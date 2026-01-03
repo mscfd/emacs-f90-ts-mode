@@ -994,6 +994,11 @@ comments in the tree. Must be parsed before plain comments."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'type
+   ;; EXTENSION: match preprocessor-defined types
+   '((preproc_type) @font-lock-type-face)
+
+   :language 'fortran
+   :feature 'type
    ;; match type keywords
    '(["integer"
       "real" "complex" "double" "precision"
