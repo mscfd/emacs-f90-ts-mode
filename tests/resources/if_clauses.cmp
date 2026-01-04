@@ -1,0 +1,26 @@
+(:indentation
+"subroutine foo()
+     name: if (condition) then
+          call foo()
+     elseif (x > y) then
+          ! comment
+     elseif (a .eqv. b) then
+
+          if (condition .or. .false.) x = fun1(y)
+          if (2*5 > x) then
+               print *, x
+          end if
+          inner: if (.true.) then
+               ! comment
+          end if inner
+     else
+
+     end if name
+end subroutine foo
+"
+
+:font-lock
+((1 1 11 font-lock-keyword-face) (1 12 15 font-lock-function-name-face) (1 15 17 f90-ts-font-lock-bracket-face) (2 27 28 f90-ts-font-lock-delimiter-face) (2 29 31 font-lock-keyword-face) (2 32 33 f90-ts-font-lock-bracket-face) (2 42 43 f90-ts-font-lock-bracket-face) (2 44 48 font-lock-keyword-face) (3 59 63 font-lock-keyword-face) (3 64 67 font-lock-function-name-face) (3 67 69 f90-ts-font-lock-bracket-face) (4 75 81 font-lock-keyword-face) (4 82 83 f90-ts-font-lock-bracket-face) (4 88 89 f90-ts-font-lock-bracket-face) (4 90 94 font-lock-keyword-face) (5 105 114 font-lock-comment-face) (6 120 126 font-lock-keyword-face) (6 127 128 f90-ts-font-lock-bracket-face) (6 130 135 f90-ts-font-lock-operator-face) (6 137 138 f90-ts-font-lock-bracket-face) (6 139 143 font-lock-keyword-face) (8 155 157 font-lock-keyword-face) (8 158 159 f90-ts-font-lock-bracket-face) (8 169 173 f90-ts-font-lock-operator-face) (8 174 181 font-lock-constant-face) (8 181 182 f90-ts-font-lock-bracket-face) (8 185 186 f90-ts-font-lock-operator-face) (8 187 191 font-lock-function-name-face) (8 191 192 f90-ts-font-lock-bracket-face) (8 193 194 f90-ts-font-lock-bracket-face) (9 205 207 font-lock-keyword-face) (9 208 209 f90-ts-font-lock-bracket-face) (9 209 210 font-lock-number-face) (9 210 211 f90-ts-font-lock-operator-face) (9 211 212 font-lock-number-face) (9 216 217 f90-ts-font-lock-bracket-face) (9 218 222 font-lock-keyword-face) (10 238 243 f90-ts-font-lock-intrinsic-face) (10 245 246 f90-ts-font-lock-delimiter-face) (11 259 262 font-lock-keyword-face) (11 263 265 font-lock-keyword-face) (12 281 282 f90-ts-font-lock-delimiter-face) (12 283 285 font-lock-keyword-face) (12 286 287 f90-ts-font-lock-bracket-face) (12 287 293 font-lock-constant-face) (12 293 294 f90-ts-font-lock-bracket-face) (12 295 299 font-lock-keyword-face) (13 315 324 font-lock-comment-face) (14 335 338 font-lock-keyword-face) (14 339 341 font-lock-keyword-face) (15 353 357 font-lock-keyword-face) (17 364 367 font-lock-keyword-face) (17 368 370 font-lock-keyword-face) (18 376 379 font-lock-keyword-face) (18 380 390 font-lock-keyword-face) (18 391 394 font-lock-function-name-face))
+
+:tree
+"(translation_unit (subroutine (subroutine_statement name: (name)) (if_statement (block_label_start_expression (label)) (parenthesized_expression (identifier)) (subroutine_call subroutine: (identifier) (argument_list)) (elseif_clause (parenthesized_expression (relational_expression left: (identifier) right: (identifier)))) (comment) (elseif_clause (parenthesized_expression (logical_expression left: (identifier) right: (identifier))) (if_statement (parenthesized_expression (logical_expression left: (identifier) right: (boolean_literal))) (assignment_statement left: (identifier) right: (call_expression (identifier) (argument_list (identifier))))) (if_statement (parenthesized_expression (relational_expression left: (math_expression left: (number_literal) right: (number_literal)) right: (identifier))) (print_statement (format_identifier) (output_item_list (identifier))) (end_if_statement)) (if_statement (block_label_start_expression (label)) (parenthesized_expression (boolean_literal)) (comment) (end_if_statement (block_label)))) (else_clause) (end_if_statement (block_label))) (end_subroutine_statement (name))))")

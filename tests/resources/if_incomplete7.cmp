@@ -1,0 +1,15 @@
+(:indentation
+"subroutine foo()
+     name: if (condition) then
+          call foo()
+          elseif (a .eqv. b)
+
+          x = fun1(y)
+     end if name
+     "
+
+:font-lock
+((1 1 11 font-lock-keyword-face) (1 12 15 font-lock-function-name-face) (1 15 17 f90-ts-font-lock-bracket-face) (2 27 28 f90-ts-font-lock-delimiter-face) (2 29 31 font-lock-keyword-face) (2 32 33 f90-ts-font-lock-bracket-face) (2 42 43 f90-ts-font-lock-bracket-face) (2 44 48 font-lock-keyword-face) (3 59 63 font-lock-keyword-face) (3 64 67 font-lock-function-name-face) (3 67 69 f90-ts-font-lock-bracket-face) (4 80 86 font-lock-keyword-face) (4 87 88 f90-ts-font-lock-bracket-face) (4 90 95 f90-ts-font-lock-operator-face) (4 97 98 f90-ts-font-lock-bracket-face) (6 112 113 f90-ts-font-lock-operator-face) (6 114 118 font-lock-function-name-face) (6 118 119 f90-ts-font-lock-bracket-face) (6 120 121 f90-ts-font-lock-bracket-face))
+
+:tree
+"(translation_unit (subroutine (subroutine_statement name: (name)) (if_statement (block_label_start_expression (label)) (parenthesized_expression (identifier)) (subroutine_call subroutine: (identifier) (argument_list)) (call_expression (identifier) (argument_list (logical_expression left: (identifier) right: (identifier)))) (assignment_statement left: (identifier) right: (call_expression (identifier) (argument_list (identifier)))) (end_if_statement (block_label))) (end_subroutine_statement (MISSING \"end\"))))")

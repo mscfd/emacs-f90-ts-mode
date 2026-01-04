@@ -1,0 +1,92 @@
+(:indentation
+"function fun_result(x, &
+                    y) result(r)
+end function fun_result
+
+
+real function fun_type(x, &
+                       y)
+end function fun_type
+
+subroutine sub_simple(x, y, z, &
+                      a, &
+                      ! comment
+                            b)
+end subroutine sub_simple
+
+module subroutine sub_mod(x, &
+                          y)
+end subroutine sub_mod
+
+module procedure sub_proc(x, &
+       y)
+end module procedure
+
+
+
+
+! some fancy continuations
+function fun(x1, x2, x3, &
+                 x4, x5)&
+       result( &
+       ! this is my result
+
+       something &
+       )
+     logical :: something
+! arguments
+     integer &
+            :: x1, &
+               x2, &
+               ! write some comment here
+               x3
+
+! ==========
+     call foo(x,& ! first arg
+
+              y, & ! second arg
+
+                  ! comment
+
+              z,&
+              u,  & ! fourth arg
+              v&
+             )
+
+     x &
+
+
+            = &
+            y &  ! comment 1
+            + fun&! comment 2
+            ( &
+
+            )
+
+     write(*,format_string_for_testing) &       !comment
+            ! comment
+            val1, val2, val3, & ! comment
+
+            ! some more comment
+
+
+            ! comment
+
+            final_val
+
+     call algorithm(fun1(a, b), fun2(x, y, &
+                                     z, &
+                                    ), &
+                    fun3(u, &
+                                 v, &
+            w))
+
+
+end function fun
+"
+
+:font-lock
+((1 1 9 font-lock-keyword-face) (1 10 20 font-lock-function-name-face) (1 20 21 f90-ts-font-lock-bracket-face) (1 22 23 f90-ts-font-lock-delimiter-face) (1 24 25 f90-ts-font-lock-delimiter-face) (2 47 48 f90-ts-font-lock-bracket-face) (2 49 55 font-lock-keyword-face) (2 55 56 f90-ts-font-lock-bracket-face) (2 56 57 default) (2 57 58 f90-ts-font-lock-bracket-face) (3 59 62 font-lock-keyword-face) (3 63 71 font-lock-keyword-face) (3 72 82 font-lock-function-name-face) (6 85 89 font-lock-type-face) (6 90 98 font-lock-keyword-face) (6 99 107 font-lock-function-name-face) (6 107 108 f90-ts-font-lock-bracket-face) (6 109 110 f90-ts-font-lock-delimiter-face) (6 111 112 f90-ts-font-lock-delimiter-face) (7 137 138 f90-ts-font-lock-bracket-face) (8 139 142 font-lock-keyword-face) (8 143 151 font-lock-keyword-face) (8 152 160 font-lock-function-name-face) (10 162 172 font-lock-keyword-face) (10 173 183 font-lock-function-name-face) (10 183 184 f90-ts-font-lock-bracket-face) (10 185 186 f90-ts-font-lock-delimiter-face) (10 188 189 f90-ts-font-lock-delimiter-face) (10 191 192 f90-ts-font-lock-delimiter-face) (10 193 194 f90-ts-font-lock-delimiter-face) (11 218 219 f90-ts-font-lock-delimiter-face) (11 220 221 f90-ts-font-lock-delimiter-face) (12 244 253 font-lock-comment-face) (13 283 284 f90-ts-font-lock-bracket-face) (14 285 288 font-lock-keyword-face) (14 289 299 font-lock-keyword-face) (14 300 310 font-lock-function-name-face) (16 312 318 font-lock-keyword-face) (16 319 329 font-lock-keyword-face) (16 330 337 font-lock-function-name-face) (16 337 338 f90-ts-font-lock-bracket-face) (16 339 340 f90-ts-font-lock-delimiter-face) (16 341 342 f90-ts-font-lock-delimiter-face) (17 370 371 f90-ts-font-lock-bracket-face) (18 372 375 font-lock-keyword-face) (18 376 386 font-lock-keyword-face) (18 387 394 font-lock-function-name-face) (20 396 402 font-lock-keyword-face) (20 403 412 font-lock-function-name-face) (20 421 422 f90-ts-font-lock-bracket-face) (20 423 424 f90-ts-font-lock-delimiter-face) (20 425 426 f90-ts-font-lock-delimiter-face) (21 435 436 f90-ts-font-lock-bracket-face) (22 437 440 font-lock-keyword-face) (22 441 447 font-lock-keyword-face) (22 448 457 font-lock-function-name-face) (27 462 488 font-lock-comment-face) (28 489 497 font-lock-keyword-face) (28 498 501 font-lock-function-name-face) (28 501 502 f90-ts-font-lock-bracket-face) (28 504 505 f90-ts-font-lock-delimiter-face) (28 508 509 f90-ts-font-lock-delimiter-face) (28 512 513 f90-ts-font-lock-delimiter-face) (28 514 515 f90-ts-font-lock-delimiter-face) (29 535 536 f90-ts-font-lock-delimiter-face) (29 539 540 f90-ts-font-lock-bracket-face) (29 540 541 f90-ts-font-lock-delimiter-face) (30 549 555 font-lock-keyword-face) (30 555 556 f90-ts-font-lock-bracket-face) (30 557 558 f90-ts-font-lock-delimiter-face) (31 566 585 font-lock-comment-face) (33 594 603 default) (33 604 605 f90-ts-font-lock-delimiter-face) (34 613 614 f90-ts-font-lock-bracket-face) (35 620 627 font-lock-type-face) (35 628 630 f90-ts-font-lock-delimiter-face) (36 641 652 f90-ts-font-lock-special-comment-face) (37 658 665 font-lock-type-face) (37 666 667 f90-ts-font-lock-delimiter-face) (38 680 682 f90-ts-font-lock-delimiter-face) (38 685 686 f90-ts-font-lock-delimiter-face) (38 687 688 f90-ts-font-lock-delimiter-face) (39 706 707 f90-ts-font-lock-delimiter-face) (39 708 709 f90-ts-font-lock-delimiter-face) (40 725 750 font-lock-comment-face) (43 770 782 f90-ts-font-lock-special-comment-face) (44 788 792 font-lock-keyword-face) (44 793 796 font-lock-function-name-face) (44 796 797 f90-ts-font-lock-bracket-face) (44 798 800 f90-ts-font-lock-delimiter-face) (44 801 812 font-lock-comment-face) (46 829 830 f90-ts-font-lock-delimiter-face) (46 831 832 f90-ts-font-lock-delimiter-face) (46 833 845 font-lock-comment-face) (48 865 874 font-lock-comment-face) (50 891 893 f90-ts-font-lock-delimiter-face) (51 909 910 f90-ts-font-lock-delimiter-face) (51 912 913 f90-ts-font-lock-delimiter-face) (51 914 926 font-lock-comment-face) (52 942 943 f90-ts-font-lock-delimiter-face) (53 957 958 f90-ts-font-lock-bracket-face) (55 967 968 f90-ts-font-lock-delimiter-face) (58 983 984 f90-ts-font-lock-operator-face) (58 985 986 f90-ts-font-lock-delimiter-face) (59 1001 1002 f90-ts-font-lock-delimiter-face) (59 1004 1015 font-lock-comment-face) (60 1028 1029 f90-ts-font-lock-operator-face) (60 1030 1033 font-lock-function-name-face) (60 1033 1034 f90-ts-font-lock-delimiter-face) (60 1034 1045 font-lock-comment-face) (61 1058 1059 f90-ts-font-lock-bracket-face) (61 1060 1061 f90-ts-font-lock-delimiter-face) (63 1075 1076 f90-ts-font-lock-bracket-face) (65 1083 1088 f90-ts-font-lock-intrinsic-face) (65 1088 1089 f90-ts-font-lock-bracket-face) (65 1090 1091 f90-ts-font-lock-delimiter-face) (65 1116 1117 f90-ts-font-lock-bracket-face) (65 1118 1119 f90-ts-font-lock-delimiter-face) (65 1126 1134 font-lock-comment-face) (66 1147 1156 font-lock-comment-face) (67 1173 1174 f90-ts-font-lock-delimiter-face) (67 1179 1180 f90-ts-font-lock-delimiter-face) (67 1185 1186 f90-ts-font-lock-delimiter-face) (67 1187 1188 f90-ts-font-lock-delimiter-face) (67 1189 1198 font-lock-comment-face) (69 1212 1231 font-lock-comment-face) (72 1246 1255 font-lock-comment-face) (76 1285 1289 font-lock-keyword-face) (76 1290 1299 font-lock-function-name-face) (76 1299 1300 f90-ts-font-lock-bracket-face) (76 1300 1304 font-lock-function-name-face) (76 1304 1305 f90-ts-font-lock-bracket-face) (76 1306 1307 f90-ts-font-lock-delimiter-face) (76 1309 1310 f90-ts-font-lock-bracket-face) (76 1310 1311 f90-ts-font-lock-delimiter-face) (76 1312 1316 font-lock-function-name-face) (76 1316 1317 f90-ts-font-lock-bracket-face) (76 1318 1319 f90-ts-font-lock-delimiter-face) (76 1321 1322 f90-ts-font-lock-delimiter-face) (76 1323 1324 f90-ts-font-lock-delimiter-face) (77 1363 1364 f90-ts-font-lock-delimiter-face) (77 1365 1366 f90-ts-font-lock-delimiter-face) (78 1403 1404 f90-ts-font-lock-bracket-face) (78 1404 1405 f90-ts-font-lock-delimiter-face) (78 1406 1407 f90-ts-font-lock-delimiter-face) (79 1428 1432 font-lock-function-name-face) (79 1432 1433 f90-ts-font-lock-bracket-face) (79 1434 1435 f90-ts-font-lock-delimiter-face) (79 1436 1437 f90-ts-font-lock-delimiter-face) (80 1472 1473 f90-ts-font-lock-delimiter-face) (80 1474 1475 f90-ts-font-lock-delimiter-face) (81 1489 1491 f90-ts-font-lock-bracket-face) (84 1494 1497 font-lock-keyword-face) (84 1498 1506 font-lock-keyword-face) (84 1507 1510 font-lock-function-name-face))
+
+:tree
+"(translation_unit (function (function_statement name: (name) parameters: (parameters (identifier) (identifier)) (function_result (identifier))) (end_function_statement (name))) (function (function_statement type: (intrinsic_type) name: (name) parameters: (parameters (identifier) (identifier))) (end_function_statement (name))) (subroutine (subroutine_statement name: (name) parameters: (parameters (identifier) (identifier) (identifier) (identifier) (comment) (identifier))) (end_subroutine_statement (name))) (subroutine (subroutine_statement (procedure_qualifier) name: (name) parameters: (parameters (identifier) (identifier))) (end_subroutine_statement (name))) (module (module_statement (name) (ERROR)) (end_module_statement (name))) (comment) (function (function_statement name: (name) parameters: (parameters (identifier) (identifier) (identifier) (identifier) (identifier)) (function_result (comment) (identifier))) (variable_declaration type: (intrinsic_type) declarator: (identifier)) (comment) (variable_declaration type: (intrinsic_type) declarator: (identifier) declarator: (identifier) (comment) declarator: (identifier)) (comment) (subroutine_call subroutine: (identifier) (argument_list (identifier) (comment) (identifier) (comment) (comment) (identifier) (identifier) (comment) (identifier))) (assignment_statement left: (identifier) right: (math_expression left: (identifier) (comment) right: (call_expression (identifier) (comment) (argument_list)))) (write_statement (unit_identifier) (format_identifier (identifier)) (comment) (comment) (output_item_list (identifier) (identifier) (identifier) (comment) (comment) (comment) (identifier))) (subroutine_call subroutine: (identifier) (argument_list (call_expression (identifier) (argument_list (identifier) (identifier))) (call_expression (identifier) (argument_list (identifier) (identifier) (identifier) (assumed_size (MISSING \"*\")))) (call_expression (identifier) (argument_list (identifier) (identifier) (identifier))))) (end_function_statement (name))))")
