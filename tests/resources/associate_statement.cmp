@@ -1,0 +1,40 @@
+(:indentation
+"subroutine sub()
+
+     associate(x => y)
+     end associate
+
+     associate(expr => sqrt(p**2/4.0 - q), &
+               result => arr(5))
+          points: associate(p &
+                            => self%points_active, &
+                            q &
+                            => self%points_inactive &
+                           )
+               ! some output
+               print *,p%count, q%count
+          end associate points
+          ! more output
+          print *, expr, result
+          ! done
+     end associate
+
+     components: associate(matrix_A => this%model_A%mat, &
+                           matrix_B => this%model_B%mat, &
+                           N => this%model_size)
+          outer:do i = 1,N
+               inner:do j = 1,N
+                    matrix_R(i,j) = matrix_A(i,j) &
+                           - matrix_B(i,j)
+               end do inner
+          end do outer
+     end associate components
+
+end subroutine sub
+"
+
+:font-lock
+((1 1 11 font-lock-keyword-face) (1 12 15 font-lock-function-name-face) (1 15 17 f90-ts-font-lock-bracket-face) (3 24 33 font-lock-keyword-face) (3 33 34 f90-ts-font-lock-bracket-face) (3 36 38 f90-ts-font-lock-delimiter-face) (3 40 41 f90-ts-font-lock-bracket-face) (4 47 50 font-lock-keyword-face) (4 51 60 font-lock-keyword-face) (6 67 76 font-lock-keyword-face) (6 76 77 f90-ts-font-lock-bracket-face) (6 82 84 f90-ts-font-lock-delimiter-face) (6 85 89 font-lock-function-name-face) (6 89 90 f90-ts-font-lock-bracket-face) (6 91 93 f90-ts-font-lock-operator-face) (6 93 94 font-lock-number-face) (6 94 95 f90-ts-font-lock-operator-face) (6 95 98 font-lock-number-face) (6 99 100 f90-ts-font-lock-operator-face) (6 102 103 f90-ts-font-lock-bracket-face) (6 103 104 f90-ts-font-lock-delimiter-face) (6 105 106 f90-ts-font-lock-delimiter-face) (7 129 131 f90-ts-font-lock-delimiter-face) (7 132 135 font-lock-function-name-face) (7 135 136 f90-ts-font-lock-bracket-face) (7 136 137 font-lock-number-face) (7 137 139 f90-ts-font-lock-bracket-face) (8 156 157 f90-ts-font-lock-delimiter-face) (8 158 167 font-lock-keyword-face) (8 167 168 f90-ts-font-lock-bracket-face) (8 170 171 f90-ts-font-lock-delimiter-face) (9 200 202 f90-ts-font-lock-delimiter-face) (9 203 207 f90-ts-font-lock-special-var-face) (9 207 208 f90-ts-font-lock-operator-face) (9 221 222 f90-ts-font-lock-delimiter-face) (9 223 224 f90-ts-font-lock-delimiter-face) (10 255 256 f90-ts-font-lock-delimiter-face) (11 285 287 f90-ts-font-lock-delimiter-face) (11 288 292 f90-ts-font-lock-special-var-face) (11 292 293 f90-ts-font-lock-operator-face) (11 309 310 f90-ts-font-lock-delimiter-face) (12 338 339 f90-ts-font-lock-bracket-face) (13 355 368 font-lock-comment-face) (14 384 389 f90-ts-font-lock-intrinsic-face) (14 391 392 f90-ts-font-lock-delimiter-face) (14 393 394 f90-ts-font-lock-operator-face) (14 399 400 f90-ts-font-lock-delimiter-face) (14 402 403 f90-ts-font-lock-operator-face) (15 419 422 font-lock-keyword-face) (15 423 432 font-lock-keyword-face) (16 450 463 font-lock-comment-face) (17 474 479 f90-ts-font-lock-intrinsic-face) (17 481 482 f90-ts-font-lock-delimiter-face) (17 487 488 f90-ts-font-lock-delimiter-face) (18 506 512 font-lock-comment-face) (19 518 521 font-lock-keyword-face) (19 522 531 font-lock-keyword-face) (21 548 549 f90-ts-font-lock-delimiter-face) (21 550 559 font-lock-keyword-face) (21 559 560 f90-ts-font-lock-bracket-face) (21 569 571 f90-ts-font-lock-delimiter-face) (21 576 577 f90-ts-font-lock-operator-face) (21 584 585 f90-ts-font-lock-operator-face) (21 588 589 f90-ts-font-lock-delimiter-face) (21 590 591 f90-ts-font-lock-delimiter-face) (22 628 630 f90-ts-font-lock-delimiter-face) (22 635 636 f90-ts-font-lock-operator-face) (22 643 644 f90-ts-font-lock-operator-face) (22 647 648 f90-ts-font-lock-delimiter-face) (22 649 650 f90-ts-font-lock-delimiter-face) (23 680 682 f90-ts-font-lock-delimiter-face) (23 687 688 f90-ts-font-lock-operator-face) (23 698 699 f90-ts-font-lock-bracket-face) (24 715 716 f90-ts-font-lock-delimiter-face) (24 716 718 font-lock-keyword-face) (24 721 722 f90-ts-font-lock-operator-face) (24 723 724 font-lock-number-face) (24 724 725 f90-ts-font-lock-delimiter-face) (25 747 748 f90-ts-font-lock-delimiter-face) (25 748 750 font-lock-keyword-face) (25 753 754 f90-ts-font-lock-operator-face) (25 755 756 font-lock-number-face) (25 756 757 f90-ts-font-lock-delimiter-face) (26 779 787 font-lock-function-name-face) (26 787 788 f90-ts-font-lock-bracket-face) (26 789 790 f90-ts-font-lock-delimiter-face) (26 791 792 f90-ts-font-lock-bracket-face) (26 793 794 f90-ts-font-lock-operator-face) (26 795 803 font-lock-function-name-face) (26 803 804 f90-ts-font-lock-bracket-face) (26 805 806 f90-ts-font-lock-delimiter-face) (26 807 808 f90-ts-font-lock-bracket-face) (26 809 810 f90-ts-font-lock-delimiter-face) (27 838 839 f90-ts-font-lock-operator-face) (27 840 848 font-lock-function-name-face) (27 848 849 f90-ts-font-lock-bracket-face) (27 850 851 f90-ts-font-lock-delimiter-face) (27 852 853 f90-ts-font-lock-bracket-face) (28 869 872 font-lock-keyword-face) (28 873 875 font-lock-keyword-face) (29 892 895 font-lock-keyword-face) (29 896 898 font-lock-keyword-face) (30 910 913 font-lock-keyword-face) (30 914 923 font-lock-keyword-face) (32 936 939 font-lock-keyword-face) (32 940 950 font-lock-keyword-face) (32 951 954 font-lock-function-name-face))
+
+:tree
+"(translation_unit (subroutine (subroutine_statement name: (name)) (associate_statement (association_list (association name: (identifier) selector: (identifier))) (end_associate_statement)) (associate_statement (association_list (association name: (identifier) selector: (call_expression (identifier) (argument_list (math_expression left: (math_expression left: (math_expression left: (identifier) right: (number_literal)) right: (number_literal)) right: (identifier))))) (association name: (identifier) selector: (call_expression (identifier) (argument_list (number_literal))))) (associate_statement (block_label_start_expression (label)) (association_list (association name: (identifier) selector: (derived_type_member_expression (identifier) (type_member))) (association name: (identifier) selector: (derived_type_member_expression (identifier) (type_member)))) (comment) (print_statement (format_identifier) (output_item_list (derived_type_member_expression (identifier) (type_member)) (derived_type_member_expression (identifier) (type_member)))) (end_associate_statement (block_label))) (comment) (print_statement (format_identifier) (output_item_list (identifier) (identifier))) (comment) (end_associate_statement)) (associate_statement (block_label_start_expression (label)) (association_list (association name: (identifier) selector: (derived_type_member_expression (derived_type_member_expression (identifier) (type_member)) (type_member))) (association name: (identifier) selector: (derived_type_member_expression (derived_type_member_expression (identifier) (type_member)) (type_member))) (association name: (identifier) selector: (derived_type_member_expression (identifier) (type_member)))) (do_loop (block_label_start_expression (label)) (do_statement (loop_control_expression (identifier) (number_literal) (identifier))) (do_loop (block_label_start_expression (label)) (do_statement (loop_control_expression (identifier) (number_literal) (identifier))) (assignment_statement left: (call_expression (identifier) (argument_list (identifier) (identifier))) right: (math_expression left: (call_expression (identifier) (argument_list (identifier) (identifier))) right: (call_expression (identifier) (argument_list (identifier) (identifier))))) (end_do_loop_statement (block_label))) (end_do_loop_statement (block_label))) (end_associate_statement (block_label))) (end_subroutine_statement (name))))")

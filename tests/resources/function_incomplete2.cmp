@@ -1,0 +1,13 @@
+(:indentation
+"
+subroutine sub()
+end subroutine sub
+
+real(real32) function foo(arg1)
+     "
+
+:font-lock
+((2 2 12 font-lock-keyword-face) (2 13 16 font-lock-function-name-face) (2 16 18 f90-ts-font-lock-bracket-face) (3 19 22 font-lock-keyword-face) (3 23 33 font-lock-keyword-face) (3 34 37 font-lock-function-name-face) (5 39 43 font-lock-type-face) (5 43 44 f90-ts-font-lock-bracket-face) (5 50 51 f90-ts-font-lock-bracket-face) (5 52 60 font-lock-keyword-face) (5 61 64 font-lock-function-name-face) (5 64 65 f90-ts-font-lock-bracket-face) (5 69 70 f90-ts-font-lock-bracket-face))
+
+:tree
+"(translation_unit (subroutine (subroutine_statement name: (name)) (end_subroutine_statement (name))) (function (function_statement type: (intrinsic_type kind: (kind (identifier))) name: (name) parameters: (parameters (identifier))) (end_function_statement (MISSING \"end\"))))")

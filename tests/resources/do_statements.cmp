@@ -1,0 +1,67 @@
+(:indentation
+"module my_mod
+
+ implicit none
+ private
+
+ public do_fun
+
+contains
+
+ integer function do_fun()
+      do
+           print *, \"Hello ERT, testing me?\"
+      end do
+
+      with_exit_: do
+           if (i > 10) exit
+           i = i + 1
+      end do with_exit_
+
+      do while (val < 1.0)
+           val = update(val)
+      end do
+
+      nested_1: do while (flag .eqv. .true.)
+           flag = .false.
+           some_if: if (cond) then
+                nested_2: do while (k < 5)
+                     k = k - 1
+                end do nested_2
+           end if some_if
+           flag = check(k)
+      end do nested_1
+
+      sum = 0
+      do i = 1,10
+           inner: do j = 1,10
+                sum = sum + i*j
+           end do inner
+      end do
+
+      label_A: do while (A)
+           label_B: do B = 100,1,-3
+                label_C: do
+                     if (cond(A,B,C) > 30) exit
+                end do label_C
+           end do label_B
+      end do label_A
+
+      do while (A)
+           do B = 100,1,-3
+                do
+                     ! comment
+                     if (cond(A,B,C) > 30) exit
+                end do
+           end do
+      end do
+ end function do_fun
+
+end module my_mod
+"
+
+:font-lock
+((1 1 7 font-lock-keyword-face) (1 8 14 font-lock-function-name-face) (3 17 25 font-lock-keyword-face) (4 32 39 font-lock-keyword-face) (6 42 48 font-lock-keyword-face) (8 57 65 font-lock-keyword-face) (10 68 75 font-lock-type-face) (10 76 84 font-lock-keyword-face) (10 85 91 font-lock-function-name-face) (10 91 93 f90-ts-font-lock-bracket-face) (11 100 102 font-lock-keyword-face) (12 114 119 f90-ts-font-lock-intrinsic-face) (12 121 122 f90-ts-font-lock-delimiter-face) (12 123 147 font-lock-string-face) (13 154 157 font-lock-keyword-face) (13 158 160 font-lock-keyword-face) (15 178 179 f90-ts-font-lock-delimiter-face) (15 180 182 font-lock-keyword-face) (16 194 196 font-lock-keyword-face) (16 197 198 f90-ts-font-lock-bracket-face) (16 202 204 font-lock-number-face) (16 204 205 f90-ts-font-lock-bracket-face) (16 206 210 font-lock-keyword-face) (17 224 225 f90-ts-font-lock-operator-face) (17 228 229 f90-ts-font-lock-operator-face) (17 230 231 font-lock-number-face) (18 238 241 font-lock-keyword-face) (18 242 244 font-lock-keyword-face) (20 263 265 font-lock-keyword-face) (20 266 271 font-lock-keyword-face) (20 272 273 f90-ts-font-lock-bracket-face) (20 279 282 font-lock-number-face) (20 282 283 f90-ts-font-lock-bracket-face) (21 299 300 f90-ts-font-lock-operator-face) (21 301 307 font-lock-function-name-face) (21 307 308 f90-ts-font-lock-bracket-face) (21 311 312 f90-ts-font-lock-bracket-face) (22 319 322 font-lock-keyword-face) (22 323 325 font-lock-keyword-face) (24 341 342 f90-ts-font-lock-delimiter-face) (24 343 345 font-lock-keyword-face) (24 346 351 font-lock-keyword-face) (24 352 353 f90-ts-font-lock-bracket-face) (24 358 363 f90-ts-font-lock-operator-face) (24 364 370 font-lock-constant-face) (24 370 371 f90-ts-font-lock-bracket-face) (25 388 389 f90-ts-font-lock-operator-face) (25 390 397 font-lock-constant-face) (26 416 417 f90-ts-font-lock-delimiter-face) (26 418 420 font-lock-keyword-face) (26 421 422 f90-ts-font-lock-bracket-face) (26 426 427 f90-ts-font-lock-bracket-face) (26 428 432 font-lock-keyword-face) (27 457 458 f90-ts-font-lock-delimiter-face) (27 459 461 font-lock-keyword-face) (27 462 467 font-lock-keyword-face) (27 468 469 f90-ts-font-lock-bracket-face) (27 473 474 font-lock-number-face) (27 474 475 f90-ts-font-lock-bracket-face) (28 499 500 f90-ts-font-lock-operator-face) (28 503 504 f90-ts-font-lock-operator-face) (28 505 506 font-lock-number-face) (29 523 526 font-lock-keyword-face) (29 527 529 font-lock-keyword-face) (30 550 553 font-lock-keyword-face) (30 554 556 font-lock-keyword-face) (31 581 582 f90-ts-font-lock-operator-face) (31 583 588 font-lock-function-name-face) (31 588 589 f90-ts-font-lock-bracket-face) (31 590 591 f90-ts-font-lock-bracket-face) (32 598 601 font-lock-keyword-face) (32 602 604 font-lock-keyword-face) (34 625 626 f90-ts-font-lock-operator-face) (34 627 628 font-lock-number-face) (35 635 637 font-lock-keyword-face) (35 640 641 f90-ts-font-lock-operator-face) (35 642 643 font-lock-number-face) (35 643 644 f90-ts-font-lock-delimiter-face) (35 644 646 font-lock-number-face) (36 663 664 f90-ts-font-lock-delimiter-face) (36 665 667 font-lock-keyword-face) (36 670 671 f90-ts-font-lock-operator-face) (36 672 673 font-lock-number-face) (36 673 674 f90-ts-font-lock-delimiter-face) (36 674 676 font-lock-number-face) (37 697 698 f90-ts-font-lock-operator-face) (37 703 704 f90-ts-font-lock-operator-face) (37 706 707 f90-ts-font-lock-operator-face) (38 720 723 font-lock-keyword-face) (38 724 726 font-lock-keyword-face) (41 760 761 f90-ts-font-lock-delimiter-face) (41 762 764 font-lock-keyword-face) (41 765 770 font-lock-keyword-face) (41 771 772 f90-ts-font-lock-bracket-face) (41 773 774 f90-ts-font-lock-bracket-face) (42 793 794 f90-ts-font-lock-delimiter-face) (42 795 797 font-lock-keyword-face) (42 800 801 f90-ts-font-lock-operator-face) (42 802 805 font-lock-number-face) (42 805 806 f90-ts-font-lock-delimiter-face) (42 806 807 font-lock-number-face) (42 807 808 f90-ts-font-lock-delimiter-face) (42 809 810 font-lock-number-face) (43 834 835 f90-ts-font-lock-delimiter-face) (43 836 838 font-lock-keyword-face) (44 860 862 font-lock-keyword-face) (44 863 864 f90-ts-font-lock-bracket-face) (44 864 868 font-lock-function-name-face) (44 868 869 f90-ts-font-lock-bracket-face) (44 870 871 f90-ts-font-lock-delimiter-face) (44 872 873 f90-ts-font-lock-delimiter-face) (44 874 875 f90-ts-font-lock-bracket-face) (44 878 880 font-lock-number-face) (44 880 881 f90-ts-font-lock-bracket-face) (44 882 886 font-lock-keyword-face) (49 972 974 font-lock-keyword-face) (49 975 980 font-lock-keyword-face) (49 981 982 f90-ts-font-lock-bracket-face) (49 983 984 f90-ts-font-lock-bracket-face) (50 996 998 font-lock-keyword-face) (50 1001 1002 f90-ts-font-lock-operator-face) (50 1003 1006 font-lock-number-face) (50 1006 1007 f90-ts-font-lock-delimiter-face) (50 1007 1008 font-lock-number-face) (50 1008 1009 f90-ts-font-lock-delimiter-face) (50 1010 1011 font-lock-number-face) (51 1028 1030 font-lock-keyword-face) (52 1052 1061 font-lock-comment-face) (53 1083 1085 font-lock-keyword-face) (53 1086 1087 f90-ts-font-lock-bracket-face) (53 1087 1091 font-lock-function-name-face) (53 1091 1092 f90-ts-font-lock-bracket-face) (53 1093 1094 f90-ts-font-lock-delimiter-face) (53 1095 1096 f90-ts-font-lock-delimiter-face) (53 1097 1098 f90-ts-font-lock-bracket-face) (53 1101 1103 font-lock-number-face) (53 1103 1104 f90-ts-font-lock-bracket-face) (53 1105 1109 font-lock-keyword-face) (54 1126 1129 font-lock-keyword-face) (54 1130 1132 font-lock-keyword-face) (55 1144 1147 font-lock-keyword-face) (55 1148 1150 font-lock-keyword-face) (56 1157 1160 font-lock-keyword-face) (56 1161 1163 font-lock-keyword-face) (57 1165 1168 font-lock-keyword-face) (57 1169 1177 font-lock-keyword-face) (57 1178 1184 font-lock-function-name-face) (59 1186 1189 font-lock-keyword-face) (59 1190 1196 font-lock-keyword-face) (59 1197 1203 font-lock-function-name-face))
+
+:tree
+"(translation_unit (module (module_statement (name)) (implicit_statement (none)) (private_statement) (public_statement (identifier)) (internal_procedures (contains_statement) (function (function_statement type: (intrinsic_type) name: (name)) (do_loop (do_statement) (print_statement (format_identifier) (output_item_list (string_literal))) (end_do_loop_statement)) (do_loop (block_label_start_expression (label)) (do_statement) (if_statement (parenthesized_expression (relational_expression left: (identifier) right: (number_literal))) (keyword_statement)) (assignment_statement left: (identifier) right: (math_expression left: (identifier) right: (number_literal))) (end_do_loop_statement (block_label))) (do_loop (do_statement (while_statement (parenthesized_expression (relational_expression left: (identifier) right: (number_literal))))) (assignment_statement left: (identifier) right: (call_expression (identifier) (argument_list (identifier)))) (end_do_loop_statement)) (do_loop (block_label_start_expression (label)) (do_statement (while_statement (parenthesized_expression (logical_expression left: (identifier) right: (boolean_literal))))) (assignment_statement left: (identifier) right: (boolean_literal)) (if_statement (block_label_start_expression (label)) (parenthesized_expression (identifier)) (do_loop (block_label_start_expression (label)) (do_statement (while_statement (parenthesized_expression (relational_expression left: (identifier) right: (number_literal))))) (assignment_statement left: (identifier) right: (math_expression left: (identifier) right: (number_literal))) (end_do_loop_statement (block_label))) (end_if_statement (block_label))) (assignment_statement left: (identifier) right: (call_expression (identifier) (argument_list (identifier)))) (end_do_loop_statement (block_label))) (assignment_statement left: (identifier) right: (number_literal)) (do_loop (do_statement (loop_control_expression (identifier) (number_literal) (number_literal))) (do_loop (block_label_start_expression (label)) (do_statement (loop_control_expression (identifier) (number_literal) (number_literal))) (assignment_statement left: (identifier) right: (math_expression left: (identifier) right: (math_expression left: (identifier) right: (identifier)))) (end_do_loop_statement (block_label))) (end_do_loop_statement)) (do_loop (block_label_start_expression (label)) (do_statement (while_statement (parenthesized_expression (identifier)))) (do_loop (block_label_start_expression (label)) (do_statement (loop_control_expression (identifier) (number_literal) (number_literal) (unary_expression argument: (number_literal)))) (do_loop (block_label_start_expression (label)) (do_statement) (if_statement (parenthesized_expression (relational_expression left: (call_expression (identifier) (argument_list (identifier) (identifier) (identifier))) right: (number_literal))) (keyword_statement)) (end_do_loop_statement (block_label))) (end_do_loop_statement (block_label))) (end_do_loop_statement (block_label))) (do_loop (do_statement (while_statement (parenthesized_expression (identifier)))) (do_loop (do_statement (loop_control_expression (identifier) (number_literal) (number_literal) (unary_expression argument: (number_literal)))) (do_loop (do_statement) (comment) (if_statement (parenthesized_expression (relational_expression left: (call_expression (identifier) (argument_list (identifier) (identifier) (identifier))) right: (number_literal))) (keyword_statement)) (end_do_loop_statement)) (end_do_loop_statement)) (end_do_loop_statement)) (end_function_statement (name)))) (end_module_statement (name))))")
