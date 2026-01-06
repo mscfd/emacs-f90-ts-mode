@@ -945,12 +945,31 @@ For example: argument lists, association lists, (logical) expressions with align
     ((n-p-ps nil                       "association"         "associate") parent f90-ts-indent-block)
     ((n-p-ps nil                       "associate_statement" "associate") parent f90-ts-indent-block)
     ((n-p-ps nil                       "ERROR"               "associate") column-0 f90-ts--align-continued-assoc-error)
-
-    ,@(f90-ts-indent-rules-info "type statement")
-    ((n-p-gp "end_select_statement" "select_type_statement" nil) parent 0)
-    ((parent-is "type_statement") parent f90-ts-indent-block)
     )
   "Indentation rules for control statements like do loops, associate and block statements.")
+
+
+(defvar f90-ts-indent-rules-select
+  `(;; control statements
+    ,@(f90-ts-indent-rules-info "select type statement")
+    ((n-p-gp "end_select_statement" "select_type_statement" nil) parent 0)
+    ((n-p-ps "type_statement" "select_type_statement" nil)     parent 0)
+    ((n-p-ps nil              "select_type_statement" "type")  parent f90-ts-indent-block)
+    ((n-p-ps nil              "select_type_statement" "class") parent f90-ts-indent-block)
+    ((n-p-ps nil              "type_statement"        "type")  parent f90-ts-indent-block)
+    ((n-p-ps nil              "type_statement"        "class") parent f90-ts-indent-block)
+    ((n-p-gp    "ERROR"       "select_type_statement" nil)     parent f90-ts-indent-block)
+    ((parent-is               "select_type_statement")         parent 0)
+
+    ,@(f90-ts-indent-rules-info "select case statement")
+    ((n-p-gp "end_select_statement" "select_case_statement" nil) parent 0)
+    ((n-p-ps "case_statement" "select_case_statement" nil)    parent 0)
+    ((n-p-ps nil              "select_case_statement" "case") parent f90-ts-indent-block)
+    ((n-p-ps nil              "case_statement"        "case") parent f90-ts-indent-block)
+    ((n-p-gp    "ERROR"       "select_case_statement" nil)    parent f90-ts-indent-block)
+    ((parent-is               "select_case_statement")        parent 0)
+    )
+  "Indentation rules for select statements (case and type).")
 
 
 (defvar f90-ts-indent-rules-catch-all
@@ -976,6 +995,7 @@ For example: argument lists, association lists, (logical) expressions with align
      ,@f90-ts-indent-rules-derived-type
      ,@f90-ts-indent-rules-if
      ,@f90-ts-indent-rules-control
+     ,@f90-ts-indent-rules-select
      ,@f90-ts-indent-rules-catch-all
      ))
   "List of all indentation rules in its proper sequence.")
