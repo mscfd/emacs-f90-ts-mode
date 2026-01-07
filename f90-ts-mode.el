@@ -1257,7 +1257,7 @@ Also add trailing whitespace characters to preserve indentation within comments.
 Include any special symbol characters "
   ;; first match openmp as comment prefix would just take the initial ! and ignoring
   ;; following $omp part in openmp statements
-  (let ((rx-comment (concat "\\(?:" f90-ts-openmp-prefix-regexp "\\)\\|\\(?:" f90-ts-comment-prefix-regexp "\\)")))
+  (let ((rx-comment (concat "^\\(?:" f90-ts-openmp-prefix-regexp "\\)\\|\\(?:" f90-ts-comment-prefix-regexp "\\)")))
     (when (string-match rx-comment (treesit-node-text node))
       (f90-ts-log :auxiliary "matched comment prefix: <%s>" (match-string 0 (treesit-node-text node)))
       (match-string 0 (treesit-node-text node)))))
@@ -1267,7 +1267,7 @@ Include any special symbol characters "
   "Check if start of NODE is on a line starting with optional whitespace and !$,
 which is an openmp statement."
   (when (string= (treesit-node-type node) "comment")
-    (string-match f90-ts-openmp-prefix-regexp (treesit-node-text node))))
+    (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
 
 
 (defun f90-ts-in-string-p ()
