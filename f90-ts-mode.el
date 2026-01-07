@@ -339,8 +339,7 @@ comments in the tree. Must be parsed before plain comments."
                       ])
                     (method_name)        @font-lock-function-name-face))
      (final_statement
-      declarator: (method_list
-                   (method_name)        @font-lock-function-name-face))
+      declarator: (method_name)          @font-lock-function-name-face)
      )))
 
 
@@ -629,10 +628,10 @@ derived type declarations."
       ;; drop the (binding_name ...) part, and the => binding symbol
       (f90-ts--align-continued-expand-assoc (seq-drop children 2))))
 
-   ((string= (treesit-node-type parent) "method_list")
-    (when-let ((children (and parent (treesit-node-children parent))))
-      ;; nothing to drop, take all children
-      (f90-ts--align-continued-expand-assoc children)))
+   ;;((string= (treesit-node-type parent) "method_list")
+   ;; (when-let ((children (and parent (treesit-node-children parent))))
+   ;;   ;; nothing to drop, take all children
+   ;;   (f90-ts--align-continued-expand-assoc children)))
 
    (t
     ;; expand for logical expression?? but how
@@ -830,7 +829,7 @@ with !$ or !$omp")
 
     ;; binding and method lists
     ((parent-is   "binding_list") column-0 f90-ts--align-continued-arg-offset)
-    ((parent-is   "method_list")  column-0 f90-ts--align-continued-arg-offset)
+    ;;((parent-is   "method_list")  column-0 f90-ts--align-continued-arg-offset)
     )
   "Indentation rules for lists on continued lines with alignment on previous list items.
 For example: argument lists, association lists, (logical) expressions with alignment at operators, etc.")
