@@ -170,7 +170,7 @@ comments in the tree. Must be parsed before plain comments."
    ;; (which are not covered by simple keywords below
    '((case_statement
       "case"    @font-lock-keyword-face
-      "default" @font-lock-keyword-face))
+      (default) @font-lock-keyword-face))
 
    :language 'fortran
    :feature 'keyword
@@ -186,7 +186,7 @@ comments in the tree. Must be parsed before plain comments."
       type: (identifier) @font-lock-type-face)
      (type_statement
       "class"   @font-lock-keyword-face
-      "default" @font-lock-keyword-face))
+      (default) @font-lock-keyword-face))
 
    :language 'fortran
    :feature 'keyword
