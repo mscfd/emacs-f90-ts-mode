@@ -1,22 +1,27 @@
 ;;; -*- lexical-binding: t; -*-
 ;;; f90-ts-mode.el --- Tree-sitter major mode for Fortran
 
-;; Copyright (C) 2025 Martin Stein
+;; Copyright (C) 2025-2026 Martin Stein
 
 ;; Author: Martin Stein
-;; Version: 0.01
+;; Version: 0.1
 ;; Keywords: languages, treesitter, fortran
 ;; Package-Name: f90-ts-mode
 
 ;; Provides syntax highlighting and structural navigation for Fortran 90+
 ;; files using the Tree-sitter parsing engine.
 
-;; Acknowledgement: With some inspiration from the legacy 'f90-mode.el'
+;;; Commentary:
+;;
+;; This mode is a tree-sitter based alternative to the classic
+;; `f90-mode'. It incorporates some logic and code snippets adapted
+;; from the original f90.el by Glenn Morris and others.
 
 ;; INSTALLATION:
 ;; for a simple setup:
 ;; 1. Save this file as ~/.emacs.d/lisp/f90-ts-mode.el
-;; 2. Add (add-to-list 'load-path "/home/you/.emacs.d/lisp") and (require 'f90-ts-mode) or use use-package
+;; 2. Add (add-to-list 'load-path "/home/you/.emacs.d/lisp")
+;;    and (require 'f90-ts-mode) or use use-package
 ;; 3. Ensure your treesitter grammar is available, for example:
 ;;    (add-to-list 'treesit-language-source-alist
 ;;                 '(fortran "/home/you/treesitter/f90"))
@@ -1199,6 +1204,7 @@ for it like type of construct and name."
           )))))
 
 
+;; The idea for smart end completion is taken from the classic f90-mode.
 (defun f90-ts--complete-smart-tab ()
   "Provide context-aware completion using tree-sitter after indentation by tab.
 Currently it handles end statements."
@@ -1220,6 +1226,7 @@ Currently it handles end statements."
 
 
 ;;------------------------------------------------------------------------------
+;; Break lines and add continuation symbol
 
 (defun f90-ts--indent-and-complete ()
   (interactive)
@@ -1236,6 +1243,8 @@ Currently it handles end statements."
       (insert " &")))
 
 
+;; Portions of the following code are adapted from `f90.el`,
+;; which is part of GNU Emacs.
 (defun f90-ts-break-line ()
   "Break line at point, insert continuation marker where necessary and indent."
   (interactive "*")
@@ -1269,6 +1278,64 @@ Currently it handles end statements."
     ))
 
   (indent-according-to-mode))
+
+
+
+;;------------------------------------------------------------------------------
+;; Comment region using some prefix
+
+(defcustom f90-ts-comment-region-prefix "!!$"
+  "Comment prefix."
+  :type 'string
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
+  "List of additional comment prefixes for interactive selection."
+  :type '(repeat string)
+  :group 'f90-ts)
+
+
+
+;; The following code are adapted from `f90.el`, which is part of GNU Emacs.
+(defun f90-ts-comment-region-with-prefix (beg-region end-region prefix)
+  "Comment/uncomment every line in the region using comment prefix.
+Insert debug comment prefix at the start of every line
+in the region, or, if already present, remove it."
+  (let ((end (copy-marker end-region)))
+    (goto-char beg-region)
+    (beginning-of-line)
+    (if (looking-at (regexp-quote prefix))
+        (delete-region (point) (match-end 0))
+      (insert prefix))
+    (while (and (zerop (forward-line 1))
+                (< (point) end))
+      (if (looking-at (regexp-quote prefix))
+          (delete-region (point) (match-end 0))
+        (insert prefix)))
+    (set-marker end nil)))
+
+
+(defun f90-ts-comment-region-default (beg-region end-region)
+  "Comment/uncomment every line in the region using default !!$ prefix."
+  (interactive "*r")
+  (f90-comment-region-with-prefix beg-region end-region f90-comment-region-prefix))
+
+
+(defun f90-ts-comment-region-custom (beg-region end-region prefix)
+  "Comment/uncomment every line in the region using custom PREFIX.
+If called interactively, prompt for a prefix from `f90-ts-extra-comment-prefixes`
+and `f90-comment-region-prefix`."
+  (interactive
+   (list
+    (progn
+      (barf-if-buffer-read-only)
+      (region-beginning))
+    (region-end)
+    (completing-read "choose comment prefix: "
+                          (cons f90-comment-region-prefix f90-ts-extra-comment-prefixes)
+                          nil t nil nil f90-comment-region-prefix)))
+  (f90-comment-region-with-prefix beg-region end-region prefix))
 
 
 ;;------------------------------------------------------------------------------
