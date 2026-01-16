@@ -135,7 +135,7 @@ Return nil if test passes, otherwise the test category (indentation, font-lock e
       )))
 
 
-(defun f90-ts-mode-tests--save-compare (file)
+(defun f90-ts-mode-tests--update-compare (file)
   "Generate and save compare file for FILE."
   (f90-ts-mode-tests--with-test-indent
    file
@@ -148,11 +148,11 @@ Return nil if test passes, otherwise the test category (indentation, font-lock e
        (message "saved compare file for %s" (file-name-nondirectory file))))))
 
 
-(defun f90-ts-mode-tests-generate-compare ()
+(defun f90-ts-mode-tests-update ()
   "Generate compare files for all resource files."
   (interactive)
   (dolist (file (directory-files (f90-ts-mode-tests--resources-dir) t "\\.f90\\'"))
-    (f90-ts-mode-tests--save-compare file)))
+    (f90-ts-mode-tests--update-compare file)))
 
 
 ;;------------------------------------------------------------------------------
@@ -194,8 +194,8 @@ If failure, then return the label which failed, otherwise nil."
          (current-val (plist-get current key))
          (label (substring (symbol-name key) 1)) ; remove leading ":" of key
          (cmp (equal compare-val current-val)))
-    (message "cmp %s" compare-val)
-    (message "cur %s" current-val)
+    ;;(message "cmp %s" compare-val)
+    ;;(message "cur %s" current-val)
     (unless cmp
       (when diff (f90-ts-mode-tests--show-diff file compare-val current-val label diff)))
     ;; return label in case of an failure

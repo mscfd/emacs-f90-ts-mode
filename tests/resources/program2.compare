@@ -1,0 +1,42 @@
+(:indentation
+"program prog2
+
+ use some_module
+
+ implicit none
+
+ type, extends(some_type) :: extra_stuff
+      integer :: ival = 123
+ contains
+      procedure :: init
+      procedure :: dispose
+ end type extra_stuff
+
+ class(extra_stuff), pointer :: p
+
+ allocate(extra_stuff :: p)
+ call p%init(456)
+ print *, p%ival
+ call p%dispose()
+
+contains
+
+ subroutine init(self, i)
+      class(extra_type), intent(out) :: self
+      integer, intent(in) :: i
+      self%ival = i
+ end subroutine init
+
+ subroutine dispose(self)
+      class(extra_type), intent(inout) :: self
+      self = extra_type()
+ end subroutine dispose
+
+end program prog2
+"
+
+:font-lock
+((1 1 8 font-lock-keyword-face) (1 9 14 font-lock-function-name-face) (3 17 20 font-lock-keyword-face) (5 35 43 font-lock-keyword-face) (7 51 55 font-lock-keyword-face) (7 55 56 f90-ts-font-lock-delimiter-face) (7 57 64 font-lock-keyword-face) (7 64 65 f90-ts-font-lock-bracket-face) (7 65 74 font-lock-type-face) (7 74 75 f90-ts-font-lock-bracket-face) (7 76 78 f90-ts-font-lock-delimiter-face) (7 79 90 font-lock-type-face) (8 97 104 font-lock-type-face) (8 105 107 f90-ts-font-lock-delimiter-face) (8 113 114 f90-ts-font-lock-operator-face) (8 115 118 font-lock-number-face) (9 120 128 font-lock-keyword-face) (10 135 144 font-lock-keyword-face) (10 145 147 f90-ts-font-lock-delimiter-face) (10 148 152 font-lock-function-name-face) (11 159 168 font-lock-keyword-face) (11 169 171 f90-ts-font-lock-delimiter-face) (11 172 179 font-lock-function-name-face) (12 181 184 font-lock-keyword-face) (12 185 189 font-lock-keyword-face) (12 190 201 font-lock-type-face) (14 204 209 font-lock-keyword-face) (14 209 210 f90-ts-font-lock-bracket-face) (14 210 221 font-lock-type-face) (14 221 222 f90-ts-font-lock-bracket-face) (14 222 223 f90-ts-font-lock-delimiter-face) (14 224 231 font-lock-keyword-face) (14 232 234 f90-ts-font-lock-delimiter-face) (16 239 247 font-lock-keyword-face) (16 247 248 f90-ts-font-lock-bracket-face) (16 248 259 font-lock-type-face) (16 260 262 f90-ts-font-lock-delimiter-face) (16 264 265 f90-ts-font-lock-bracket-face) (17 267 271 font-lock-keyword-face) (17 273 274 f90-ts-font-lock-operator-face) (17 278 279 f90-ts-font-lock-bracket-face) (17 279 282 font-lock-number-face) (17 282 283 f90-ts-font-lock-bracket-face) (18 285 290 f90-ts-font-lock-intrinsic-face) (18 292 293 f90-ts-font-lock-delimiter-face) (18 295 296 f90-ts-font-lock-operator-face) (19 302 306 font-lock-keyword-face) (19 308 309 f90-ts-font-lock-operator-face) (19 316 318 f90-ts-font-lock-bracket-face) (21 320 328 font-lock-keyword-face) (23 331 341 font-lock-keyword-face) (23 342 346 font-lock-function-name-face) (23 346 347 f90-ts-font-lock-bracket-face) (23 351 352 f90-ts-font-lock-delimiter-face) (23 354 355 f90-ts-font-lock-bracket-face) (24 362 367 font-lock-keyword-face) (24 367 368 f90-ts-font-lock-bracket-face) (24 368 378 font-lock-type-face) (24 378 379 f90-ts-font-lock-bracket-face) (24 379 380 f90-ts-font-lock-delimiter-face) (24 381 392 font-lock-keyword-face) (24 393 395 f90-ts-font-lock-delimiter-face) (25 407 414 font-lock-type-face) (25 414 415 f90-ts-font-lock-delimiter-face) (25 416 426 font-lock-keyword-face) (25 427 429 f90-ts-font-lock-delimiter-face) (26 442 443 f90-ts-font-lock-operator-face) (26 448 449 f90-ts-font-lock-operator-face) (27 453 456 font-lock-keyword-face) (27 457 467 font-lock-keyword-face) (27 468 472 font-lock-function-name-face) (29 475 485 font-lock-keyword-face) (29 486 493 font-lock-function-name-face) (29 493 494 f90-ts-font-lock-bracket-face) (29 498 499 f90-ts-font-lock-bracket-face) (30 506 511 font-lock-keyword-face) (30 511 512 f90-ts-font-lock-bracket-face) (30 512 522 font-lock-type-face) (30 522 523 f90-ts-font-lock-bracket-face) (30 523 524 f90-ts-font-lock-delimiter-face) (30 525 538 font-lock-keyword-face) (30 539 541 f90-ts-font-lock-delimiter-face) (31 558 559 f90-ts-font-lock-operator-face) (31 560 570 font-lock-function-name-face) (31 570 572 f90-ts-font-lock-bracket-face) (32 574 577 font-lock-keyword-face) (32 578 588 font-lock-keyword-face) (32 589 596 font-lock-function-name-face) (34 598 601 font-lock-keyword-face) (34 602 609 font-lock-keyword-face) (34 610 615 font-lock-function-name-face))
+
+:tree
+"(translation_unit (program (program_statement (name)) (use_statement (module_name)) (implicit_statement (none)) (derived_type_definition (derived_type_statement base: (base_type_specifier (identifier)) (type_name)) (variable_declaration type: (intrinsic_type) declarator: (init_declarator left: (identifier) right: (number_literal))) (derived_type_procedures (contains_statement) (procedure_statement (procedure_kind) declarator: (method_name)) (procedure_statement (procedure_kind) declarator: (method_name))) (end_type_statement (name))) (variable_declaration type: (derived_type name: (type_name)) attribute: (type_qualifier) declarator: (identifier)) (allocate_statement type: (identifier) allocation: (identifier)) (subroutine_call subroutine: (derived_type_member_expression (identifier) (type_member)) (argument_list (number_literal))) (print_statement (format_identifier) (output_item_list (derived_type_member_expression (identifier) (type_member)))) (subroutine_call subroutine: (derived_type_member_expression (identifier) (type_member)) (argument_list)) (internal_procedures (contains_statement) (subroutine (subroutine_statement name: (name) parameters: (parameters (identifier) (identifier))) (variable_declaration type: (derived_type name: (type_name)) attribute: (type_qualifier) declarator: (identifier)) (variable_declaration type: (intrinsic_type) attribute: (type_qualifier) declarator: (identifier)) (assignment_statement left: (derived_type_member_expression (identifier) (type_member)) right: (identifier)) (end_subroutine_statement (name))) (subroutine (subroutine_statement name: (name) parameters: (parameters (identifier))) (variable_declaration type: (derived_type name: (type_name)) attribute: (type_qualifier) declarator: (identifier)) (assignment_statement left: (identifier) right: (call_expression (identifier) (argument_list))) (end_subroutine_statement (name)))) (end_program_statement (name))))")
