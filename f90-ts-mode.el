@@ -547,6 +547,22 @@ associates and others."
         result))))
 
 
+(defun p-ps-pss (type-p type-ps type-pss)
+  "Matcher that checks types of parent, previous statement and next
+sibling of previous statement.
+This matcher with the previous statement nodes is mainly used for
+incomplete statements with error nodes and empty lines, where node
+is nil and parent an ERROR."
+  (lambda (node parent bol &rest _)
+    (let* ((prev-stmt (f90-ts--previous-stmt node parent))
+           (ps-sib (and prev-stmt (treesit-node-next-sibling prev-stmt))))
+      (let ((result (and (f90-ts--node-type-p parent type-p)
+                         (f90-ts--node-type-p prev-stmt type-ps)
+                         (f90-ts--node-type-p ps-sib type-pss))))
+        (when result
+          (f90-ts-log :indent "match: type-p type-ps type-pss= %s, %s, %s" type-p type-ps type-pss))
+        result))))
+
 ;; not used currently
 (defun n-p-nps-pps (type-n type-p type-nps type-pps)
   "Matcher that checks types of node, parent and previous node sibling and previous parent sibling."
@@ -639,10 +655,10 @@ to the opening parenthesis."
 
 
 (defun f90-ts--align-continued-expand-assoc (nodes)
-  "Replace association nodes in a list of NODES by their children."
+  "Replace association nodes in list NODES by their children."
   (seq-mapcat
    (lambda (node)
-     (if (string= (treesit-node-type node) "association")
+     (if (string= "association" (treesit-node-type node))
          (treesit-node-children node)
        (list node)))
    nodes))
@@ -658,35 +674,25 @@ Depending on context, we might need to drop children of PARENT or use grandparen
     ;; subroutine or function arguments drop the first child,
     ;; which is opening parenthesis
     (when-let ((children (and parent (treesit-node-children parent))))
-      (f90-ts--align-continued-expand-assoc (seq-drop children 1))))
+      (seq-drop children 1)))
 
-   ((string= (treesit-node-type parent) "associate_statement")
-    ;; the first child is keyword 'associate', which should be dropped
+   ((string= (treesit-node-type parent) "association_list")
+    ;; expand it, as the it contains a list of nodes, whose children are required
     (when-let ((children (and parent (treesit-node-children parent))))
-      (f90-ts--align-continued-expand-assoc (seq-drop children 1))))
+      (f90-ts--align-continued-expand-assoc children)))
 
-   ((string= (treesit-node-type parent) "association")
-    ;; we need do ascend to the grandparent, and drop first child (what exactly?)
-    (when-let* ((gp (and parent (treesit-node-parent parent)))
-                (children (treesit-node-children gp)))
-      (f90-ts--align-continued-expand-assoc (seq-drop children 1))))
-
-   ((string= (treesit-node-type parent) "binding_list")
+   ((or (string= (treesit-node-type parent) "binding_list")
+        (string= (treesit-node-type parent) "final_statement"))
     (when-let ((children (and parent (treesit-node-children parent))))
       ;; drop the (binding_name ...) part, and the => binding symbol
-      (f90-ts--align-continued-expand-assoc (seq-drop children 2))))
-
-   ((string= (treesit-node-type parent) "final_statement")
-    (when-let ((children (and parent (treesit-node-children parent))))
-      ;; drop the "final" and "::"
-      (f90-ts--align-continued-expand-assoc (seq-drop children 2))))
+      (seq-drop children 2)))
 
    ((string= (treesit-node-type parent) "variable_declaration")
     (when-let ((children (and parent (treesit-node-children parent))))
       ;; drop everything before the first declarator field (first declared variable)
       (seq-drop-while
        (lambda (child)
-         (not (equal "declarator" (treesit-node-field-name child))))
+         (not (string= "declarator" (treesit-node-field-name child))))
        children)))
 
    (t
@@ -695,7 +701,7 @@ Depending on context, we might need to drop children of PARENT or use grandparen
       children))))
 
 
-(defun f90-ts--align-continued-argsprev (children cur-line node-sym)
+(defun f90-ts--align-continued-tokens-prev (children cur-line node-sym)
   "From a list of CHILDREN select relevant nodes prior to given
 line CUR-LINE and satisfying some predicates like prior to CUR-LINE
 and of same symbol type NODE-SYM."
@@ -704,50 +710,60 @@ and of same symbol type NODE-SYM."
         (pred-node-sym (lambda (n) (eq (f90-ts--align-node-symbol n) node-sym))))
     ;; filter nodes by predicate, and if symbol based selection is empty,
     ;; fall back to almost all symbol selection (all except ampersand)
+    ;(f90-ts-log :indent "ap: %s" (mapcar #'f90-ts--align-node-symbol children))
+
     (let ((args-prev-almost (f90-ts--nodes-on-prev-lines children cur-line pred-almost))
-          (args-prev-sym (and node-sym (f90-ts--nodes-on-prev-lines children cur-line pred-node-sym))))
+          (args-prev-sym (and node-sym
+                              (f90-ts--nodes-on-prev-lines children cur-line pred-node-sym))))
+      ;(f90-ts-log :indent "apsym: %s" (mapcar #'f90-ts--align-node-symbol args-prev-sym))
+      ;(f90-ts-log :indent "apall: %s" (mapcar #'f90-ts--align-node-symbol args-prev-almost))
       (or args-prev-sym args-prev-almost))))
 
 
-(defun f90-ts--align-continued-select (args cur-col cur-line node-sym)
-  "From ARGS filter relevant args by previous line and symbol type NODE-SYM predicates.
+(defun f90-ts--align-continued-select (tokens cur-col cur-line node-sym)
+  "From TOKENS filter relevant tokens by previous line and symbol type NODE-SYM predicates.
 Then determine relevant column position and select column depending on CUR-COL.
 This offset is to be used with an column-0 anchor, and hence is a column number."
-  ;;(f90-ts-log :indent "contarg1: %s" args)
-  ;;(f90-ts-log :indent "contarg2: %d, %s" cur-line node-sym)
-  (let* ((args-prev (f90-ts--align-continued-argsprev args cur-line node-sym))
-         (args-col-unsorted (seq-map (lambda (n) (f90-ts--align-continued-node-col n node-sym)) args-prev))
-         (args-col (seq-uniq (seq-sort #'< args-col-unsorted))))
-    ;;(f90-ts-log :indent "contarg3: %s" args-prev)
-    ;;(f90-ts-log :indent "contarg4: %s" args-col)
+  ;;(f90-ts-log :indent "contarg1: %d, %s" cur-line node-sym)
+  ;;(f90-ts-log :indent "contarg2: %s" tokens)
+  (let* ((tokens-prev (f90-ts--align-continued-tokens-prev tokens cur-line node-sym))
+         (tokens-col-unsorted (seq-map
+                               (lambda (n)
+                                 (f90-ts--align-continued-node-col n node-sym))
+                               tokens-prev))
+         (tokens-col (seq-uniq (seq-sort #'< tokens-col-unsorted))))
+    ;;(f90-ts-log :indent "contarg3: %s" tokens-prev)
+    ;;(f90-ts-log :indent "contarg4: %s" tokens-col)
     ;;(f90-ts-log :indent "contarg5: %d" cur-col)
     (cond
-     ((member cur-col args-col)
+     ((member cur-col tokens-col)
       ;; already aligned, go to next column or wrap around
       (let* ((next-col
               (seq-find (lambda (arg-col) (< cur-col arg-col))
-                        args-col)))
+                        tokens-col)))
         ;; if there is a next-col, this next-col else column of first argument on previous line
-        (or next-col (car args-col))))
+        (or next-col (car tokens-col))))
 
-     (args-col
-      ; current column does not match any column of arguments/symbols on previous lines,
-      ; use smallest column as indentation
+     (tokens-col
+      ;; current column does not match any column of arguments/symbols on previous lines,
+      ;; use smallest column as indentation
       (progn
-        (car args-col)))
+        (car tokens-col)))
 
      (t
-      ; no previous arguments, but not on the line of argument list, use end position of
-      ; parent node argument_list plus 1
+      ;; no previous arguments, but not on the line of argument list, use end position of
+      ;; parent node (argument_list or whatever) plus 1
+      ;; (for example end position corresponds to opening parenthesis)
       (1+ (f90-ts--node-column parent)))
      )))
 
 
-(defun f90-ts--align-continued-arg-offset (node parent bol)
-  "If argument, indent continued Fortran arguments under argument of
-previous lines, rotating through positions. If anonymous node like
-parenthesis, comma etc, then do the same, but rotate through columns
-with symbols of same kind on previous argument lines.
+(defun f90-ts--align-continued-list-offset (node parent bol)
+  "For lists of tokens like arguments, indent continued Fortran
+arguments under argument of previous lines, rotating through
+positions. If anonymous node like parenthesis, comma etc, then do
+the same, but rotate through columns with symbols of same kind on
+previous argument lines.
 This offset function is to be used with an column-0 anchor."
   (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
       (let* ((children (and parent (f90-ts--align-continued-children parent)))
@@ -760,23 +776,34 @@ This offset function is to be used with an column-0 anchor."
 
 
 (defun f90-ts--align-continued-assoc-error (node parent bol)
-  "For associate statement with an ERROR parent, we need something special."
-  (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
-    (let* ((prev-stmt (f90-ts--previous-stmt node parent))
-           (pstmt-ix (treesit-node-index prev-stmt))
-           (pred-after (lambda (n) (and (< pstmt-ix (treesit-node-index n)))))
-           (siblings (treesit-node-children (treesit-node-parent prev-stmt)))
-           (sib-after (seq-filter pred-after siblings)))
-      ;;(f90-ts-log :indent "error assoc argsprev: %s" args-prev)
-      (f90-ts--align-continued-select sib-after cur-col cur-line node-sym))))
+  "The same as f90-ts--align-continued-list-offset, but for incomplete
+associate lists, where PARENT is an ERROR node.
+First map PARENT and call original function."
+  ;; the matcher ensures that prev-stmt and pssib have type "associate" and
+  ;; "association_list", the parent of prev-stmt must have type
+  ;; associate_statement, and this one should contain a child association_list
+  (let* ((prev-stmt (f90-ts--previous-stmt node parent))
+         (ps-sib (treesit-node-next-sibling prev-stmt)))
+    (f90-ts--align-continued-list-offset node ps-sib bol)))
 
 
 (defun f90-ts--align-node-symbol (node)
   "Return a symbol representing anonymous punctuation or operator NODE.
 If NODE is nil return nil."
   (when node
-    (if (string= (treesit-node-field-name node) "operator")
-        'operator
+    ;;(f90-ts-log :indent "symbol node: type=%s, field=%s, text=%s" (treesit-node-type node) (treesit-node-field-name node) (treesit-node-text node))
+    (cond
+     ((string= (treesit-node-type node) "ERROR")
+      'error)
+
+     ((string= (treesit-node-field-name node) "operator")
+      'operator)
+
+     ((string= (treesit-node-type node) "&")
+      ;; text is not always "&" (like virtual ampersand at beginning of line)
+      'ampersand)
+
+     (t
       (let ((text (treesit-node-text node)))
         (pcase text
           ("("  'parenthesis)
@@ -786,7 +813,7 @@ If NODE is nil return nil."
           ("=>" 'associate)
           ;; default: argument for anything else (this is probably a named node
           ;; of type identifier, number_literal, call_expression etc.
-          (_    'named))))))
+          (_    'named)))))))
 
 
 (defun f90-ts--indent-toplevel-offset (node parent _bol)
@@ -819,9 +846,10 @@ additionally some node and parent info if MSG=first."
     (f90-ts-log :indent "---------info %s--------------" msg)
     (when (or (string= msg "first") (string= msg "final catch"))
       (let* ((prev-stmt (f90-ts--previous-stmt node parent))
+             (pssib (and prev-stmt (treesit-node-next-sibling prev-stmt)))
              (sibling0 (and parent (treesit-node-child parent 0 t)))
-             (npsib (and node (treesit-node-prev-sibling node)))
-             (ppsib (and parent (treesit-node-prev-sibling parent)))
+             ;;(npsib (and node (treesit-node-prev-sibling node)))
+             ;;(ppsib (and parent (treesit-node-prev-sibling parent)))
              (child0 (and node (treesit-node-child node 0 t)))
              )
         (f90-ts-log :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
@@ -835,10 +863,11 @@ additionally some node and parent info if MSG=first."
         (f90-ts-inspect-node :indent node "info[node]")
         (f90-ts-inspect-node :indent parent "info[parent]")
         (f90-ts-inspect-node :indent prev-stmt "info[prevstmt]")
+        (f90-ts-inspect-node :indent pssib "info[pssib]")
         (f90-ts-inspect-node :indent child0 "info[child0]")
         (f90-ts-inspect-node :indent sibling0 "info[firstsib]")
-        (f90-ts-inspect-node :indent npsib "info[npsib]")
-        (f90-ts-inspect-node :indent ppsib "info[ppsib]")
+        ;;(f90-ts-inspect-node :indent npsib "info[npsib]")
+        ;;(f90-ts-inspect-node :indent ppsib "info[ppsib]")
         ))
     nil))
 
@@ -881,21 +910,26 @@ with !$ or !$omp")
 (defvar f90-ts-indent-rules-lists
   `(;; we compute absolute column position, using parents column as anchor is not useful for lists
     ,@(f90-ts-indent-rules-info "lists")
-    ((parent-is   "argument_list")                 column-0 f90-ts--align-continued-arg-offset)
-    ((parent-is   "association_list")              column-0 f90-ts--align-continued-arg-offset) ;; associate statement
-    ((n-p-ps nil  "parameters" "subroutine")       column-0 f90-ts--align-continued-arg-offset) ;; arguments of subroutine
-    ((n-p-ps nil  "parameters" "function")         column-0 f90-ts--align-continued-arg-offset) ;; arguments of function
-    ((n-p-ps nil  "parenthesized_expression" "do") column-0 f90-ts--align-continued-arg-offset) ;; within logical while expression
-    ((n-p-ps nil  "logical_expression"       "do") column-0 f90-ts--align-continued-arg-offset) ;; within logical while expression
-    ((n-p-ps nil  "parenthesized_expression" "if") column-0 f90-ts--align-continued-arg-offset) ;; within logical if expression
-    ((n-p-ps nil  "logical_expression"       "if") column-0 f90-ts--align-continued-arg-offset) ;; within logical if expression
+    ((parent-is "association_list")                     column-0 f90-ts--align-continued-list-offset)  ;; associate statement
+    ((p-ps-pss  "ERROR" "associate" "association_list") column-0 f90-ts--align-continued-assoc-error) ;; unclosed associate statement
+
+    ;; functions and subroutines
+    ((parent-is   "argument_list")                 column-0 f90-ts--align-continued-list-offset)
+    ((n-p-ps nil  "parameters" "subroutine")       column-0 f90-ts--align-continued-list-offset) ;; arguments of subroutine
+    ((n-p-ps nil  "parameters" "function")         column-0 f90-ts--align-continued-list-offset) ;; arguments of function
+
+    ;; logical expressions
+    ((n-p-ps nil  "parenthesized_expression" "do") column-0 f90-ts--align-continued-list-offset) ;; within logical while expression
+    ((n-p-ps nil  "logical_expression"       "do") column-0 f90-ts--align-continued-list-offset) ;; within logical while expression
+    ((n-p-ps nil  "parenthesized_expression" "if") column-0 f90-ts--align-continued-list-offset) ;; within logical if expression
+    ((n-p-ps nil  "logical_expression"       "if") column-0 f90-ts--align-continued-list-offset) ;; within logical if expression
 
     ;; binding and method lists
-    ((parent-is   "binding_list")    column-0 f90-ts--align-continued-arg-offset) ;; generic statement in DT decl
-    ((parent-is   "final_statement") column-0 f90-ts--align-continued-arg-offset) ;; final statement in DT decl
+    ((parent-is   "binding_list")    column-0 f90-ts--align-continued-list-offset) ;; generic statement in DT decl
+    ((parent-is   "final_statement") column-0 f90-ts--align-continued-list-offset) ;; final statement in DT decl
 
     ;; variable declarations
-    ((parent-is   "variable_declaration") column-0 f90-ts--align-continued-arg-offset) ;; standard variable declaration
+    ((parent-is   "variable_declaration") column-0 f90-ts--align-continued-list-offset) ;; standard variable declaration
     )
   "Indentation rules for lists on continued lines with alignment on previous list items.
 For example: argument lists, association lists, (logical) expressions with alignment at operators, etc.")
@@ -1004,12 +1038,11 @@ For example: argument lists, association lists, (logical) expressions with align
     ((n-p-ps nil                             "ERROR"           "block") previous-stmt-anchor f90-ts-indent-block)
 
     ((n-p-gp "end_associate_statement" "associate_statement" nil)         parent 0)
-    ((n-p-ps "association"             "associate_statement" nil)         column-0 f90-ts--align-continued-arg-offset)
-    ((n-p-ps ")"                       "associate_statement" nil)         column-0 f90-ts--align-continued-arg-offset)
-    ((n-p-ps "=>"                      "association"         nil)         column-0 f90-ts--align-continued-arg-offset)
+    ((n-p-ps "association"             "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
+    ((n-p-ps ")"                       "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
+    ((n-p-ps "=>"                      "association"         nil)         column-0 f90-ts--align-continued-list-offset)
     ((n-p-ps nil                       "association"         "associate") parent f90-ts-indent-block)
     ((n-p-ps nil                       "associate_statement" "associate") parent f90-ts-indent-block)
-    ((n-p-ps nil                       "ERROR"               "associate") column-0 f90-ts--align-continued-assoc-error)
     )
   "Indentation rules for control statements like do loops, associate and block statements.")
 
