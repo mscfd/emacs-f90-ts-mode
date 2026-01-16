@@ -681,6 +681,14 @@ Depending on context, we might need to drop children of PARENT or use grandparen
       ;; drop the "final" and "::"
       (f90-ts--align-continued-expand-assoc (seq-drop children 2))))
 
+   ((string= (treesit-node-type parent) "variable_declaration")
+    (when-let ((children (and parent (treesit-node-children parent))))
+      ;; drop everything before the first declarator field (first declared variable)
+      (seq-drop-while
+       (lambda (child)
+         (not (equal "declarator" (treesit-node-field-name child))))
+       children)))
+
    (t
     ;; for cases where nothing needs to be dropped (or just unidentified yet)
     (when-let ((children (and parent (treesit-node-children parent))))
@@ -869,7 +877,7 @@ with !$ or !$omp")
   `(;; we compute absolute column position, using parents column as anchor is not useful for lists
     ,@(f90-ts-indent-rules-info "lists")
     ((parent-is   "argument_list")                 column-0 f90-ts--align-continued-arg-offset)
-    ((parent-is   "association_list")              column-0 f90-ts--align-continued-arg-offset)
+    ((parent-is   "association_list")              column-0 f90-ts--align-continued-arg-offset) ;; associate statement
     ((n-p-ps nil  "parameters" "subroutine")       column-0 f90-ts--align-continued-arg-offset) ;; arguments of subroutine
     ((n-p-ps nil  "parameters" "function")         column-0 f90-ts--align-continued-arg-offset) ;; arguments of function
     ((n-p-ps nil  "parenthesized_expression" "do") column-0 f90-ts--align-continued-arg-offset) ;; within logical while expression
@@ -878,8 +886,11 @@ with !$ or !$omp")
     ((n-p-ps nil  "logical_expression"       "if") column-0 f90-ts--align-continued-arg-offset) ;; within logical if expression
 
     ;; binding and method lists
-    ((parent-is   "binding_list")    column-0 f90-ts--align-continued-arg-offset)
-    ((parent-is   "final_statement") column-0 f90-ts--align-continued-arg-offset)
+    ((parent-is   "binding_list")    column-0 f90-ts--align-continued-arg-offset) ;; generic statement in DT decl
+    ((parent-is   "final_statement") column-0 f90-ts--align-continued-arg-offset) ;; final statement in DT decl
+
+    ;; variable declarations
+    ((parent-is   "variable_declaration") column-0 f90-ts--align-continued-arg-offset) ;; standard variable declaration
     )
   "Indentation rules for lists on continued lines with alignment on previous list items.
 For example: argument lists, association lists, (logical) expressions with alignment at operators, etc.")
