@@ -236,7 +236,7 @@ comments in the tree. Must be parsed before plain comments."
    :language 'fortran
    :feature 'keyword
    ;; match keywords exposed by the grammar
-   '((["module" "program"
+   '((["program" "module" "submodule"
       "function" "subroutine" "procedure" "result"
       "end" "call"
       "if" "then" "else" "elseif" "endif"
@@ -306,12 +306,17 @@ comments in the tree. Must be parsed before plain comments."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'function
-   '((module_statement
-      "module"
-      (name)            @font-lock-function-name-face)
-     (program_statement
+   '((program_statement
       "program"
-      (name)            @font-lock-function-name-face)
+      (name)                  @font-lock-function-name-face)
+     (module_statement
+      "module"
+      (name)                  @font-lock-function-name-face)
+     (submodule_statement
+      "submodule"
+      ancestor: (module_name
+                 (name)       @font-lock-function-name-face)
+      (name)                  @font-lock-function-name-face)
      )))
 
 
@@ -410,27 +415,32 @@ associates and others."
    '((end_program_statement
       "end"
       "program"
-      ((name) :?)   @font-lock-function-name-face)
+      (name)       @font-lock-function-name-face)
 
      (end_module_statement
       "end"
       "module"
-      ((name) :?)   @font-lock-function-name-face)
+      (name)       @font-lock-function-name-face)
+
+     (end_submodule_statement
+      "end"
+      "submodule"
+      (name)       @font-lock-function-name-face)
 
      (end_function_statement
-      "end"         ;; covered by general keyword list
-      "function"    @font-lock-keyword-face
-      ((name) :?)   @font-lock-function-name-face)
+      "end"
+      "function"
+      (name)       @font-lock-function-name-face)
 
      (end_subroutine_statement
-      "end"         ;; covered by general keyword list
-      "subroutine"  @font-lock-keyword-face
-      ((name) :?)   @font-lock-function-name-face)
+      "end"
+      "subroutine"
+      (name)       @font-lock-function-name-face)
 
      (end_interface_statement
-      "end"         ;; covered by general keyword list
-      "interface"  @font-lock-keyword-face
-      ((name) :?)   @font-lock-function-name-face)
+      "end"
+      "interface"
+      (name)       @font-lock-function-name-face)
      )))
 
 
@@ -955,9 +965,25 @@ For example: argument lists, association lists, (logical) expressions with align
 
 
 (defvar f90-ts-indent-rules-prog-mod
-  `(;; program or module interface part (before contains)
+  `(;; program or module interface part (before contains) and end statement
     ,@(f90-ts-indent-rules-info "program module")
-    ((parent-is "program") parent f90-ts--indent-toplevel-offset)
+
+    ;; in all cases: first match node with end_xyz_statement, and then only
+    ;; whether parent is xyz, as parent is xyz in both cases
+
+    ((node-is "end_program_statement") parent 0)
+    ((parent-is  "program")            parent f90-ts--indent-toplevel-offset)
+    ((n-p-ps nil "ERROR" "program")    parent f90-ts--indent-toplevel-offset)
+
+    ;; parent-is uses regexp matching, thus use "^module" to avoid that it
+    ;; matches "submodule"
+    ((node-is "end_module_statement") parent 0)
+    ((parent-is  "^module")           parent f90-ts--indent-toplevel-offset)
+    ((n-p-ps nil "ERROR" "module")    parent f90-ts--indent-toplevel-offset)
+
+    ((node-is "end_submodule_statement") parent 0)
+    ((parent-is  "submodule")            parent f90-ts--indent-toplevel-offset)
+    ((n-p-ps nil "ERROR" "submodule")    parent f90-ts--indent-toplevel-offset)
     )
   "Indentation rules for program and module nodes.")
 
