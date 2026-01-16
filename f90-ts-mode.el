@@ -698,12 +698,12 @@ Depending on context, we might need to drop children of PARENT or use grandparen
 (defun f90-ts--align-continued-argsprev (children cur-line node-sym)
   "From a list of CHILDREN select relevant nodes prior to given
 line CUR-LINE and satisfying some predicates like prior to CUR-LINE
-or of same symbol type NODE-SYM."
+and of same symbol type NODE-SYM."
   ;; if node-sym is not known take almost all kind of nodes, except for continuation symbol
   (let ((pred-almost (lambda (n) (not (eq (f90-ts--align-node-symbol n) 'ampersand))))
         (pred-node-sym (lambda (n) (eq (f90-ts--align-node-symbol n) node-sym))))
     ;; filter nodes by predicate, and if symbol based selection is empty,
-    ;; fall back to almost all symbol selection
+    ;; fall back to almost all symbol selection (all except ampersand)
     (let ((args-prev-almost (f90-ts--nodes-on-prev-lines children cur-line pred-almost))
           (args-prev-sym (and node-sym (f90-ts--nodes-on-prev-lines children cur-line pred-node-sym))))
       (or args-prev-sym args-prev-almost))))
@@ -750,8 +750,13 @@ parenthesis, comma etc, then do the same, but rotate through columns
 with symbols of same kind on previous argument lines.
 This offset function is to be used with an column-0 anchor."
   (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
-      (let* ((children (and parent (f90-ts--align-continued-children parent))))
-        (f90-ts--align-continued-select children cur-col cur-line node-sym))))
+      (let* ((children (and parent (f90-ts--align-continued-children parent)))
+             (node-sym-noamp (unless (eq node-sym 'ampersand) node-sym)))
+        ;; a line starting with an ampersand is not allowed in standard fortran,
+        ;; thus we do not want to align ampersand;
+        ;; if lines starts with an ampersand, then this is probably still missing
+        ;; some text about to typed, so we align assuming it to be an empty line
+        (f90-ts--align-continued-select children cur-col cur-line node-sym-noamp))))
 
 
 (defun f90-ts--align-continued-assoc-error (node parent bol)
