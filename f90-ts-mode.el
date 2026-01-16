@@ -340,7 +340,16 @@ comments in the tree. Must be parsed before plain comments."
       (type_name)                @font-lock-type-face)
      (end_type_statement
       (name)                     @font-lock-type-face)
-     )))
+     )
+
+   :language 'fortran
+   :feature 'type
+   ;; special declarations (e.g. within allocate statements)
+   ;; TODO: should the grammar use type_name instead of identifier as done elsewhere?
+   '((allocate_statement
+      type: (identifier)        @font-lock-type-face)
+     )
+   ))
 
 
 (defun f90-ts--font-lock-rules-function ()
