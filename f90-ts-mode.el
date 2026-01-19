@@ -540,7 +540,7 @@ associates and others."
 
 
 (defun f90-ts--openmp-comment-is ()
-  "Matcher that checks if first named child of parent is TYPE."
+  "Matcher that checks whether node is an openmp comment."
   (lambda (node parent bol &rest _)
     (and (f90-ts--node-type-p node "comment")
          (f90-ts-openmp-node-p node))))
@@ -1460,8 +1460,7 @@ Include any special symbol characters "
 
 
 (defun f90-ts-openmp-node-p (node)
-  "Check if start of NODE is on a line starting with optional whitespace and !$,
-which is an openmp statement."
+  "Check if NODE is a comment node and has the openmp comment prefix."
   (when (string= (treesit-node-type node) "comment")
     (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
 
