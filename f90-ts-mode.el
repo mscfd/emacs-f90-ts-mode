@@ -113,6 +113,13 @@ jumping and nil turns of smart end completion."
   :group 'f90-ts)
 
 
+(defface f90-ts-font-lock-special-comment-face
+  '((t :foreground "Sienna4"
+       :weight bold))
+  "Face for openmp statements."
+  :group 'f90-ts)
+
+
 (defface f90-ts-font-lock-test1-face
   '((t :foreground "Red"
        :background "Yellow"))
@@ -183,13 +190,13 @@ jumping and nil turns of smart end completion."
 (defun f90-ts--font-lock-rules-openmp ()
   "Font-lock rules for openmp statements, which are currently stored as
 comments in the tree. Must be parsed before plain comments."
-    (treesit-font-lock-rules
-     :language 'fortran
-     :feature 'comment
-     '(;; capture comments starting with !$, which are openmp statements
-       ((comment) @f90-ts-font-lock-openmp-face
-        (:pred f90-ts-openmp-node-p @f90-ts-font-lock-openmp-face))
-       )))
+  (treesit-font-lock-rules
+   :language 'fortran
+   :feature 'comment
+   '(;; capture comments starting with !$, which are openmp statements
+     ((comment) @f90-ts-font-lock-openmp-face
+      (:pred f90-ts-openmp-node-p @f90-ts-font-lock-openmp-face))
+     )))
 
 
 (defun f90-ts--font-lock-rules-comment ()
@@ -197,8 +204,11 @@ comments in the tree. Must be parsed before plain comments."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'comment
-   '((comment) @font-lock-comment-face)
-   ))
+   '(
+     ((comment) @f90-ts-font-lock-special-comment-face
+      (:pred f90-ts-special-comment-node-p @f90-ts-font-lock-special-comment-face))
+     ((comment) @font-lock-comment-face)
+     )))
 
 
 (defun f90-ts--font-lock-rules-keyword ()
@@ -546,12 +556,20 @@ associates and others."
          (f90-ts-openmp-node-p node))))
 
 
+(defun f90-ts--special-comment-is ()
+  "Matcher that checks whether node is a special comment."
+  (lambda (node parent bol &rest _)
+    (and (f90-ts--node-type-p node "comment")
+         (f90-ts-special-comment-node-p node))))
+
+
 (defun f90-ts--comment-is ()
   "Matcher that checks whether node and previous node are comments."
   (lambda (node parent bol &rest _)
     (when (f90-ts--node-type-p node "comment")
       (let ((prev-sib (treesit-node-prev-sibling node)))
-        (f90-ts--node-type-p prev-sib "comment")))))
+        (and (f90-ts--node-type-p prev-sib "comment")
+             (f90-ts-special-comment-node-p node))))))
 
 
 (defun n-p-ps (type-n type-p type-ps)
@@ -921,6 +939,7 @@ with !$ or !$omp")
 (defvar f90-ts-indent-rules-comments
   `(;; indent a sequence of comments with respect to previous comment
     ,@(f90-ts-indent-rules-info "comments")
+    ((f90-ts--special-comment-is) parent 0)
     ((f90-ts--comment-is) prev-sibling 0)
     )
   "Indentation rules for comments (excluding openmp statements).")
@@ -1431,9 +1450,11 @@ and `f90-comment-region-prefix`."
 ;; auxiliary
 
 (defcustom f90-ts-comment-prefix-regexp "!\\(?:!*\\|[<>]\\)\\s-*"
-  "Regular expression for matching comment starts (excluding openmp).
+  "Regular expression for matching and capturing comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments."
+Also add trailing whitespace characters to preserve indentation within comments.
+This is used for applying the same comment starter in comment section, see
+`f90-ts-break-line`."
   :type 'regexp
   :safe #'stringp  ; allows setting via file-local variables if it's a string
   :group 'f90-ts)
@@ -1443,6 +1464,14 @@ Also add trailing whitespace characters to preserve indentation within comments.
   "Regular expression for matching comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments."
+  :type 'regexp
+  :safe #'stringp  ; allows setting via file-local variables if it's a string
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-special-comment-regexp ""
+  "Regular expression for matching special comments (e.g. for structuring code).
+Used for applying a special font lock face."
   :type 'regexp
   :safe #'stringp  ; allows setting via file-local variables if it's a string
   :group 'f90-ts)
@@ -1463,6 +1492,13 @@ Include any special symbol characters "
   "Check if NODE is a comment node and has the openmp comment prefix."
   (when (string= (treesit-node-type node) "comment")
     (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
+
+
+(defun f90-ts-special-comment-node-p (node)
+  "Check if NODE is a comment node and satisfies the special comment regexp."
+  (when (and (not (string-empty-p f90-ts-special-comment-regexp))
+             (string= (treesit-node-type node) "comment"))
+    (string-match (concat "^" f90-ts-special-comment-regexp) (treesit-node-text node))))
 
 
 (defun f90-ts-in-string-p ()
