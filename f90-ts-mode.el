@@ -238,16 +238,7 @@ comments in the tree. Must be parsed before plain comments."
    :feature 'keyword
    ;; match keywords in select type statements
    ;; (which are not covered by simple keywords below
-   '((selector
-      (identifier)       @font-lock-type-face)
-     (derived_type
-      name: (type_name) @font-lock-type-face)
-     (type_statement
-      ["type" "class"]   @font-lock-keyword-face
-      "is"               @font-lock-keyword-face
-      type: (identifier) @font-lock-type-face)
-     (type_statement
-      "class"   @font-lock-keyword-face
+   '((type_statement
       (default) @font-lock-keyword-face))
 
    :language 'fortran
@@ -259,7 +250,8 @@ comments in the tree. Must be parsed before plain comments."
       "if" "then" "else" "elseif" "endif"
       "do" "while"
       "cycle" "exit"
-      "type" "class" "extends" "abstract"
+      "type" "class" "is" "typeof" "classof"
+      "extends" "abstract"
       "pass" "nopass" "deferred"
       "operator" "assignment" "generic" "final"
       "select" "case" "default"
@@ -351,10 +343,10 @@ comments in the tree. Must be parsed before plain comments."
    :language 'fortran
    :feature 'type
    ;; match type keywords
-   '((derived_type_statement
+   '(((type_name)                @font-lock-type-face)
+     ((derived_type_statement
       base: (base_type_specifier
-             (identifier)        @font-lock-type-face)
-      (type_name)                @font-lock-type-face)
+             (identifier)        @font-lock-type-face)))
      (end_type_statement
       (name)                     @font-lock-type-face)
      )
@@ -363,10 +355,11 @@ comments in the tree. Must be parsed before plain comments."
    :feature 'type
    ;; special declarations (e.g. within allocate statements)
    ;; TODO: should the grammar use type_name instead of identifier as done elsewhere?
-   '((allocate_statement
+   '(((allocate_statement
+      type: (identifier)        @font-lock-type-face))
+     (type_statement
       type: (identifier)        @font-lock-type-face)
-     )
-   ))
+   )))
 
 
 (defun f90-ts--font-lock-rules-function ()
