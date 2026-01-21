@@ -619,16 +619,22 @@ is nil and parent an ERROR."
         result))))
 
 
-(defun n-p-ch (type-n type-p type-ch )
-  "Matcher that checks types of node, parent and first child of node."
+(defun n-p-ch-psib (type-n type-p type-ch type-psib)
+  "Matcher that checks types of node, parent, first child of node
+and previous sibling of node (actually last child of parent previous
+to position, which also works for node=nil)."
   (lambda (node parent bol &rest _)
-    (let ((child0 (treesit-node-child node 0 t)))
-      ;;(f90-ts-log :indent "n-p-ch-matcher: node=%s" (and node (treesit-node-type node)))
-      ;;(f90-ts-log :indent "n-p-ch-matcher: parent=%s" (and parent (treesit-node-type parent)))
-      ;;(f90-ts-log :indent "n-p-ch-matcher: child=%s" (and child0 (treesit-node-type child0)))
+    (let* ((child0 (and node (treesit-node-child node 0 t)))
+           (prev-sib (and parent
+                          (f90-ts--previous-sibling parent))))
+      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: node=%s" (and node (treesit-node-type node)))
+      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: parent=%s" (and parent (treesit-node-type parent)))
+      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: child0=%s" (and child0 (treesit-node-type child0)))
+      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: prevsib=%s" (and prev-sib (treesit-node-type prev-sib)))
       (and (f90-ts--node-type-p node type-n)
            (f90-ts--node-type-p parent type-p)
-           (f90-ts--node-type-p child0 type-ch)))))
+           (f90-ts--node-type-p child0 type-ch)
+           (f90-ts--node-type-p prev-sib type-psib)))))
 
 
 ;;++++++++++++++
@@ -648,7 +654,7 @@ with the previous relevant line."
   ;; node is nil if on an empty line, thus we should use parent to
   ;; find a meaningful previous "sibling" of node
   (let* ((prev-sib (and parent
-                        (f90-ts--before-child parent (line-number-at-pos bol) #'f90-ts--node-not-comment-or-error-p)))
+                        (f90-ts--previous-sibling parent)))
          (prev-neigh (f90-ts--previous-stmt node parent))
          (node-sel (or prev-sib prev-neigh parent node)))
     (if node-sel
@@ -894,14 +900,15 @@ additionally some node and parent info if MSG=first."
     (when (string= msg "first")
         (f90-ts-log :indent "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" msg))
     (f90-ts-log :indent "---------info %s--------------" msg)
-    (when (or (string= msg "first") (string= msg "final catch"))
+    (when (or (string= msg "first") (string= msg "catch all"))
       (let* ((grandparent (and parent (treesit-node-parent parent)))
              (prev-stmt (f90-ts--previous-stmt node parent))
              (pssib (and prev-stmt (treesit-node-next-sibling prev-stmt)))
-             (sibling0 (and parent (treesit-node-child parent 0 t)))
              ;;(npsib (and node (treesit-node-prev-sibling node)))
              ;;(ppsib (and parent (treesit-node-prev-sibling parent)))
              (child0 (and node (treesit-node-child node 0 t)))
+             (sibling0 (and parent (treesit-node-child parent 0 t)))
+             (prev-sib (and parent (f90-ts--previous-sibling parent)))
              )
         (f90-ts-log :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
                     (point) bol (line-beginning-position) (line-number-at-pos))
@@ -919,6 +926,7 @@ additionally some node and parent info if MSG=first."
         (f90-ts-inspect-node :indent pssib "info[pssib]")
         (f90-ts-inspect-node :indent child0 "info[child0]")
         (f90-ts-inspect-node :indent sibling0 "info[firstsib]")
+        (f90-ts-inspect-node :indent prev-sib "info[prevsib]")
         ;;(f90-ts-inspect-node :indent npsib "info[npsib]")
         ;;(f90-ts-inspect-node :indent ppsib "info[ppsib]")
         ))
@@ -1059,9 +1067,9 @@ For example: argument lists, association lists, (logical) expressions with align
 (defvar f90-ts-indent-rules-derived-type
   `(;; type definitions
     ,@(f90-ts-indent-rules-info "derived type")
-    ((n-p-gp "end_type_statement" "derived_type_definition" nil) parent 0)
-    ((n-p-ch "derived_type_procedures" "derived_type_definition" "contains_statement") parent 0)
-    ((n-p-ch "ERROR"                   "derived_type_definition" "contains_statement") parent 0)
+    ((n-p-gp      "end_type_statement"      "derived_type_definition" nil)                      parent 0)
+    ((n-p-ch-psib "derived_type_procedures" "derived_type_definition" "contains_statement" nil) parent 0)
+    ((n-p-ch-psib "ERROR"                   "derived_type_definition" "contains_statement" nil) parent 0)
     ((parent-is "derived_type_procedures") parent f90-ts-indent-block)
     ((parent-is "derived_type_definition") parent f90-ts-indent-block)
     )
@@ -1146,7 +1154,12 @@ For example: argument lists, association lists, (logical) expressions with align
 (defvar f90-ts-indent-rules-catch-all
   `(;; final catch-all rule, with a fallback anchor which also prints
     ;; some diagnostics to allow adding further rules
-    ,@(f90-ts-indent-rules-info "final catch")
+    ,@(f90-ts-indent-rules-info "catch remaining")
+    ((n-p-ch-psib nil "translation_unit" nil "subroutine_statement") parent f90-ts-indent-block)
+    ((n-p-ch-psib nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
+    ((n-p-ch-psib nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
+    ((n-p-ch-psib nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
+    ,@(f90-ts-indent-rules-info "catch all")
     (catch-all catch-all-anchor 0)
     )
   "Final indentation rule to handle default case and catch anything else.")
@@ -1590,11 +1603,35 @@ Otherwise return non-nil if node is non-nil and is of type TYPE."
     t))
 
 
+(defun f90-ts--node-not-comment-p (node)
+  "Return true if NODE is not of type comment."
+  (let ((type (treesit-node-type node)))
+    (not (string= type "comment"))))
+
+
 (defun f90-ts--node-not-comment-or-error-p (node)
   "Return true if NODE is not of type comment or error. This is used to
 find relevant nodes."
   (let ((type (treesit-node-type node)))
     (not (member type (list "comment" "ERROR")))))
+
+
+;; currently not used, but might be useful
+(defun f90-ts--statement-at-node (node)
+  "For a node, find the most relevant (grand...)parent node starting at
+the same position. This is done by ascend to parent nodes until start
+position becomes different or an ERROR or translation_unit node is
+encountered."
+  ;; ascend as long as parent starts at the same position and is not an ERROR node
+  (cl-loop
+   for current = node then parent
+   for parent = (treesit-node-parent current)
+   while (and parent
+              (= (treesit-node-start parent)
+                 (treesit-node-start current))
+              (not (or (string= (treesit-node-type parent) "ERROR")
+                       (string= (treesit-node-type parent) "translation_unit"))))
+   finally return current))
 
 
 (defun f90-ts--previous-stmt (node parent)
@@ -1626,6 +1663,28 @@ during ascend or descend (for example comment nodes)."
      ;; (take continuation lines into account and go to beginning of statement)
      (and prev-descend (f90-ts--first-node-of-stmt prev-descend))
      )))
+
+
+(defun f90-ts--previous-sibling (parent)
+  "Previous sibling based on position of point. Especially for empty
+line, it often happens that node=nil, but parent is some relevant node,
+whose children, which are kind of siblings to nil-node-position, can be
+used to determine things like indentation.
+For the first sibling itself, we do not exclude ERROR nodes, then the
+ERROR node is descended (usually just one step) to find a node with relevant
+structure type, like subroutine_statement or similar."
+  (let* ((cur-line (line-number-at-pos))
+         (predicate #'f90-ts--node-not-comment-p)
+         (psib (f90-ts--before-child parent cur-line predicate)))
+    ;; if psib=nil, just return nil
+    ;; if psib=ERROR node, descend and try to find some non-error node
+    (cl-loop
+     with current = psib
+     while (and current
+                (string= (treesit-node-type current) "ERROR")
+                (treesit-node-child current 0 t))
+     do (setq current (treesit-node-child current 0 t))
+     finally return current)))
 
 
 (defun f90-ts--before-child (node line predicate)
@@ -1683,6 +1742,8 @@ if present, further go back skipping comments until beginning of
 statement is found."
   (let* ((start (treesit-node-start node))
          (head (f90-ts--first-node-on-line start)))
+    ;;(f90-ts-inspect-node :indent head "start")
+    ;;(f90-ts-inspect-node :indent head "head ")
     (while (string= (treesit-node-type head) "&")
       ;; go to corresponding terminating '&'
       ;; (the head of line ampersand might be virtual, not a real symbol)
