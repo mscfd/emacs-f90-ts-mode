@@ -68,6 +68,31 @@ subroutine bodies, control statements (do, if, associate ...)."
   :group 'f90-ts-indent)
 
 
+(defconst f90-ts-indent-lists-options
+  '(radio (const :tag "Keep if aligned or align to first element" keep-or-first)
+          (const :tag "Always align with first element" always-first)
+          (const :tag "Indent as for continued lines" continued-line)
+          (const :tag "Rotate elements" rotate))
+  "Options for indentation of list like structures on continued lines.")
+
+
+(defcustom f90-ts-indent-lists-region 'keep-or-first
+  "Options for how to indent list like structures on continued lines,
+used as default setting, in particular if indent-region is invoked."
+  :type f90-ts-indent-lists-options
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-indent-lists-line 'rotate
+  "Options for how to indent list like structures on continued lines,
+used for indentation of a single line. Used in function
+f90-ts-indent-for-tab-command, which can be bound to a key like <tab>."
+  :type f90-ts-indent-lists-options
+  :group 'f90-ts)
+
+
+;;------------------------------------------------------------------------------
+
 (defcustom f90-ts-smart-end 'blink
   "Copy from original f90 prog mode. If set to blink, then jump to the
 opening clause of a smart end completion, no-blink does completion without
@@ -146,7 +171,7 @@ jumping and nil turns of smart end completion."
 
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
-    ;; (define-key map (kbd "A-h m") #'f90-ts-some-function)
+    (define-key map (kbd "<tab>") #'f90-ts-indent-line-or-region)
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -663,7 +688,7 @@ with the previous relevant line."
 
 
 ;;++++++++++++++
-;; offset functions
+;; offset functions: general
 
 (defun f90-ts--minus-offset (offset)
   "Returns an offset function which returns -OFFSET.
@@ -672,6 +697,51 @@ Mainly necessary for error cases without proper parent trees to use."
     (- offset)))
 
 
+(defun f90-ts--indent-toplevel-offset (node parent _bol)
+  "Indent internal_procedure: 0 when inside module, otherwise use f90-ts-indent-contain."
+  ;(f90-ts-log :indent "%d  %d  %d" bol (treesit-node-start parent) (treesit-node-start node))
+  (let* ((grandparent (treesit-node-parent parent))
+         (ggparent    (and grandparent (treesit-node-parent grandparent))))
+    (f90-ts-log :indent "toplevel-offset: grandparent type = %s" (and grandparent (treesit-node-type grandparent)))
+    (f90-ts-log :indent "toplevel-offset: ggparent type = %s" (and ggparent (treesit-node-type ggparent)))
+    ;; before 'contains' statement, grandparent is translation_unit,
+    ;; after 'contains' it is module or program
+    (if (or (and grandparent (member (treesit-node-type grandparent)
+                                     '("module" "program" "translation_unit")))
+            (and grandparent ggparent
+                 (string= (treesit-node-type grandparent) "ERROR")
+                 (string= (treesit-node-type ggparent) "translation_unit")))
+        f90-ts-indent-toplevel
+      f90-ts-indent-contain)))
+
+
+;;++++++++++++++
+;; offset functions: lists on continued lines
+;; handling alignment options
+
+;; indent region variant is used internally, hence is overridden if
+;; tab version is required")
+(defvar-local f90-ts--align-continued-variant-tab nil
+  "Current variant for indentation, if nil use region variant,
+otherwise use tab variant.")
+
+
+(defun f90-ts-indent-line-or-region ()
+  "Indent line with tab variant, or region with region variant if
+region is active."
+  (interactive)
+  (if (use-region-p)
+      (indent-region (region-beginning) (region-end))
+    (unwind-protect
+        (progn
+          (setq f90-ts--align-continued-variant-tab t)
+          (indent-for-tab-command))
+      (setq f90-ts--align-continued-variant-tab nil))))
+
+
+;;++++++++++++++
+;; offset functions: lists on continued lines
+;; rotation logic
 (defun f90-ts--align-continued-location (node)
   "Determine node dependent position related values. These are current
 column, line number and symbol type at point (for deciding where to
@@ -805,7 +875,7 @@ and of same symbol type NODE-SYM."
       (or args-prev-sym args-prev-almost))))
 
 
-(defun f90-ts--align-continued-select (tokens cur-col cur-line node-sym)
+(defun f90-ts--align-continued-select (tokens cur-col cur-line node-sym variant)
   "From TOKENS filter relevant tokens by previous line and symbol type NODE-SYM predicates.
 Then determine relevant column position and select column depending on CUR-COL.
 This offset is to be used with an column-0 anchor, and hence is a column number."
@@ -816,31 +886,47 @@ This offset is to be used with an column-0 anchor, and hence is a column number.
                                (lambda (n)
                                  (f90-ts--align-continued-node-col n node-sym))
                                tokens-prev))
-         (tokens-col (seq-uniq (seq-sort #'< tokens-col-unsorted))))
+         (tokens-col (seq-uniq (seq-sort #'< tokens-col-unsorted)))
+         (is-aligned (member cur-col tokens-col)))
     ;;(f90-ts-log :indent "contarg3: %s" tokens-prev)
     ;;(f90-ts-log :indent "contarg4: %s" tokens-col)
     ;;(f90-ts-log :indent "contarg5: %d" cur-col)
     (cond
-     ((member cur-col tokens-col)
-      ;; already aligned, go to next column or wrap around
+     ((and tokens-col
+           (or (eq variant 'always-first)
+               (not is-aligned)))
+      ;; we have relevant tokens, and either always-first or not aligned
+      (car tokens-col))
+
+     ((and is-aligned
+           (eq variant 'keep-or-first))
+      ;; aligned, keep current column
+      cur-col)
+
+     ((and is-aligned
+           (eq variant 'rotate))
+      ;; aligned, rotate (go to next column or wrap around)
       (let* ((next-col
               (seq-find (lambda (arg-col) (< cur-col arg-col))
                         tokens-col)))
-        ;; if there is a next-col, this next-col else column of first argument on previous line
+        ;; if there is a next-col, take it, otherwise get column of first
+        ;; argument on previous line
         (or next-col (car tokens-col))))
 
-     (tokens-col
-      ;; current column does not match any column of arguments/symbols on previous lines,
-      ;; use smallest column as indentation
-      (progn
-        (car tokens-col)))
-
      (t
-      ;; no previous arguments, but not on the line of argument list, use end position of
-      ;; parent node (argument_list or whatever) plus 1
-      ;; (for example end position corresponds to opening parenthesis)
-      (1+ (f90-ts--node-column parent)))
+      ;; no previous arguments, do something else
+      nil)
      )))
+
+
+(defun f90-ts--align-continued-list-cont (node parent bol)
+  "Offset with continued-line option. Return prev-stmt offset
+plus indentation offset for continued lines."
+  (if-let ((prev-stmt (f90-ts--previous-stmt node parent)))
+      ;; we start with offset-0, so we need to add column of prev-stmt
+      (+ f90-ts-indent-continued
+         (f90-ts--node-column prev-stmt))
+    bol))
 
 
 (defun f90-ts--align-continued-list-offset (node parent bol)
@@ -850,14 +936,27 @@ positions. If anonymous node like parenthesis, comma etc, then do
 the same, but rotate through columns with symbols of same kind on
 previous argument lines.
 This offset function is to be used with an column-0 anchor."
-  (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
-      (let* ((children (and parent (f90-ts--align-continued-children parent)))
-             (node-sym-noamp (unless (eq node-sym 'ampersand) node-sym)))
-        ;; a line starting with an ampersand is not allowed in standard fortran,
-        ;; thus we do not want to align ampersand;
-        ;; if lines starts with an ampersand, then this is probably still missing
-        ;; some text about to typed, so we align assuming it to be an empty line
-        (f90-ts--align-continued-select children cur-col cur-line node-sym-noamp))))
+  (let ((variant (if f90-ts--align-continued-variant-tab
+                     f90-ts-indent-lists-line
+                   f90-ts-indent-lists-region)))
+    (f90-ts-log :indent "continued list variant is: %s" variant)
+    (if (eq variant 'continued-line)
+        (f90-ts--align-continued-list-cont node parent bol)
+
+      (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
+        (let* ((children (and parent (f90-ts--align-continued-children parent)))
+               (node-sym-noamp (unless (eq node-sym 'ampersand) node-sym)))
+          ;; a line starting with an ampersand is not allowed in standard fortran,
+          ;; thus we do not want to align ampersand;
+          ;; if lines starts with an ampersand, then this is probably still missing
+          ;; some text about to typed, so we align assuming it to be an empty line
+          (or (f90-ts--align-continued-select children cur-col cur-line node-sym-noamp variant)
+              ;; failed, most likely as there are on prior list items, as point is not on the
+              ;; line of the start of the list, use end position of
+              ;; parent node (argument_list or whatever) plus 1
+              ;; (for example end position corresponds to opening parenthesis)
+              (1+ (f90-ts--node-column parent)))))
+      )))
 
 
 (defun f90-ts--align-continued-assoc-error (node parent bol)
@@ -899,24 +998,6 @@ If NODE is nil return nil."
           ;; default: argument for anything else (this is probably a named node
           ;; of type identifier, number_literal, call_expression etc.
           (_    'named)))))))
-
-
-(defun f90-ts--indent-toplevel-offset (node parent _bol)
-  "Indent internal_procedure: 0 when inside module, otherwise use f90-ts-indent-contain."
-  ;(f90-ts-log :indent "%d  %d  %d" bol (treesit-node-start parent) (treesit-node-start node))
-  (let* ((grandparent (treesit-node-parent parent))
-         (ggparent    (and grandparent (treesit-node-parent grandparent))))
-    (f90-ts-log :indent "toplevel-offset: grandparent type = %s" (and grandparent (treesit-node-type grandparent)))
-    (f90-ts-log :indent "toplevel-offset: ggparent type = %s" (and ggparent (treesit-node-type ggparent)))
-    ;; before 'contains' statement, grandparent is translation_unit,
-    ;; after 'contains' it is module or program
-    (if (or (and grandparent (member (treesit-node-type grandparent)
-                                     '("module" "program" "translation_unit")))
-            (and grandparent ggparent
-                 (string= (treesit-node-type grandparent) "ERROR")
-                 (string= (treesit-node-type ggparent) "translation_unit")))
-        f90-ts-indent-toplevel
-      f90-ts-indent-contain)))
 
 
 ;;++++++++++++++
@@ -1010,10 +1091,10 @@ with !$ or !$omp")
     ((n-p-ps nil  "parameters" "function")         column-0 f90-ts--align-continued-list-offset) ;; arguments of function
 
     ;; logical expressions
-    ((n-p-ps nil  "parenthesized_expression" "do") column-0 f90-ts--align-continued-list-offset) ;; within logical while expression
-    ((n-p-ps nil  "logical_expression"       "do") column-0 f90-ts--align-continued-list-offset) ;; within logical while expression
-    ((n-p-ps nil  "parenthesized_expression" "if") column-0 f90-ts--align-continued-list-offset) ;; within logical if expression
-    ((n-p-ps nil  "logical_expression"       "if") column-0 f90-ts--align-continued-list-offset) ;; within logical if expression
+    ;;((n-p-ps nil  "parenthesized_expression" "do") column-0 f90-ts--align-continued-list-offset)
+    ((n-p-ps nil  "logical_expression"       "do") column-0 f90-ts--align-continued-list-offset)
+    ;;((n-p-ps nil  "parenthesized_expression" "if") column-0 f90-ts--align-continued-list-offset)
+    ((n-p-ps nil  "logical_expression"       "if") column-0 f90-ts--align-continued-list-offset)
 
     ;; binding and method lists
     ((parent-is   "binding_list")    column-0 f90-ts--align-continued-list-offset) ;; generic statement in DT decl

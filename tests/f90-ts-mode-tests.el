@@ -232,6 +232,7 @@ at the end of file."
     f90-ts-indent-contain
     f90-ts-indent-block
     f90-ts-indent-continued
+    f90-ts-indent-lists-region
     f90-ts-special-comment-regexp
     f90-ts-log-categories
     require-final-newline)
@@ -256,6 +257,7 @@ at the end of file."
     (f90-ts-indent-contain . 3)
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
+    (f90-ts-indent-lists-region . keep-or-first)
     (f90-ts-special-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (f90-ts-log-categories . '())
     (require-final-newline . nil)

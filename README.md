@@ -74,7 +74,7 @@ Currently implemented rules are:
 |-----------------------|------------------------------------------------------------------------------------------|
 | openmp                | openmp directives stored as comments starting with `!$` or `!$omp`                       |
 | comments              | regular and special comments                                                             |
-| lists                 | continued lists such as argument lists, association lists, bindings, and expressions; aligned to previous list items or operators, with rotation if there are several options |
+| lists                 | continued lists such as argument lists, association lists, bindings, and expressions     |
 | continued lines       | generic continued lines not matched by list rules, indented by `f90-ts-indent-continued` |
 | internal procedures   | `contains` sections and internal procedures in programs, modules and procedures          |
 | program / module      | program, module, and submodule bodies                                                    |
@@ -85,6 +85,14 @@ Currently implemented rules are:
 | control statements    | `do`, `block`, and `associate` constructs                                                |
 | select statements     | `select case` and `select type` statements                                               |
 | catch-all             | final fallback rule for unmatched cases                                                  |
+
+
+#### Continued lists
+
+For list structures (argument lists, logical expressions in if and do while etc.) spread over several continued lines,
+four options exists, which can be set for default indentation (in particular indent-region) via `f90-ts-indent-lists-region`
+and single line indentation via `f90-ts-indent-lists-line`.
+Options are `continued-line`, `keep-or-first`, `always-first` and `rotate`.
 
 
 
