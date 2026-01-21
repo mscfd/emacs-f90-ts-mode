@@ -50,7 +50,7 @@ Return nil if test passes, otherwise the test category (indentation, font-lock e
             (current   (f90-ts-mode-tests--run-with-testing
                         file
                         (lambda ()
-                          (indent-region (point-min) (point-max))
+                          (f90-ts-mode-tests--indent-buffer)
                           (f90-ts-mode-tests--capture-buffer-state)))))
         (let ((result (or (f90-ts-mode-tests--compare-and-diff file compare current :indentation diff)
                           (f90-ts-mode-tests--compare-and-diff file compare current :font-lock diff)
@@ -142,7 +142,7 @@ Return nil if test passes, otherwise the test category (indentation, font-lock e
    file
    (lambda ()
      (font-lock-ensure)
-     (indent-region (point-min) (point-max))
+     (f90-ts-mode-tests--indent-buffer)
      (let ((state (f90-ts-mode-tests--capture-buffer-state))
            (compare-file (f90-ts-mode-tests--compare-file file)))
        (f90-ts-mode-tests--print-state state compare-file)
@@ -207,6 +207,16 @@ If failure, then return the label which failed, otherwise nil."
 ;;------------------------------------------------------------------------------
 ;; Auxiliary stuff
 
+(defun f90-ts-mode-tests--indent-buffer ()
+  "Indent current buffer, including the final line. This is relevant as
+we also want to test the final line, which is relevant during typing
+at the end of file."
+  (indent-region (point-min) (point-max))
+  (save-excursion
+    (goto-char (point-max))
+    (indent-for-tab-command)))
+
+
 (defun f90-ts-mode-tests--resources-dir ()
   "Get the test resources directory. Use the location of f90-ts-mode-tests"
   (let* ((test-file (symbol-file 'f90-ts-mode-tests 'defun))
@@ -222,7 +232,9 @@ If failure, then return the label which failed, otherwise nil."
     f90-ts-indent-contain
     f90-ts-indent-block
     f90-ts-indent-continued
-    f90-ts-special-comment-regexp)
+    f90-ts-special-comment-regexp
+    f90-ts-log-categories
+    require-final-newline)
   "Custom variables whose values can be temporarily overridden.")
 
 
@@ -245,6 +257,8 @@ If failure, then return the label which failed, otherwise nil."
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
     (f90-ts-special-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
+    (f90-ts-log-categories . '())
+    (require-final-newline . nil)
     )
   "Alist of custom variable values for testing purposes.")
 
