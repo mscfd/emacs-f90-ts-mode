@@ -2006,10 +2006,56 @@ Prefix the line with 'inspect<INFO>'."
                   (end   (treesit-node-end node))
                   (len   (- end start))
                   (line  (line-number-at-pos)))
-             (treesit-inspect-node-at-point)
+             (f90-ts-treesit-inspect-node node)
              (message "inspect<%s>: type= %s  -  name= %s - start=%d  end=%d  len=%d  line=%d"
                       info type treesit--inspect-name start end len line))))
      (message "inspect<%s>: nil" info))))
+
+
+(defun f90-ts-treesit-inspect-node (node-inspect)
+  "Copy of treesit-inspect-node-at-point, but highlight provided
+NODE-INSPECT and use its start position as point."
+  ;; NODE-LIST contains all the node that starts at point.
+  (let* ((node-start (treesit-node-start node-inspect))
+         (node-list
+          (cl-loop for node = (treesit-node-at node-start)
+                   then (treesit-node-parent node)
+                   while node
+                   if (eq (treesit-node-start node)
+                          node-start)
+                   collect node))
+         (largest-node (car (last node-list)))
+         (parent (treesit-node-parent largest-node))
+         ;; node-list-ascending contains all the node bottom-up, then
+         ;; the parent.
+         (node-list-ascending
+          (if (null largest-node)
+              ;; If there are no nodes that start at point, just show
+              ;; the node at point and its parent.
+              (list (treesit-node-at node-start)
+                    (treesit-node-parent
+                     (treesit-node-at node-start)))
+            (append node-list (list parent))))
+         (name ""))
+    ;; We draw nodes like (parent field-name: (node)) recursively,
+    ;; so it could be (node1 field-name: (node2 field-name: (node3))).
+    (dolist (node node-list-ascending)
+      (setq
+       name
+       (concat
+        (if (treesit-node-field-name node)
+            (format " %s: " (treesit-node-field-name node))
+          " ")
+        (if (treesit-node-check node 'named) "(" "\"")
+        (propertize (or (treesit-node-type node) "N/A")
+                    'face
+                    (if (treesit-node-eq node node-inspect)
+                        'bold nil))
+        name
+        (if (treesit-node-check node 'named) ")" "\""))))
+    ;; Escape the percent character for mode-line. (Bug#65540)
+    (setq treesit--inspect-name (string-replace "%" "%%" name))
+    (force-mode-line-update)))
 
 
 ;;------------------------------------------------------------------------------
