@@ -1,6 +1,6 @@
 program program1
 
-use, intrinsic :: iso_fortran_env
+ use, intrinsic :: iso_fortran_env
 
  abstract interface
       real(real32) function f_ifc(x)
@@ -36,15 +36,15 @@ contains
  end function compute_sequence_sum
 
  real(real32) function reciprocal(x)
-      ! arguments
+ ! arguments
       real(real32), intent(in) :: x
-      ! ==========
+ ! ==========
       reciprocal = 1.0_real32 / x
  end function reciprocal
 
  subroutine print_result(s)
-    real(real32), intent(in) :: s
-    print '(a,f15.5)', 'result: ', s
+      real(real32), intent(in) :: s
+      print '(a,f15.5)', 'result: ', s
  end subroutine print_result
 
 end program program1

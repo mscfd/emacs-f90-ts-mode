@@ -6,4 +6,4 @@
 ((1 1 11 font-lock-keyword-face) (1 12 15 font-lock-function-name-face) (1 15 17 f90-ts-font-lock-bracket-face))
 
 :tree
-"(translation_unit (ERROR (subroutine_statement name: (name))))")
+"(translation_unit (subroutine (subroutine_statement name: (name)) (end_subroutine_statement (MISSING \"end\"))))")
