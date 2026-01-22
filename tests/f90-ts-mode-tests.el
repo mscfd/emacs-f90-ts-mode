@@ -3,6 +3,14 @@
 
 ;; mode activation
 
+
+(defconst f90-ts-mode-fortran-file-pattern "\\`[^.].*\\.f90\\'"
+  "Regexp matching fortran test files.")
+
+(defconst f90-ts-mode-compare-file-pattern "\\`[^.].*\\.cmp\\'"
+  "Regexp matching files to compare output with.")
+
+
 (defun f90-ts-mode-tests ()
   "Run all tests."
   (ert #'f90-ts-mode-activates)
@@ -20,13 +28,14 @@
 
 (ert-deftest f90-ts-mode-test-resources ()
   "Run all f90 files in folder resources and compare with pre-generated compare files."
-  (dolist (file (directory-files (f90-ts-mode-tests--resources-dir) t "\\.f90\\'"))
-    (let ((label (f90-ts-mode-test-single file nil)))
-      (when label
-        (ert-fail
-         (format "%s differs in %s"
-                 label
-                 (file-name-nondirectory file)))))))
+  (let ((f90-files (f90-ts-mode-tests--fortran-files)))
+    (dolist (file f90-files)
+      (let ((label (f90-ts-mode-test-single file nil)))
+        (when label
+          (ert-fail
+           (format "%s differs in %s"
+                   label
+                   (file-name-nondirectory file))))))))
 
 
 (defun f90-ts-mode-test-single (file diff)
@@ -34,7 +43,7 @@
 Return nil if test passes, otherwise the test category (indentation, font-lock etc.) which failed."
   (interactive
    (list (let* ((rdir (file-name-as-directory (f90-ts-mode-tests--resources-dir)))
-                (files (directory-files rdir nil "\\.f90\\'")))
+                (files (f90-ts-mode-tests--fortran-files)))
            (expand-file-name
             (completing-read "select F90 file: " files nil t)
             rdir))
@@ -152,7 +161,7 @@ Return nil if test passes, otherwise the test category (indentation, font-lock e
 (defun f90-ts-mode-tests-update ()
   "Generate compare files for all resource files."
   (interactive)
-  (dolist (file (directory-files (f90-ts-mode-tests--resources-dir) t "\\.f90\\'"))
+  (dolist (file (f90-ts-mode-tests--fortran-files))
     (f90-ts-mode-tests--update-compare file)))
 
 
@@ -218,11 +227,17 @@ at the end of file."
 
 
 (defun f90-ts-mode-tests--resources-dir ()
-  "Get the test resources directory. Use the location of f90-ts-mode-tests"
+  "Get the test resources directory. Use the location of f90-ts-mode-tests."
   (let* ((test-file (symbol-file 'f90-ts-mode-tests 'defun))
          (test-dir (file-name-directory test-file)))
     (expand-file-name "resources" test-dir)))
 
+
+(defun f90-ts-mode-tests--fortran-files ()
+  "Get all fortran test files in the resources directory."
+  (directory-files (f90-ts-mode-tests--resources-dir)
+                   t
+                   f90-ts-mode-fortran-file-pattern))
 
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
