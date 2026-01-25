@@ -1,0 +1,20 @@
+(:indentation
+"subroutine foo()
+     name: if (condition) then
+          call foo()
+     elseif (x > y) then
+          ! comment
+     elseif (a .eqv. b) then
+
+          x = fun1(y)
+     else
+
+     end if
+end subroutine foo
+"
+
+:font-lock
+((1 1 11 font-lock-keyword-face) (1 12 15 font-lock-function-name-face) (1 15 17 f90-ts-font-lock-bracket-face) (2 27 28 f90-ts-font-lock-delimiter-face) (2 29 31 font-lock-keyword-face) (2 32 33 f90-ts-font-lock-bracket-face) (2 42 43 f90-ts-font-lock-bracket-face) (2 44 48 font-lock-keyword-face) (3 59 63 font-lock-keyword-face) (3 64 67 font-lock-function-name-face) (3 67 69 f90-ts-font-lock-bracket-face) (4 75 81 font-lock-keyword-face) (4 82 83 f90-ts-font-lock-bracket-face) (4 88 89 f90-ts-font-lock-bracket-face) (4 90 94 font-lock-keyword-face) (5 105 114 font-lock-comment-face) (6 120 126 font-lock-keyword-face) (6 127 128 f90-ts-font-lock-bracket-face) (6 130 135 f90-ts-font-lock-operator-face) (6 137 138 f90-ts-font-lock-bracket-face) (6 139 143 font-lock-keyword-face) (8 157 158 f90-ts-font-lock-operator-face) (8 159 163 font-lock-function-name-face) (8 163 164 f90-ts-font-lock-bracket-face) (8 165 166 f90-ts-font-lock-bracket-face) (9 172 176 font-lock-keyword-face) (11 183 186 font-lock-keyword-face) (11 187 189 font-lock-keyword-face) (12 190 193 font-lock-keyword-face) (12 194 204 font-lock-keyword-face) (12 205 208 font-lock-function-name-face))
+
+:tree
+"(translation_unit (subroutine (subroutine_statement name: (name)) (if_statement (block_label_start_expression) (parenthesized_expression (identifier)) (subroutine_call subroutine: (identifier) (argument_list)) (elseif_clause (parenthesized_expression (relational_expression left: (identifier) right: (identifier)))) (comment) (elseif_clause (parenthesized_expression (logical_expression left: (identifier) right: (identifier))) (assignment_statement left: (identifier) right: (call_expression (identifier) (argument_list (identifier))))) (else_clause) (end_if_statement)) (end_subroutine_statement (name))))")

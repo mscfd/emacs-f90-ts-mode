@@ -1194,21 +1194,24 @@ For example: argument lists, association lists, (logical) expressions with align
     ((n-p-gp "elseif_clause"    "if_statement"  nil)      parent 0)
     ((n-p-gp "else_clause"      "if_statement"  nil)      parent 0)
     ((n-p-ps nil                "if_statement"  "if")     parent f90-ts-indent-block)
+    ((n-p-ps nil                "if_statement"  "elseif") parent f90-ts-indent-block) ; line after elseif
     ((n-p-ps nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line after else, with empty else block
     ((n-p-ps nil                "else_clause"   "else")   parent f90-ts-indent-block) ; line after else, with non-empty else block
     ((n-p-ps nil                "elseif_clause" "elseif") parent f90-ts-indent-block)
 
     ((n-p-ps "elseif_clause"    "ERROR" "if") previous-stmt-anchor 0)
-    ((n-p-gp "elseif_clause"    "ERROR" nil)  previous-stmt-anchor f90-ts--minus-block-offset)
+    ((n-p-ps "elseif"           "ERROR" "if") previous-stmt-anchor 0)
+    ((n-p-gp "elseif_clause"    "ERROR" nil)  previous-stmt-anchor f90-ts--minus-block-offset) ;; at elseif line, incomplete
 
     ((n-p-ps "else_clause"      "ERROR" "if")     previous-stmt-anchor 0)
     ((n-p-ps "else_clause"      "ERROR" "elseif") previous-stmt-anchor 0)
-    ((n-p-gp "else_clause"      "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset)
+    ((n-p-gp "else_clause"      "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset) ;; at elseif line, incomplete
+    ((n-p-ps "else"             "ERROR" "if")     previous-stmt-anchor 0)
     ((n-p-gp "else"             "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset)
 
-    ((n-p-ps nil                "ERROR" "if")     previous-stmt-anchor f90-ts-indent-block)
-    ((n-p-ps nil                "ERROR" "elseif") previous-stmt-anchor f90-ts-indent-block)
-    ((n-p-ps nil                "ERROR" "else")   previous-stmt-anchor f90-ts-indent-block)
+    ((n-p-ps nil                "ERROR" "if")     previous-stmt-anchor f90-ts-indent-block) ;; empty line after if
+    ((n-p-ps nil                "ERROR" "elseif") previous-stmt-anchor f90-ts-indent-block) ;; empty line after elseif
+    ((n-p-ps nil                "ERROR" "else")   previous-stmt-anchor f90-ts-indent-block) ;; empty line after else
     )
   "Indentation rules for if-then-else statements.")
 
@@ -1219,7 +1222,6 @@ For example: argument lists, association lists, (logical) expressions with align
     ((n-p-gp    "end_do_loop" "do_loop" nil)  parent 0)
     ((n-p-ps    nil           "do_loop"           "do") parent f90-ts-indent-block)  ;; proper do block (with or without while)
     ((n-p-ps    nil           "ERROR"             "do") previous-stmt-anchor f90-ts-indent-block)
-    ;;((n-p-ns-ps nil         "ERROR"             nil   "do") previous-stmt-anchor f90-ts-indent-block)
 
     ((n-p-gp "end_block_construct_statement" "block_construct" nil)     parent 0)
     ((n-p-ps nil                             "block_construct" "block") parent f90-ts-indent-block)
