@@ -569,11 +569,31 @@ associates and others."
 ;;++++++++++++++
 ;; matchers
 
-(defun f90-ts--continued-line-is ()
-  "Check whether we are after some continued line."
+(defun f90-ts--continued-line-first-is ()
+  "Check whether we are first continued line of a continued statement.
+This line is indented relative to the statements first line.
+All other line use indentation of previous line."
   (lambda (node parent bol &rest _)
-    (when-let ((prev-stmt (f90-ts--previous-stmt-first node parent)))
-      (f90-ts--after-stmt-line1-p prev-stmt (point)))))
+    (when-let ((prev-stmt (f90-ts--previous-stmt-first node parent))
+               (pos (f90-ts--node-start-or-pos node)))
+      (f90-ts--after-stmt-line1-p prev-stmt pos)
+      )))
+
+
+(defun f90-ts--continued-line-some-is ()
+  "Check whether we are on some continued line of a continued statement."
+  (lambda (node parent bol &rest _)
+    (cond
+     (node
+      (let ((pos (treesit-node-start node)))
+        (f90-ts--pos-in-continued-p pos)))
+
+     (parent
+      ;; node=nil but parent is a proper node, then we are probably on an empty line
+      (when-let ((psib (f90-ts--previous-sibling parent)))
+        ;; previous-sibling already excludes comment node, hence we can directly
+        ;; check whether there is an ampersand
+        (f90-ts--node-type-p psib "&"))))))
 
 
 (defun f90-ts--openmp-comment-is ()
@@ -669,6 +689,20 @@ to position, which also works for node=nil)."
   (if-let ((prev-stmt (f90-ts--previous-stmt-first node parent)))
       (f90-ts--indent-pos-at-node prev-stmt)
     bol))
+
+
+(defun previous-line-anchor (node parent bol)
+  "Anchor at previous line with a statement on it. Used for continued
+lines, where the previous sibling or parent is not the right anchor."
+  (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
+         ;; TODO: for the moment, do not exclude comments or anything else, just get indentation
+         ;; at previous relevant line, it might only contain a comment
+         (predicate (lambda (n) t))
+         (psib (f90-ts--before-child parent cur-line predicate)))
+    ;;(f90-ts-inspect-node :indent psib "prev-line-anchor-psib")
+    (if psib
+        (f90-ts--indent-pos-at-node psib)
+      bol)))
 
 
 (defun catch-all-anchor (node parent bol)
@@ -1010,8 +1044,6 @@ If NODE is nil return nil."
   "Matcher that always fails, but prints a separator line and
 additionally some node and parent info if MSG=first."
   (lambda (node parent bol &rest _)
-    (when (string= msg "first")
-        (f90-ts-log :indent "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv" msg))
     (f90-ts-log :indent "---------info %s--------------" msg)
     (when (or (string= msg "first") (string= msg "catch all"))
       (let* ((grandparent (and parent (treesit-node-parent parent)))
@@ -1114,7 +1146,8 @@ For example: argument lists, association lists, (logical) expressions with align
   `(;; handle continued lines which are not yet caught, this also happens for
     ;; unclosed argument lists, where rules-lists cannot be matched
     ,@(f90-ts-indent-rules-info "continued")
-    ((f90-ts--continued-line-is) previous-stmt-anchor f90-ts-indent-continued)
+    ((f90-ts--continued-line-first-is) previous-stmt-anchor f90-ts-indent-continued)
+    ((f90-ts--continued-line-some-is)  previous-line-anchor 0)
     )
   "Indentation rules for continued lines. Argument lists and similar continued lines must have been dealt with before.")
 
@@ -1842,35 +1875,53 @@ Keyword nodes become relevant for incomplete code with ERROR nodes."
 	    (treesit-node-next-sibling fparent)
       first)))
 
+
 (defun f90-ts--previous-stmt-first (node parent)
-  "Start at node and walk up the tree until a previous sibling can be found.
-Then walk down previous sibling to further narrow it down among its children.
-Finally return the leaf node at the start of the line with this previous node.
-Ignore nodes which do not satisfy the predicate f90-ts--node-not-comment-or-error-p
-during ascend or descend (for example comment nodes)."
- (let ((cur-line (line-number-at-pos))
-       (predicate #'f90-ts--node-not-comment-or-error-p)
-       (n (or node parent))
-       prev-sib)  ; previous sibling for children scans (ascending and descending)
+  "Return most previous statement.
+First search for any reasonable (leaf) node, which is before current
+line, and then go to start of line. If on a continued line, follow it
+to the start of the statement.
+If current point is within a continued line, then previous leaf node
+belongs to the continued line as well, and previous-stmt return the
+node at the start of the continued line.
 
-   ;;(f90-ts-inspect-node :auxiliary n "prev-stmt-n")
-   ;; ascend until a previous sibling was found
-   (while (and n (not prev-sib))
-     (setq prev-sib (f90-ts--before-child n cur-line predicate))
-     ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib1")
-     (setq n (treesit-node-parent n)))
+In order to find the most previous leaf node start at node and ascend
+the tree until a previous sibling on a previous line can be found. Just
+taking a sibling of node is not possible, as node might be nil (empty
+line), or node is part of an expression tree with deep nesting or
+similar. We really want to go to previous line with a proper node on
+it. Once we have a proper node, descend the previous sibling to further
+narrow it down among its children.
+Finally return the leaf node at the start of the line. Follow continued
+lines to first line of continued statement.
 
-   (let ((prev-descend prev-sib))
-     ;; descend the previous sibling to find sub nodes which are still previous to current line
-     (while (and prev-sib (> (treesit-node-child-count prev-sib) 0))
-       (setq prev-sib (f90-ts--before-child prev-descend cur-line predicate))
-       ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib2")
-       (setq prev-descend (or prev-sib prev-descend)))
+Ignore nodes which do not satisfy the predicate
+`f90-ts--node-not-comment-or-error-p` during ascend or descend
+(for example comment nodes)."
+  (let ((cur-line (f90-ts--line-number-at-node-or-pos node))
+        (predicate #'f90-ts--node-not-comment-or-error-p)
+        (n (or node parent))
+        prev-sib)  ; previous sibling for children scans (ascending and descending)
+    ;;(f90-ts-inspect-node :auxiliary node "prev-stmt-node")
+    ;;(f90-ts-inspect-node :auxiliary parent "prev-stmt-parent")
+    ;;(f90-ts-inspect-node :auxiliary n "prev-stmt-n")
+    ;; ascend until a previous sibling was found
+    (while (and n (not prev-sib))
+      (setq prev-sib (f90-ts--before-child n cur-line predicate))
+      ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib1")
+      (setq n (treesit-node-parent n)))
 
-     ;; return the first leaf on the line where prev-descend is placed
-     ;; (take continuation lines into account and go to beginning of statement)
-     (and prev-descend (f90-ts--first-node-of-stmt prev-descend))
-     )))
+    (let ((prev-descend prev-sib))
+      ;; descend the previous sibling to find sub nodes which are still previous to current line
+      (while (and prev-sib (> (treesit-node-child-count prev-sib) 0))
+        (setq prev-sib (f90-ts--before-child prev-descend cur-line predicate))
+        ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib2")
+        (setq prev-descend (or prev-sib prev-descend)))
+
+      ;; return the first leaf on the line where prev-descend is placed
+      ;; (take continuation lines into account and go to beginning of statement)
+      (and prev-descend (f90-ts--first-node-of-stmt prev-descend))
+      )))
 
 
 (defun f90-ts--previous-sibling (parent)
@@ -1940,14 +1991,61 @@ PREDICATE. Take the last of all children satisfying this condition."
   (save-excursion
     (goto-char pos)
     (end-of-line)
-    (treesit-node-at (point))))
+    (when-let ((node (treesit-node-at (point))))
+      (when (= (line-number-at-pos pos)
+               (f90-ts--node-line node))
+        node))))
+
+
+(defun f90-ts--pos-in-continued-p (pos)
+  "Check whether line at POS belongs to a continued statement. Either
+at start line there is an &, or it is a comment, and going backwards
+by prev-sibling after a sequence of comments (and only comments), we
+find an ampersand."
+  (let* ((first (f90-ts--first-node-on-line pos)))
+    (cond
+     ((f90-ts--node-is-ampersand-p first)
+      t)
+
+     ((f90-ts--node-has-type-p first "comment")
+      (cl-loop for node = first then (treesit-node-prev-sibling node)
+               while (and node (f90-ts--node-has-type-p node "comment"))
+               finally return (and node (f90-ts--node-is-ampersand-p node))))
+
+     (t
+      ;; in all other cases, we are not on a continued line
+      nil))))
+
+
+(defun f90-ts--line-continued-at-end-p (last pos)
+  "Check whether line at POS is continued. It usually ends in &, but
+might be followed by a comments.
+LAST is expected to be the last node on the line. Instead of obtaining
+LAST itself using POS, it is expected as an argument (the only user of
+this function requires LAST for further work)."
+  (cond
+   ((f90-ts--node-is-ampersand-p last)
+    t)
+
+   ((f90-ts--node-has-type-p last "comment")
+    ;; if last comment is node, check whether previous one is an ampersand,
+    ;; but it must be on the same line
+    (let ((prev (treesit-node-prev-sibling last)))
+      (and prev
+           (f90-ts--node-is-ampersand-p prev)
+           (= (line-number-at-pos pos)
+              (f90-ts--node-line prev)))))
+
+   (t
+    ;; in all other cases, we are not on a continued line
+    nil)))
 
 
 (defun f90-ts--first-node-of-stmt (node)
   "Return the first node of the statement at which NODE is placed.
 Use f90-ts--first-node-on-line, check for continuation symbol and
-if present, further go back skipping comments until beginning of
-statement is found."
+if present, further go back, skipping comments and empty line until
+beginning of statement is found."
   (let* ((start (treesit-node-start node))
          (head (f90-ts--first-node-on-line start)))
     ;;(f90-ts-inspect-node :indent head "start")
@@ -1975,28 +2073,34 @@ For empty NODES, return an empty list."
 
 
 (defun f90-ts--after-stmt-line1-p (node pos)
-  "Check whether position POS is right after the line of where NODE is
-located, being part of a statement possibly spread over several lines.
-Empty lines are automatically skipped as those are not present in the tree."
+  "Check whether position POS is on the next line after the line where
+NODE is located (NODE assumed to being part of a statement possibly
+spread over several lines). Empty lines are automatically skipped as
+those are not present in the tree."
   ;; strategy: get last node on the same line as NODE, check whether it is &,
   ;; goto next node, which is & on next line and compare with line number at pos;
   ;; note that if "&" is at end of line, then there is always a second "&"
-  ;; at beginning of the next non-empty/non-comment line or at EOF.
-  ;; Hence (treesit-next-sibling last) below can always be executed.
-
+  ;; at beginning of the next non-empty/non-comment line or at EOF,
+  ;; hence (treesit-next-sibling last) below can always be executed.
   ;;(f90-ts-inspect-node :auxiliary node "astmt1-node")
-  (let* ((cur-line (line-number-at-pos pos))
-         (last (f90-ts--last-node-on-line (treesit-node-start node)))
-         (nsib (when (and last (string= (treesit-node-type last) "&"))
-                 (treesit-node-next-sibling last))))
+  ;;(f90-ts-log :auxiliary "astmt: pos = %d, node start = %d" pos (treesit-node-start node))
+  (when-let* ((cur-line (line-number-at-pos pos))
+              (pos-node (treesit-node-start node))
+              (last (f90-ts--last-node-on-line pos-node)))
     ;;(f90-ts-inspect-node :auxiliary last "astmt1-last")
-    ;;(f90-ts-inspect-node :auxiliary nsib "astmt1-nsib")
-    (and nsib
-         (not (< (f90-ts--node-line nsib) cur-line)))))
+    (when (f90-ts--line-continued-at-end-p last pos-node)
+      ;;(f90-ts-log :auxiliary "astmt: on continued lines")
+      (let ((nsib (treesit-node-next-sibling last)))
+        ;;(f90-ts-inspect-node :auxiliary nsib "astmt1-nsib")
+        ;;(f90-ts-log :auxiliary "astmt: last start = %d, nsib start = %d"
+        ;;            (treesit-node-start last) (treesit-node-start nsib))
+        (and nsib
+             (not (< (f90-ts--node-line nsib) cur-line)))))))
 
 
 (defun f90-ts--indent-pos-at-node (node)
   "Determine indentation position of line where start of NODE is located."
+  ;; TODO: is this correct even with treesit-indent-region?
   (save-excursion
     (goto-char (treesit-node-start node))
     (back-to-indentation)
@@ -2026,6 +2130,33 @@ Empty lines are automatically skipped as those are not present in the tree."
   (save-excursion
     (goto-char pos)
     (current-column)))
+
+
+(defun f90-ts--node-start-or-pos (node)
+  "Return start position of node or position of point if node is nil.
+In indent-region batch processing, position by (point) is not valid,
+but node is always some node. On the other hand, indentation of a single
+line has node=nil on empty lines, in which case, we can and should
+return (point)."
+  (or (and node (treesit-node-start node))
+      (point)))
+
+
+(defun f90-ts--line-number-at-node-or-pos (node)
+  "If NODE is non-nil, return line number at which start position is
+located, otherwise return line number of current point position."
+  (or (and node (f90-ts--node-line node))
+      (line-number-at-pos)))
+
+
+(defun f90-ts--node-is-ampersand-p (node)
+  "Check whether node is continuation symbol &."
+  (string= (treesit-node-type node) "&"))
+
+
+(defun f90-ts--node-has-type-p (node type)
+  "Check whether node has type TYPE."
+  (string= (treesit-node-type node) type))
 
 
 ;;------------------------------------------------------------------------------

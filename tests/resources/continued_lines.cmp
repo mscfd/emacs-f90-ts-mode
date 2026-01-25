@@ -1,0 +1,56 @@
+(:indentation
+"function fun(x1, x2, x3, x4, x5)  &
+       result( &
+            ! this is my result
+
+            something &
+            )
+     logical :: something
+! arguments
+     integer &
+      :: x1, &
+         x2, &
+         ! write some comment here
+         x3
+
+! ==========
+     call foo(x,& ! first arg
+
+              y, & ! second arg
+
+                  ! comment
+
+              z,&
+              u,  & ! fourth arg
+              v
+             )
+
+     x &
+
+
+            = &
+     y &  ! comment 1
+     + fun&! comment 2
+     ( &
+
+            )
+
+     write(*,format_string_for_testing) &       !comment
+     ! comment
+     val1, val2, val3, & ! comment
+
+     ! some more comment
+
+
+     ! comment
+
+     final_val
+
+end function fun
+"
+
+:font-lock
+((1 1 9 font-lock-keyword-face) (1 10 13 font-lock-function-name-face) (1 13 14 f90-ts-font-lock-bracket-face) (1 16 17 f90-ts-font-lock-delimiter-face) (1 20 21 f90-ts-font-lock-delimiter-face) (1 24 25 f90-ts-font-lock-delimiter-face) (1 28 29 f90-ts-font-lock-delimiter-face) (1 32 33 f90-ts-font-lock-bracket-face) (1 35 36 f90-ts-font-lock-delimiter-face) (2 44 50 font-lock-keyword-face) (2 50 51 f90-ts-font-lock-bracket-face) (2 52 53 f90-ts-font-lock-delimiter-face) (3 66 85 font-lock-comment-face) (5 99 108 default) (5 109 110 f90-ts-font-lock-delimiter-face) (6 123 124 f90-ts-font-lock-bracket-face) (7 130 137 font-lock-type-face) (7 138 140 f90-ts-font-lock-delimiter-face) (8 151 162 f90-ts-font-lock-special-comment-face) (9 168 175 font-lock-type-face) (9 176 177 f90-ts-font-lock-delimiter-face) (10 184 186 f90-ts-font-lock-delimiter-face) (10 189 190 f90-ts-font-lock-delimiter-face) (10 191 192 f90-ts-font-lock-delimiter-face) (11 204 205 f90-ts-font-lock-delimiter-face) (11 206 207 f90-ts-font-lock-delimiter-face) (12 217 242 font-lock-comment-face) (15 256 268 f90-ts-font-lock-special-comment-face) (16 274 278 font-lock-keyword-face) (16 279 282 font-lock-function-name-face) (16 282 283 f90-ts-font-lock-bracket-face) (16 284 286 f90-ts-font-lock-delimiter-face) (16 287 298 font-lock-comment-face) (18 315 316 f90-ts-font-lock-delimiter-face) (18 317 318 f90-ts-font-lock-delimiter-face) (18 319 331 font-lock-comment-face) (20 351 360 font-lock-comment-face) (22 377 379 f90-ts-font-lock-delimiter-face) (23 395 396 f90-ts-font-lock-delimiter-face) (23 398 399 f90-ts-font-lock-delimiter-face) (23 400 412 font-lock-comment-face) (25 442 443 f90-ts-font-lock-bracket-face) (27 452 453 f90-ts-font-lock-delimiter-face) (30 468 469 f90-ts-font-lock-operator-face) (30 470 471 f90-ts-font-lock-delimiter-face) (31 479 480 f90-ts-font-lock-delimiter-face) (31 482 493 font-lock-comment-face) (32 499 500 f90-ts-font-lock-operator-face) (32 501 504 font-lock-function-name-face) (32 504 505 f90-ts-font-lock-delimiter-face) (32 505 516 font-lock-comment-face) (33 522 523 f90-ts-font-lock-bracket-face) (33 524 525 f90-ts-font-lock-delimiter-face) (35 539 540 f90-ts-font-lock-bracket-face) (37 547 552 f90-ts-font-lock-intrinsic-face) (37 552 553 f90-ts-font-lock-bracket-face) (37 554 555 f90-ts-font-lock-delimiter-face) (37 580 581 f90-ts-font-lock-bracket-face) (37 582 583 f90-ts-font-lock-delimiter-face) (37 590 598 font-lock-comment-face) (38 604 613 font-lock-comment-face) (39 623 624 f90-ts-font-lock-delimiter-face) (39 629 630 f90-ts-font-lock-delimiter-face) (39 635 636 f90-ts-font-lock-delimiter-face) (39 637 638 f90-ts-font-lock-delimiter-face) (39 639 648 font-lock-comment-face) (41 655 674 font-lock-comment-face) (44 682 691 font-lock-comment-face) (48 709 712 font-lock-keyword-face) (48 713 721 font-lock-keyword-face) (48 722 725 font-lock-function-name-face))
+
+:tree
+"(translation_unit (function (function_statement name: (name) parameters: (parameters (identifier) (identifier) (identifier) (identifier) (identifier)) (function_result (comment) (identifier))) (variable_declaration type: (intrinsic_type) declarator: (identifier)) (comment) (variable_declaration type: (intrinsic_type) declarator: (identifier) declarator: (identifier) (comment) declarator: (identifier)) (comment) (subroutine_call subroutine: (identifier) (argument_list (identifier) (comment) (identifier) (comment) (comment) (identifier) (identifier) (comment) (identifier))) (assignment_statement left: (identifier) right: (math_expression left: (identifier) (comment) right: (call_expression (identifier) (comment) (argument_list)))) (write_statement (unit_identifier) (format_identifier (identifier)) (comment) (comment) (output_item_list (identifier) (identifier) (identifier) (comment) (comment) (comment) (identifier))) (end_function_statement (name))))")
