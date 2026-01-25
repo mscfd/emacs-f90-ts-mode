@@ -971,13 +971,17 @@ First map PARENT and call original function."
 
 
 (defun f90-ts--align-node-symbol (node)
-  "Return a symbol representing anonymous punctuation or operator NODE.
+  "Return a symbol for NODE for grouping nodes. Relevant nodes
+for alignment are mostly selected among nodes with same symbol.
 If NODE is nil return nil."
   (when node
     ;;(f90-ts-log :indent "symbol node: type=%s, field=%s, text=%s" (treesit-node-type node) (treesit-node-field-name node) (treesit-node-text node))
     (cond
      ((string= (treesit-node-type node) "ERROR")
       'error)
+
+     ((string= (treesit-node-type node) "comment")
+      'comment)
 
      ((string= (treesit-node-field-name node) "operator")
       'operator)
