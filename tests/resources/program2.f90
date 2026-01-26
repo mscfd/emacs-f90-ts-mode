@@ -15,7 +15,7 @@ program prog2
  allocate(extra_t :: p)
  select type (p)
  class is (extra_t)
-      call p%set(i=456,
+      call p%set(i=456, &
                  j=123)
       print *, p%ival
       call p%unset()
@@ -35,7 +35,7 @@ contains
 
  subroutine unset(obj)
       class(extra_t), intent(inout) :: obj
-      call obj%set(i=123,
+      call obj%set(i=123, &
                    j=456)
  end subroutine unset
 
