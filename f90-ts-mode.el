@@ -1680,7 +1680,7 @@ self or this. Used for applying a special font lock face."
   :group 'f90-ts)
 
 
-(defcustom f90-ts-comment-prefix-regexp "!\\(?:!*\\|[<>]\\)\\s-*"
+(defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
   "Regular expression for matching and capturing comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments.
