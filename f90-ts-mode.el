@@ -217,6 +217,497 @@ jumping and nil turns of smart end completion."
 
 
 ;;------------------------------------------------------------------------------
+;; auxiliary predicates
+
+(defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
+  "Regular expression for matching names of special variables like
+self or this. Used for applying a special font lock face."
+  :type 'regexp
+  :safe #'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
+  "Regular expression for matching and capturing comment starts (excluding openmp).
+For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
+Also add trailing whitespace characters to preserve indentation within comments.
+This is used for applying the same comment starter in comment section, see
+`f90-ts-break-line`."
+  :type 'regexp
+  :safe #'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
+  "Regular expression for matching comment starts (excluding openmp).
+For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
+Also add trailing whitespace characters to preserve indentation within comments."
+  :type 'regexp
+  :safe #'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-special-comment-regexp ""
+  "Regular expression for matching special comments (e.g. for structuring code).
+Used for applying a special font lock face."
+  :type 'regexp
+  :safe #'stringp
+  :group 'f90-ts)
+
+
+(defun f90-ts--comment-prefix (node)
+  "Extract the starting character sequence from NODE, assumed to be of type comment.
+Include any special symbol characters "
+  ;; first match openmp as comment prefix would just take the initial ! and ignoring
+  ;; following $omp part in openmp statements
+  (let ((rx-comment (concat "^\\(?:" f90-ts-openmp-prefix-regexp "\\)\\|\\(?:" f90-ts-comment-prefix-regexp "\\)")))
+    (when (string-match rx-comment (treesit-node-text node))
+      (f90-ts-log :auxiliary "matched comment prefix: <%s>" (match-string 0 (treesit-node-text node)))
+      (match-string 0 (treesit-node-text node)))))
+
+
+(defun f90-ts-special-var-p (node)
+  "Check if NODE is an identifier and matches the special variable regexp.
+Note that the parse uses identifier not just for variables, but for types etc."
+  (when (string= (treesit-node-type node) "identifier")
+    ;; we do not prepend or append symbol start or end assertions, as it should also
+    ;; work with more general regexps (like highlight all variables with a certain prefix)
+    ;;(string-match f90-ts-special-var-regexp (treesit-node-text node))))
+    (string-match "self" (treesit-node-text node))))
+
+
+(defun f90-ts-openmp-node-p (node)
+  "Check if NODE is a comment node and has the openmp comment prefix."
+  (when (string= (treesit-node-type node) "comment")
+    (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
+
+
+(defun f90-ts-special-comment-node-p (node)
+  "Check if NODE is a comment node and satisfies the special comment regexp."
+  (when (and (not (string-empty-p f90-ts-special-comment-regexp))
+             (string= (treesit-node-type node) "comment"))
+    (string-match (concat "^" f90-ts-special-comment-regexp) (treesit-node-text node))))
+
+
+(defun f90-ts-in-string-p ()
+  "Non-nil if point is inside a string."
+  (when-let ((node (treesit-node-at (point))))
+    (when (string= (treesit-node-type node) "string_literal")
+      (let ((start (treesit-node-start node))
+            (end (treesit-node-end node))
+            (pos (point)))
+        ;; start and end position are the quotation characters
+        (and (< start pos) (< pos end))))))
+
+
+(defun f90-ts-in-openmp-p ()
+  "Non-nil if point is inside an openmp statement, which starts with !$ and
+looks like a comment. The grammar does not parse openmp currently."
+  (when-let ((node (treesit-node-at (point))))
+    (when (f90-ts-openmp-node-p node)
+      (f90-ts-log :auxiliary "in-openmp: %s" (treesit-node-type node))
+      (f90-ts-log :auxiliary "in-openmp: %d, %d, %d" (treesit-node-start node) (treesit-node-end node) (point))
+      (let ((start (treesit-node-start node))
+            (pos (point)))
+        ;; start position is the comment symbol itself
+        (and (< start pos))))))
+
+
+(defun f90-ts-in-comment-p ()
+  "Non-nil if point is after start of comment. This excludes openmp statements,
+which look like comments and are currently not parsed by the treesitter grammar."
+  (when-let ((node (treesit-node-at (point))))
+    (when (and (string= (treesit-node-type node) "comment")
+               (not (f90-ts-openmp-node-p node)))
+      (f90-ts-log :auxiliary "in-comment: %s" (treesit-node-type node))
+      (f90-ts-log :auxiliary "in-comment: %d, %d, %d" (treesit-node-start node) (treesit-node-end node) (point))
+      (let ((start (treesit-node-start node))
+            (pos (point)))
+        ;; start position is the comment symbol itself
+        (and (< start pos))))))
+
+
+(defun f90-ts-bol-to-point-blank-p ()
+  "Return non-nil if only blank characters exist between BOL and point.
+Note that in fortran, a continuation symbol shall not be used on blank lines."
+  (looking-back "^\\s-*" (line-beginning-position)))
+
+
+(defun f90-ts--node-type-p (node type)
+  "If type is nil, return non-nil and ignore node.
+Otherwise return non-nil if node is non-nil and is of type TYPE."
+  (if type
+      (and node (string= (treesit-node-type node) type))
+    t))
+
+
+(defun f90-ts--node-not-comment-p (node)
+  "Return true if NODE is not of type comment."
+  (let ((type (treesit-node-type node)))
+    (not (string= type "comment"))))
+
+
+(defun f90-ts--node-not-comment-or-error-p (node)
+  "Return true if NODE is not of type comment or error. This is used to
+find relevant nodes."
+  (let ((type (treesit-node-type node)))
+    (not (member type (list "comment" "ERROR")))))
+
+
+(defun f90-ts-node-overlap-region-p (node start end)
+  "Return true if NODE overlaps with region START END."
+  (and (< (treesit-node-start node) end)
+       (> (treesit-node-end node)   start)))
+
+
+;;------------------------------------------------------------------------------
+;; auxiliary walk and query functions
+
+(defun f90-ts--search-subtree (root pred &optional start end prune reversed)
+  "Collect nodes within subtree of ROOT (not necessarily the treesitter
+root) for which PRED returns non-nil.
+If START and END are non-nil, only visit nodes overlapping that region.
+If PRUNE is non-nil, do not descend into children of nodes that
+satisfy PRED.
+If REVERSED is true, return in reversed order."
+  (f90-ts-log :auxiliary "root %s" root)
+  (let (nodes)
+    (cl-labels
+        ((traverse (node)
+           (when (or (null start)
+                     (null end)
+                     (f90-ts-node-overlap-region-p node start end))
+             (let ((match (funcall pred node)))
+               (when match
+                 (push node nodes))
+               (unless (and match prune)
+                 (dolist (child (treesit-node-children node))
+                   (traverse child)))))))
+      (traverse root))
+    (if reversed
+        nodes
+      (nreverse nodes))))
+
+
+;; currently not used, but might be useful
+(defun f90-ts--statement-at-node (node)
+  "For a node, find the most relevant (grand...)parent node starting at
+the same position. This is done by ascend to parent nodes until start
+position becomes different or an ERROR or translation_unit node is
+encountered."
+  ;; ascend as long as parent starts at the same position and is not an ERROR node
+  (cl-loop
+   for current = node then parent
+   for parent = (treesit-node-parent current)
+   while (and parent
+              (= (treesit-node-start parent)
+                 (treesit-node-start current))
+              (not (or (string= (treesit-node-type parent) "ERROR")
+                       (string= (treesit-node-type parent) "translation_unit"))))
+   finally return current))
+
+
+(defun f90-ts--previous-stmt-keyword (node parent)
+  "Return the statement leaf node (usually some keyword like if,
+elseif, do, etc.) for `f90-ts-prev-stmt-first`. In case of a block label
+The first leaf node is the label, not the keyword. For use as anchor,
+the label is required. For use as matcher, we need the keyword.
+Keyword nodes become relevant for incomplete code with ERROR nodes."
+  ;; if the statement starts with a block label, then first is unnamed
+  ;; node label, and its parent is block_label_start_expression. Its
+  ;; next sibling is a keyword like if or do
+  (let* ((first (f90-ts--previous-stmt-first node parent))
+         (fparent (and first (treesit-node-parent first))))
+    (if (string= (treesit-node-type fparent) "block_label_start_expression")
+	    (treesit-node-next-sibling fparent)
+      first)))
+
+
+(defun f90-ts--previous-stmt-first (node parent)
+  "Return most previous statement.
+First search for any reasonable (leaf) node, which is before current
+line, and then go to start of line. If on a continued line, follow it
+to the start of the statement.
+If current point is within a continued line, then previous leaf node
+belongs to the continued line as well, and previous-stmt return the
+node at the start of the continued line.
+
+In order to find the most previous leaf node start at node and ascend
+the tree until a previous sibling on a previous line can be found. Just
+taking a sibling of node is not possible, as node might be nil (empty
+line), or node is part of an expression tree with deep nesting or
+similar. We really want to go to previous line with a proper node on
+it. Once we have a proper node, descend the previous sibling to further
+narrow it down among its children.
+Finally return the leaf node at the start of the line. Follow continued
+lines to first line of continued statement.
+
+Ignore nodes which do not satisfy the predicate
+`f90-ts--node-not-comment-or-error-p` during ascend or descend
+(for example comment nodes)."
+  (let ((cur-line (f90-ts--line-number-at-node-or-pos node))
+        (predicate #'f90-ts--node-not-comment-or-error-p)
+        (n (or node parent))
+        prev-sib)  ; previous sibling for children scans (ascending and descending)
+    ;;(f90-ts-inspect-node :auxiliary node "prev-stmt-node")
+    ;;(f90-ts-inspect-node :auxiliary parent "prev-stmt-parent")
+    ;;(f90-ts-inspect-node :auxiliary n "prev-stmt-n")
+    ;; ascend until a previous sibling was found
+    (while (and n (not prev-sib))
+      (setq prev-sib (f90-ts--before-child n cur-line predicate))
+      ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib1")
+      (setq n (treesit-node-parent n)))
+
+    (let ((prev-descend prev-sib))
+      ;; descend the previous sibling to find sub nodes which are still previous to current line
+      (while (and prev-sib (> (treesit-node-child-count prev-sib) 0))
+        (setq prev-sib (f90-ts--before-child prev-descend cur-line predicate))
+        ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib2")
+        (setq prev-descend (or prev-sib prev-descend)))
+
+      ;; return the first leaf on the line where prev-descend is placed
+      ;; (take continuation lines into account and go to beginning of statement)
+      (and prev-descend (f90-ts--first-node-of-stmt prev-descend))
+      )))
+
+
+(defun f90-ts--previous-sibling (parent)
+  "Previous sibling based on position of point. Especially for empty
+line, it often happens that node=nil, but parent is some relevant node,
+whose children, which are kind of siblings to nil-node-position, can be
+used to determine things like indentation.
+For the first sibling itself, we do not exclude ERROR nodes, then the
+ERROR node is descended (usually just one step) to find a node with relevant
+structure type, like subroutine_statement or similar."
+  (let* ((cur-line (line-number-at-pos))
+         (predicate #'f90-ts--node-not-comment-p)
+         (psib (f90-ts--before-child parent cur-line predicate)))
+    ;; if psib=nil, just return nil
+    ;; if psib=ERROR node, descend and try to find some non-error node
+    (cl-loop
+     for current = psib then child
+     for child = (and current (treesit-node-child current 0 t))
+     while (and child
+                (string= (treesit-node-type current) "ERROR"))
+     finally return current)))
+
+
+(defun f90-ts--before-child (node line predicate)
+  "Return child of NODE, which is on a previous line and satisfies
+PREDICATE. Take the last of all children satisfying this condition."
+  (when-let* ((children (treesit-node-children node))
+              (children-prev (f90-ts--nodes-on-prev-lines children line predicate)))
+    (car (last children-prev))))
+
+
+(defun f90-ts--first-node-on-line (pos)
+  "Return the first node on the line at POS."
+  (save-excursion
+    (goto-char pos)
+    (back-to-indentation)
+
+    (let* ((node-indent (treesit-node-at (point)))
+           (node-amp1 (and (< 1 (point)) (treesit-node-at (1- (point)))))
+           (node-amp2 (and (bolp) node-amp1 (treesit-node-next-sibling node-amp1))))
+      ;;(f90-ts-inspect-node :auxiliary node-amp1 "na1")
+      ;;(f90-ts-inspect-node :auxiliary node-amp2 "na2")
+      ;;(f90-ts-inspect-node :auxiliary node-indent "nai")
+
+      ;; this is a bit tricky: for a continuation line, there are two unnamed nodes "&"
+      ;; one at the back-to-indentation position, and one on the previous line,
+      ;; but treesit-node-at does not return the ampersand at back-to-indentation, but
+      ;; the next leaf node with same start position;
+      ;; using (1- (point)) gives the proper ampersand, except if (point) is at
+      ;; beginning of line position, in this case:
+      ;;   if previous line closes with an ampersand, then amp2 contains that one
+      ;;   if previous line is empty, then amp1 contains the ampersand at beginning of line
+      ;;   if previous line is a comment (no ampersand required), then amp1 has the comment
+      ;;      and amp2 has the desired ampersand
+      (cond
+       ((and node-amp2 (string= (treesit-node-type node-amp2) "&"))
+        node-amp2)
+       ((and node-amp1 (string= (treesit-node-type node-amp1) "&"))
+        node-amp1)
+       (t
+        node-indent)))))
+
+
+(defun f90-ts--last-node-on-line (pos)
+  "Go to end of line of POS and obtain the node at this end of line position."
+  (save-excursion
+    (goto-char pos)
+    (end-of-line)
+    (when-let ((node (treesit-node-at (point))))
+      (when (= (line-number-at-pos pos)
+               (f90-ts--node-line node))
+        node))))
+
+
+(defun f90-ts--pos-in-continued-p (pos)
+  "Check whether line at POS belongs to a continued statement, but is
+not the first line of such a statement. The line at POS is assumed to
+be non-empty and thus contains at least one node.
+Either at start line there is an &, or it is a comment, and going
+backwards by prev-sibling after a sequence of comments (and only
+comments), we find an ampersand."
+  (let* ((first (f90-ts--first-node-on-line pos)))
+    (cond
+     ((f90-ts--node-is-ampersand-p first)
+      t)
+
+     ((f90-ts--node-has-type-p first "comment")
+      (cl-loop for node = first then (treesit-node-prev-sibling node)
+               while (and node (f90-ts--node-has-type-p node "comment"))
+               finally return (and node (f90-ts--node-is-ampersand-p node))))
+
+     (t
+      ;; in all other cases, we are not on a continued line
+      nil))))
+
+
+(defun f90-ts--line-continued-at-end-p (last pos)
+  "Check whether line at POS is continued. It usually ends in &, but
+might be followed by a comment.
+LAST is expected to be the last node on the line. Instead of obtaining
+LAST itself using POS, it is expected as an argument (the only user of
+this function requires LAST for further work)."
+  (cond
+   ((f90-ts--node-is-ampersand-p last)
+    t)
+
+   ((f90-ts--node-has-type-p last "comment")
+    ;; if last comment is node, check whether previous one is an ampersand,
+    ;; but it must be on the same line
+    (let ((prev (treesit-node-prev-sibling last)))
+      (and prev
+           (f90-ts--node-is-ampersand-p prev)
+           (= (line-number-at-pos pos)
+              (f90-ts--node-line prev)))))
+
+   (t
+    ;; in all other cases, we are not on a continued line
+    nil)))
+
+
+(defun f90-ts--first-node-of-stmt (node)
+  "Return the first node of the statement at which NODE is placed.
+Use f90-ts--first-node-on-line, check for continuation symbol and
+if present, further go back, skipping comments and empty line until
+beginning of statement is found."
+  (let* ((start (treesit-node-start node))
+         (head (f90-ts--first-node-on-line start)))
+    ;;(f90-ts-inspect-node :indent head "start")
+    ;;(f90-ts-inspect-node :indent head "head ")
+    (while (string= (treesit-node-type head) "&")
+      ;; go to corresponding terminating '&'
+      ;; (the head of line ampersand might be virtual, not a real symbol)
+      (let ((prev (treesit-node-prev-sibling head)))
+        (while (and prev (f90-ts--node-type-p prev "comment"))
+          (setq prev (treesit-node-prev-sibling prev)))
+        ;; jump to the start of that line, and go on if necessary
+        (setq head (f90-ts--first-node-on-line (treesit-node-start prev)))))
+    head))
+
+
+(defun f90-ts--nodes-on-prev-lines (nodes cur-line predicate)
+  "Return all NODES on any previous line.
+For empty NODES, return an empty list."
+  (seq-filter
+   (lambda (node)
+     (and (funcall predicate node)
+          (< (f90-ts--node-line node)
+             cur-line)))
+   nodes))
+
+
+(defun f90-ts--after-stmt-line1-p (node pos)
+  "Check whether position POS is on the next line after the line where
+NODE is located (NODE assumed to being part of a statement possibly
+spread over several lines). Empty lines are automatically skipped as
+those are not present in the tree."
+  ;; strategy: get last node on the same line as NODE, check whether it is &,
+  ;; goto next node, which is & on next line and compare with line number at pos;
+  ;; note that if "&" is at end of line, then there is always a second "&"
+  ;; at beginning of the next non-empty/non-comment line or at EOF,
+  ;; hence (treesit-next-sibling last) below can always be executed.
+  ;;(f90-ts-inspect-node :auxiliary node "astmt1-node")
+  ;;(f90-ts-log :auxiliary "astmt: pos = %d, node start = %d" pos (treesit-node-start node))
+  (when-let* ((cur-line (line-number-at-pos pos))
+              (pos-node (treesit-node-start node))
+              (last (f90-ts--last-node-on-line pos-node)))
+    ;;(f90-ts-inspect-node :auxiliary last "astmt1-last")
+    (when (f90-ts--line-continued-at-end-p last pos-node)
+      ;;(f90-ts-log :auxiliary "astmt: on continued lines")
+      (let ((nsib (treesit-node-next-sibling last)))
+        ;;(f90-ts-inspect-node :auxiliary nsib "astmt1-nsib")
+        ;;(f90-ts-log :auxiliary "astmt: last start = %d, nsib start = %d"
+        ;;            (treesit-node-start last) (treesit-node-start nsib))
+        (and nsib
+             (not (< (f90-ts--node-line nsib) cur-line)))))))
+
+
+(defun f90-ts--indent-pos-at-node (node)
+  "Determine indentation position of line where start of NODE is located."
+  ;; TODO: is this correct even with treesit-indent-region?
+  (save-excursion
+    (goto-char (treesit-node-start node))
+    (back-to-indentation)
+    (point)))
+
+
+(defun f90-ts--node-at-indent-pos (pos)
+  "Determine node at indentation position of line determined by POS."
+  (save-excursion
+    (goto-char pos)
+    (back-to-indentation)
+    (treesit-node-at (point))))
+
+
+(defun f90-ts--node-line (node)
+  "Determine line number of start position of node."
+  (line-number-at-pos (treesit-node-start node)))
+
+
+(defun f90-ts--node-column (node)
+  "Determine column number of start position of node."
+  (f90-ts--column-number-at-pos (treesit-node-start node)))
+
+
+(defun f90-ts--column-number-at-pos (pos)
+  "Compute column by position."
+  (save-excursion
+    (goto-char pos)
+    (current-column)))
+
+
+(defun f90-ts--node-start-or-pos (node)
+  "Return start position of node or position of point if node is nil.
+In indent-region batch processing, position by (point) is not valid,
+but node is always some node. On the other hand, indentation of a single
+line has node=nil on empty lines, in which case, we can and should
+return (point)."
+  (or (and node (treesit-node-start node))
+      (point)))
+
+
+(defun f90-ts--line-number-at-node-or-pos (node)
+  "If NODE is non-nil, return line number at which start position is
+located, otherwise return line number of current point position."
+  (or (and node (f90-ts--node-line node))
+      (line-number-at-pos)))
+
+
+(defun f90-ts--node-is-ampersand-p (node)
+  "Check whether node is continuation symbol &."
+  (string= (treesit-node-type node) "&"))
+
+
+(defun f90-ts--node-has-type-p (node type)
+  "Check whether node has type TYPE."
+  (string= (treesit-node-type node) type))
+
+
+;;------------------------------------------------------------------------------
 ;; Font-locking
 
 (defun f90-ts--font-lock-rules-openmp ()
@@ -301,7 +792,7 @@ comments in the tree. Must be parsed before plain comments."
 ;   :feature 'preproc
 ;   ;; preprocessor directive keywords as tokens (not entire nodes)
 ;   '((["#include" "#define" "#if" "#ifdef" "#ifndef" "#endif" "#else" "#elif" "#elifdef"]) @font-lock-preprocessor-face)
-   
+
    :language 'fortran
    :feature 'preproc
    ;; highlight macro names in definitions
@@ -511,7 +1002,7 @@ associates and others."
    :feature 'number
    '(((number_literal) @font-lock-number-face)
      ((complex_literal) @font-lock-number-face))
-   
+
    :language 'fortran
    :feature 'constant
    '(((boolean_literal) @font-lock-constant-face)
@@ -525,7 +1016,7 @@ associates and others."
    :language 'fortran
    :feature 'bracket
    '(["(" ")" "[" "]" "(/" "/)"] @f90-ts-font-lock-bracket-face)
-   
+
    :language 'fortran
    :feature 'delimiter
    '(["," ":" ";" "::" "=>" "&"] @f90-ts-font-lock-delimiter-face)
@@ -1660,495 +2151,6 @@ and `f90-comment-region-prefix`."
                           (cons f90-comment-region-prefix f90-ts-extra-comment-prefixes)
                           nil t nil nil f90-comment-region-prefix)))
   (f90-comment-region-with-prefix beg-region end-region prefix))
-
-
-;;------------------------------------------------------------------------------
-;; auxiliary predicates
-
-(defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
-  "Regular expression for matching names of special variables like
-self or this. Used for applying a special font lock face."
-  :type 'regexp
-  :safe #'stringp
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
-  "Regular expression for matching and capturing comment starts (excluding openmp).
-For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments.
-This is used for applying the same comment starter in comment section, see
-`f90-ts-break-line`."
-  :type 'regexp
-  :safe #'stringp
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
-  "Regular expression for matching comment starts (excluding openmp).
-For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments."
-  :type 'regexp
-  :safe #'stringp
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-special-comment-regexp ""
-  "Regular expression for matching special comments (e.g. for structuring code).
-Used for applying a special font lock face."
-  :type 'regexp
-  :safe #'stringp
-  :group 'f90-ts)
-
-
-(defun f90-ts--comment-prefix (node)
-  "Extract the starting character sequence from NODE, assumed to be of type comment.
-Include any special symbol characters "
-  ;; first match openmp as comment prefix would just take the initial ! and ignoring
-  ;; following $omp part in openmp statements
-  (let ((rx-comment (concat "^\\(?:" f90-ts-openmp-prefix-regexp "\\)\\|\\(?:" f90-ts-comment-prefix-regexp "\\)")))
-    (when (string-match rx-comment (treesit-node-text node))
-      (f90-ts-log :auxiliary "matched comment prefix: <%s>" (match-string 0 (treesit-node-text node)))
-      (match-string 0 (treesit-node-text node)))))
-
-
-(defun f90-ts-special-var-p (node)
-  "Check if NODE is an identifier and matches the special variable regexp.
-Note that the parse uses identifier not just for variables, but for types etc."
-  (when (string= (treesit-node-type node) "identifier")
-    ;; we do not prepend or append symbol start or end assertions, as it should also
-    ;; work with more general regexps (like highlight all variables with a certain prefix)
-    ;;(string-match f90-ts-special-var-regexp (treesit-node-text node))))
-    (string-match "self" (treesit-node-text node))))
-
-
-(defun f90-ts-openmp-node-p (node)
-  "Check if NODE is a comment node and has the openmp comment prefix."
-  (when (string= (treesit-node-type node) "comment")
-    (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
-
-
-(defun f90-ts-special-comment-node-p (node)
-  "Check if NODE is a comment node and satisfies the special comment regexp."
-  (when (and (not (string-empty-p f90-ts-special-comment-regexp))
-             (string= (treesit-node-type node) "comment"))
-    (string-match (concat "^" f90-ts-special-comment-regexp) (treesit-node-text node))))
-
-
-(defun f90-ts-in-string-p ()
-  "Non-nil if point is inside a string."
-  (when-let ((node (treesit-node-at (point))))
-    (when (string= (treesit-node-type node) "string_literal")
-      (let ((start (treesit-node-start node))
-            (end (treesit-node-end node))
-            (pos (point)))
-        ;; start and end position are the quotation characters
-        (and (< start pos) (< pos end))))))
-
-
-(defun f90-ts-in-openmp-p ()
-  "Non-nil if point is inside an openmp statement, which starts with !$ and
-looks like a comment. The grammar does not parse openmp currently."
-  (when-let ((node (treesit-node-at (point))))
-    (when (f90-ts-openmp-node-p node)
-      (f90-ts-log :auxiliary "in-openmp: %s" (treesit-node-type node))
-      (f90-ts-log :auxiliary "in-openmp: %d, %d, %d" (treesit-node-start node) (treesit-node-end node) (point))
-      (let ((start (treesit-node-start node))
-            (pos (point)))
-        ;; start position is the comment symbol itself
-        (and (< start pos))))))
-
-
-(defun f90-ts-in-comment-p ()
-  "Non-nil if point is after start of comment. This excludes openmp statements,
-which look like comments and are currently not parsed by the treesitter grammar."
-  (when-let ((node (treesit-node-at (point))))
-    (when (and (string= (treesit-node-type node) "comment")
-               (not (f90-ts-openmp-node-p node)))
-      (f90-ts-log :auxiliary "in-comment: %s" (treesit-node-type node))
-      (f90-ts-log :auxiliary "in-comment: %d, %d, %d" (treesit-node-start node) (treesit-node-end node) (point))
-      (let ((start (treesit-node-start node))
-            (pos (point)))
-        ;; start position is the comment symbol itself
-        (and (< start pos))))))
-
-
-(defun f90-ts-bol-to-point-blank-p ()
-  "Return non-nil if only blank characters exist between BOL and point.
-Note that in fortran, a continuation symbol shall not be used on blank lines."
-  (looking-back "^\\s-*" (line-beginning-position)))
-
-
-(defun f90-ts--node-type-p (node type)
-  "If type is nil, return non-nil and ignore node.
-Otherwise return non-nil if node is non-nil and is of type TYPE."
-  (if type
-      (and node (string= (treesit-node-type node) type))
-    t))
-
-
-(defun f90-ts--node-not-comment-p (node)
-  "Return true if NODE is not of type comment."
-  (let ((type (treesit-node-type node)))
-    (not (string= type "comment"))))
-
-
-(defun f90-ts--node-not-comment-or-error-p (node)
-  "Return true if NODE is not of type comment or error. This is used to
-find relevant nodes."
-  (let ((type (treesit-node-type node)))
-    (not (member type (list "comment" "ERROR")))))
-
-
-(defun f90-ts-node-overlap-region-p (node start end)
-  "Return true if NODE overlaps with region START END."
-  (and (< (treesit-node-start node) end)
-       (> (treesit-node-end node)   start)))
-
-
-;;------------------------------------------------------------------------------
-;; auxiliary walk and query functions
-
-(defun f90-ts--search-subtree (root pred &optional start end prune reversed)
-  "Collect nodes within subtree of ROOT (not necessarily the treesitter
-root) for which PRED returns non-nil.
-If START and END are non-nil, only visit nodes overlapping that region.
-If PRUNE is non-nil, do not descend into children of nodes that
-satisfy PRED.
-If REVERSED is true, return in reversed order."
-  (f90-ts-log :auxiliary "root %s" root)
-  (let (nodes)
-    (cl-labels
-        ((traverse (node)
-           (when (or (null start)
-                     (null end)
-                     (f90-ts-node-overlap-region-p node start end))
-             (let ((match (funcall pred node)))
-               (when match
-                 (push node nodes))
-               (unless (and match prune)
-                 (dolist (child (treesit-node-children node))
-                   (traverse child)))))))
-      (traverse root))
-    (if reversed
-        nodes
-      (nreverse nodes))))
-
-
-;; currently not used, but might be useful
-(defun f90-ts--statement-at-node (node)
-  "For a node, find the most relevant (grand...)parent node starting at
-the same position. This is done by ascend to parent nodes until start
-position becomes different or an ERROR or translation_unit node is
-encountered."
-  ;; ascend as long as parent starts at the same position and is not an ERROR node
-  (cl-loop
-   for current = node then parent
-   for parent = (treesit-node-parent current)
-   while (and parent
-              (= (treesit-node-start parent)
-                 (treesit-node-start current))
-              (not (or (string= (treesit-node-type parent) "ERROR")
-                       (string= (treesit-node-type parent) "translation_unit"))))
-   finally return current))
-
-
-(defun f90-ts--previous-stmt-keyword (node parent)
-  "Return the statement leaf node (usually some keyword like if,
-elseif, do, etc.) for `f90-ts-prev-stmt-first`. In case of a block label
-The first leaf node is the label, not the keyword. For use as anchor,
-the label is required. For use as matcher, we need the keyword.
-Keyword nodes become relevant for incomplete code with ERROR nodes."
-  ;; if the statement starts with a block label, then first is unnamed
-  ;; node label, and its parent is block_label_start_expression. Its
-  ;; next sibling is a keyword like if or do
-  (let* ((first (f90-ts--previous-stmt-first node parent))
-         (fparent (and first (treesit-node-parent first))))
-    (if (string= (treesit-node-type fparent) "block_label_start_expression")
-	    (treesit-node-next-sibling fparent)
-      first)))
-
-
-(defun f90-ts--previous-stmt-first (node parent)
-  "Return most previous statement.
-First search for any reasonable (leaf) node, which is before current
-line, and then go to start of line. If on a continued line, follow it
-to the start of the statement.
-If current point is within a continued line, then previous leaf node
-belongs to the continued line as well, and previous-stmt return the
-node at the start of the continued line.
-
-In order to find the most previous leaf node start at node and ascend
-the tree until a previous sibling on a previous line can be found. Just
-taking a sibling of node is not possible, as node might be nil (empty
-line), or node is part of an expression tree with deep nesting or
-similar. We really want to go to previous line with a proper node on
-it. Once we have a proper node, descend the previous sibling to further
-narrow it down among its children.
-Finally return the leaf node at the start of the line. Follow continued
-lines to first line of continued statement.
-
-Ignore nodes which do not satisfy the predicate
-`f90-ts--node-not-comment-or-error-p` during ascend or descend
-(for example comment nodes)."
-  (let ((cur-line (f90-ts--line-number-at-node-or-pos node))
-        (predicate #'f90-ts--node-not-comment-or-error-p)
-        (n (or node parent))
-        prev-sib)  ; previous sibling for children scans (ascending and descending)
-    ;;(f90-ts-inspect-node :auxiliary node "prev-stmt-node")
-    ;;(f90-ts-inspect-node :auxiliary parent "prev-stmt-parent")
-    ;;(f90-ts-inspect-node :auxiliary n "prev-stmt-n")
-    ;; ascend until a previous sibling was found
-    (while (and n (not prev-sib))
-      (setq prev-sib (f90-ts--before-child n cur-line predicate))
-      ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib1")
-      (setq n (treesit-node-parent n)))
-
-    (let ((prev-descend prev-sib))
-      ;; descend the previous sibling to find sub nodes which are still previous to current line
-      (while (and prev-sib (> (treesit-node-child-count prev-sib) 0))
-        (setq prev-sib (f90-ts--before-child prev-descend cur-line predicate))
-        ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib2")
-        (setq prev-descend (or prev-sib prev-descend)))
-
-      ;; return the first leaf on the line where prev-descend is placed
-      ;; (take continuation lines into account and go to beginning of statement)
-      (and prev-descend (f90-ts--first-node-of-stmt prev-descend))
-      )))
-
-
-(defun f90-ts--previous-sibling (parent)
-  "Previous sibling based on position of point. Especially for empty
-line, it often happens that node=nil, but parent is some relevant node,
-whose children, which are kind of siblings to nil-node-position, can be
-used to determine things like indentation.
-For the first sibling itself, we do not exclude ERROR nodes, then the
-ERROR node is descended (usually just one step) to find a node with relevant
-structure type, like subroutine_statement or similar."
-  (let* ((cur-line (line-number-at-pos))
-         (predicate #'f90-ts--node-not-comment-p)
-         (psib (f90-ts--before-child parent cur-line predicate)))
-    ;; if psib=nil, just return nil
-    ;; if psib=ERROR node, descend and try to find some non-error node
-    (cl-loop
-     for current = psib then child
-     for child = (and current (treesit-node-child current 0 t))
-     while (and child
-                (string= (treesit-node-type current) "ERROR"))
-     finally return current)))
-
-
-(defun f90-ts--before-child (node line predicate)
-  "Return child of NODE, which is on a previous line and satisfies
-PREDICATE. Take the last of all children satisfying this condition."
-  (when-let* ((children (treesit-node-children node))
-              (children-prev (f90-ts--nodes-on-prev-lines children line predicate)))
-    (car (last children-prev))))
-
-
-(defun f90-ts--first-node-on-line (pos)
-  "Return the first node on the line at POS."
-  (save-excursion
-    (goto-char pos)
-    (back-to-indentation)
-
-    (let* ((node-indent (treesit-node-at (point)))
-           (node-amp1 (and (< 1 (point)) (treesit-node-at (1- (point)))))
-           (node-amp2 (and (bolp) node-amp1 (treesit-node-next-sibling node-amp1))))
-      ;;(f90-ts-inspect-node :auxiliary node-amp1 "na1")
-      ;;(f90-ts-inspect-node :auxiliary node-amp2 "na2")
-      ;;(f90-ts-inspect-node :auxiliary node-indent "nai")
-
-      ;; this is a bit tricky: for a continuation line, there are two unnamed nodes "&"
-      ;; one at the back-to-indentation position, and one on the previous line,
-      ;; but treesit-node-at does not return the ampersand at back-to-indentation, but
-      ;; the next leaf node with same start position;
-      ;; using (1- (point)) gives the proper ampersand, except if (point) is at
-      ;; beginning of line position, in this case:
-      ;;   if previous line closes with an ampersand, then amp2 contains that one
-      ;;   if previous line is empty, then amp1 contains the ampersand at beginning of line
-      ;;   if previous line is a comment (no ampersand required), then amp1 has the comment
-      ;;      and amp2 has the desired ampersand
-      (cond
-       ((and node-amp2 (string= (treesit-node-type node-amp2) "&"))
-        node-amp2)
-       ((and node-amp1 (string= (treesit-node-type node-amp1) "&"))
-        node-amp1)
-       (t
-        node-indent)))))
-
-
-(defun f90-ts--last-node-on-line (pos)
-  "Go to end of line of POS and obtain the node at this end of line position."
-  (save-excursion
-    (goto-char pos)
-    (end-of-line)
-    (when-let ((node (treesit-node-at (point))))
-      (when (= (line-number-at-pos pos)
-               (f90-ts--node-line node))
-        node))))
-
-
-(defun f90-ts--pos-in-continued-p (pos)
-  "Check whether line at POS belongs to a continued statement. Either
-at start line there is an &, or it is a comment, and going backwards
-by prev-sibling after a sequence of comments (and only comments), we
-find an ampersand."
-  (let* ((first (f90-ts--first-node-on-line pos)))
-    (cond
-     ((f90-ts--node-is-ampersand-p first)
-      t)
-
-     ((f90-ts--node-has-type-p first "comment")
-      (cl-loop for node = first then (treesit-node-prev-sibling node)
-               while (and node (f90-ts--node-has-type-p node "comment"))
-               finally return (and node (f90-ts--node-is-ampersand-p node))))
-
-     (t
-      ;; in all other cases, we are not on a continued line
-      nil))))
-
-
-(defun f90-ts--line-continued-at-end-p (last pos)
-  "Check whether line at POS is continued. It usually ends in &, but
-might be followed by a comments.
-LAST is expected to be the last node on the line. Instead of obtaining
-LAST itself using POS, it is expected as an argument (the only user of
-this function requires LAST for further work)."
-  (cond
-   ((f90-ts--node-is-ampersand-p last)
-    t)
-
-   ((f90-ts--node-has-type-p last "comment")
-    ;; if last comment is node, check whether previous one is an ampersand,
-    ;; but it must be on the same line
-    (let ((prev (treesit-node-prev-sibling last)))
-      (and prev
-           (f90-ts--node-is-ampersand-p prev)
-           (= (line-number-at-pos pos)
-              (f90-ts--node-line prev)))))
-
-   (t
-    ;; in all other cases, we are not on a continued line
-    nil)))
-
-
-(defun f90-ts--first-node-of-stmt (node)
-  "Return the first node of the statement at which NODE is placed.
-Use f90-ts--first-node-on-line, check for continuation symbol and
-if present, further go back, skipping comments and empty line until
-beginning of statement is found."
-  (let* ((start (treesit-node-start node))
-         (head (f90-ts--first-node-on-line start)))
-    ;;(f90-ts-inspect-node :indent head "start")
-    ;;(f90-ts-inspect-node :indent head "head ")
-    (while (string= (treesit-node-type head) "&")
-      ;; go to corresponding terminating '&'
-      ;; (the head of line ampersand might be virtual, not a real symbol)
-      (let ((prev (treesit-node-prev-sibling head)))
-        (while (and prev (f90-ts--node-type-p prev "comment"))
-          (setq prev (treesit-node-prev-sibling prev)))
-        ;; jump to the start of that line, and go on if necessary
-        (setq head (f90-ts--first-node-on-line (treesit-node-start prev)))))
-    head))
-
-
-(defun f90-ts--nodes-on-prev-lines (nodes cur-line predicate)
-  "Return all NODES on any previous line.
-For empty NODES, return an empty list."
-  (seq-filter
-   (lambda (node)
-     (and (funcall predicate node)
-          (< (f90-ts--node-line node)
-             cur-line)))
-   nodes))
-
-
-(defun f90-ts--after-stmt-line1-p (node pos)
-  "Check whether position POS is on the next line after the line where
-NODE is located (NODE assumed to being part of a statement possibly
-spread over several lines). Empty lines are automatically skipped as
-those are not present in the tree."
-  ;; strategy: get last node on the same line as NODE, check whether it is &,
-  ;; goto next node, which is & on next line and compare with line number at pos;
-  ;; note that if "&" is at end of line, then there is always a second "&"
-  ;; at beginning of the next non-empty/non-comment line or at EOF,
-  ;; hence (treesit-next-sibling last) below can always be executed.
-  ;;(f90-ts-inspect-node :auxiliary node "astmt1-node")
-  ;;(f90-ts-log :auxiliary "astmt: pos = %d, node start = %d" pos (treesit-node-start node))
-  (when-let* ((cur-line (line-number-at-pos pos))
-              (pos-node (treesit-node-start node))
-              (last (f90-ts--last-node-on-line pos-node)))
-    ;;(f90-ts-inspect-node :auxiliary last "astmt1-last")
-    (when (f90-ts--line-continued-at-end-p last pos-node)
-      ;;(f90-ts-log :auxiliary "astmt: on continued lines")
-      (let ((nsib (treesit-node-next-sibling last)))
-        ;;(f90-ts-inspect-node :auxiliary nsib "astmt1-nsib")
-        ;;(f90-ts-log :auxiliary "astmt: last start = %d, nsib start = %d"
-        ;;            (treesit-node-start last) (treesit-node-start nsib))
-        (and nsib
-             (not (< (f90-ts--node-line nsib) cur-line)))))))
-
-
-(defun f90-ts--indent-pos-at-node (node)
-  "Determine indentation position of line where start of NODE is located."
-  ;; TODO: is this correct even with treesit-indent-region?
-  (save-excursion
-    (goto-char (treesit-node-start node))
-    (back-to-indentation)
-    (point)))
-
-
-(defun f90-ts--node-at-indent-pos (pos)
-  "Determine node at indentation position of line determined by POS."
-  (save-excursion
-    (goto-char pos)
-    (back-to-indentation)
-    (treesit-node-at (point))))
-
-
-(defun f90-ts--node-line (node)
-  "Determine line number of start position of node."
-  (line-number-at-pos (treesit-node-start node)))
-
-
-(defun f90-ts--node-column (node)
-  "Determine column number of start position of node."
-  (f90-ts--column-number-at-pos (treesit-node-start node)))
-
-
-(defun f90-ts--column-number-at-pos (pos)
-  "Compute column by position."
-  (save-excursion
-    (goto-char pos)
-    (current-column)))
-
-
-(defun f90-ts--node-start-or-pos (node)
-  "Return start position of node or position of point if node is nil.
-In indent-region batch processing, position by (point) is not valid,
-but node is always some node. On the other hand, indentation of a single
-line has node=nil on empty lines, in which case, we can and should
-return (point)."
-  (or (and node (treesit-node-start node))
-      (point)))
-
-
-(defun f90-ts--line-number-at-node-or-pos (node)
-  "If NODE is non-nil, return line number at which start position is
-located, otherwise return line number of current point position."
-  (or (and node (f90-ts--node-line node))
-      (line-number-at-pos)))
-
-
-(defun f90-ts--node-is-ampersand-p (node)
-  "Check whether node is continuation symbol &."
-  (string= (treesit-node-type node) "&"))
-
-
-(defun f90-ts--node-has-type-p (node type)
-  "Check whether node has type TYPE."
-  (string= (treesit-node-type node) type))
 
 
 ;;------------------------------------------------------------------------------
