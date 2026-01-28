@@ -5,8 +5,14 @@ subroutine foo()
           ! comment
      elseif (a .eqv. b) then
 
-          x = fun1(y)
+          if (condition .or. .false.) x = fun1(y)
+          if (2*5 > x) then
+               print *, x
+          end if
+          inner: if (.true.) then
+               ! comment
+          end if inner
      else
 
-     end if
+     end if name
 end subroutine foo

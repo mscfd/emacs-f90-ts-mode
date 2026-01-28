@@ -1889,6 +1889,7 @@ different, as subtrees are built differently."
                        ("function"                 "(function (function_statement name: (_) @name))")
                        ("interface"                "(interface (interface_statement (_) * (name) @name))")
                        ("derived_type_definition"  "(derived_type_statement (_) * (type_name) @name)")
+                       ("if_statement"             "(if_statement (block_label_start_expression _ @name))")
                        (_                          nil)
                        ))
               (capture (treesit-query-capture node query)))
@@ -1918,9 +1919,9 @@ CONSTRUCT-TYPE is a string like 'subroutine', 'function', 'module', etc."
       ("function"                (f90-ts--complete-smart-end-compose node "function"))
       ("derived_type_definition" (f90-ts--complete-smart-end-compose node "type"))
       ("interface"               (f90-ts--complete-smart-end-compose node "interface"))
+      ("if_statement"            (f90-ts--complete-smart-end-compose node "if"))
 
       ;; TODO: just simple completion, no label or name extraction so far
-      ("if_statement"            "end if")
       ("do_loop"                 "end do")
       ("associate_statement"     "end associate")
       ("block_construct"         "end block")
