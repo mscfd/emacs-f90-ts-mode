@@ -341,6 +341,11 @@ Otherwise return non-nil if node is non-nil and is of type TYPE."
     t))
 
 
+(defun f90-ts--node-is-ampersand-p (node)
+  "Check whether node is continuation symbol &."
+  (and node (string= (treesit-node-type node) "&")))
+
+
 (defun f90-ts--node-not-comment-p (node)
   "Return true if NODE is not of type comment."
   (let ((type (treesit-node-type node)))
@@ -505,10 +510,10 @@ PREDICATE. Take the last of all children satisfying this condition."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
-
     (let* ((node-indent (treesit-node-at (point)))
            (node-amp1 (and (< 1 (point)) (treesit-node-at (1- (point)))))
            (node-amp2 (and (bolp) node-amp1 (treesit-node-next-sibling node-amp1))))
+      ;;(f90-ts-log :indent "first node: %d, %s" (point) node-indent)
       ;;(f90-ts-inspect-node :auxiliary node-amp1 "na1")
       ;;(f90-ts-inspect-node :auxiliary node-amp2 "na2")
       ;;(f90-ts-inspect-node :auxiliary node-indent "nai")
@@ -543,50 +548,83 @@ PREDICATE. Take the last of all children satisfying this condition."
         node))))
 
 
-(defun f90-ts--pos-in-continued-p (pos)
+(defun f90-ts--find-first-ampersand (first)
+  "In continued lines, continuation symbol ampersands appears in
+sequences like &, (comment)*, &. This routines checks whether node
+FIRST is any of those ampersand or comment nodes, and returns the first
+ampersand node of this sequence. FIRST is assumed to be the first node
+on its line!"
+  (when-let ((nprev
+              (cond
+               ((f90-ts--node-is-ampersand-p first)
+                ;; go one step back to first ampersand or sequence
+                ;; of comments
+                (treesit-node-prev-sibling first))
+
+               ((f90-ts--node-type-p first "comment")
+                first)
+
+               (t
+                ;; in all other cases, we are not on a continued line
+                nil))))
+    ;; if necessary skip comments (but only comments) to find the first ampersand,
+    ;; if we are in a sequence of comments not being part of a continued line,
+    ;; then the final non-comment node is not an ampersand and we return nil
+    (cl-loop for node = nprev then (treesit-node-prev-sibling node)
+             while (f90-ts--node-type-p node "comment")
+             finally return (and (f90-ts--node-is-ampersand-p node)
+                                 node))))
+
+
+(defun f90-ts--pos-is-continued-p (pos)
   "Check whether line at POS belongs to a continued statement, but is
-not the first line of such a statement. The line at POS is assumed to
-be non-empty and thus contains at least one node.
-Either at start line there is an &, or it is a comment, and going
+not the first line of such a statement.
+Either at start line there is an &. Or it is a comment, and going
 backwards by prev-sibling after a sequence of comments (and only
-comments), we find an ampersand."
+comments), we find an &."
+  ;; if line is empty, first gives the next node on some subsequent
+  ;; line; if the line is after some continuation ampersand
+  ;; then next node is either a comment or the second ampersand,
+  ;; from which we can go backwards
   (let* ((first (f90-ts--first-node-on-line pos)))
+    (f90-ts--find-first-ampersand first)))
+
+
+(defun f90-ts--line-continued-at-end-p (last pos)
+  "Check whether line at POS is continued. It usually ends in &, but
+might be followed by a comment. We first check that there is a next line
+after current line.
+LAST is expected to be the last node on the line. Instead of obtaining
+LAST itself using POS, it is expected as an argument (the only user of
+this function requires LAST for further work)."
+  ;; if there is an ampersand (or ampersand (comment)) at end of line but
+  ;; no other sibling follows, we are probably at end of file
+  (when (treesit-node-next-sibling last)
     (cond
-     ((f90-ts--node-is-ampersand-p first)
+     ((f90-ts--node-is-ampersand-p last)
       t)
 
-     ((f90-ts--node-has-type-p first "comment")
-      (cl-loop for node = first then (treesit-node-prev-sibling node)
-               while (and node (f90-ts--node-has-type-p node "comment"))
-               finally return (and node (f90-ts--node-is-ampersand-p node))))
+     ((f90-ts--node-type-p last "comment")
+      ;; if last comment is node, check whether previous one is an ampersand,
+      ;; but it must be on the same line
+      (let ((prev (treesit-node-prev-sibling last)))
+        (and prev
+             (f90-ts--node-is-ampersand-p prev)
+             (= (line-number-at-pos pos)
+                (f90-ts--node-line prev)))))
 
      (t
       ;; in all other cases, we are not on a continued line
       nil))))
 
 
-(defun f90-ts--line-continued-at-end-p (last pos)
-  "Check whether line at POS is continued. It usually ends in &, but
-might be followed by a comment.
-LAST is expected to be the last node on the line. Instead of obtaining
-LAST itself using POS, it is expected as an argument (the only user of
-this function requires LAST for further work)."
-  (cond
-   ((f90-ts--node-is-ampersand-p last)
-    t)
-
-   ((f90-ts--node-has-type-p last "comment")
-    ;; if last comment is node, check whether previous one is an ampersand,
-    ;; but it must be on the same line
-    (let ((prev (treesit-node-prev-sibling last)))
-      (and prev
-           (f90-ts--node-is-ampersand-p prev)
-           (= (line-number-at-pos pos)
-              (f90-ts--node-line prev)))))
-
-   (t
-    ;; in all other cases, we are not on a continued line
-    nil)))
+(defun f90-ts--pos-within-continued-stmt-p (pos)
+  "Check whether POS is on some line of a continued statement.
+This needs to check forward or backward, as first and last line
+must also match."
+  (or (f90-ts--pos-is-continued-p pos)
+      (when-let ((last (f90-ts--last-node-on-line pos)))
+        (f90-ts--line-continued-at-end-p last pos))))
 
 
 (defun f90-ts--first-node-of-stmt (node)
@@ -594,19 +632,17 @@ this function requires LAST for further work)."
 Use f90-ts--first-node-on-line, check for continuation symbol and
 if present, further go back, skipping comments and empty line until
 beginning of statement is found."
-  (let* ((start (treesit-node-start node))
-         (head (f90-ts--first-node-on-line start)))
-    ;;(f90-ts-inspect-node :indent head "start")
-    ;;(f90-ts-inspect-node :indent head "head ")
-    (while (string= (treesit-node-type head) "&")
-      ;; go to corresponding terminating '&'
-      ;; (the head of line ampersand might be virtual, not a real symbol)
-      (let ((prev (treesit-node-prev-sibling head)))
-        (while (and prev (f90-ts--node-type-p prev "comment"))
-          (setq prev (treesit-node-prev-sibling prev)))
-        ;; jump to the start of that line, and go on if necessary
-        (setq head (f90-ts--first-node-on-line (treesit-node-start prev)))))
-    head))
+  ;;(f90-ts-inspect-node :indent node "node")
+  (cl-loop
+   for namp = node then next-namp
+   for first = (progn
+                 ;;(f90-ts-inspect-node :indent node "node")
+                 ;;(f90-ts-inspect-node :indent namp "namp")
+                 (f90-ts--first-node-on-line
+                  (treesit-node-start namp)))
+   for next-namp = (f90-ts--find-first-ampersand first)
+   while next-namp
+   finally return first))
 
 
 (defun f90-ts--nodes-on-prev-lines (nodes cur-line predicate)
@@ -695,16 +731,6 @@ return (point)."
 located, otherwise return line number of current point position."
   (or (and node (f90-ts--node-line node))
       (line-number-at-pos)))
-
-
-(defun f90-ts--node-is-ampersand-p (node)
-  "Check whether node is continuation symbol &."
-  (string= (treesit-node-type node) "&"))
-
-
-(defun f90-ts--node-has-type-p (node type)
-  "Check whether node has type TYPE."
-  (string= (treesit-node-type node) type))
 
 
 ;;------------------------------------------------------------------------------
@@ -1077,7 +1103,7 @@ All other line use indentation of previous line."
     (cond
      (node
       (let ((pos (treesit-node-start node)))
-        (f90-ts--pos-in-continued-p pos)))
+        (f90-ts--pos-is-continued-p pos)))
 
      (parent
       ;; node=nil but parent is a proper node, then we are probably on an empty line
@@ -1987,18 +2013,83 @@ Currently it handles end statements."
 
 
 ;;------------------------------------------------------------------------------
+;; Indentation: auxiliary functions for continued lines
+
+(defun f90-ts--indent-stmt-first (first)
+  "Indent first line with FIRST being first node on that line, the first
+node of the statement. Compute and return the applied offset."
+  (f90-ts-log :indent "indent statement0: pos=%d, first=%s" (point) first)
+  (save-excursion
+    (goto-char (treesit-node-start first))
+    ;; indent first line of statement and compute applied offset
+    (beginning-of-line)
+    (let ((before-indent (current-indentation)))
+      (treesit-indent)
+      (- (current-indentation) before-indent))))
+
+
+(defun f90-ts--indent-stmt-rest (start offset)
+  "Indent remaining lines after first line of a multi line statement.
+First line can be found at position START.
+The same OFFSET computed for the first line is applied to all lines.
+Instead of walking lines, the loop goes from last node on line to
+next node, which must be on next relevant line. This automatically
+skips empty lines."
+  (save-excursion
+    (goto-char start)
+    (cl-loop
+     for last = (f90-ts--last-node-on-line (point))
+     for next = (and last (treesit-node-next-sibling last))
+     while (or (f90-ts--node-type-p last "comment")
+               (f90-ts--line-continued-at-end-p last (line-end-position)))
+     do (progn
+          (goto-char (treesit-node-start next))
+          (f90-ts-log :indent "indent statement1: %d, last=%s, next=%s" (point) last next)
+          (indent-line-to
+           (max 0 (+ (current-indentation) offset))))
+     )))
+
+
+;;------------------------------------------------------------------------------
 ;; Indentation and smart end completion
 
-;; indent-line-function:   =f90-ts--indent-and-complete-line, called by indent-for-tab-command
+;; indent-line-function:   =f90-ts-indent-statement, called by indent-for-tab-command
 ;; indent-region-function: =f90-ts-indent-and-complete-region, called by indent-region
 
 ;; TODO: make smart end completion optional (like nil, 'line, 'region, 'all or so)
 
 ;; indent region variant is used internally, hence is overridden if
 ;; tab version is required")
+
 (defvar-local f90-ts--align-continued-variant-tab nil
   "Current variant for indentation, if nil use region variant,
 otherwise use tab variant.")
+
+
+(defun f90-ts-indent-statement ()
+  "In general, this just calls `f90-ts--indent-and-complete`. However,
+if within a continued line region, then determine first line of
+statement and check indentation. If indentation changes, then move
+the whole statement by computed offset and invoke
+`f90-ts--indent-and-complete` with region choice for alignment.
+Otherwise with line choice."
+  (interactive)
+  (if (not (f90-ts--pos-within-continued-stmt-p (point)))
+      ;; just do normal indentation
+      (f90-ts--indent-and-complete-line)
+    ;; multi-line statement
+    (let* ((node (treesit-node-at (point)))
+           (first (f90-ts--first-node-of-stmt node))
+           (start (treesit-node-start first)))
+      (let ((offset (f90-ts--indent-stmt-first first)))
+        (f90-ts-log :indent "indent offset: %d" offset)
+        (if (= 0 offset)
+            ;; no indentation applied, invoke indentation for current line
+            ;; like doing rotational alignment
+            (f90-ts--indent-and-complete-line)
+          (f90-ts--indent-stmt-rest start offset)
+          )))))
+
 
 (defun f90-ts--indent-and-complete-line ()
   (interactive)
@@ -2191,8 +2282,8 @@ and `f90-comment-region-prefix`."
     (treesit-major-mode-setup))
 
   ;; set indentation functions (both add smart end completion and more)
-  (setq-local indent-line-function #'f90-ts--indent-and-complete-line)
-  (setq-local indent-region-function #'f90-ts--indent-and-complete-region)
+  (setq-local indent-line-function #'f90-ts-indent-statement)
+  (setq-local indent-region-function #'f90-ts-indent-and-complete-region)
 
   ;; provide a simple mode name in the modeline
   (setq-local mode-name "F90-TS"))
