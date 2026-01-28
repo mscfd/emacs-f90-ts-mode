@@ -424,7 +424,12 @@ Keyword nodes become relevant for incomplete code with ERROR nodes."
   (let* ((first (f90-ts--previous-stmt-first node parent))
          (fparent (and first (treesit-node-parent first))))
     (if (string= (treesit-node-type fparent) "block_label_start_expression")
-	    (treesit-node-next-sibling fparent)
+	    (let ((fnext (treesit-node-next-sibling fparent)))
+          (cl-loop
+           for n = fnext then child
+           for child = (treesit-node-child n 0)
+           while child
+           finally return n))
       first)))
 
 
@@ -2503,12 +2508,13 @@ NODE-INSPECT and use its start position as point."
   ;; NODE-LIST contains all the node that starts at point.
   (let* ((node-start (treesit-node-start node-inspect))
          (node-list
-          (cl-loop for node = (treesit-node-at node-start)
-                   then (treesit-node-parent node)
-                   while node
-                   if (eq (treesit-node-start node)
-                          node-start)
-                   collect node))
+          (cl-loop
+           for node = (treesit-node-at node-start)
+           then (treesit-node-parent node)
+           while node
+           if (eq (treesit-node-start node)
+                  node-start)
+           collect node))
          (largest-node (car (last node-list)))
          (parent (treesit-node-parent largest-node))
          ;; node-list-ascending contains all the node bottom-up, then
