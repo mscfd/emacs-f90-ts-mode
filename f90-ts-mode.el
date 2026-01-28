@@ -1102,6 +1102,8 @@ All other line use indentation of previous line."
       )))
 
 
+;; this is also true for the first continued line, if this needs
+;; extra handling, then the matcher for the first line should be called first
 (defun f90-ts--continued-line-some-is ()
   "Check whether we are on some continued line of a continued statement."
   (lambda (node parent bol &rest _)
@@ -1644,8 +1646,16 @@ For example: argument lists, association lists, (logical) expressions with align
   `(;; handle continued lines which are not yet caught, this also happens for
     ;; unclosed argument lists, where rules-lists cannot be matched
     ,@(f90-ts-indent-rules-info "continued")
-    ((f90-ts--continued-line-first-is) previous-stmt-anchor f90-ts-indent-continued)
-    ((f90-ts--continued-line-some-is)  previous-line-anchor 0)
+    ;; using previous line indentation for all but the first continued line
+    ;; does not work in conjunction with rotation, if a statement has continued
+    ;; lines after a list part, for example:
+    ;; function fun(aa, x1, x2,&
+    ;;                  x3, x4, x5) &
+    ;;      result(val)
+    ;; by how much should result be indented? x3 is not a good anchor!
+    ;;((f90-ts--continued-line-first-is) previous-stmt-anchor f90-ts-indent-continued)
+    ;;((f90-ts--continued-line-some-is)  previous-line-anchor 0)
+    ((f90-ts--continued-line-some-is) previous-stmt-anchor f90-ts-indent-continued)
     )
   "Indentation rules for continued lines. Argument lists and similar continued lines must have been dealt with before.")
 
