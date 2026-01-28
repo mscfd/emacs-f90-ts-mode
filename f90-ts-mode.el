@@ -171,7 +171,7 @@ jumping and nil turns of smart end completion."
 
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "<tab>") #'f90-ts-indent-line-or-region)
+    ;; (define-key map (kbd "A-h m") #'f90-ts-some-function)
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -748,30 +748,6 @@ with the previous relevant line."
                  (string= (treesit-node-type ggparent) "translation_unit")))
         f90-ts-indent-toplevel
       f90-ts-indent-contain)))
-
-
-;;++++++++++++++
-;; offset functions: lists on continued lines
-;; handling alignment options
-
-;; indent region variant is used internally, hence is overridden if
-;; tab version is required")
-(defvar-local f90-ts--align-continued-variant-tab nil
-  "Current variant for indentation, if nil use region variant,
-otherwise use tab variant.")
-
-
-(defun f90-ts-indent-line-or-region ()
-  "Indent line with tab variant, or region with region variant if
-region is active."
-  (interactive)
-  (if (use-region-p)
-      (indent-region (region-beginning) (region-end))
-    (unwind-protect
-        (progn
-          (setq f90-ts--align-continued-variant-tab t)
-          (indent-for-tab-command))
-      (setq f90-ts--align-continued-variant-tab nil))))
 
 
 ;;++++++++++++++
@@ -1522,17 +1498,33 @@ Currently it handles end statements."
 ;;------------------------------------------------------------------------------
 ;; Indentation and smart end completion
 
-(defun f90-ts--indent-and-complete ()
+;; indent-line-function:   =f90-ts--indent-and-complete-line, called by indent-for-tab-command
+;; indent-region-function: =f90-ts-indent-and-complete-region, called by indent-region
+
+;; TODO: make smart end completion optional (like nil, 'line, 'region, 'all or so)
+
+;; indent region variant is used internally, hence is overridden if
+;; tab version is required")
+(defvar-local f90-ts--align-continued-variant-tab nil
+  "Current variant for indentation, if nil use region variant,
+otherwise use tab variant.")
+
+(defun f90-ts--indent-and-complete-line ()
   (interactive)
-  (f90-ts-log :indent "INDENT ============================")
-  (treesit-indent)
-  (f90-ts-log :complete "DONE ==========================")
-  (f90-ts-log :complete "COMPLETE ==========================")
-  (f90-ts--complete-smart-tab)
-  (f90-ts-log :complete "DONE ==========================")
+    (unwind-protect
+        (progn
+          (setq f90-ts--align-continued-variant-tab t)
+          (f90-ts-log :indent "INDENT ============================")
+          (treesit-indent)
+          (f90-ts-log :complete "DONE ==========================")
+          (f90-ts-log :complete "COMPLETE ==========================")
+          (f90-ts--complete-smart-tab)
+          (f90-ts-log :complete "DONE =========================="))
+      (setq f90-ts--align-continued-variant-tab nil))
   )
 
 
+;; currently used by f90-ts-indent-and-complete-region
 (defun f90-ts-complete-smart-end-region (start end)
   "Execute smart end completion in region, using treesitter nodes
 representing end constructs."
@@ -1553,6 +1545,8 @@ representing end constructs."
      for node in end-stmts
      do (f90-ts--complete-smart-end-node node)
      )))
+
+
 
 (defun f90-ts-indent-and-complete-region (start end)
   "Indent region and execute smart end completion in specified region,
@@ -1609,7 +1603,6 @@ based on the treesitter tree overlapping that region."
     ))
 
   (indent-according-to-mode))
-
 
 
 ;;------------------------------------------------------------------------------
@@ -2195,9 +2188,9 @@ located, otherwise return line number of current point position."
   (when (fboundp 'treesit-major-mode-setup)
     (treesit-major-mode-setup))
 
-  ;; set indentation function (if necessary, some custom function can be used
-  ;(setq-local indent-line-function #'treesit-indent-line)
-  (setq-local indent-line-function #'f90-ts--indent-and-complete)
+  ;; set indentation functions (both add smart end completion and more)
+  (setq-local indent-line-function #'f90-ts--indent-and-complete-line)
+  (setq-local indent-region-function #'f90-ts--indent-and-complete-region)
 
   ;; provide a simple mode name in the modeline
   (setq-local mode-name "F90-TS"))
