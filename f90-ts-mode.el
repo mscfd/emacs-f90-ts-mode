@@ -2111,7 +2111,7 @@ Otherwise with line choice."
       ;; just do normal indentation
       (f90-ts--indent-and-complete-line)
     ;; multi-line statement
-    (let* ((node (treesit-node-at (point)))
+    (let* ((node (f90-ts--first-node-on-line (point)))
            (first (f90-ts--first-node-of-stmt node))
            (start (treesit-node-start first)))
       (let ((offset (f90-ts--indent-stmt-first first)))
