@@ -1,3 +1,30 @@
+function fun_result(x, &
+                    y) result(r)
+end function fun_result
+
+
+real function fun_type(x, &
+     y)
+end function fun_type
+
+subroutine sub_simple(x, y, z, &
+                         a, &
+                      ! comment
+                            b)
+end subroutine sub_simple
+
+module subroutine sub_mod(x, &
+     y)
+end subroutine sub_mod
+
+module procedure sub_proc(x, &
+     y)
+end module procedure
+
+
+
+
+
 function fun(x1, x2, x3, &
                  x4, x5)&
                  result( &
