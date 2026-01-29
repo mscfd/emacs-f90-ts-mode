@@ -1893,13 +1893,29 @@ different, as subtrees are built differently."
                        ("subroutine"               "(subroutine (subroutine_statement name: (_) @name))")
                        ("function"                 "(function (function_statement name: (_) @name))")
                        ("interface"                "(interface (interface_statement (_) * (name) @name))")
-                       ("derived_type_definition"  "(derived_type_statement (_) * (type_name) @name)")
-                       ("if_statement"             "(if_statement (block_label_start_expression _ @name))")
+                       ("derived_type_definition"  "(derived_type_definition (derived_type_statement (_) * (type_name) @name))")
+                       ("if_statement"             "(if_statement (block_label_start_expression (_) @name))")
                        (_                          nil)
                        ))
-              (capture (treesit-query-capture node query)))
-    (f90-ts-log :complete "captured name node: %s, %s" capture (cdr (car capture)))
-    (cdr (car capture))))
+              (query-root (concat query " @root"))
+              (capture (treesit-query-capture node query-root)))
+    ;; we added an @root to also get the root node of the capture subtree, thues
+    ;; capture result is an alist (('root, root), ('name, name), ('root, root), ('name, name), ...),
+    ;; where root and name are the captured nodes,
+    ;; we need to make sure that root=node, which might not be the case in nested block structure
+    ;; (where the inner loop, if etc. also matches),
+    ;; this could be done with the :anchor pattern, but it is rejected... syntax not valid?
+    (f90-ts-log :complete "smart end name captured: cap=%s" capture)
+    (let ((name (cl-loop for (root-cap name-cap) on capture by #'cddr
+                         do (progn
+                              (cl-assert (eq (car root-cap) 'root) nil
+                                         "expected 'node capture, got '%s'" (car root-cap))
+                              (cl-assert (eq (car name-cap) 'name) nil
+                                         "expected 'name capture, got '%s'" (car name-cap)))
+                         when (treesit-node-eq (cdr root-cap) node)
+                         return (cdr name-cap))))
+      (f90-ts-log :complete "captured name node: name-node=%s" name)
+      name)))
 
 
 (defun f90-ts--complete-smart-end-compose (node construct-type)
