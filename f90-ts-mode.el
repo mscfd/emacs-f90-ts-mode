@@ -1524,51 +1524,80 @@ Offset is computed relative to PREV-STMT."
 ;; offset functions: continued lines
 ;; determine whether list or standard case
 
-(defun f90-ts--indent-continued-list-context (parent ps-key ps-sib)
+(defconst list-context-types
+  '("argument_list"
+    "parameters"
+    "logical_expression"
+    "binding_list"
+    "final_statement"
+    "variable_declaration"
+    "association_list")
+  "List of tree-sitter node types presenting some kind of list context
+which is suitable for alignment indentation.")
+
+
+(defun f90-ts--indent-continued-list-context (node parent ps-key)
   "In case some list option is active, determine whether we are within
 a list like context and the relevant parent. Often this is PARENT,
 but sometimes a related node like grandparent, ps-sib etc.
 Return value nil signals that this is not a list context."
-  (let ((gp      (and parent (treesit-node-parent parent)))
-        (gps-sib (and ps-sib (treesit-node-parent ps-sib))))
-    (cond
-     ;; functions and subroutines
-     (     (f90-ts--node-type-p parent "argument_list")    parent)
-     ((and (f90-ts--node-type-p parent "parameters")
-           (or (f90-ts--node-type-p ps-key "function")
-               (f90-ts--node-type-p ps-key "subroutine"))) parent)
+  ;; TODO: once stmt-root has been determined, ascend from parent
+  ;; as long as node is contained in stmt-root and no list context has been encountered
+  ;; stmt-root gives an upper bound for the ascend
+  ;; do we need any further checks (like line condition: ascend further if line condition not satisfied?)
+  (let* ((pos (or (and node (treesit-node-start node))
+                  (point)))
+         (line (line-number-at-pos pos))
+         (stmt-root (treesit-node-on (treesit-node-start ps-key)
+                                     pos)))
+    (f90-ts-log :indent "continued root: pos=%d, line=%2, root=%s" pos line stmt-root)
+    (treesit-search-subtree
+     stmt-root
+     (lambda (n) (and (< (f90-ts--node-line n) line)
+                      (<= line (line-number-at-pos (treesit-node-end n)))
+                      (member (treesit-node-type n)
+                              list-context-types))))))
 
-     ;; logical expressions
-     ((and (f90-ts--node-type-p parent "logical_expression")
-           (or (f90-ts--node-type-p ps-key "do")
-               (f90-ts--node-type-p ps-key "if")))           parent)
+  ;; (let ((gp      (and parent (treesit-node-parent parent)))
+  ;;       (gps-sib (and ps-sib (treesit-node-parent ps-sib))))
+  ;;   (cond
+  ;;    ;; functions and subroutines
+  ;;    (     (f90-ts--node-type-p parent "argument_list")    parent)
+  ;;    ((and (f90-ts--node-type-p parent "parameters")
+  ;;          (or (f90-ts--node-type-p ps-key "function")
+  ;;              (f90-ts--node-type-p ps-key "subroutine"))) parent)
 
-     ;; binding and method lists in derived type definition
-     (     (f90-ts--node-type-p parent "binding_list")    parent)
-     (     (f90-ts--node-type-p parent "final_statement") parent)
+  ;;    ;; logical expressions
+  ;;    ((and (f90-ts--node-type-p parent "logical_expression")
+  ;;          (or (f90-ts--node-type-p ps-key "do")
+  ;;              (f90-ts--node-type-p ps-key "if")))           parent)
 
-     ;; variable declarations
-     (     (f90-ts--node-type-p parent "variable_declaration") parent)
+  ;;    ;; binding and method lists in derived type definition
+  ;;    (     (f90-ts--node-type-p parent "binding_list")    parent)
+  ;;    (     (f90-ts--node-type-p parent "final_statement") parent)
 
-     ;; original partially faulty rules
-     ;;((parent-is "association_list")                     column-0 f90-ts--align-continued-list-offset)  ;; associate statement
-     ;;((p-ps-pss  "ERROR" "associate" "association_list") column-0 f90-ts--align-continued-assoc-error) ;; unclosed associate statement
-     ;;((n-p-ps "association"             "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
-     ;;((n-p-ps ")"                       "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
-     ;;((n-p-ps "=>"                      "association"         nil)         column-0 f90-ts--align-continued-list-offset)
-     ;; variable declarations
-     ;; association list
-     (     (f90-ts--node-type-p parent "association_list")      parent)
-     ((and (f90-ts--node-type-p parent "ERROR")
-           (f90-ts--node-type-p ps-key "associate")
-           (f90-ts--node-type-p ps-sib "association_list"))     ps-sib)
-     ((and (f90-ts--node-type-p ps-key  "associate")
-           (f90-ts--node-type-p gps-sib "association_list"))    gps-sib)
-     ((and (f90-ts--node-type-p parent  "association")
-           (f90-ts--node-type-p gp      "association_list"))    gp) ;; where "=> item" is on a continued line
+  ;;    ;; variable declarations
+  ;;    (     (f90-ts--node-type-p parent "variable_declaration") parent)
 
-     (t nil)
-     )))
+  ;;    ;; original partially faulty rules
+  ;;    ;;((parent-is "association_list")                     column-0 f90-ts--align-continued-list-offset)  ;; associate statement
+  ;;    ;;((p-ps-pss  "ERROR" "associate" "association_list") column-0 f90-ts--align-continued-assoc-error) ;; unclosed associate statement
+  ;;    ;;((n-p-ps "association"             "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
+  ;;    ;;((n-p-ps ")"                       "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
+  ;;    ;;((n-p-ps "=>"                      "association"         nil)         column-0 f90-ts--align-continued-list-offset)
+  ;;    ;; variable declarations
+  ;;    ;; association list
+  ;;    (     (f90-ts--node-type-p parent "association_list")      parent)
+  ;;    ((and (f90-ts--node-type-p parent "ERROR")
+  ;;          (f90-ts--node-type-p ps-key "associate")
+  ;;          (f90-ts--node-type-p ps-sib "association_list"))     ps-sib)
+  ;;    ((and (f90-ts--node-type-p ps-key  "associate")
+  ;;          (f90-ts--node-type-p gps-sib "association_list"))    gps-sib)
+  ;;    ((and (f90-ts--node-type-p parent  "association")
+  ;;          (f90-ts--node-type-p gp      "association_list"))    gp) ;; where "=> item" is on a continued line
+
+  ;;    (t nil)
+  ;;    )))
 
 
 (defun f90-ts--indent-continued-offset (node parent bol &rest _)
@@ -1587,10 +1616,13 @@ is not catched by the continued line matcher."
         f90-ts-indent-continued
       (let* ((prev-stmt-1 (f90-ts--previous-stmt-first node parent))
              (ps-key (f90-ts--previous-stmt-keyword-by-first prev-stmt-1))
-             (ps-sib (and prev-stmt-1 (treesit-node-next-sibling prev-stmt-1)))
-             (list-context (f90-ts--indent-continued-list-context parent ps-key ps-sib))
+             ;;(ps-sib (and prev-stmt-1 (treesit-node-next-sibling prev-stmt-1)))
+             (list-context (f90-ts--indent-continued-list-context node parent ps-key))
              )
         (f90-ts-log :indent "continued offset: list-context=%s" list-context)
+        (f90-ts-log :indent "continued region: %s" (treesit-node-on (treesit-node-start prev-stmt-1)
+                                                                    (treesit-node-end parent)))
+
         (if list-context
             ;; make the offset relative to first statement node
             ;; (important for indent-region and batch processing)

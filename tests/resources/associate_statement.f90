@@ -8,7 +8,8 @@ subroutine sub()
           points: associate(p &
                                     => self%points_active, &
                             q &
-                                    => self%points_inactive)
+                                    => self%points_inactive &
+                           )
                ! some output
                print *,p%count, q%count
           end associate points
