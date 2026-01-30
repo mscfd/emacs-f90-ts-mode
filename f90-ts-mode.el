@@ -1351,11 +1351,16 @@ to the opening parenthesis."
 (defun f90-ts--align-continued-expand-assoc (nodes)
   "Replace association nodes in list NODES by their first two children,
 which are field 'name' and '=>'. There is no handling of the selector
-part currently."
+part currently. Skip continuation symbols, which might be between
+'name' and arrow '=>'."
   (seq-mapcat
    (lambda (node)
-     (if (string= "association" (treesit-node-type node))
-         (seq-take (treesit-node-children node) 2)
+     (if (f90-ts--node-type-p node "association")
+         (let* ((children (treesit-node-children node))
+                (first (car children))
+                (arrow (seq-find (lambda (n) (f90-ts--node-type-p n "=>"))
+                                 children)))
+           (list first arrow))
        (list node)))
    nodes))
 
@@ -1387,6 +1392,7 @@ type of list context."
    ((string= (treesit-node-type list-context) "association_list")
     ;; expand it, as the it contains a list of nodes, whose children are required
     (when-let ((children (treesit-node-children list-context)))
+      (f90-ts-log :indent "assoc_list children: %s" children)
       (f90-ts--align-continued-expand-assoc children)))
 
    ((or (string= (treesit-node-type list-context) "binding_list")
@@ -1423,7 +1429,11 @@ type of list context."
     (when-let ((children (treesit-node-children list-context)))
       children))))
 
-
+;; TODO: if no suitable symbol is found, use first item position and
+;; default continued indent position, example:
+;; associate(some_very_long_name &
+;;                => x)
+;; suggest offset 0 and 5 for "=>" relative to first position of some_very_long_name
 (defun f90-ts--align-continued-tokens-prev (nitems cur-line node-sym)
   "From a list NITEMS of node items select relevant nodes prior to given
 line CUR-LINE and satisfying some predicates like prior to CUR-LINE
@@ -1539,6 +1549,23 @@ Return value nil signals that this is not a list context."
 
      ;; variable declarations
      (     (f90-ts--node-type-p parent "variable_declaration") parent)
+
+     ;; original partially faulty rules
+     ;;((parent-is "association_list")                     column-0 f90-ts--align-continued-list-offset)  ;; associate statement
+     ;;((p-ps-pss  "ERROR" "associate" "association_list") column-0 f90-ts--align-continued-assoc-error) ;; unclosed associate statement
+     ;;((n-p-ps "association"             "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
+     ;;((n-p-ps ")"                       "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
+     ;;((n-p-ps "=>"                      "association"         nil)         column-0 f90-ts--align-continued-list-offset)
+     ;; variable declarations
+     ;; association list
+     (     (f90-ts--node-type-p parent "association_list")      parent)
+     ((and (f90-ts--node-type-p parent "ERROR")
+           (f90-ts--node-type-p ps-key "associate")
+           (f90-ts--node-type-p ps-sib "association_list"))     ps-sib)
+     ((and (f90-ts--node-type-p ps-key  "associate")
+           (f90-ts--node-type-p gps-sib "association_list"))    gps-sib)
+     ((and (f90-ts--node-type-p parent  "association")
+           (f90-ts--node-type-p gp      "association_list"))    gp) ;; where "=> item" is on a continued line
 
      (t nil)
      )))
@@ -1905,6 +1932,7 @@ different, as subtrees are built differently."
                        ("derived_type_definition"  "(derived_type_definition (derived_type_statement (_) * (type_name) @name))")
                        ("if_statement"             "(if_statement (block_label_start_expression (_) @name))")
                        ("do_loop"                  "(do_loop (block_label_start_expression (_) @name))")
+                       ("associate_statement"      "(associate_statement (block_label_start_expression (_) @name))")
                        (_                          nil)
                        ))
               (query-root (concat query " @root"))
@@ -1952,9 +1980,9 @@ CONSTRUCT-TYPE is a string like 'subroutine', 'function', 'module', etc."
       ("interface"               (f90-ts--complete-smart-end-compose node "interface"))
       ("if_statement"            (f90-ts--complete-smart-end-compose node "if"))
       ("do_loop"                 (f90-ts--complete-smart-end-compose node "do"))
+      ("associate_statement"     (f90-ts--complete-smart-end-compose node "associate"))
 
       ;; TODO: just simple completion, no label or name extraction so far
-      ("associate_statement"     "end associate")
       ("block_construct"         "end block")
       ("select_case_statement"   "end select")
       ("select_type_statement"   "end select")
