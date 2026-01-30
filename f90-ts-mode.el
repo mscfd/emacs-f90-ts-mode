@@ -412,6 +412,23 @@ encountered."
    finally return current))
 
 
+(defun f90-ts--previous-stmt-keyword-by-first (first)
+  "Auxiliary function for `f90-ts--previous-stmt-keyword` or when
+first statement is known."
+  ;; if the statement starts with a block label, then first is unnamed
+  ;; node label, and its parent is block_label_start_expression. Its
+  ;; next sibling is a keyword like if or do
+  (let ((fparent (and first (treesit-node-parent first))))
+    (if (f90-ts--node-type-p fparent "block_label_start_expression")
+	    (let ((fnext (treesit-node-next-sibling fparent)))
+          (cl-loop
+           for n = fnext then child
+           for child = (treesit-node-child n 0)
+           while child
+           finally return n))
+      first)))
+
+
 (defun f90-ts--previous-stmt-keyword (node parent)
   "Return the statement leaf node (usually some keyword like if,
 elseif, do, etc.) for `f90-ts-prev-stmt-first`. In case of a block label
@@ -421,16 +438,8 @@ Keyword nodes become relevant for incomplete code with ERROR nodes."
   ;; if the statement starts with a block label, then first is unnamed
   ;; node label, and its parent is block_label_start_expression. Its
   ;; next sibling is a keyword like if or do
-  (let* ((first (f90-ts--previous-stmt-first node parent))
-         (fparent (and first (treesit-node-parent first))))
-    (if (string= (treesit-node-type fparent) "block_label_start_expression")
-	    (let ((fnext (treesit-node-next-sibling fparent)))
-          (cl-loop
-           for n = fnext then child
-           for child = (treesit-node-child n 0)
-           while child
-           finally return n))
-      first)))
+  (let ((first (f90-ts--previous-stmt-first node parent)))
+    (f90-ts--previous-stmt-keyword-by-first first)))
 
 
 (defun f90-ts--previous-stmt-first (node parent)
@@ -1486,56 +1495,93 @@ This offset is to be used with an column-0 anchor, and hence is a column number.
      )))
 
 
-(defun f90-ts--align-continued-list-cont (node parent bol)
-  "Offset with continued-line option. Return prev-stmt offset
-plus indentation offset for continued lines."
-  (if-let ((prev-stmt (f90-ts--previous-stmt-first node parent)))
-      ;; we start with offset-0, so we need to add column of prev-stmt
-      (+ f90-ts-indent-continued
-         (f90-ts--node-column prev-stmt))
-    bol))
-
-
-(defun f90-ts--align-continued-list-offset (node parent bol)
+(defun f90-ts--align-continued-list-offset (variant node parent prev-stmt)
   "For lists of tokens like arguments, indent continued Fortran
 arguments under argument of previous lines, rotating through
 positions. If anonymous node like parenthesis, comma etc, then do
 the same, but rotate through columns with symbols of same kind on
 previous argument lines.
-This offset function is to be used with an column-0 anchor."
-  (let ((variant (if f90-ts--align-continued-variant-tab
-                     f90-ts-indent-lists-line
-                   f90-ts-indent-lists-region)))
-    (f90-ts-log :indent "continued list variant is: %s" variant)
-    (if (eq variant 'continued-line)
-        (f90-ts--align-continued-list-cont node parent bol)
-
-      (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
-        (let* ((children (and parent (f90-ts--align-continued-children parent)))
-               (node-sym-noamp (unless (eq node-sym 'ampersand) node-sym)))
-          ;; a line starting with an ampersand is not allowed in standard fortran,
-          ;; thus we do not want to align ampersand;
-          ;; if lines starts with an ampersand, then this is probably still missing
-          ;; some text about to typed, so we align assuming it to be an empty line
-          (or (f90-ts--align-continued-select children cur-col cur-line node-sym-noamp variant)
-              ;; failed, most likely as there are on prior list items, as point is not on the
-              ;; line of the start of the list, use end position of
-              ;; parent node (argument_list or whatever) plus 1
-              ;; (for example end position corresponds to opening parenthesis)
-              (1+ (f90-ts--node-column parent)))))
-      )))
+This offset function is to be used with the previous-stmt-anchor.
+Offset is computed relative to PREV-STMT."
+  (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
+    (let* ((children (and parent (f90-ts--align-continued-children parent)))
+           (node-sym-noamp (unless (eq node-sym 'ampersand) node-sym))
+           (offset0
+            (or (f90-ts--align-continued-select children cur-col cur-line node-sym-noamp variant)
+                ;; failed, most likely as there are on prior list items, as point is not on the
+                ;; line of the start of the list, use end position of
+                ;; parent node (argument_list or whatever) plus 1
+                ;; (for example end position corresponds to opening parenthesis)
+                (1+ (f90-ts--node-column parent)))))
+      (f90-ts-log :indent "cont childred: %s" children)
+      (- offset0 (f90-ts--node-column prev-stmt)))))
 
 
-(defun f90-ts--align-continued-assoc-error (node parent bol)
+(defun f90-ts--align-continued-assoc-error (variant node parent prev-stmt)
   "The same as f90-ts--align-continued-list-offset, but for incomplete
 associate lists, where PARENT is an ERROR node.
 First map PARENT and call original function."
   ;; the matcher ensures that prev-stmt and ps-sib have type "associate" and
   ;; "association_list", the parent of prev-stmt must have type
   ;; associate_statement, and this one should contain a child association_list
-  (let* ((prev-stmt (f90-ts--previous-stmt-first node parent))
-         (ps-sib (treesit-node-next-sibling prev-stmt)))
-    (f90-ts--align-continued-list-offset node ps-sib bol)))
+  (let* ((ps-sib (treesit-node-next-sibling prev-stmt)))
+    (f90-ts--align-continued-list-offset node ps-sib prev-stmt)))
+
+
+;;++++++++++++++
+;; offset functions: continued lines
+;; determine whether list or standard case
+
+(defun f90-ts--indent-continued-context (parent ps-key ps-sib)
+  "In case some list option is active, determine whether we are within
+a list like context."
+  (cond
+   ;; functions and subroutines
+   (     (f90-ts--node-type-p parent "argument_list")         'list-offset)
+   ((and (f90-ts--node-type-p parent "parameters")
+         (or (f90-ts--node-type-p ps-key "function")
+             (f90-ts--node-type-p ps-key "subroutine")))   'list-offset)
+
+   ;; logical expressions
+   ((and (f90-ts--node-type-p parent "logical_expression")
+         (or (f90-ts--node-type-p ps-key "do")
+             (f90-ts--node-type-p ps-key "if")))           'list-offset)
+
+   ;; binding and method lists in derived type definition
+   (     (f90-ts--node-type-p parent "binding_list")          'list-offset)
+   (     (f90-ts--node-type-p parent "final_statement")       'list-offset)
+
+   ;; variable declarations
+   (     (f90-ts--node-type-p parent "variable_declaration")  'list-offset)
+   (t 'default-offset)
+   ))
+
+
+(defun f90-ts--indent-continued-offset (node parent bol &rest _)
+  "Determine, whether we are on a continued line of a list like node,
+where list item should be aligned, or some standard continued line with
+default offset.
+Note then if this offset function is used, we already know that we are
+on a continued line of a continued statement. The statement line itself
+is not catched by the continued line matcher."
+  (let ((variant (if f90-ts--align-continued-variant-tab
+                     f90-ts-indent-lists-line
+                   f90-ts-indent-lists-region)))
+    (f90-ts-log :indent "continued offset: variant=%s" variant)
+
+    (if (eq variant 'continued-line)
+        f90-ts-indent-continued
+      (let* ((prev-stmt-1 (f90-ts--previous-stmt-first node parent))
+             (ps-key (f90-ts--previous-stmt-keyword-by-first prev-stmt-1))
+             (ps-sib (and prev-stmt-1 (treesit-node-next-sibling prev-stmt-1)))
+             (context (f90-ts--indent-continued-context parent ps-key ps-sib))
+             )
+        (f90-ts-log :indent "continued offset: context=%s" context)
+        (pcase context
+          ('list-offset      (f90-ts--align-continued-list-offset variant node parent prev-stmt-1))
+          ('default-offset   f90-ts-indent-continued)
+          (_               (cl-assert nil t "unexpected context"))
+          )))))
 
 
 ;;++++++++++++++
@@ -1615,48 +1661,23 @@ with !$ or !$omp")
   "Indentation rules for comments (excluding openmp statements).")
 
 
-(defvar f90-ts-indent-rules-lists
-  `(;; we compute absolute column position, using parents column as anchor is not useful for lists
-    ,@(f90-ts-indent-rules-info "lists")
-    ((parent-is "association_list")                     column-0 f90-ts--align-continued-list-offset)  ;; associate statement
-    ((p-ps-pss  "ERROR" "associate" "association_list") column-0 f90-ts--align-continued-assoc-error) ;; unclosed associate statement
-
-    ;; functions and subroutines
-    ((parent-is   "argument_list")                 column-0 f90-ts--align-continued-list-offset)
-    ((n-p-ps nil  "parameters" "subroutine")       column-0 f90-ts--align-continued-list-offset) ;; arguments of subroutine
-    ((n-p-ps nil  "parameters" "function")         column-0 f90-ts--align-continued-list-offset) ;; arguments of function
-
-    ;; logical expressions
-    ;;((n-p-ps nil  "parenthesized_expression" "do") column-0 f90-ts--align-continued-list-offset)
-    ((n-p-ps nil  "logical_expression"       "do") column-0 f90-ts--align-continued-list-offset)
-    ;;((n-p-ps nil  "parenthesized_expression" "if") column-0 f90-ts--align-continued-list-offset)
-    ((n-p-ps nil  "logical_expression"       "if") column-0 f90-ts--align-continued-list-offset)
-
-    ;; binding and method lists
-    ((parent-is   "binding_list")    column-0 f90-ts--align-continued-list-offset) ;; generic statement in DT decl
-    ((parent-is   "final_statement") column-0 f90-ts--align-continued-list-offset) ;; final statement in DT decl
-
-    ;; variable declarations
-    ((parent-is   "variable_declaration") column-0 f90-ts--align-continued-list-offset) ;; standard variable declaration
-    )
-  "Indentation rules for lists on continued lines with alignment on previous list items.
-For example: argument lists, association lists, (logical) expressions with alignment at operators, etc.")
-
-
 (defvar f90-ts-indent-rules-continued
-  `(;; handle continued lines which are not yet caught, this also happens for
-    ;; unclosed argument lists, where rules-lists cannot be matched
+  `(;; handle continued lines
     ,@(f90-ts-indent-rules-info "continued")
-    ;; using previous line indentation for all but the first continued line
-    ;; does not work in conjunction with rotation, if a statement has continued
+    ;; it is easy to see whether we are on a continued line (not the first line
+    ;; of a multiline statement, only subsequent lines), but handling specific
+    ;; cases is not possible with just some simple n-p-gp like matches,
+    ;; in particular on conjunction with ERROR cases of incomplete code
+    ;;
+    ;; moreover, using previous line indentation for all but the first continued line
+    ;; does not work in conjunction with list alignment, if a statement has continued
     ;; lines after a list part, for example:
+    ;;
     ;; function fun(aa, x1, x2,&
     ;;                  x3, x4, x5) &
     ;;      result(val)
     ;; by how much should result be indented? x3 is not a good anchor!
-    ;;((f90-ts--continued-line-first-is) previous-stmt-anchor f90-ts-indent-continued)
-    ;;((f90-ts--continued-line-some-is)  previous-line-anchor 0)
-    ((f90-ts--continued-line-some-is) previous-stmt-anchor f90-ts-indent-continued)
+    ((f90-ts--continued-line-some-is) previous-stmt-anchor f90-ts--indent-continued-offset)
     )
   "Indentation rules for continued lines. Argument lists and similar continued lines must have been dealt with before.")
 
@@ -1699,12 +1720,12 @@ For example: argument lists, association lists, (logical) expressions with align
 (defvar f90-ts-indent-rules-function
   `(;; functions and subroutine bodies
     ,@(f90-ts-indent-rules-info "function")
-    ((node-is "end_subroutine_statement") parent 0)
-    ((node-is "end_function_statement") parent 0)
-    ((parent-is "subroutine") parent f90-ts-indent-block)
-    ((parent-is "function") parent f90-ts-indent-block)
-    ((n-p-ps nil nil "subroutine") parent f90-ts-indent-block)
-    ((n-p-ps nil nil "function") parent f90-ts-indent-block)
+    ((node-is    "end_subroutine_statement") parent 0)
+    ((node-is    "end_function_statement")   parent 0)
+    ((parent-is  "subroutine")               parent f90-ts-indent-block)
+    ((parent-is  "function")                 parent f90-ts-indent-block)
+    ((n-p-ps nil nil "subroutine")           parent f90-ts-indent-block)
+    ((n-p-ps nil nil "function")             parent f90-ts-indent-block)
     )
   "Indentation rules for functions and subroutines.")
 
@@ -1766,19 +1787,17 @@ For example: argument lists, association lists, (logical) expressions with align
   `(;; control statements
     ,@(f90-ts-indent-rules-info "control")
     ((n-p-gp    "end_do_loop" "do_loop" nil)  parent 0)
-    ((n-p-ps    nil           "do_loop"           "do") parent f90-ts-indent-block)  ;; proper do block (with or without while)
-    ((n-p-ps    nil           "ERROR"             "do") previous-stmt-anchor f90-ts-indent-block)
+    ((n-p-ps    nil           "do_loop" "do") parent f90-ts-indent-block)  ;; proper do block (with or without while)
+    ((n-p-ps    nil           "ERROR"   "do") previous-stmt-anchor f90-ts-indent-block)
 
     ((n-p-gp "end_block_construct_statement" "block_construct" nil)     parent 0)
     ((n-p-ps nil                             "block_construct" "block") parent f90-ts-indent-block)
     ((n-p-ps nil                             "ERROR"           "block") previous-stmt-anchor f90-ts-indent-block)
 
     ((n-p-gp "end_associate_statement" "associate_statement" nil)         parent 0)
-    ((n-p-ps "association"             "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
-    ((n-p-ps ")"                       "associate_statement" nil)         column-0 f90-ts--align-continued-list-offset)
-    ((n-p-ps "=>"                      "association"         nil)         column-0 f90-ts--align-continued-list-offset)
     ((n-p-ps nil                       "association"         "associate") parent f90-ts-indent-block)
     ((n-p-ps nil                       "associate_statement" "associate") parent f90-ts-indent-block)
+    ((n-p-ps nil                       "ERROR"               "associate") previous-stmt-anchor f90-ts-indent-block)
     )
   "Indentation rules for control statements like do loops, associate and block statements.")
 
@@ -1827,7 +1846,6 @@ For example: argument lists, association lists, (logical) expressions with align
      ,@f90-ts-indent-rules-test-first
      ,@f90-ts-indent-rules-openmp
      ,@f90-ts-indent-rules-comments
-     ,@f90-ts-indent-rules-lists
      ,@f90-ts-indent-rules-continued
      ,@f90-ts-indent-rules-internal-proc
      ,@f90-ts-indent-rules-prog-mod
