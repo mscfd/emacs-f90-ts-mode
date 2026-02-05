@@ -67,6 +67,34 @@ subroutine bodies, control statements (do, if, associate ...)."
   :safe  'integerp
   :group 'f90-ts-indent)
 
+(defcustom f90-ts-indent-openmp-style 'column-0
+  "Style for indentation of OpenMP directives (!$).
+
+'column-0:
+  Always place at the beginning of the line (column 0).
+  Example:
+  do k=1, 10
+!$omp simd
+    ...
+
+'context:
+  Align with the surrounding code block (parent node).
+  Example:
+  do k=1, 10
+  !$omp simd
+    ...
+"
+;; 'indented:
+;;   Indent relative to the surrounding code block.
+;;   Example:
+;;   do k=1, 10
+;;     !$omp simd
+;;     ...
+  :type '(choice (const :tag "Column 0 (default)" column-0)
+                 (const :tag "Align with Context" context)
+                 ;; (const :tag "Indented" indented)
+                 )
+  :group 'f90-ts-indent)
 
 (defconst f90-ts-indent-lists-options
   '(radio (const :tag "Keep if aligned or align to first element" keep-or-first)
@@ -1263,6 +1291,17 @@ with the previous relevant line."
         (f90-ts--indent-pos-at-node node-sel)
       bol)))
 
+(defun f90-ts--anchor-openmp (node parent _bol)
+  "Anchor function for OpenMP directives.
+Returns buffer start (0) if `f90-ts-indent-openmp-style` is 'column-0.
+Otherwise, aligns with the previous statement."
+  ;; Note. 'indented is not implemented yet.
+  (if (eq f90-ts-indent-openmp-style 'column-0)
+      (point-min)
+    ;; Align with the previous statement
+    (if-let ((prev (f90-ts--previous-stmt-first node parent)))
+        (treesit-node-start prev)
+      (treesit-node-start parent))))
 
 ;;++++++++++++++
 ;; offset functions: general
@@ -1462,7 +1501,7 @@ type definition."
       (f90-ts-log :indent "cont var-decl: pos=%d, decl-start=%d" pos decl-start)
       (if (< pos decl-start)
           attr-children
-        decl-children))))    
+        decl-children))))
 
 
 ;;++++++++++++++
@@ -1781,16 +1820,14 @@ debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
     )
   "Indentation rules executed first and intended for testing purposes.")
 
-
 (defvar f90-ts-indent-rules-openmp
   `(;; indent a sequence of openmp statements, these are comments starting
     ;; with !$, so this needs to be done before comments are processed
     ,@(f90-ts-indent-rules-info "openmp")
-    ((f90-ts--openmp-comment-is) column-0 0)
+    ((f90-ts--openmp-comment-is) f90-ts--anchor-openmp 0)
     )
   "Indentation rules for openmp. Currently openmp are comment nodes, which start
 with !$ or !$omp")
-
 
 (defvar f90-ts-indent-rules-comments
   `(;; indent a sequence of comments with respect to previous comment
