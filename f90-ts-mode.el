@@ -275,12 +275,16 @@ Note that the parse uses identifier not just for variables, but for types etc."
     ;;(string-match f90-ts-special-var-regexp (treesit-node-text node))))
     (string-match "self" (treesit-node-text node))))
 
-
 (defun f90-ts-openmp-node-p (node)
   "Check if NODE is a comment node and has the openmp comment prefix."
   (when (string= (treesit-node-type node) "comment")
     (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
 
+(defun f90-ts-preproc-node-p (node)
+  "Check if NODE is a preprocessor node and has the '#' prefix."
+    (let ((type (treesit-node-type node)))
+      (or (string-match "^preproc_" type)
+          (string-prefix-p "#" type))))
 
 (defun f90-ts-special-comment-node-p (node)
   "Check if NODE is a comment node and satisfies the special comment regexp."
@@ -864,10 +868,10 @@ comments in the tree. Must be parsed before plain comments."
 (defun f90-ts--font-lock-rules-preproc ()
   "Font-lock rules for preprocessor directives."
   (treesit-font-lock-rules
-;   :language 'fortran
-;   :feature 'preproc
-;   ;; preprocessor directive keywords as tokens (not entire nodes)
-;   '((["#include" "#define" "#if" "#ifdef" "#ifndef" "#endif" "#else" "#elif" "#elifdef"]) @font-lock-preprocessor-face)
+  :language 'fortran
+  :feature 'preproc
+  ;; preprocessor directive keywords as tokens (not entire nodes)
+  '((["#include" "#define" "#if" "#ifdef" "#ifndef" "#endif" "#else" "#elif" "#elifdef"]) @font-lock-preprocessor-face)
 
    :language 'fortran
    :feature 'preproc
@@ -1171,6 +1175,10 @@ All other line use indentation of previous line."
     (and (f90-ts--node-type-p node "comment")
          (f90-ts-openmp-node-p node))))
 
+(defun f90-ts--preproc-node-is ()
+  "Matcher that checks whether node is a fortran preprocessor node."
+  (lambda (node parent bol &rest _)
+    (and node (f90-ts-preproc-node-p node))))
 
 (defun f90-ts--special-comment-is ()
   "Matcher that checks whether node is a special comment."
@@ -1186,7 +1194,6 @@ All other line use indentation of previous line."
       (let ((prev-sib (treesit-node-prev-sibling node)))
         (and (f90-ts--node-type-p prev-sib "comment")
              (f90-ts-special-comment-node-p node))))))
-
 
 (defun n-p-ps (type-n type-p type-ps)
   "Matcher that checks types of node, parent and previous statement."
@@ -1941,6 +1948,26 @@ with !$ or !$omp")
     )
   "Indentation rules for comments (excluding openmp statements).")
 
+(defvar f90-ts-indent-rules-preproc
+  `(;; indent preprocessor directive.
+    ,@(f90-ts-indent-rules-info "preprocessor directive")
+    ;; Directive itself: no indent
+    ((f90-ts--preproc-node-is) column-0 0)
+    ;; Content inside preprocessor:
+    ;; - Search up the tree for the first "Ancestor" that is NOT a
+    ;;   preprocessor node.
+    ;; - If that ancestor is a module or program -> toplevel indent
+    ((lambda (_n parent &rest _)
+       (let ((ancestor (treesit-parent-until
+                        parent
+                        (lambda (n)
+                          (not (f90-ts-preproc-node-p n))))))
+         (and ancestor
+              (string-match-p "module\\|program" (treesit-node-type ancestor)))))
+     grand-parent f90-ts-indent-toplevel)
+    ;; Other
+    ((n-p-gp nil "preproc_.*" nil) grand-parent f90-ts-indent-block))
+  "Indentation rules for preprocessor directives.")
 
 (defvar f90-ts-indent-rules-continued
   `(;; handle continued lines
@@ -2127,6 +2154,7 @@ with !$ or !$omp")
 (defvar f90-ts-indent-rules
   `((fortran
      ,@f90-ts-indent-rules-test-first
+     ,@f90-ts-indent-rules-preproc
      ,@f90-ts-indent-rules-openmp
      ,@f90-ts-indent-rules-comments
      ,@f90-ts-indent-rules-continued
