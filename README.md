@@ -15,10 +15,10 @@ Currently it relies on the upstream treesitter grammar fork
 The mode currently has quite extensive debug logging in a separate `*f90-ts-log*` buffer.
 
 
-**NOTE**: Use treesitter version 0.25.x, as emacs (including 30.2) has problems with the 0.26 branch.
-For example, queries are not translated correctly.
+**NOTE**: The fortran grammar should be compiled with treesitter version 0.25.x, as emacs (including 30.2) does not yet support the 0.26 branch.
+For example, queries are not translated as expected by the 0.26 branch.
 
-Check that the following versions are correct:
+The following can be used to check whether versions are correct:
 
 (`M-:` = `eval-expression`)
 * with `M-:` `(treesit-library-abi-version)` should be 15
@@ -33,7 +33,8 @@ Check that the following versions are correct:
 - Indentation
 - Smart end completion
 - Break lines with automatic continuation and comment starters for comment lines
-- openmp
+- openmp directives
+- preprocessor directives
 
 
 ### Syntax highlight
@@ -54,7 +55,7 @@ Special variables are recognised by regexp matching with customizable variable `
 Special comments are recognised by regexp matching with customizable variable `f90-ts-special-comment-regexp`.
 
 
-*Note*: use interactive elisp function `describe-face` to find out which face is applied and to customize it if necessary.
+*Note*: Executing `M-x describe-face` can be used to find out which face is applied and to customize it if necessary.
 
 
 ### Indentation
@@ -81,9 +82,9 @@ Currently implemented rules are:
 | Rule Set              | Description                                                                              |
 |-----------------------|------------------------------------------------------------------------------------------|
 | openmp                | openmp directives stored as comments starting with `!$` or `!$omp`                       |
+| preproc               | indentation of and at preprocessor directives                                            |
 | comments              | regular and special comments                                                             |
-| continued lists       | procedure arguments, variable declarations, association lists, bindings, expressions, etc.   |
-| continued lines       | generic continued lines not matched by list rules, indented by `f90-ts-indent-continued` |
+| continued lines       | multi-line statements, column alignment for lists (like variable declarations, arguments, etc. |
 | internal procedures   | `contains` sections and internal procedures in programs, modules and procedures          |
 | program / module      | program, module, and submodule bodies                                                    |
 | functions             | function and subroutine bodies, including `end function` / `end subroutine`              |
@@ -95,20 +96,28 @@ Currently implemented rules are:
 | catch-all             | final fallback rule for unmatched cases                                                  |
 
 
-#### Continued lists
+#### Indentation of multiline statement
 
-For list structures (argument lists, variable declarations, logical expressions, do statements etc.) spread
-over several continued lines, four options exists, which can be set for default indentation (in particular indent-region)
-via `f90-ts-indent-lists-region` and single line indentation via `f90-ts-indent-lists-line`.
-Options are `continued-line`, `keep-or-first`, `always-first` and `rotate`.
+Indentation of multiline statements is complex. Indentation for region works a bit differently than
+indentation of a single line. The reason is that indentation of a single line can rotate through
+eligible column given by similar items on previous lines:
+```
+call sub_with_many_arguments(argx, another, one_more, &
+                                   another2, one_more2, &
+                             argy, just_this, &
+                             argz)
+```
+Four options are currently implemented: `continued-line`, `keep-or-first`, `always-first` and `rotate`
+Behaviour of indentation of a region and or a line aare controlled by `f90-ts-indent-lists-region`
+and `f90-ts-indent-lists-line`, respecitvely.
 
-
-#### Continued lines
-
-To improve usability of continued lists alignment with rotation and keep options, the indent-line function first
-applies indent-region to region from start of statement to current line. This preserve existing alignment in the region.
-Only if nothing as changed by this operation, the line is indented and if applicable, rotation for alignment positions
-is done.
+TODO:
+* implement further list like structures
+* add fifth option: keep-or-next
+* use same option for region and line indentation, and provide other options like rotate by extra
+functions bound to keys like C-<tab>, M-<tab> and A-<tab> etc. 
+* revise and complement eligible column positions for implemented constructs
+* Handle leading ampersand
 
 
 ### Smart end completion
@@ -118,7 +127,7 @@ using the treesitter generated AST. Lower, upper and title case of construct key
 end statement, including whether to use `end`, `END` or `End`.
 
 
-### Break lines
+### Line breaking
 
 Inspired by the legacy f90 mode as well.
 The function `f90-ts-break-line` breaks the current line at point and adds continuation symbols.
@@ -131,6 +140,10 @@ This can be bound to a key by
 ```
 (define-key f90-ts-mode-map (kbd "<C-return>") #'f90-ts-break-line)
 ```
+
+Whether a leading ampersand at the start of the new line is inserted is controlled by
+`f90-ts-beginning-ampersand`. However, this has not yet been tested, in particular in conjunction
+with list item alignment.
 
 
 ### Comment region
@@ -148,13 +161,16 @@ Standard prefixes like `!$omp`, `!>` and some others are predefined.
 
 ## Installation
 
-First get the master branch of the patched treesitter fortran grammar at
+The f90-ts-mode relies on the master branch of the patched treesitter fortran grammar at
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran.git).
+Suggested patches are not yet merged into main treesitter fortran repo.
 
-Generate the grammar and install the grammar in emacs.
+The grammar needs to be generated with `tree-sitter generate` (or via npm), and installed in emacs.
 
 
-Put f90-ts-mode.el into a directory where emacs can find it, and link to the tree-sitter-fortran repository.
+Currently, f90-ts-mode.el is not provided as a package. It needs to be copied into a directory,
+where emacs can find it.
+
 
 ```elisp
 (add-to-list 'load-path
