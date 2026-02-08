@@ -1381,7 +1381,6 @@ inside module, otherwise use f90-ts-indent-contain."
 for alignment are mostly selected among nodes with same symbol.
 If NODE is nil return nil."
   (when node
-    ;;(f90-ts-log :indent "symbol node: type=%s, field=%s, text=%s" (treesit-node-type node) (treesit-node-field-name node) (treesit-node-text node))
     (cond
      ((string= (treesit-node-type node) "ERROR")
       'error)
@@ -2266,6 +2265,9 @@ smart end completion. Statements not yet supported are commented out.")
     ("if_statement"            . "(if_statement (block_label_start_expression (_) @name)? \"if\" @construct)")
     ("do_loop"                 . "(do_loop (block_label_start_expression (_) @name)? (do_statement \"do\" @construct))")
     ("associate_statement"     . "(associate_statement (block_label_start_expression (_) @name)? \"associate\" @construct)")
+    ("block_construct"         . "(block_construct (block_label_start_expression (_) @name)? \"block\" @construct)")
+    ("select_case_statement"   . "(select_case_statement (block_label_start_expression (_) @name)? \"select\" @construct)")
+    ("select_type_statement"   . "(select_type_statement (block_label_start_expression (_) @name)? \"select\" @construct)")
     )
   "Treesitter queries to extract relevant nodes for smart end completion.")
 
@@ -2348,6 +2350,7 @@ CONSTRUCT is a string like 'subroutine', 'function', 'module', etc."
 
 (defun f90-ts--complete-smart-end-map (node)
   "Map start type of start NODE to completion string."
+  ;; TODO: refactor
   (let ((type (treesit-node-type node)))
     (f90-ts-log :complete "smart-end-map type of node: %s" type)
     (pcase type
@@ -2361,13 +2364,11 @@ CONSTRUCT is a string like 'subroutine', 'function', 'module', etc."
       ("if_statement"            (f90-ts--complete-smart-end-compose node))
       ("do_loop"                 (f90-ts--complete-smart-end-compose node))
       ("associate_statement"     (f90-ts--complete-smart-end-compose node))
+      ("block_construct"         (f90-ts--complete-smart-end-compose node))
+      ("select_case_statement"   (f90-ts--complete-smart-end-compose node))
+      ("select_type_statement"   (f90-ts--complete-smart-end-compose node))
 
-      ;; TODO: just simple completion, no label or name extraction so far
-      ("block_construct"         "end block")
-      ("select_case_statement"   "end select")
-      ("select_type_statement"   "end select")
-
-      ;; unrecognised, this is not the start of a known structured block
+      ;; unrecognised, not yet supported or not the start of a structured block
       (_                         nil)
       )))
 
