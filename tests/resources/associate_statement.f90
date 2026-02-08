@@ -29,4 +29,21 @@ subroutine sub()
           end do outer
      end associate components
 
+     associate(test => 1+2, &
+
+               after_empty_line => 3+4)
+     end associate
+
+     associate(test => 1+2, &
+                          ! comment
+               after_comment_line => 3+4)
+     end associate
+
+     associate(test => 1+2, &
+
+                    ! comment
+
+               after_empty_and_comment_lines => 3+4)
+     end associate
+
 end subroutine sub
