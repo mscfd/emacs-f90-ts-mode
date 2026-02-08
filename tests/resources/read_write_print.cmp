@@ -1,0 +1,23 @@
+(:indentation
+"subroutine print()
+
+     read: associate(x => arr(2))
+     read(*,*) x
+     end associate read
+     
+     print: do value = 1,10
+     print *, 'hello', value
+     end do print
+
+     write: if (result > 10) then
+     write(unit,'(es15.5,f12.3)') expr, result
+     end if write
+
+end subroutine print
+"
+
+:font-lock
+((1 1 11 font-lock-keyword-face) (1 12 17 font-lock-function-name-face) (1 17 19 f90-ts-font-lock-bracket-face) (3 30 31 f90-ts-font-lock-delimiter-face) (3 32 41 font-lock-keyword-face) (3 41 42 f90-ts-font-lock-bracket-face) (3 44 46 f90-ts-font-lock-delimiter-face) (3 50 51 f90-ts-font-lock-bracket-face) (3 51 52 font-lock-number-face) (3 52 54 f90-ts-font-lock-bracket-face) (4 60 64 font-lock-builtin-face) (4 64 65 f90-ts-font-lock-bracket-face) (4 66 67 f90-ts-font-lock-delimiter-face) (4 68 69 f90-ts-font-lock-bracket-face) (5 77 80 font-lock-keyword-face) (5 81 90 font-lock-keyword-face) (7 112 113 f90-ts-font-lock-delimiter-face) (7 114 116 font-lock-keyword-face) (7 123 124 f90-ts-font-lock-operator-face) (7 125 126 font-lock-number-face) (7 126 127 f90-ts-font-lock-delimiter-face) (7 127 129 font-lock-number-face) (8 135 140 font-lock-builtin-face) (8 142 143 f90-ts-font-lock-delimiter-face) (8 144 151 font-lock-string-face) (8 151 152 f90-ts-font-lock-delimiter-face) (9 164 167 font-lock-keyword-face) (9 168 170 font-lock-keyword-face) (11 188 189 f90-ts-font-lock-delimiter-face) (11 190 192 font-lock-keyword-face) (11 193 194 f90-ts-font-lock-bracket-face) (11 203 205 font-lock-number-face) (11 205 206 f90-ts-font-lock-bracket-face) (11 207 211 font-lock-keyword-face) (12 217 222 font-lock-builtin-face) (12 222 223 f90-ts-font-lock-bracket-face) (12 227 228 f90-ts-font-lock-delimiter-face) (12 228 244 font-lock-string-face) (12 244 245 f90-ts-font-lock-bracket-face) (12 250 251 f90-ts-font-lock-delimiter-face) (13 264 267 font-lock-keyword-face) (13 268 270 font-lock-keyword-face) (15 278 281 font-lock-keyword-face) (15 282 292 font-lock-keyword-face) (15 293 298 font-lock-function-name-face))
+
+:tree
+"(translation_unit (subroutine (subroutine_statement name: (name)) (associate_statement (block_label_start_expression (label)) (association_list (association name: (identifier) selector: (call_expression (identifier) (argument_list (number_literal))))) (read_statement (unit_identifier) (format_identifier) (input_item_list (identifier))) (end_associate_statement (block_label))) (do_loop (block_label_start_expression (label)) (do_statement (loop_control_expression (identifier) (number_literal) (number_literal))) (print_statement (format_identifier) (output_item_list (string_literal) (identifier))) (end_do_loop_statement (block_label))) (if_statement (block_label_start_expression (label)) (parenthesized_expression (relational_expression left: (identifier) right: (number_literal))) (write_statement (unit_identifier (identifier)) (format_identifier (string_literal)) (output_item_list (identifier) (identifier))) (end_if_statement (block_label))) (end_subroutine_statement (name))))")

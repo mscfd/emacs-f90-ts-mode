@@ -104,13 +104,6 @@ jumping and nil turns of smart end completion."
 
 ;;------------------------------------------------------------------------------
 
-(defface f90-ts-font-lock-intrinsic-face
-  '((t :foreground "DarkOrchid4"
-       :weight semi-bold))
-  "Face for custom font-lock highlighting."
-  :group 'f90-ts)
-
-
 (defface f90-ts-font-lock-delimiter-face
   '((t :foreground "Sienna4"
        :weight medium))
@@ -794,6 +787,15 @@ comments in the tree. Must be parsed before plain comments."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'builtin
+   `((print_statement
+      "print" @font-lock-builtin-face)
+     (read_statement
+      "read" @font-lock-builtin-face)
+     (write_statement
+      "write" @font-lock-builtin-face))
+
+   :language 'fortran
+   :feature 'builtin
    `((call_expression
       (identifier) @font-lock-builtin-face
       (:match ,(regexp-opt
@@ -813,7 +815,7 @@ comments in the tree. Must be parsed before plain comments."
                   "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
                   "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
                   "verify"))
-               @font-lock-builtin-face)))))
+              @font-lock-builtin-face)))))
 
 (defun f90-ts--font-lock-rules-keyword ()
   "Font-lock rules for Fortran keywords."
@@ -861,8 +863,7 @@ comments in the tree. Must be parsed before plain comments."
       "pure" "impure" "elemental" "recursive"
       "dimension" "contiguous" "volatile"
       "associate" "block" "critical"
-      "where" "forall" "concurrent"] @font-lock-keyword-face)
-     (["print" "write" "read"] @f90-ts-font-lock-intrinsic-face))
+      "where" "forall" "concurrent"] @font-lock-keyword-face))
    ))
 
 
