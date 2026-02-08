@@ -305,7 +305,7 @@ end program")
     ;; 1. allocated Check (Expect: builtin)
     (goto-char (point-min))
     (search-forward "allocated")
-    (goto-char (match-beginning 0)) ;; マッチした単語の先頭へ
+    (goto-char (match-beginning 0)) ;;
     (should (eq (get-text-property (point) 'face) 'font-lock-builtin-face))
 
     ;; 2. min Check (Expect: builtin)
@@ -325,6 +325,78 @@ end program")
     (search-forward "unknown")
     (goto-char (match-beginning 0))
     (should (eq (get-text-property (point) 'face) nil))))
+
+(ert-deftest f90-ts-mode-test-indent-preproc ()
+  "Test indentation for preprocessor directives (#ifdef) and their contents."
+  (f90-ts-mode-tests-set-custom-testing)
+  ;; Case 1: Module Scope
+  (with-temp-buffer
+    (f90-ts-mode)
+    (insert "module my_mod
+public :: foo
+#ifdef HOGE
+public :: bar
+public :: baz
+#endif
+end module my_mod")
+    (f90-ts-mode-tests--indent-buffer)
+    (should (string= (buffer-string) "module my_mod
+ public :: foo
+#ifdef HOGE
+ public :: bar
+ public :: baz
+#endif
+end module my_mod")))
+
+  ;; Case 2: Subroutine Scope
+  (with-temp-buffer
+    (f90-ts-mode)
+    (insert "subroutine test_sub
+integer :: i
+#ifdef DEBUG
+print *, 'debug mode'
+i = i + 1
+#else
+i = 0
+#endif
+end subroutine test_sub")
+    (f90-ts-mode-tests--indent-buffer)
+    (should (string= (buffer-string) "subroutine test_sub
+     integer :: i
+#ifdef DEBUG
+     print *, 'debug mode'
+     i = i + 1
+#else
+     i = 0
+#endif
+end subroutine test_sub")))
+  ;; Case 3: Nested Preprocessors (Great-Grand-Parent logic)
+  (with-temp-buffer
+    (f90-ts-mode)
+    (setq-local indent-tabs-mode nil)
+    (setq-local f90-ts-indent-block 2)
+    (insert "program main
+#ifdef A
+call func_a()
+#ifdef B
+call func_b()
+#elifdef C
+call func_c()
+#endif
+#endif
+end program main")
+    (f90-ts-mode-tests--indent-buffer)
+    (should (string= (buffer-string) "program main
+#ifdef A
+ call func_a()
+#ifdef B
+ call func_b()
+#elifdef C
+ call func_c()
+#endif
+#endif
+end program main")))
+)
 
 ;; (ert-deftest f90-ts-mode-test-resources ()
 ;;   "Run all f90 files in folder resources and compare with pre-generated compare files."
