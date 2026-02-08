@@ -1406,8 +1406,7 @@ line."
             ;; decide which kind of (named or anonymous) nodes to filter
             ;; (argument, parentheses, comma, ampersend, etc)
             (f90-ts--align-node-symbol node))
-    (list (cons (f90-ts--column-number-at-pos (point))
-                (point))
+    (list (f90-ts--column-number-at-pos (point))
           (line-number-at-pos)
           nil)
     ))
