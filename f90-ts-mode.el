@@ -102,6 +102,14 @@ jumping and nil turns of smart end completion."
   :group 'f90-ts)
 
 
+;; same as in legacy f90 mode
+(defcustom f90-ts-beginning-ampersand nil
+  "Non-nil gives automatic insertion of `&' at start of continuation line."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90)
+
+
 ;;------------------------------------------------------------------------------
 
 (defface f90-ts-font-lock-intrinsic-face
@@ -2632,7 +2640,7 @@ based on the treesitter tree overlapping that region."
     (delete-horizontal-space)
     (f90-ts--break-line-insert-amp-at-end)
     (newline 1)
-    (if f90-beginning-ampersand (insert "&"))
+    (if f90-ts-beginning-ampersand (insert "&"))
     ))
 
   (indent-according-to-mode))
