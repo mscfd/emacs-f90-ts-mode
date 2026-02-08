@@ -305,7 +305,7 @@ end program")
     ;; 1. allocated Check (Expect: builtin)
     (goto-char (point-min))
     (search-forward "allocated")
-    (goto-char (match-beginning 0))
+    (goto-char (match-beginning 0)) ;;
     (should (eq (get-text-property (point) 'face) 'font-lock-builtin-face))
 
     ;; 2. min Check (Expect: builtin)
