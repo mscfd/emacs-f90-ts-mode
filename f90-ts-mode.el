@@ -2582,25 +2582,27 @@ Otherwise default indent with line choice."
 
 ;; used by f90-ts-indent-and-complete-region
 (defun f90-ts-complete-smart-end-region (start end)
-  "Execute smart end completion in region, using treesitter nodes
-representing end constructs."
+  "Execute smart end completion in region from START to END,
+using treesitter nodes representing end constructs."
   (interactive
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
-  (let* ((root (treesit-buffer-root-node))
-         (end-stmts (f90-ts--search-subtree
-                     root
-                     (lambda (n) (member (treesit-node-type n) f90-ts--complete-end-structs))
-                     start end
-                     t t)))
-    ;; process in reverse order (from last to first, search-subtree returns
-    ;; in reversed order (due to last argument t), this way node positions do
-    ;; not become stale after completion of end statements
-    (cl-loop
-     for node in end-stmts
-     do (f90-ts--complete-smart-end-node node)
-     )))
+  (let ((start-pos (if (markerp start) (marker-position start) start))
+        (end-pos (if (markerp end) (marker-position end) end)))
+    (let* ((root (treesit-buffer-root-node))
+           (end-stmts (f90-ts--search-subtree
+                       root
+                       (lambda (n) (member (treesit-node-type n) f90-ts--complete-end-structs))
+                       start-pos end-pos
+                       t t)))
+      ;; process in reverse order (from last to first, search-subtree returns
+      ;; in reversed order (due to last argument t), this way node positions do
+      ;; not become stale after completion of end statements
+      (cl-loop
+       for node in end-stmts
+       do (f90-ts--complete-smart-end-node node)
+       ))))
 
 
 (defun f90-ts-indent-and-complete-region (start end)
@@ -2610,8 +2612,16 @@ based on the treesitter tree overlapping that region."
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
-  (treesit-indent-region start end)
-  (f90-ts-complete-smart-end-region start end))
+  ;; we need markers as indent-region changes the positions
+  ;; of start and end in general
+  (let ((start-marker (copy-marker start))
+        (end-marker (copy-marker end t))) ; t=stay after inserted text
+  (unwind-protect
+      (progn
+        (treesit-indent-region start-marker end-marker)
+        (f90-ts-complete-smart-end-region start-marker end-marker))
+    (set-marker start-marker nil)
+    (set-marker end-marker nil))))
 
 
 ;;------------------------------------------------------------------------------
