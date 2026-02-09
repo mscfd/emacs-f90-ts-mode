@@ -36,7 +36,6 @@
   "Fortran (F90+) major mode using Tree-sitter."
   :group 'languages)
 
-
 (defgroup f90-ts-indent nil
   "Indentation in free format Fortran for treesitter f90-ts mode."
   :prefix "f90-ts-"
@@ -67,7 +66,6 @@ subroutine bodies, control statements (do, if, associate ...)."
   :safe  'integerp
   :group 'f90-ts-indent)
 
-
 (defconst f90-ts-indent-lists-options
   '(radio (const :tag "Keep if aligned or align to first element" keep-or-first)
           (const :tag "Always align with first element" always-first)
@@ -75,13 +73,11 @@ subroutine bodies, control statements (do, if, associate ...)."
           (const :tag "Rotate elements" rotate))
   "Options for indentation of list like structures on continued lines.")
 
-
 (defcustom f90-ts-indent-lists-region 'keep-or-first
   "Options for how to indent list like structures on continued lines,
 used as default setting, in particular if indent-region is invoked."
   :type f90-ts-indent-lists-options
   :group 'f90-ts)
-
 
 (defcustom f90-ts-indent-lists-line 'rotate
   "Options for how to indent list like structures on continued lines,
@@ -89,7 +85,6 @@ used for indentation of a single line. Used in function
 f90-ts-indent-for-tab-command, which can be bound to a key like <tab>."
   :type f90-ts-indent-lists-options
   :group 'f90-ts)
-
 
 ;;------------------------------------------------------------------------------
 
@@ -2130,7 +2125,7 @@ with !$ or !$omp")
 
     ((n-p-ps "else_clause"      "ERROR" "if")     previous-stmt-anchor 0)
     ((n-p-ps "else_clause"      "ERROR" "elseif") previous-stmt-anchor 0)
-    ((n-p-gp "else_clause"      "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset) ;; at elseif line, incomplete
+    ((n-p-gp "else_clause"      "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset) ;; at else line, incomplete
     ((n-p-ps "else"             "ERROR" "if")     previous-stmt-anchor 0)
     ((n-p-gp "else"             "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset)
 
@@ -2914,23 +2909,6 @@ FMT + ARGS are passed to `format' and like message arguments."
       (message "no *f90-ts-log* buffer present"))))
 
 
-(defmacro f90-ts--redirect-message (category &rest body)
-  "Evaluate BODY with all calls to `message` redirected to f90-ts-log-buffer.
-This is done to allow treesit inspect routines to output into the log buffer.
-Note that for the call to f90-ts--log-insert, messages are redirected to
-original function to avoid infinite loops in case f90-ts--log-insert or some
-helper function invokes message."
-  (let ((original-msg (make-symbol "original-message")))
-    `(let ((,original-msg (symbol-function 'message)))
-       (cl-letf (((symbol-function 'message)
-                  (lambda (fmt &rest args)
-                    ;; Temporarily restore original message
-                    (cl-letf (((symbol-function 'message) ,original-msg))
-                      (apply #'f90-ts-log category fmt args))
-                    nil)))
-         ,@body))))
-
-
 (defvar f90-ts-log-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-c k") #'f90-ts-log-clear)
@@ -2956,55 +2934,25 @@ helper function invokes message."
   (pp treesit-font-lock-settings))
 
 
-(defun f90-ts--inspect--show ()
-  "Show the smallest tree-sitter node(s) at point in the echo area."
-  (when (and (bound-and-true-p treesit-parser-list)
-             (treesit-ready-p 'fortran))
-    (let* ((node (treesit-node-at (point)))
-           (types (when node (treesit-node-type node))))
-      (when types
-        (message "[TS] node: %s  range: %s" types (cons (treesit-node-start node) (treesit-node-end node)))))))
-
-
-(defun f90-ts-inspect-node-at-point (category)
-  "Show the tree-sitter node at point as a one-liner in the log buffer."
-  (interactive (list :debug))
-  (f90-ts--redirect-message category
-   (let* ((node (treesit-node-at (point)))
-          (parent (treesit-node-parent node)))
-     (if (not node)
-         (message "no Tree-sitter node at point")
-       (let* ((type  (treesit-node-type node))
-              (start (treesit-node-start node))
-              (end   (treesit-node-end node))
-              (len   (- end start)))
-         (treesit-inspect-node-at-point)
-         (message "parent at point: type= %s  - name= %s -  start=%d  end=%d  len=%d"
-                  type treesit--inspect-name start end len))))))
-
-
 (defun f90-ts-inspect-node (category node info)
   "Show inspect info of treesitter NODE as a one-liner in the log buffer.
 Prefix the line with 'inspect<INFO>'."
-  (f90-ts--redirect-message category
-   (if node
-       (let ((pos (treesit-node-start node)))
-         (save-excursion
-           (goto-char pos)
-           (let* ((type  (treesit-node-type node))
-                  (start (treesit-node-start node))
-                  (end   (treesit-node-end node))
-                  (len   (- end start))
-                  (line  (line-number-at-pos)))
-             (f90-ts-treesit-inspect-node node)
-             (message "inspect<%s>: type= %s  -  name= %s - start=%d  end=%d  len=%d  line=%d"
-                      info type treesit--inspect-name start end len line))))
-     (message "inspect<%s>: nil" info))))
+  (if node
+      (let* ((type  (treesit-node-type node))
+             (start (treesit-node-start node))
+             (end   (treesit-node-end node))
+             (len   (- end start))
+             (line  (f90-ts--node-line node))
+             (inspect-name  (f90-ts-treesit-inspect-node node)))
+        (f90-ts-log category "inspect<%s>: type= %s  -  name= %s - start=%d  end=%d  len=%d  line=%d"
+                    info type inspect-name start end len line))
+    (f90-ts-log category "inspect<%s>: nil" info)))
 
 
 (defun f90-ts-treesit-inspect-node (node-inspect)
   "Copy of treesit-inspect-node-at-point, but highlight provided
-NODE-INSPECT and use its start position as point."
+NODE-INSPECT and use its start position as point.
+Return the constructed name."
   ;; NODE-LIST contains all the node that starts at point.
   (let* ((node-start (treesit-node-start node-inspect))
          (node-list
@@ -3044,9 +2992,7 @@ NODE-INSPECT and use its start position as point."
                         'bold nil))
         name
         (if (treesit-node-check node 'named) ")" "\""))))
-    ;; Escape the percent character for mode-line. (Bug#65540)
-    (setq treesit--inspect-name (string-replace "%" "%%" name))
-    (force-mode-line-update)))
+    name))
 
 
 ;;------------------------------------------------------------------------------

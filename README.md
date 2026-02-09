@@ -108,16 +108,15 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argz)
 ```
 Four options are currently implemented: `continued-line`, `keep-or-first`, `always-first` and `rotate`
-Behaviour of indentation of a region and or a line aare controlled by `f90-ts-indent-lists-region`
+Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-lists-region`
 and `f90-ts-indent-lists-line`, respecitvely.
 
 TODO:
-* implement further list like structures
-* add fifth option: keep-or-next
-* use same option for region and line indentation, and provide other options like rotate by extra
-functions bound to keys like C-<tab>, M-<tab> and A-<tab> etc. 
-* revise and complement eligible column positions for implemented constructs
-* Handle leading ampersand
+* implement further list like structures, refine existing once
+* add fifth option: `keep-or-next`
+* use same option for region and line indentation, and provide other options like rotate or always first
+by separate functions bound to keys like `C-<tab>`, `M-<tab>` and `A-<tab>` etc.
+* handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
 
 
 ### Smart end completion
@@ -125,6 +124,15 @@ functions bound to keys like C-<tab>, M-<tab> and A-<tab> etc.
 The legacy mode provided smart end completion coupled to indentation, bound to key TAB. This is replicated by f90-ts-mode
 using the treesitter generated AST. Lower, upper and title case of construct keywords is recovered and applied to
 end statement, including whether to use `end`, `END` or `End`.
+
+
+#### Indentation of whole structures
+
+For incomplete block, indentation is sometimes not correct, due to an incomplete AST produced by the parser.
+To easily indent a whole structure once it can be assumed to be complete structurally, indentation of the whole
+structure closed by the `end` statement at point can be performed in conjunction with smart end completion.
+If smart end completion has changed the end statement then indent-region is called for the whole block.
+This experimental feature is controlled by customizable variable `f90-ts-smart-end-indent-if-changed`.
 
 
 ### Line breaking
@@ -223,8 +231,7 @@ This is a quite extensive way to load and setup f90-ts-mode, intended for develo
   (global-set-key (kbd "A-h l") #'f90-ts-log-show)
 
   (define-key f90-ts-mode-map (kbd "A-h m") #'treesit-explore-mode)
-  (define-key f90-ts-mode-map (kbd "A-h P") #'treesit-inspect-node-at-point)
-  (define-key f90-ts-mode-map (kbd "A-h p") #'f90-ts-inspect-node-at-point)
+  (define-key f90-ts-mode-map (kbd "A-h p") #'treesit-inspect-node-at-point)
   (define-key f90-ts-mode-map (kbd "A-h f") #'describe-face)
 
 (global-set-key (kbd "A-h j") #'f90-ts-toggle-mode)
