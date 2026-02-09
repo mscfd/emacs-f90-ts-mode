@@ -1381,7 +1381,6 @@ inside module, otherwise use f90-ts-indent-contain."
 for alignment are mostly selected among nodes with same symbol.
 If NODE is nil return nil."
   (when node
-    ;;(f90-ts-log :indent "symbol node: type=%s, field=%s, text=%s" (treesit-node-type node) (treesit-node-field-name node) (treesit-node-text node))
     (cond
      ((string= (treesit-node-type node) "ERROR")
       'error)
@@ -2249,7 +2248,7 @@ smart end completion. Statements not yet supported are commented out.")
 
 
 
-(defconst f90-ts--complete-smart-end-name-query
+(defconst f90-ts--complete-smart-end-query
   `(("program"                 . "(program (program_statement \"program\" @construct (_) * (name) @name))")
     ("module"                  . "(module (module_statement \"module\" @construct (_) * (name) @name))")
     ("submodule"               . "(submodule (submodule_statement \"submodule\" @construct (_) * (name) @name))")
@@ -2266,6 +2265,9 @@ smart end completion. Statements not yet supported are commented out.")
     ("if_statement"            . "(if_statement (block_label_start_expression (_) @name)? \"if\" @construct)")
     ("do_loop"                 . "(do_loop (block_label_start_expression (_) @name)? (do_statement \"do\" @construct))")
     ("associate_statement"     . "(associate_statement (block_label_start_expression (_) @name)? \"associate\" @construct)")
+    ("block_construct"         . "(block_construct (block_label_start_expression (_) @name)? \"block\" @construct)")
+    ("select_case_statement"   . "(select_case_statement (block_label_start_expression (_) @name)? \"select\" @construct)")
+    ("select_type_statement"   . "(select_type_statement (block_label_start_expression (_) @name)? \"select\" @construct)")
     )
   "Treesitter queries to extract relevant nodes for smart end completion.")
 
@@ -2293,7 +2295,7 @@ extraction is different, as subtrees are built differently.
 The construct type is fixed, but we want to query the lower/upper case
 to match usage in opening and end statement."
   (when-let* ((query (alist-get (treesit-node-type node)
-                                f90-ts--complete-smart-end-name-query
+                                f90-ts--complete-smart-end-query
                                 nil
                                 nil
                                 #'string=))
@@ -2301,8 +2303,8 @@ to match usage in opening and end statement."
               (capture-all (treesit-query-capture node query-root))
               (capture     (f90-ts--complete-smart-end-extract node capture-all))
               )
-    ;; we added an @root to also get the root node of the captured subtree,
-    ;; captured result is an alist (('root, root), ('construct, construct) ('name, name),
+    ;; @root is added to also get the root node of the captured subtree,
+    ;; capture result is an alist (('root, root), ('construct, construct) ('name, name),
     ;; ('root, root), ('construct, construct) ('name, name), ...),
     ;; where root and name are the captured nodes,
     ;; we need to make sure that root=node, which might not be the case in nested block structure
@@ -2323,9 +2325,13 @@ to match usage in opening and end statement."
 
 
 (defun f90-ts--complete-smart-end-compose (node)
-  "Create an 'end CONSTRUCT name' completion from NODE.
-CONSTRUCT is a string like 'subroutine', 'function', 'module', etc."
-  (let ((construct-name (f90-ts--complete-smart-end-name node)))
+  "Create an 'end construct name' completion from NODE, where construct
+is a string like 'subroutine', 'function', 'module', etc.
+If no suitable query for recovering the construct name exists, then
+the construct is either not yet supported or not the start of a
+structured block statement. In this case, return nil."
+  (f90-ts-log :complete "smart end: type of node = %s" (and node (treesit-node-type node)))
+  (when-let ((construct-name (f90-ts--complete-smart-end-name node)))
     (cl-assert construct-name
                nil
                "complete-smart-end: structure query failed")
@@ -2344,32 +2350,6 @@ CONSTRUCT is a string like 'subroutine', 'function', 'module', etc."
           (format "%s %s %s" end construct name)
         ;; fallback if no name found
         (format "%s %s" end construct)))))
-
-
-(defun f90-ts--complete-smart-end-map (node)
-  "Map start type of start NODE to completion string."
-  (let ((type (treesit-node-type node)))
-    (f90-ts-log :complete "smart-end-map type of node: %s" type)
-    (pcase type
-      ("program"                 (f90-ts--complete-smart-end-compose node))
-      ("module"                  (f90-ts--complete-smart-end-compose node))
-      ("submodule"               (f90-ts--complete-smart-end-compose node))
-      ("subroutine"              (f90-ts--complete-smart-end-compose node))
-      ("function"                (f90-ts--complete-smart-end-compose node))
-      ("derived_type_definition" (f90-ts--complete-smart-end-compose node))
-      ("interface"               (f90-ts--complete-smart-end-compose node))
-      ("if_statement"            (f90-ts--complete-smart-end-compose node))
-      ("do_loop"                 (f90-ts--complete-smart-end-compose node))
-      ("associate_statement"     (f90-ts--complete-smart-end-compose node))
-
-      ;; TODO: just simple completion, no label or name extraction so far
-      ("block_construct"         "end block")
-      ("select_case_statement"   "end select")
-      ("select_type_statement"   "end select")
-
-      ;; unrecognised, this is not the start of a known structured block
-      (_                         nil)
-      )))
 
 
 (defun f90-ts--complete-smart-end-show (node-stmt)
@@ -2424,7 +2404,7 @@ Example: compelete `end` closing a subroutine block by `end subroutine mysub`"
       (f90-ts-log :complete "smart end: text = %s, type = %s" (treesit-node-text node t) type)
       (f90-ts-log :complete "smart end: start = %s, end = %d" start end)
       (when-let* ((node-stmt (treesit-node-parent node))
-                  (completion (f90-ts--complete-smart-end-map node-stmt)))
+                  (completion (f90-ts--complete-smart-end-compose node-stmt)))
           (f90-ts-log :complete "smart end: node type=%s, stmt type=%s" (treesit-node-type node) (treesit-node-type node-stmt))
           (f90-ts-log :complete "smart end: node start=%s, end=%s" node-stmt node)
           (f90-ts-log :complete "completion string: %S" completion)
@@ -2582,25 +2562,27 @@ Otherwise default indent with line choice."
 
 ;; used by f90-ts-indent-and-complete-region
 (defun f90-ts-complete-smart-end-region (start end)
-  "Execute smart end completion in region, using treesitter nodes
-representing end constructs."
+  "Execute smart end completion in region from START to END,
+using treesitter nodes representing end constructs."
   (interactive
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
-  (let* ((root (treesit-buffer-root-node))
-         (end-stmts (f90-ts--search-subtree
-                     root
-                     (lambda (n) (member (treesit-node-type n) f90-ts--complete-end-structs))
-                     start end
-                     t t)))
-    ;; process in reverse order (from last to first, search-subtree returns
-    ;; in reversed order (due to last argument t), this way node positions do
-    ;; not become stale after completion of end statements
-    (cl-loop
-     for node in end-stmts
-     do (f90-ts--complete-smart-end-node node)
-     )))
+  (let ((start-pos (if (markerp start) (marker-position start) start))
+        (end-pos (if (markerp end) (marker-position end) end)))
+    (let* ((root (treesit-buffer-root-node))
+           (end-stmts (f90-ts--search-subtree
+                       root
+                       (lambda (n) (member (treesit-node-type n) f90-ts--complete-end-structs))
+                       start-pos end-pos
+                       t t)))
+      ;; process in reverse order (from last to first, search-subtree returns
+      ;; in reversed order (due to last argument t), this way node positions do
+      ;; not become stale after completion of end statements
+      (cl-loop
+       for node in end-stmts
+       do (f90-ts--complete-smart-end-node node)
+       ))))
 
 
 (defun f90-ts-indent-and-complete-region (start end)
@@ -2610,8 +2592,16 @@ based on the treesitter tree overlapping that region."
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
-  (treesit-indent-region start end)
-  (f90-ts-complete-smart-end-region start end))
+  ;; we need markers as indent-region changes the positions
+  ;; of start and end in general
+  (let ((start-marker (copy-marker start))
+        (end-marker (copy-marker end t))) ; t=stay after inserted text
+  (unwind-protect
+      (progn
+        (treesit-indent-region start-marker end-marker)
+        (f90-ts-complete-smart-end-region start-marker end-marker))
+    (set-marker start-marker nil)
+    (set-marker end-marker nil))))
 
 
 ;;------------------------------------------------------------------------------

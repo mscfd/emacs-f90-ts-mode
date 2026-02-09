@@ -173,5 +173,32 @@ end upper
 
 Program TitleProg
 
+ level_1: block
+      LEVEL_2: BLOCK
+           Level_3: Block
+           End Block Level_3
+      END BLOCK LEVEL_2
+ end block level_1
+
+ outer: select case (x)
+ case (1)
+      MIDDLE: SELECT case (y)
+      case (2)
+           Inner: Select CASE (z)
+           case default
+           End Select Inner
+      END SELECT MIDDLE
+ end select outer
+
+ BIG: SELECT type (x)
+ type is (s)
+      Somewhat: Select Type (y)
+      class is (t)
+           small: select Type (z)
+           class is (unknown)
+           END
+      END
+ END
+
 
 end title
