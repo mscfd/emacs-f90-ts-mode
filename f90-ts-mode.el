@@ -2248,7 +2248,7 @@ smart end completion. Statements not yet supported are commented out.")
 
 
 
-(defconst f90-ts--complete-smart-end-name-query
+(defconst f90-ts--complete-smart-end-query
   `(("program"                 . "(program (program_statement \"program\" @construct (_) * (name) @name))")
     ("module"                  . "(module (module_statement \"module\" @construct (_) * (name) @name))")
     ("submodule"               . "(submodule (submodule_statement \"submodule\" @construct (_) * (name) @name))")
@@ -2295,7 +2295,7 @@ extraction is different, as subtrees are built differently.
 The construct type is fixed, but we want to query the lower/upper case
 to match usage in opening and end statement."
   (when-let* ((query (alist-get (treesit-node-type node)
-                                f90-ts--complete-smart-end-name-query
+                                f90-ts--complete-smart-end-query
                                 nil
                                 nil
                                 #'string=))
@@ -2303,8 +2303,8 @@ to match usage in opening and end statement."
               (capture-all (treesit-query-capture node query-root))
               (capture     (f90-ts--complete-smart-end-extract node capture-all))
               )
-    ;; we added an @root to also get the root node of the captured subtree,
-    ;; captured result is an alist (('root, root), ('construct, construct) ('name, name),
+    ;; @root is added to also get the root node of the captured subtree,
+    ;; capture result is an alist (('root, root), ('construct, construct) ('name, name),
     ;; ('root, root), ('construct, construct) ('name, name), ...),
     ;; where root and name are the captured nodes,
     ;; we need to make sure that root=node, which might not be the case in nested block structure
@@ -2325,9 +2325,13 @@ to match usage in opening and end statement."
 
 
 (defun f90-ts--complete-smart-end-compose (node)
-  "Create an 'end CONSTRUCT name' completion from NODE.
-CONSTRUCT is a string like 'subroutine', 'function', 'module', etc."
-  (let ((construct-name (f90-ts--complete-smart-end-name node)))
+  "Create an 'end construct name' completion from NODE, where construct
+is a string like 'subroutine', 'function', 'module', etc.
+If no suitable query for recovering the construct name exists, then
+the construct is either not yet supported or not the start of a
+structured block statement. In this case, return nil."
+  (f90-ts-log :complete "smart end: type of node = %s" (and node (treesit-node-type node)))
+  (when-let ((construct-name (f90-ts--complete-smart-end-name node)))
     (cl-assert construct-name
                nil
                "complete-smart-end: structure query failed")
@@ -2346,31 +2350,6 @@ CONSTRUCT is a string like 'subroutine', 'function', 'module', etc."
           (format "%s %s %s" end construct name)
         ;; fallback if no name found
         (format "%s %s" end construct)))))
-
-
-(defun f90-ts--complete-smart-end-map (node)
-  "Map start type of start NODE to completion string."
-  ;; TODO: refactor
-  (let ((type (treesit-node-type node)))
-    (f90-ts-log :complete "smart-end-map type of node: %s" type)
-    (pcase type
-      ("program"                 (f90-ts--complete-smart-end-compose node))
-      ("module"                  (f90-ts--complete-smart-end-compose node))
-      ("submodule"               (f90-ts--complete-smart-end-compose node))
-      ("subroutine"              (f90-ts--complete-smart-end-compose node))
-      ("function"                (f90-ts--complete-smart-end-compose node))
-      ("derived_type_definition" (f90-ts--complete-smart-end-compose node))
-      ("interface"               (f90-ts--complete-smart-end-compose node))
-      ("if_statement"            (f90-ts--complete-smart-end-compose node))
-      ("do_loop"                 (f90-ts--complete-smart-end-compose node))
-      ("associate_statement"     (f90-ts--complete-smart-end-compose node))
-      ("block_construct"         (f90-ts--complete-smart-end-compose node))
-      ("select_case_statement"   (f90-ts--complete-smart-end-compose node))
-      ("select_type_statement"   (f90-ts--complete-smart-end-compose node))
-
-      ;; unrecognised, not yet supported or not the start of a structured block
-      (_                         nil)
-      )))
 
 
 (defun f90-ts--complete-smart-end-show (node-stmt)
@@ -2425,7 +2404,7 @@ Example: compelete `end` closing a subroutine block by `end subroutine mysub`"
       (f90-ts-log :complete "smart end: text = %s, type = %s" (treesit-node-text node t) type)
       (f90-ts-log :complete "smart end: start = %s, end = %d" start end)
       (when-let* ((node-stmt (treesit-node-parent node))
-                  (completion (f90-ts--complete-smart-end-map node-stmt)))
+                  (completion (f90-ts--complete-smart-end-compose node-stmt)))
           (f90-ts-log :complete "smart end: node type=%s, stmt type=%s" (treesit-node-type node) (treesit-node-type node-stmt))
           (f90-ts-log :complete "smart end: node start=%s, end=%s" node-stmt node)
           (f90-ts-log :complete "completion string: %S" completion)
