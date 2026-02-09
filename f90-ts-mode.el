@@ -102,12 +102,25 @@ jumping and nil turns of smart end completion."
   :group 'f90-ts)
 
 
+(defcustom f90-ts-smart-end-indent-if-changed nil
+  "If smart end completion has changed the end statement during
+indentation of a line (not region), perform indentation of whole region
+of the block. The intention of this option is fix indentation of the
+block, once it is finished with an end statement and the treesitter
+parser is able to generate a proper AST. Before the end statement is
+present, the AST often has an incomplete parse tree and indentation of
+statements within the block cannot be done as expected."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90-ts)
+
+
 ;; same as in legacy f90 mode
 (defcustom f90-ts-beginning-ampersand nil
   "Non-nil gives automatic insertion of `&' at start of continuation line."
   :type  'boolean
   :safe  'booleanp
-  :group 'f90)
+  :group 'f90-ts)
 
 
 ;;------------------------------------------------------------------------------
@@ -1316,8 +1329,9 @@ to position, which also works for node=nil)."
   "Anchor at previous line with a statement on it. Used for continued
 lines, where the previous sibling or parent is not the right anchor."
   (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
-         ;; TODO: for the moment, do not exclude comments or anything else, just get indentation
-         ;; at previous relevant line, it might only contain a comment
+         ;; TODO: for the moment, do not exclude comments or anything else,
+         ;; just get indentation at previous relevant line, it might only
+         ;; contain a comment
          (predicate (lambda (n) t))
          (psib (f90-ts--before-child parent cur-line predicate)))
     ;;(f90-ts-inspect-node :indent psib "prev-line-anchor-psib")
@@ -2236,15 +2250,18 @@ smart end completion. Statements not yet supported are commented out.")
 
 
 (defun f90-ts--complete-replace-if-changed (start end completion)
-  "Replace text in region START...END with COMPLETION, but only if different."
-  (let ((original (buffer-substring-no-properties start end)))
-    (if (string= original completion)
+  "Replace text in region START...END with COMPLETION, but only if
+different. Return true if something was changed."
+  (let* ((original (buffer-substring-no-properties start end))
+         (is-equal (string= original completion)))
+    (if is-equal
         (goto-char end)
       (progn
         (delete-region start end)
         (goto-char start)
         (insert completion)
-        ))))
+        ))
+    (not is-equal)))
 
 
 
@@ -2387,10 +2404,24 @@ text like in `end subr_out` with point at `_` should be handled as well."
     (point)))
 
 
-(defun f90-ts--complete-smart-end-node (node &optional fshow)
+(defun f90-ts--complete-smart-end-node (node &optional indent-if-changed fshow)
   "Check whether NODE represents an end struct statement and try find
 a completion for it like structure type and name.
-Example: compelete `end` closing a subroutine block by `end subroutine mysub`"
+Example: complete `end` closing a subroutine block by `end subroutine mysub`.
+
+If INDENT-IF-CHANGED is true, the tab variant is true (no region
+indentation and if smart end completion changed the end statement,
+then perform the whole block with indent-region.
+
+If provided, show opening statement using function FSHOW."
+  ;; TODO: refactor, this has become quite complex with the indent-if-changed option
+  ;; TODO: consider checking end statement first, perform the indent-region instead
+  ;; of indent line, and then perform the smart end completion, similar to how
+  ;; multi-line statements are handled;
+  ;; however, we only want region indentation if smart end completed anything, but
+  ;; smart end completion should be done after indentation, as we want to show
+  ;; completed block, so this is a bit circular
+
   ;; the region check ensures that end statements on continued lines are left alone
   (let ((type (treesit-node-type node))
         (start (treesit-node-start node))
@@ -2405,17 +2436,44 @@ Example: compelete `end` closing a subroutine block by `end subroutine mysub`"
       (f90-ts-log :complete "smart end: start = %s, end = %d" start end)
       (when-let* ((node-stmt (treesit-node-parent node))
                   (completion (f90-ts--complete-smart-end-compose node-stmt)))
-          (f90-ts-log :complete "smart end: node type=%s, stmt type=%s" (treesit-node-type node) (treesit-node-type node-stmt))
-          (f90-ts-log :complete "smart end: node start=%s, end=%s" node-stmt node)
-          (f90-ts-log :complete "completion string: %S" completion)
+        (f90-ts-log :complete "smart end: node type=%s, stmt type=%s"
+                    (treesit-node-type node)
+                    (treesit-node-type node-stmt))
+        (f90-ts-log :complete "smart end: node start=%s, node end=%s" node-stmt node)
+        (f90-ts-log :complete "completion string: %S" completion)
 
-          (f90-ts--complete-replace-if-changed start end completion)
+        (let (start-marker
+              end-marker)
+          (unwind-protect
+              (progn
+                (setq start-marker (copy-marker (treesit-node-start node-stmt) t))
+                (setq end-marker (copy-marker (treesit-node-end node-stmt) t))
+                ;; returns true if text was changed
+                (setq has-changed (f90-ts--complete-replace-if-changed start end completion))
+                (when (and indent-if-changed
+                           has-changed
+                           f90-ts--align-continued-variant-tab)
+                  ;; use region variant for indentation (no rotation of list
+                  ;; items on continued lines)
+                  (unwind-protect
+                      (progn
+                        ;; set region variant
+                        (setq f90-ts--align-continued-variant-tab nil)
+                        (treesit-indent-region start-marker end-marker))
+                    ;; revert to tab variant
+                    (setq f90-ts--align-continued-variant-tab t))))
 
-          (when fshow
-            ;; show the completion, do this even if nothing has been changed,
-            ;; as this is useful to shortly show the start of the block
-            (funcall fshow node-stmt))
-          ))))
+                (when fshow
+                  ;; show the completion, do this even if nothing has been changed,
+                  ;; as this is useful to shortly show the start of the block
+                  (let ((node-stmt-new (treesit-node-on (marker-position start-marker)
+                                                        (marker-position end-marker))))
+                    ;;(f90-ts-inspect-node :complete node-stmt-new "node-stmt-new")
+                    (funcall fshow node-stmt-new)))
+                )
+            (when start-marker (set-marker start-marker nil))
+            (when end-marker (set-marker end-marker nil)))
+        ))))
 
 
 ;; The idea for smart end completion is taken from the classic f90-mode.
@@ -2439,6 +2497,7 @@ Currently it handles end statements."
                (f90-ts--node-line node))
         (f90-ts--complete-smart-end-node
          node
+         f90-ts-smart-end-indent-if-changed
          #'f90-ts--complete-smart-end-show)))))
 
 
@@ -2594,14 +2653,17 @@ based on the treesitter tree overlapping that region."
      (list (point-min) (point-max))))
   ;; we need markers as indent-region changes the positions
   ;; of start and end in general
-  (let ((start-marker (copy-marker start))
-        (end-marker (copy-marker end t))) ; t=stay after inserted text
-  (unwind-protect
-      (progn
-        (treesit-indent-region start-marker end-marker)
-        (f90-ts-complete-smart-end-region start-marker end-marker))
-    (set-marker start-marker nil)
-    (set-marker end-marker nil))))
+  (let (start-marker end-marker)
+    (unwind-protect
+        (progn
+          ;; start marker should stay before inserted text
+          ;; end marker should stay after inserted text
+          (setq start-marker (copy-marker start))
+          (setq end-marker (copy-marker end t))
+          (treesit-indent-region start-marker end-marker)
+          (f90-ts-complete-smart-end-region start-marker end-marker))
+      (when start-marker (set-marker start-marker nil))
+      (when end-marker (set-marker end-marker nil)))))
 
 
 ;;------------------------------------------------------------------------------
