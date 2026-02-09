@@ -107,7 +107,7 @@ jumping and nil turns of smart end completion."
   "Non-nil gives automatic insertion of `&' at start of continuation line."
   :type  'boolean
   :safe  'booleanp
-  :group 'f90)
+  :group 'f90-ts)
 
 
 ;;------------------------------------------------------------------------------
