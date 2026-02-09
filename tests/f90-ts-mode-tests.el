@@ -27,12 +27,15 @@ at the end of file."
 (defun f90-ts-mode-tests--resources-dir ()
   "Get the test resources directory.
 Try the location of 'f90-ts-mode-tests, falling back to the current file."
-  (let* ((test-file (or load-file-name
-                        buffer-file-name))
-         (test-dir (when test-file (file-name-directory test-file))))
-    (if test-dir
-        (expand-file-name "resources" test-dir)
-      (error "Could not determine test directory."))))
+  (or f90-ts-mode-resources-dir
+      (error "Could not determine test directory.")))
+
+
+(defvar f90-ts-mode-resources-dir
+  (let* ((mode-file (symbol-file 'f90-ts-mode 'defun))
+         (root-dir (file-name-directory mode-file)))
+    (expand-file-name "tests/resources/" root-dir))
+  "Cached directory path for tests/resources.")
 
 
 (defun f90-ts-mode-tests--fortran-files ()
