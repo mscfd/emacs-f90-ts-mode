@@ -2594,14 +2594,17 @@ based on the treesitter tree overlapping that region."
      (list (point-min) (point-max))))
   ;; we need markers as indent-region changes the positions
   ;; of start and end in general
-  (let ((start-marker (copy-marker start))
-        (end-marker (copy-marker end t))) ; t=stay after inserted text
-  (unwind-protect
-      (progn
-        (treesit-indent-region start-marker end-marker)
-        (f90-ts-complete-smart-end-region start-marker end-marker))
-    (set-marker start-marker nil)
-    (set-marker end-marker nil))))
+  (let (start-marker end-marker)
+    (unwind-protect
+        (progn
+          ;; start marker should stay before inserted text
+          ;; end marker should stay after inserted text
+          (setq start-marker (copy-marker start))
+          (setq end-marker (copy-marker end t))
+          (treesit-indent-region start-marker end-marker)
+          (f90-ts-complete-smart-end-region start-marker end-marker))
+      (when start-marker (set-marker start-marker nil))
+      (when end-marker (set-marker end-marker nil)))))
 
 
 ;;------------------------------------------------------------------------------
