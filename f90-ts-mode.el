@@ -342,9 +342,8 @@ Note that in fortran, a continuation symbol shall not be used on blank lines."
 (defun f90-ts--node-type-p (node type)
   "If type is nil, return non-nil and ignore node.
 Otherwise return non-nil if node is non-nil and is of type TYPE."
-  (if type
-      (and node (string= (treesit-node-type node) type))
-    t))
+  (or (not type)
+      (and node (string= (treesit-node-type node) type))))
 
 
 (defun f90-ts--node-is-ampersand-p (node)
@@ -430,17 +429,33 @@ encountered."
 (defun f90-ts--previous-stmt-keyword-by-first (first)
   "Auxiliary function for `f90-ts--previous-stmt-keyword` or when
 first statement is known."
-  ;; if the statement starts with a block label, then first is unnamed
-  ;; node label, and its parent is block_label_start_expression. Its
-  ;; next sibling is a keyword like if or do
-  (let ((fparent (and first (treesit-node-parent first))))
+  ;; block structure statements like if, do, associate etc. can start
+  ;; with a label, if a (optional) label is present, skip it and extract
+  ;; the keyword node;
+  ;; in general, the AST looks like:
+  ;; (do_loop
+  ;;  (block_label_start_expression
+  ;;   (label)
+  ;;   :)
+  ;;  (do_statement do
+  ;;  ...))
+  ;; we want to extract the unnamed node "do" of the statement following
+  ;; the block_label_start expression;
+  ;; unfortunately, if the label name is a reserved keyword, then (label)
+  ;; becomes (label name) and FIRST is anonymous node "name"
+  (let* ((nlabel (or (and (f90-ts--node-type-p first "label")
+                          first)
+                     (and first
+                          (treesit-node-parent first))))
+         (fparent (and nlabel (treesit-node-parent nlabel))))
     (if (f90-ts--node-type-p fparent "block_label_start_expression")
-	    (let ((fnext (treesit-node-next-sibling fparent)))
+	    (let ((fp-next (treesit-node-next-sibling fparent)))
           (cl-loop
-           for n = fnext then child
+           for n = fp-next then child
            for child = (treesit-node-child n 0)
            while child
            finally return n))
+      ;; not a label expression, just return first
       first)))
 
 
@@ -2090,9 +2105,9 @@ with !$ or !$omp")
     ((n-p-gp "end_if_statement" "if_statement"  nil)      parent 0)
     ((n-p-gp "elseif_clause"    "if_statement"  nil)      parent 0)
     ((n-p-gp "else_clause"      "if_statement"  nil)      parent 0)
-    ((n-p-ps nil                "if_statement"  "if")     parent f90-ts-indent-block)
-    ((n-p-ps nil                "if_statement"  "elseif") parent f90-ts-indent-block) ; line after elseif
-    ((n-p-ps nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line after else, with empty else block
+    ((n-p-ps nil                "if_statement"  "if")     parent f90-ts-indent-block) ; line right after if
+    ((n-p-ps nil                "if_statement"  "elseif") parent f90-ts-indent-block) ; line right after elseif
+    ((n-p-ps nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line right after else, with empty else block
     ((n-p-ps nil                "else_clause"   "else")   parent f90-ts-indent-block) ; line after else, with non-empty else block
     ((n-p-ps nil                "elseif_clause" "elseif") parent f90-ts-indent-block)
 
