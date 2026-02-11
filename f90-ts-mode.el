@@ -148,20 +148,6 @@ jumping and nil turns of smart end completion."
   :group 'f90-ts)
 
 
-(defface f90-ts-font-lock-test1-face
-  '((t :foreground "Red"
-       :background "Yellow"))
-  "Face for testing."
-  :group 'f90-ts)
-
-
-(defface f90-ts-font-lock-test2-face
-  '((t :foreground "Blue"
-       :background "Yellow"))
-  "Face for testing."
-  :group 'f90-ts)
-
-
 ;;------------------------------------------------------------------------------
 ;; keymap and syntax table
 
