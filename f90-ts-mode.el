@@ -2484,7 +2484,8 @@ If INDENT-BLOCK is true, then indent the whole block with indent-region."
                   (treesit-node-end node))
       (when (= (line-number-at-pos)
                (f90-ts--node-line node))
-        (let ((node-block (f90-ts--complete-smart-end-node node)))
+        (when-let ((node-block (f90-ts--complete-smart-end-node node)))
+          (f90-ts-log :complete "smart end actions: node-block=%s" node-block)
           (when indent-block
             ;; update node-block, if indent changes anything
             (setq node-block (or (f90-ts--complete-smart-end-indent node-block)
