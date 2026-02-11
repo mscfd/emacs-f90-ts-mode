@@ -581,10 +581,12 @@ PREDICATE. Take the last of all children satisfying this condition."
   (save-excursion
     (goto-char pos)
     (end-of-line)
-    (when-let ((node (treesit-node-at (point))))
-      (when (= (line-number-at-pos pos)
-               (f90-ts--node-line node))
-        node))))
+    (skip-chars-backward " \t")
+    (unless (bolp)
+      (when-let ((node (treesit-node-at (point))))
+        (when (= (line-number-at-pos pos)
+                 (f90-ts--node-line node))
+          node)))))
 
 
 (defun f90-ts--find-first-ampersand (first)
