@@ -237,6 +237,20 @@ Used for applying a special font lock face."
   :group 'f90-ts)
 
 
+(defun f90-ts--node-type-p (node type)
+  "If TYPE is nil, return true and ignore NODE.
+If NODE is nil and TYPE is non-nil, return nil.
+If TYPE is a string, return true if NODE is non-nil and is of type TYPE.
+If TYPE is a list of strings, return true if NODE is non-nil its type is
+among the elements of TYPE."
+  (or (not type)
+      (and node
+           (let ((type-n (treesit-node-type node)))
+             (if (stringp type)
+                 (string= type-n type)
+               (member type-n type))))))
+
+
 (defun f90-ts--comment-prefix (node)
   "Extract the starting character sequence from NODE, assumed to be of type comment.
 Include any special symbol characters "
@@ -251,7 +265,7 @@ Include any special symbol characters "
 (defun f90-ts-special-var-p (node)
   "Check if NODE is an identifier and matches the special variable regexp.
 Note that the parse uses identifier not just for variables, but for types etc."
-  (when (string= (treesit-node-type node) "identifier")
+  (when (f90-ts--node-type-p node "identifier")
     ;; we do not prepend or append symbol start or end assertions, as it should also
     ;; work with more general regexps (like highlight all variables with a certain prefix)
     ;;(string-match f90-ts-special-var-regexp (treesit-node-text node))))
@@ -260,7 +274,7 @@ Note that the parse uses identifier not just for variables, but for types etc."
 
 (defun f90-ts-openmp-node-p (node)
   "Check if NODE is a comment node and has the openmp comment prefix."
-  (when (string= (treesit-node-type node) "comment")
+  (when (f90-ts--node-type-p node "comment")
     (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
 
 (defun f90-ts-preproc-node-p (node)
@@ -272,14 +286,15 @@ Note that the parse uses identifier not just for variables, but for types etc."
 (defun f90-ts-special-comment-node-p (node)
   "Check if NODE is a comment node and satisfies the special comment regexp."
   (when (and (not (string-empty-p f90-ts-special-comment-regexp))
-             (string= (treesit-node-type node) "comment"))
-    (string-match (concat "^" f90-ts-special-comment-regexp) (treesit-node-text node))))
+             (f90-ts--node-type-p node "comment"))
+    (string-match (concat "^" f90-ts-special-comment-regexp)
+                  (treesit-node-text node))))
 
 
 (defun f90-ts-in-string-p ()
   "Non-nil if point is inside a string."
   (when-let ((node (treesit-node-at (point))))
-    (when (string= (treesit-node-type node) "string_literal")
+    (when (f90-ts--node-type-p node "string_literal")
       (let ((start (treesit-node-start node))
             (end (treesit-node-end node))
             (pos (point)))
@@ -304,7 +319,7 @@ looks like a comment. The grammar does not parse openmp currently."
   "Non-nil if point is after start of comment. This excludes openmp statements,
 which look like comments and are currently not parsed by the treesitter grammar."
   (when-let ((node (treesit-node-at (point))))
-    (when (and (string= (treesit-node-type node) "comment")
+    (when (and (f90-ts--node-type-p node "comment")
                (not (f90-ts-openmp-node-p node)))
       (f90-ts-log :auxiliary "in-comment: %s" (treesit-node-type node))
       (f90-ts-log :auxiliary "in-comment: %d, %d, %d" (treesit-node-start node) (treesit-node-end node) (point))
@@ -320,35 +335,20 @@ Note that in fortran, a continuation symbol shall not be used on blank lines."
   (looking-back "^\\s-*" (line-beginning-position)))
 
 
-(defun f90-ts--node-type-p (node type)
-  "If TYPE is nil, return true and ignore NODE.
-If TYPE is a string, return true if NODE is non-nil and is of type TYPE.
-If TYPE is a list of strings, return true if NODE is non-nil its type is
-among the elements of TYPE."
-  (or (not type)
-      (and node
-           (let ((type-n (treesit-node-type node)))
-             (if (stringp type)
-                 (string= type-n type)
-               (member type-n type))))))
-
-
 (defun f90-ts--node-is-ampersand-p (node)
   "Check whether node is continuation symbol &."
-  (and node (string= (treesit-node-type node) "&")))
+  (f90-ts--node-type-p node "&"))
 
 
 (defun f90-ts--node-not-comment-p (node)
   "Return true if NODE is not of type comment."
-  (let ((type (treesit-node-type node)))
-    (not (string= type "comment"))))
+  (not (f90-ts--node-type-p node "comment")))
 
 
 (defun f90-ts--node-not-comment-or-error-p (node)
   "Return true if NODE is not of type comment or error. This is used to
 find relevant nodes."
-  (let ((type (treesit-node-type node)))
-    (not (member type (list "comment" "ERROR")))))
+  (not (f90-ts--node-type-p node '("comment" "ERROR"))))
 
 
 (defun f90-ts-node-overlap-region-p (node start end)
@@ -408,8 +408,8 @@ encountered."
    while (and parent
               (= (treesit-node-start parent)
                  (treesit-node-start current))
-              (not (or (string= (treesit-node-type parent) "ERROR")
-                       (string= (treesit-node-type parent) "translation_unit"))))
+              (not (f90-ts--node-type-p parent
+                                        '("ERROR" "translation_unit"))))
    finally return current))
 
 
@@ -524,7 +524,7 @@ structure type, like subroutine_statement or similar."
      for current = psib then child
      for child = (and current (treesit-node-child current 0 t))
      while (and child
-                (string= (treesit-node-type current) "ERROR"))
+                (f90-ts--node-type-p current "ERROR"))
      finally return current)))
 
 
@@ -560,9 +560,9 @@ PREDICATE. Take the last of all children satisfying this condition."
       ;;   if previous line is a comment (no ampersand required), then amp1 has the comment
       ;;      and amp2 has the desired ampersand
       (cond
-       ((and node-amp2 (string= (treesit-node-type node-amp2) "&"))
+       ((f90-ts--node-type-p node-amp2 "&")
         node-amp2)
-       ((and node-amp1 (string= (treesit-node-type node-amp1) "&"))
+       ((f90-ts--node-type-p node-amp1 "&")
         node-amp1)
        (t
         node-indent)))))
@@ -1364,11 +1364,9 @@ inside module, submodule or program, otherwise use f90-ts-indent-contain."
     (f90-ts-log :indent "toplevel-offset: ggparent type = %s" (and ggparent (treesit-node-type ggparent)))
     ;; before 'contains' statement, grandparent is translation_unit,
     ;; after 'contains' it is module or program
-    (if (or (and grandparent (member (treesit-node-type grandparent)
-                                     '("module" "program" "submodule" "translation_unit")))
-            (and grandparent ggparent
-                 (string= (treesit-node-type grandparent) "ERROR")
-                 (string= (treesit-node-type ggparent) "translation_unit")))
+    (if (or (f90-ts--node-type-p grandparent '("module" "submodule" "program" "translation_unit"))
+            (and (f90-ts--node-type-p grandparent "ERROR")
+                 (f90-ts--node-type-p ggparent "translation_unit")))
         f90-ts-indent-toplevel
       f90-ts-indent-contain)))
 
@@ -1383,16 +1381,16 @@ for alignment are mostly selected among nodes with same symbol.
 If NODE is nil return nil."
   (when node
     (cond
-     ((string= (treesit-node-type node) "ERROR")
+     ((f90-ts--node-type-p node "ERROR")
       'error)
 
-     ((string= (treesit-node-type node) "comment")
+     ((f90-ts--node-type-p node "comment")
       'comment)
 
      ((string= (treesit-node-field-name node) "operator")
       'operator)
 
-     ((string= (treesit-node-type node) "&")
+     ((f90-ts--node-type-p node "&")
       ;; text is not always "&" (like virtual ampersand at beginning of line)
       'ampersand)
 
@@ -1466,7 +1464,7 @@ tree. An expression like A .and. B .and. C is roughly represented as
 logical_expression(logical_expression(A .and. B), .and. C).
 The routine returns the five children A, .and., B, and., C.
 It does not descend into parenthesized_expressions."
-  (if (string= (treesit-node-type node) "logical_expression")
+  (if (f90-ts--node-type-p node "logical_expression")
       (mapcan #'f90-ts--align-continued-expand-log-expr
               (treesit-node-children node))
     (list node)))
@@ -1484,7 +1482,7 @@ It does not descend into parenthesized_expressions."
   ;; then expand logical_expression (but not parenthesised_expression) recursively
   (when-let ((root (treesit-parent-while
                     list-context
-                    (lambda (n) (string= "logical_expression" (treesit-node-type n))))))
+                    (lambda (n) (f90-ts--node-type-p n "logical_expression")))))
     (f90-ts-inspect-node :indent root "root")
     (let ((children (f90-ts--align-continued-expand-log-expr root)))
       ;; (f90-ts-log :indent "cont-logexpr: %s" children)
