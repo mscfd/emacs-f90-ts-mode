@@ -321,10 +321,16 @@ Note that in fortran, a continuation symbol shall not be used on blank lines."
 
 
 (defun f90-ts--node-type-p (node type)
-  "If type is nil, return non-nil and ignore node.
-Otherwise return non-nil if node is non-nil and is of type TYPE."
+  "If TYPE is nil, return true and ignore NODE.
+If TYPE is a string, return true if NODE is non-nil and is of type TYPE.
+If TYPE is a list of strings, return true if NODE is non-nil its type is
+among the elements of TYPE."
   (or (not type)
-      (and node (string= (treesit-node-type node) type))))
+      (and node
+           (let ((type-n (treesit-node-type node)))
+             (if (stringp type)
+                 (string= type-n type)
+               (member type-n type))))))
 
 
 (defun f90-ts--node-is-ampersand-p (node)
