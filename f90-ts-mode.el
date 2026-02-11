@@ -154,6 +154,8 @@ jumping and nil turns of smart end completion."
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+    (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
+    (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -2751,6 +2753,68 @@ based on the treesitter tree overlapping that region."
     ))
 
   (indent-according-to-mode))
+
+
+;; TODO for both join variants:
+;; * joining of comment line and openmp statements
+;; * empty lines within continued statements
+;;
+;; note: due to comments and empty lines, a simple forward-line or backward-line
+;; does not seem possibly easily, instead we should check and reconstruct the
+;; (&, comment*, &) sequence of nodes and use it for navigation and changes,
+;; and to unify the two join variants
+(defun f90-ts-join-line-prev ()
+  "Join previous line with the current one, if it is part of a continued
+statement. This is (partially) a counterpart to `f90-ts-break-line`.
+If previous line has comments (at end, next line etc.) joining is not
+done."
+  (interactive)
+  (let* ((first-node (f90-ts--first-node-on-line (point)))
+         (amp-node (when (and first-node
+                              (f90-ts--node-type-p first-node "&"))
+                     first-node))
+         (prev-node (and amp-node (treesit-node-prev-sibling amp-node))))
+    ;;(f90-ts-inspect-node :info last-node "last")
+    ;;(f90-ts-inspect-node :info amp-node "amp")
+    ;;(f90-ts-inspect-node :info next-node "next")
+    (cl-assert (f90-ts--node-type-p prev-node '("&" "comment"))
+               nil "internal error: prev node is not an ampersand or comment?")
+    (if (and amp-node
+             prev-node
+             (f90-ts--node-type-p prev-node "&"))
+        (let ((beg (treesit-node-start prev-node))
+              (end (treesit-node-end amp-node)))
+          (delete-region beg end)
+          (goto-char beg)
+          (fixup-whitespace))
+      (message "join failed: not a simple continued line"))))
+
+
+(defun f90-ts-join-line-next ()
+  "Join current line with the next one, if it is part of a continued
+statement. This is (partially) a counterpart to `f90-ts-break-line`.
+If continued line has comments (at end, next line etc.) joining is not
+done."
+  (interactive)
+  (let* ((last-node (f90-ts--last-node-on-line (point)))
+         (amp-node (when (and last-node
+                              (f90-ts--node-type-p last-node "&"))
+                     last-node))
+         (next-node (and amp-node (treesit-node-next-sibling amp-node))))
+    ;;(f90-ts-inspect-node :info last-node "last")
+    ;;(f90-ts-inspect-node :info amp-node "amp")
+    ;;(f90-ts-inspect-node :info next-node "next")
+    (cl-assert (f90-ts--node-type-p next-node '("&" "comment"))
+               nil "internal error: next node is not an ampersand or comment?")
+    (if (and amp-node
+             next-node
+             (f90-ts--node-type-p next-node "&"))
+        (let ((beg (treesit-node-start amp-node))
+              (end (treesit-node-end next-node)))
+          (delete-region beg end)
+          (goto-char beg)
+          (fixup-whitespace))
+      (message "join failed: not a simple continued line"))))
 
 
 ;;------------------------------------------------------------------------------

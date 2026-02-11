@@ -33,6 +33,7 @@ The following can be used to check whether versions are correct:
 - Indentation
 - Smart end completion
 - Break lines with automatic continuation and comment starters for comment lines
+- Join continued lines
 - openmp directives
 - preprocessor directives
 
@@ -154,9 +155,14 @@ If smart end completion has changed the end statement then indent-region is call
 This experimental feature is controlled by customizable variable `f90-ts-smart-end-indent-if-changed`.
 
 
-### Line breaking
+### Breaking and joining lines
 
-Inspired by the legacy f90 mode as well.
+Inspired by the legacy f90 mode as well. Continued lines can be created by breaking a line or reduced
+by joining two consecutive lines connected by continuation symbol `&`.
+
+
+#### Breaking lines
+
 The function `f90-ts-break-line` breaks the current line at point and adds continuation symbols.
 If the current line is a comment,
 then the comment starter (like '!>', '!<' or similar) is extracted, including indentation offset after the
@@ -171,6 +177,23 @@ This can be bound to a key by
 Whether a leading ampersand at the start of the new line is inserted is controlled by
 `f90-ts-beginning-ampersand`. However, this has not yet been tested, in particular in conjunction
 with list item alignment.
+
+
+#### Joining lines
+
+Two consecutives lines (skipping empty lines) connected by continuation symbol `&` can be joined by
+`f90-ts-join-line-prev` and `f90-ts-join-line-next`.
+The ampersand(s) and empty lines in between are removed.
+One whitespace character is left after putting the second line at the end of the first line.
+Comments at end of first line or in between the two lines are not allowed currently.
+(It is not quite clear what should be done with such comments.)
+
+The `prev` variant joins current line with previous (non-empty) line.
+The `next` variant joins current line with next (non-empty) line.
+
+If point is on an empty line within a continued statement, then nothing is joined.
+Joining of comment lines or openmp statements is not yet implemented as well.
+
 
 
 ### Comment region
