@@ -1353,7 +1353,7 @@ with the previous relevant line."
 
 (defun f90-ts--indent-toplevel-offset (node parent _bol)
   "Indent stuff right below top level nodes: f90-ts-indent-toplevel when
-inside module, otherwise use f90-ts-indent-contain."
+inside module, submodule or program, otherwise use f90-ts-indent-contain."
   ;(f90-ts-log :indent "%d  %d  %d" bol (treesit-node-start parent) (treesit-node-start node))
   (let* ((grandparent (treesit-node-parent parent))
          (ggparent    (and grandparent (treesit-node-parent grandparent))))
@@ -1362,7 +1362,7 @@ inside module, otherwise use f90-ts-indent-contain."
     ;; before 'contains' statement, grandparent is translation_unit,
     ;; after 'contains' it is module or program
     (if (or (and grandparent (member (treesit-node-type grandparent)
-                                     '("module" "program" "translation_unit")))
+                                     '("module" "program" "submodule" "translation_unit")))
             (and grandparent ggparent
                  (string= (treesit-node-type grandparent) "ERROR")
                  (string= (treesit-node-type ggparent) "translation_unit")))
