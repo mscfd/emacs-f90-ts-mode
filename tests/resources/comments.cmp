@@ -1,0 +1,61 @@
+(:indentation
+"submodule (mod) subm
+
+ ! comment 1
+
+ use other
+
+ ! comment 2
+ ! comment 3
+ implicit none
+
+ ! before contains1
+ ! before contains2
+
+contains
+
+! ==========
+! ==========
+
+ ! after contains1
+ ! after contains2
+
+ subroutine sub1()
+ ! arguments
+ ! ==========
+      ! comment sub11
+
+      ! comment sub12
+ contains
+
+    ! comment fun11
+    ! comment fun12
+ ! ==========
+ ! ==========
+
+    function fun1()
+    ! ==========
+    ! ==========
+         ! comment fun1_inside1
+         ! comment fun1_inside2
+    end function fun1
+ end subroutine sub1
+
+
+ ! contains in subroutine 1
+ ! contains in subroutine 2
+
+ pure function fun2()
+      ! comment fun21
+
+      ! comment fun22
+ end function fun2
+
+end submodule subm
+"
+
+:font-lock
+((1 1 10 font-lock-keyword-face) (1 11 12 f90-ts-font-lock-bracket-face) (1 12 15 font-lock-function-name-face) (1 15 16 f90-ts-font-lock-bracket-face) (1 17 21 font-lock-function-name-face) (3 24 35 font-lock-comment-face) (5 38 41 font-lock-keyword-face) (7 50 61 font-lock-comment-face) (8 63 74 font-lock-comment-face) (9 76 84 font-lock-keyword-face) (11 92 110 font-lock-comment-face) (12 112 130 font-lock-comment-face) (14 132 140 font-lock-keyword-face) (16 142 154 f90-ts-font-lock-special-comment-face) (17 155 167 f90-ts-font-lock-special-comment-face) (19 170 187 font-lock-comment-face) (20 189 206 font-lock-comment-face) (22 209 219 font-lock-keyword-face) (22 220 224 font-lock-function-name-face) (22 224 226 f90-ts-font-lock-bracket-face) (23 228 239 f90-ts-font-lock-special-comment-face) (24 241 253 f90-ts-font-lock-special-comment-face) (25 260 275 font-lock-comment-face) (27 283 298 font-lock-comment-face) (28 300 308 font-lock-keyword-face) (30 314 329 font-lock-comment-face) (31 334 349 font-lock-comment-face) (32 351 363 f90-ts-font-lock-special-comment-face) (33 365 377 f90-ts-font-lock-special-comment-face) (35 383 391 font-lock-keyword-face) (35 392 396 font-lock-function-name-face) (35 396 398 f90-ts-font-lock-bracket-face) (36 403 415 f90-ts-font-lock-special-comment-face) (37 420 432 f90-ts-font-lock-special-comment-face) (38 442 464 font-lock-comment-face) (39 474 496 font-lock-comment-face) (40 501 504 font-lock-keyword-face) (40 505 513 font-lock-keyword-face) (40 514 518 font-lock-function-name-face) (41 520 523 font-lock-keyword-face) (41 524 534 font-lock-keyword-face) (41 535 539 font-lock-function-name-face) (44 543 569 font-lock-comment-face) (45 571 597 font-lock-comment-face) (47 600 604 font-lock-keyword-face) (47 605 613 font-lock-keyword-face) (47 614 618 font-lock-function-name-face) (47 618 620 f90-ts-font-lock-bracket-face) (48 627 642 font-lock-comment-face) (50 650 665 font-lock-comment-face) (51 667 670 font-lock-keyword-face) (51 671 679 font-lock-keyword-face) (51 680 684 font-lock-function-name-face) (53 686 689 font-lock-keyword-face) (53 690 699 font-lock-keyword-face) (53 700 704 font-lock-function-name-face))
+
+:tree
+"(translation_unit (submodule (submodule_statement ancestor: (module_name (name)) (name)) (comment) (use_statement (module_name)) (comment) (comment) (implicit_statement (none)) (comment) (comment) (internal_procedures (contains_statement) (comment) (comment) (comment) (comment) (subroutine (subroutine_statement name: (name)) (comment) (comment) (comment) (comment) (internal_procedures (contains_statement) (comment) (comment) (comment) (comment) (function (function_statement name: (name)) (comment) (comment) (comment) (comment) (end_function_statement (name)))) (end_subroutine_statement (name))) (comment) (comment) (function (function_statement (procedure_qualifier) name: (name)) (comment) (comment) (end_function_statement (name)))) (end_submodule_statement (name))))")
