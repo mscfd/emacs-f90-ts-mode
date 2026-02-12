@@ -83,7 +83,7 @@ Currently implemented rules are:
 |-----------------------|------------------------------------------------------------------------------------------|
 | openmp                | openmp directives stored as comments starting with `!$` or `!$omp`                       |
 | preproc               | indentation of and at preprocessor directives                                            |
-| comments              | regular and special comments                                                             |
+| comments              | for sequences of regular and special comments                                            |
 | continued lines       | multi-line statements, column alignment for lists (like variable declarations, arguments, etc. |
 | internal procedures   | `contains` sections and internal procedures in programs, modules and procedures          |
 | program / module      | program, module, and submodule bodies                                                    |
@@ -117,6 +117,25 @@ TODO:
 * use same option for region and line indentation, and provide other options like rotate or always first
 by separate functions bound to keys like `C-<tab>`, `M-<tab>` and `A-<tab>` etc.
 * handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
+
+
+#### Special comments
+
+Special comments (recognised by a regexp `f90-ts-special-comment-regexp`) are highlighted with
+`f90-ts-font-lock-special-comment-face`. Additionally these are also aligned differently.
+Normal comments are indented like statements. Special comments are aligned to their parent node.
+For example (wher `arguments` and `===` are special comments matched by the regexp):
+
+```
+subroutine sub(arg1, arg2)
+! arguments
+   ! arg1 must be a positive number
+   integer, intent(in) :: arg1, arg2
+! ===
+  print *, arg1, arg2
+end subroutine sub
+```
+
 
 
 ### Smart end completion

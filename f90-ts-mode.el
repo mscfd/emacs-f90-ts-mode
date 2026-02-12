@@ -144,21 +144,7 @@ jumping and nil turns of smart end completion."
 (defface f90-ts-font-lock-special-comment-face
   '((t :foreground "Sienna4"
        :weight bold))
-  "Face for openmp statements."
-  :group 'f90-ts)
-
-
-(defface f90-ts-font-lock-test1-face
-  '((t :foreground "Red"
-       :background "Yellow"))
-  "Face for testing."
-  :group 'f90-ts)
-
-
-(defface f90-ts-font-lock-test2-face
-  '((t :foreground "Blue"
-       :background "Yellow"))
-  "Face for testing."
+  "Face for special comments."
   :group 'f90-ts)
 
 
@@ -1222,19 +1208,30 @@ non-preprocessor ancestor is a toplevel node (program, module, etc.)."
 
 
 (defun f90-ts--special-comment-is ()
-  "Matcher that checks whether node is a special comment."
+  "Matcher that checks whether node is a special comment.
+These are aligned to their parents."
   (lambda (node parent bol &rest _)
     (and (f90-ts--node-type-p node "comment")
          (f90-ts-special-comment-node-p node))))
 
 
-(defun f90-ts--comment-is ()
-  "Matcher that checks whether node and previous node are comments."
+(defun f90-ts--comment-region-is ()
+  "Matcher that checks whether node and previous node are comments
+and are of same type (both special or both other).
+Use first node of previous line (skipping empty lines) to avoid
+trailing comments."
   (lambda (node parent bol &rest _)
     (when (f90-ts--node-type-p node "comment")
-      (let ((prev-sib (treesit-node-prev-sibling node)))
-        (and (f90-ts--node-type-p prev-sib "comment")
-             (f90-ts-special-comment-node-p node))))))
+      (when-let* ((prev-sib (treesit-node-prev-sibling node))
+                  (prev-line (f90-ts--first-node-on-line
+                              (treesit-node-start prev-sib))))
+        (f90-ts-inspect-node :indent node "node")
+        (f90-ts-inspect-node :indent prev-sib "prev-sib")
+        (f90-ts-inspect-node :indent prev-line "prev-line")
+        (and (f90-ts--node-type-p prev-line "comment")
+             (eq (not (f90-ts-special-comment-node-p node))
+                 (not (f90-ts-special-comment-node-p prev-line))))
+        ))))
 
 
 (defun n-p-ps (type-n type-p type-ps)
@@ -1353,7 +1350,7 @@ with the previous relevant line."
 
 (defun f90-ts--indent-toplevel-offset (node parent _bol)
   "Indent stuff right below top level nodes: f90-ts-indent-toplevel when
-inside module, otherwise use f90-ts-indent-contain."
+inside module, submodule or program, otherwise use f90-ts-indent-contain."
   ;(f90-ts-log :indent "%d  %d  %d" bol (treesit-node-start parent) (treesit-node-start node))
   (let* ((grandparent (treesit-node-parent parent))
          (ggparent    (and grandparent (treesit-node-parent grandparent))))
@@ -1362,7 +1359,7 @@ inside module, otherwise use f90-ts-indent-contain."
     ;; before 'contains' statement, grandparent is translation_unit,
     ;; after 'contains' it is module or program
     (if (or (and grandparent (member (treesit-node-type grandparent)
-                                     '("module" "program" "translation_unit")))
+                                     '("module" "program" "submodule" "translation_unit")))
             (and grandparent ggparent
                  (string= (treesit-node-type grandparent) "ERROR")
                  (string= (treesit-node-type ggparent) "translation_unit")))
@@ -1983,10 +1980,18 @@ with !$ or !$omp")
 
 
 (defvar f90-ts-indent-rules-comments
-  `(;; indent a sequence of comments with respect to previous comment
+  `(;; comments are ignored if checking previous statements, first comment
+    ;; in a sequence of comments can be aligned like a normal statement,
+    ;; but if a comment follows another comment, then we need an extra rule
+    ;; to align to previous comment
     ,@(f90-ts-indent-rules-info "comments")
+    ;; indent a sequence of comments of same kind (special or other)
+    ;; with respect to previous comment
+    ((f90-ts--comment-region-is) prev-sibling 0)
+    ;; indent special comments like their parent nodes
+    ;; this check is after the region check, hence previous sibling
+    ;; is not a comment of same kind
     ((f90-ts--special-comment-is) parent 0)
-    ((f90-ts--comment-is) prev-sibling 0)
     )
   "Indentation rules for comments (excluding openmp statements).")
 
