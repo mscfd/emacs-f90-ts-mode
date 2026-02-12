@@ -193,6 +193,7 @@ If failure, then return the label which failed, otherwise nil."
     f90-ts-indent-block
     f90-ts-indent-continued
     f90-ts-indent-lists-region
+    f90-ts-special-var-regexp
     f90-ts-separator-comment-regexp
     require-final-newline)
   "Custom variables whose values can be temporarily overridden.")
@@ -217,6 +218,7 @@ If failure, then return the label which failed, otherwise nil."
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
     (f90-ts-indent-lists-region . keep-or-first)
+    (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (require-final-newline . nil)
     )

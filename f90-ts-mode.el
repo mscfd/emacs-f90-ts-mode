@@ -271,8 +271,10 @@ Note that the parse uses identifier not just for variables, but for types etc."
   (when (f90-ts--node-type-p node "identifier")
     ;; we do not prepend or append symbol start or end assertions, as it should also
     ;; work with more general regexps (like highlight all variables with a certain prefix)
-    ;;(string-match f90-ts-special-var-regexp (treesit-node-text node))))
-    (string-match "self" (treesit-node-text node))))
+    (string-match (concat "^"
+                          f90-ts-special-var-regexp
+                          "$")
+                  (treesit-node-text node))))
 
 
 (defun f90-ts-openmp-node-p (node)
