@@ -141,10 +141,10 @@ jumping and nil turns of smart end completion."
   :group 'f90-ts)
 
 
-(defface f90-ts-font-lock-special-comment-face
+(defface f90-ts-font-lock-separator-comment-face
   '((t :foreground "Sienna4"
        :weight bold))
-  "Face for special comments."
+  "Face for separator comments."
   :group 'f90-ts)
 
 
@@ -231,9 +231,9 @@ Also add trailing whitespace characters to preserve indentation within comments.
   :group 'f90-ts)
 
 
-(defcustom f90-ts-special-comment-regexp ""
-  "Regular expression for matching special comments (e.g. for structuring code).
-Used for applying a special font lock face and alignment with parent node."
+(defcustom f90-ts-separator-comment-regexp ""
+  "Regular expression for matching separator comments (e.g. for structuring code).
+Used for applying a separator font lock face and alignment with parent node."
   :type 'regexp
   :safe #'stringp
   :group 'f90-ts)
@@ -254,8 +254,9 @@ among the elements of TYPE."
 
 
 (defun f90-ts--comment-prefix (node)
-  "Extract the starting character sequence from NODE, assumed to be of type comment.
-Include any special symbol characters "
+  "Extract the starting character sequence from NODE, which is assumed
+to be of type comment. It uses 'f90-ts-openmp-prefix-regexp' and
+'f90-ts-comment-prefix-regexp' to identify the prefix to extract."
   ;; first match openmp as comment prefix would just take the initial ! and ignoring
   ;; following $omp part in openmp statements
   (let ((rx-comment (concat "^\\(?:" f90-ts-openmp-prefix-regexp "\\)\\|\\(?:" f90-ts-comment-prefix-regexp "\\)")))
@@ -285,11 +286,11 @@ Note that the parse uses identifier not just for variables, but for types etc."
       (or (string-match "^preproc_" type)
           (string-prefix-p "#" type))))
 
-(defun f90-ts-special-comment-node-p (node)
-  "Check if NODE is a comment node and satisfies the special comment regexp."
-  (when (and (not (string-empty-p f90-ts-special-comment-regexp))
+(defun f90-ts-separator-comment-node-p (node)
+  "Check if NODE is a comment node and satisfies the separator comment regexp."
+  (when (and (not (string-empty-p f90-ts-separator-comment-regexp))
              (f90-ts--node-type-p node "comment"))
-    (string-match (concat "^" f90-ts-special-comment-regexp)
+    (string-match (concat "^" f90-ts-separator-comment-regexp)
                   (treesit-node-text node))))
 
 
@@ -821,8 +822,8 @@ comments in the tree. Must be parsed before plain comments."
    :language 'fortran
    :feature 'comment
    '(
-     ((comment) @f90-ts-font-lock-special-comment-face
-      (:pred f90-ts-special-comment-node-p @f90-ts-font-lock-special-comment-face))
+     ((comment) @f90-ts-font-lock-separator-comment-face
+      (:pred f90-ts-separator-comment-node-p @f90-ts-font-lock-separator-comment-face))
      ((comment) @font-lock-comment-face)
      )))
 
@@ -1229,17 +1230,17 @@ non-preprocessor ancestor is a toplevel node (program, module, etc.)."
                  (string-match-p "module\\|program" (treesit-node-type ancestor)))))))
 
 
-(defun f90-ts--special-comment-is ()
-  "Matcher that checks whether node is a special comment.
+(defun f90-ts--separator-comment-is ()
+  "Matcher that checks whether node is a separator comment.
 These are aligned to their parents."
   (lambda (node parent bol &rest _)
     (and (f90-ts--node-type-p node "comment")
-         (f90-ts-special-comment-node-p node))))
+         (f90-ts-separator-comment-node-p node))))
 
 
 (defun f90-ts--comment-region-is ()
   "Matcher that checks whether node and previous node are comments
-and are of same type (both special or both other).
+and are of same type (both separator or both other).
 Use first node of previous line (skipping empty lines) to avoid
 trailing comments."
   (lambda (node parent bol &rest _)
@@ -1251,8 +1252,8 @@ trailing comments."
         (f90-ts-inspect-node :indent prev-sib "prev-sib")
         (f90-ts-inspect-node :indent prev-line "prev-line")
         (and (f90-ts--node-type-p prev-line "comment")
-             (eq (not (f90-ts-special-comment-node-p node))
-                 (not (f90-ts-special-comment-node-p prev-line))))
+             (eq (not (f90-ts-separator-comment-node-p node))
+                 (not (f90-ts-separator-comment-node-p prev-line))))
         ))))
 
 
@@ -2005,13 +2006,13 @@ with !$ or !$omp")
     ;; but if a comment follows another comment, then we need an extra rule
     ;; to align to previous comment
     ,@(f90-ts-indent-rules-info "comments")
-    ;; indent a sequence of comments of same kind (special or other)
+    ;; indent a sequence of comments of same kind (separator or other)
     ;; with respect to previous comment
     ((f90-ts--comment-region-is) prev-sibling 0)
-    ;; indent special comments like their parent nodes
+    ;; indent separator comments like their parent nodes
     ;; this check is after the region check, hence previous sibling
     ;; is not a comment of same kind
-    ((f90-ts--special-comment-is) parent 0)
+    ((f90-ts--separator-comment-is) parent 0)
     )
   "Indentation rules for comments (excluding openmp statements).")
 
