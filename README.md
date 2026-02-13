@@ -3,16 +3,14 @@
 **f90-ts-mode** is a major mode for editing **Fortran 90 / Fortran 2003** (and newer)
 based on Emacs’s built-in **Tree-sitter** support (requires Emacs 29+).
 
-The mode is under **development**, features partially implemented:
-- Font locking
-- Indentation
-- Smart end completion
-- Line break with automatic continuation
+The mode is under **development**, features might only be partially implemented.
+It also has quite extensive debug logging in a separate `*f90-ts-log*` buffer, which
+can be controlled by custom variable `f90-ts-log-categories`.
+
 
 Currently it relies on the upstream treesitter grammar fork
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran.git)
 
-The mode currently has quite extensive debug logging in a separate `*f90-ts-log*` buffer.
 
 
 **NOTE**: The fortran grammar should be compiled with treesitter version 0.25.x, as emacs (including 30.2) does not yet support the 0.26 branch.
@@ -34,26 +32,27 @@ The following can be used to check whether versions are correct:
 - Smart end completion
 - Break lines with automatic continuation and comment starters for comment lines
 - Join continued lines
-- openmp directives
-- preprocessor directives
+- Comment regions
+- Mark regions based on tree-sitter nodes
+- Handling openmp and preprocessor directives
 
 
 ### Syntax highlight
 
 Additionally to the usual faces, there are some extra custom faces:
 
-| Face Name                               | Used For                                   |
-|-----------------------------------------|--------------------------------------------|
-| `f90-ts-font-lock-intrinsic-face`       | intrinsic procedures and functions         |
-| `f90-ts-font-lock-delimiter-face`       | delimiters such as commas and separators   |
-| `f90-ts-font-lock-bracket-face`         | brackets and parentheses                   |
-| `f90-ts-font-lock-operator-face`        | operators and assignments                  |
-| `f90-ts-font-lock-openmp-face`          | openmp directives                          |
-| `f90-ts-font-lock-special-var-face`     | special variables (e.g. `self`, `this`)    |
-| `f90-ts-font-lock-special-comment-face` | special comments (e.g. `FIXME`, `REMARK`)  |
+| Face Name                                 | Description                                        |
+|-------------------------------------------|----------------------------------------------------|
+| `f90-ts-font-lock-intrinsic-face`         | intrinsic procedures and functions                 |
+| `f90-ts-font-lock-delimiter-face`         | delimiters such as commas and separators           |
+| `f90-ts-font-lock-bracket-face`           | brackets and parentheses                           |
+| `f90-ts-font-lock-operator-face`          | operators and assignments                          |
+| `f90-ts-font-lock-openmp-face`            | openmp directives                                  |
+| `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)            |
+| `f90-ts-font-lock-separator-comment-face` | separator comments (e.g. `---------`, `arguments`) |
 
 Special variables are recognised by regexp matching with customizable variable `f90-ts-special-var-regexp`.
-Special comments are recognised by regexp matching with customizable variable `f90-ts-special-comment-regexp`.
+Separator comments are recognised by regexp matching with customizable variable `f90-ts-separator-comment-regexp`.
 
 
 *Note*: Executing `M-x describe-face` can be used to find out which face is applied and to customize it if necessary.
@@ -84,8 +83,8 @@ Currently implemented rules are:
 |-----------------------|------------------------------------------------------------------------------------------|
 | openmp                | openmp directives stored as comments starting with `!$` or `!$omp`                       |
 | preproc               | indentation of and at preprocessor directives                                            |
-| comments              | for sequences of regular and special comments                                            |
-| continued lines       | multi-line statements, column alignment for lists (like variable declarations, arguments, etc. |
+| comments              | for sequences of regular and separator comments                                          |
+| continued lines       | multi-line statements, column alignment for lists (like variable declarations, arguments, etc.) |
 | internal procedures   | `contains` sections and internal procedures in programs, modules and procedures          |
 | program / module      | program, module, and submodule bodies                                                    |
 | functions             | function and subroutine bodies, including `end function` / `end subroutine`              |
@@ -120,12 +119,13 @@ by separate functions bound to keys like `C-<tab>`, `M-<tab>` and `A-<tab>` etc.
 * handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
 
 
-#### Special comments
+#### Separator comments
 
-Special comments (recognised by a regexp `f90-ts-special-comment-regexp`) are highlighted with
-`f90-ts-font-lock-special-comment-face`. Additionally these are also aligned differently.
-Normal comments are indented like statements. Special comments are aligned to their parent node.
-For example (wher `arguments` and `===` are special comments matched by the regexp):
+Separator comments are recognised by regexp `f90-ts-separator-comment-regexp`.
+Highlight is done with `f90-ts-font-lock-separator-comment-face`.
+Additionally these special comments are also aligned differently.
+Normal comments are indented like statements. Separator comments are aligned to their parent node.
+For example, if regexp for separator comments is `\\(arguments\|===\\)`, then indentation would look like:
 
 ```
 subroutine sub(arg1, arg2)
@@ -133,6 +133,7 @@ subroutine sub(arg1, arg2)
    ! arg1 must be a positive number
    integer, intent(in) :: arg1, arg2
 ! ===
+  ! print arguments
   print *, arg1, arg2
 end subroutine sub
 ```
@@ -198,14 +199,35 @@ Joining of comment lines or openmp statements is not yet implemented as well.
 
 ### Comment region
 
-This is also a feature from the legacy f90 mode. The selected region is (un)commented with a default or with a selectable prefix.
+This is also a feature from the legacy f90 mode. The selected region is (un)commented with
+a default or with a selectable prefix.
 ```
 (define-key f90-ts-mode-map (kbd "C-c ;") #'f90-ts-comment-region-default)
 (define-key f90-ts-mode-map (kbd "C-c '") #'f90-ts-comment-region-custom)
 ```
 
-Default prefix `f90-ts-comment-region-prefix` and extra prefixes `f90-ts-extra-comment-prefixes` can be customized as desired.
+Default prefix `f90-ts-comment-region-prefix` and extra prefixes
+`f90-ts-extra-comment-prefixes` can be customized as desired.
 Standard prefixes like `!$omp`, `!>` and some others are predefined.
+
+
+### Mark regions based on tree-sitter nodes
+
+Regions can be selected, enlarged, shrunk or moved based on tree-sitter nodes:
+Available functions are:
+
+| Function                         | Description                                                                 |
+|----------------------------------|-----------------------------------------------------------------------------|
+| `f90-ts-enlarge-region`          | Find smallest parent node of existing region which is strictly larger       |
+| `f90-ts-child0-region`           | Reduce existing region to a first (grand)child which is strictly smaller    |
+| `f90-ts-prev-region`             | Move selected region to previous sibling                                    |
+| `f90-ts-next-region`             | Move selected region to next sibling                                        |
+
+Default Keybindings:
+ * (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)
+ * (define-key map (kbd "A-0") #'f90-ts-child0-region)
+ * (define-key map (kbd "A-[") #'f90-ts-prev-region)
+ * (define-key map (kbd "A-]") #'f90-ts-next-region)
 
 
 
