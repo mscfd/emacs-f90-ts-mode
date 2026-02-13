@@ -300,6 +300,10 @@ selection of indentation rules is tested properly."
   if (allocated(y)) then
      x = min(1.0, 2.0)
      y(1) = unknown(x)
+     y(4) = abs_vec(v)
+     y(5) = dim2()
+     y(6) = compute_sum(x)
+     y(7) = doScanFast()
   end if
 end program")
     (f90-ts-mode)
@@ -327,7 +331,32 @@ end program")
     (goto-char (point-min))
     (search-forward "unknown")
     (goto-char (match-beginning 0))
-    (should (eq (get-text-property (point) 'face) nil))))
+    (should (eq (get-text-property (point) 'face) nil))
+
+    ;; 7. Identifier with prefix being a builtin, boundary is "_" (Expect: nil)
+    (goto-char (point-min))
+    (search-forward "abs_vec")
+    (goto-char (match-beginning 0))
+    (should (eq (get-text-property (point) 'face) nil))
+
+    ;; 8. Identifier with prefix being a builtin, boundary is a digit (Expect: nil)
+    (goto-char (point-min))
+    (search-forward "dim2")
+    (goto-char (match-beginning 0))
+    (should (eq (get-text-property (point) 'face) nil))
+
+    ;; 9. Identifier with suffix being a builtin, boundary is "_" (Expect: nil)
+    (goto-char (point-min))
+    (search-forward "compute_sum")
+    (goto-char (match-beginning 0))
+    (should (eq (get-text-property (point) 'face) nil))
+
+    ;; 10. Identifier containing a builtin (Expect: nil)
+    (goto-char (point-min))
+    (search-forward "doScanFast")
+    (goto-char (match-beginning 0))
+    (should (eq (get-text-property (point) 'face) nil))
+    ))
 
 (ert-deftest f90-ts-mode-test-indent-preproc ()
   "Test indentation for preprocessor directives (#ifdef) and their contents."

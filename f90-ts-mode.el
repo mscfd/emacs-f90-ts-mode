@@ -828,7 +828,8 @@ comments in the tree. Must be parsed before plain comments."
                   "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
                   "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
                   "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
-                  "verify"))
+                  "verify")
+                'symbols)
               @font-lock-builtin-face)))))
 
 (defun f90-ts--font-lock-rules-keyword ()
