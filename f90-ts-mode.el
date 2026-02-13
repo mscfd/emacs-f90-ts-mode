@@ -156,6 +156,10 @@ jumping and nil turns of smart end completion."
     (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
     (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
     (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
+    (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)
+    (define-key map (kbd "A-0") #'f90-ts-child0-region)
+    (define-key map (kbd "A-[") #'f90-ts-prev-region)
+    (define-key map (kbd "A-]") #'f90-ts-next-region)
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -2832,6 +2836,135 @@ done."
           (goto-char beg)
           (fixup-whitespace))
       (message "join failed: not a simple continued line"))))
+
+
+;;------------------------------------------------------------------------------
+;; treesitter based region functions
+
+(defun f90-ts--smallest-child0-same-span (node)
+  "Find the smallest child0 of node which spans the same region."
+  (cl-loop for current = node then child
+           for child = (treesit-node-child current 0 t)
+           while (and child
+                      (= (treesit-node-start child) (treesit-node-start current))
+                      (= (treesit-node-end child) (treesit-node-end current)))
+           finally return current))
+
+
+(defun f90-ts--largest-node-same-span (node)
+  "Find the largest ancestor of node which spans the same region.
+Example: for (contains_statement 'contains') treesit-node-on returns
+'contains', but for navigation, we usually want the largest node with
+same bounds, which is the contains_statement node."
+  (treesit-parent-while
+   node
+   (lambda (n)
+     (and (= (treesit-node-start n) (treesit-node-start node))
+          (= (treesit-node-end n) (treesit-node-end node))))
+   ))
+
+
+(defun f90-ts--smallest-named-node-containing-region (beg end)
+  "Return the smallest named node fully containing region from BEG to END.
+The node must be strictly larger than the region (BEG END)."
+  (when-let* ((node (treesit-node-on beg end))
+              (cover (treesit-parent-until
+                      node
+                      (lambda (n)
+                        (and (treesit-node-check n 'named)
+                             (<= (treesit-node-start n) beg)
+                             (>= (treesit-node-end n) end)
+                             (< (- end beg)
+                                (- (treesit-node-end n) (treesit-node-start n)))))
+                      t)))
+    (f90-ts--largest-node-same-span cover)))
+
+
+(defun f90-ts-enlarge-region ()
+  "Expand region to next larger node.
+If no region is active, select the smallest named node at point.
+If region is active, expand to the smallest named node that is larger
+than current region."
+  (interactive)
+  (if (use-region-p)
+      (let* ((beg (region-beginning))
+             (end (region-end))
+             (node (f90-ts--smallest-named-node-containing-region beg end)))
+        (f90-ts-log :info "enlarge region: beg=%s, end=%s" beg end)
+        (f90-ts-inspect-node :info node "node")
+        (if node
+            (progn
+              (set-mark (treesit-node-start node))
+              (goto-char (treesit-node-end node)))
+          (message "no tree-sitter node found enlarging current region")))
+    ;; no active region, select smallest named node at point
+    (if-let* ((node-on (treesit-node-on (point) (point)))
+              (node (f90-ts--largest-node-same-span node-on)))
+        (progn
+          (set-mark (treesit-node-start node))
+          (goto-char (treesit-node-end node)))
+      (message "no tree-sitter node found at point"))))
+
+
+(defun f90-ts-child0-region ()
+  "Find smallest node covering region. Then reduce region to its first
+child. If there are further first child with same region, return the
+smallest of these grandchildren."
+  (interactive)
+  (if (use-region-p)
+      (if-let* ((beg (region-beginning))
+                (end (region-end))
+                (node-on (treesit-node-on beg end))
+                (node (f90-ts--smallest-child0-same-span node-on))
+                (child0 (treesit-node-child node 0 t)))
+          (progn
+            (f90-ts-log :info "child0 region: beg=%s, end=%s" beg end)
+            (f90-ts-inspect-node :info node "node")
+            (f90-ts-inspect-node :info child0 "child0")
+            (set-mark (treesit-node-start child0))
+            (goto-char (treesit-node-end child0)))
+        (message "no tree-sitter child0 found for current region"))
+    (message "no active region")))
+
+
+(defun f90-ts-prev-region ()
+  "Find smallest node covering region. Then reduce region to its first
+child."
+  (interactive)
+  (if (use-region-p)
+      (if-let* ((beg (region-beginning))
+                (end (region-end))
+                (node-on (treesit-node-on beg end))
+                (node (f90-ts--largest-node-same-span node-on))
+                (prev-sib (treesit-node-prev-sibling node t)))
+          (progn
+            (f90-ts-log :info "prev region: beg=%s, end=%s" beg end)
+            (f90-ts-inspect-node :info node "node")
+            (f90-ts-inspect-node :info prev-sib "prev-sib")
+            (set-mark (treesit-node-start prev-sib))
+            (goto-char (treesit-node-end prev-sib)))
+        (message "no tree-sitter previous sibling found for current region"))
+    (message "no active region")))
+
+
+(defun f90-ts-next-region ()
+  "Find smallest node covering region. Then reduce region to its first
+child."
+  (interactive)
+  (if (use-region-p)
+      (if-let* ((beg (region-beginning))
+                (end (region-end))
+                (node-on (treesit-node-on beg end))
+                (node (f90-ts--largest-node-same-span node-on))
+                (next-sib (treesit-node-next-sibling node t)))
+          (progn
+            (f90-ts-log :info "next region: beg=%s, end=%s" beg end)
+            (f90-ts-inspect-node :info node "node")
+            (f90-ts-inspect-node :info next-sib "next-sib")
+            (set-mark (treesit-node-start next-sib))
+            (goto-char (treesit-node-end next-sib)))
+        (message "no tree-sitter next sibling found for current region"))
+    (message "no active region")))
 
 
 ;;------------------------------------------------------------------------------
