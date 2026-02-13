@@ -300,6 +300,8 @@ selection of indentation rules is tested properly."
   if (allocated(y)) then
      x = min(1.0, 2.0)
      y(1) = unknown(x)
+     y(2) = Asin(x)
+     y(3) = MODULO(y(1))
      y(4) = abs_vec(v)
      y(5) = dim2()
      y(6) = compute_sum(x)
@@ -332,6 +334,18 @@ end program")
     (search-forward "unknown")
     (goto-char (match-beginning 0))
     (should (eq (get-text-property (point) 'face) nil))
+
+    ;; 5. Builtin with title case
+    (goto-char (point-min))
+    (search-forward "Asin")
+    (goto-char (match-beginning 0))
+    (should (eq (get-text-property (point) 'face) 'font-lock-builtin-face))
+
+    ;; 6. Builtin with upper case
+    (goto-char (point-min))
+    (search-forward "MODULO")
+    (goto-char (match-beginning 0))
+    (should (eq (get-text-property (point) 'face) 'font-lock-builtin-face))
 
     ;; 7. Identifier with prefix being a builtin, boundary is "_" (Expect: nil)
     (goto-char (point-min))

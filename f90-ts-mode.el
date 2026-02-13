@@ -233,7 +233,7 @@ Also add trailing whitespace characters to preserve indentation within comments.
 
 (defcustom f90-ts-special-comment-regexp ""
   "Regular expression for matching special comments (e.g. for structuring code).
-Used for applying a special font lock face."
+Used for applying a special font lock face and alignment with parent node."
   :type 'regexp
   :safe #'stringp
   :group 'f90-ts)
@@ -291,6 +291,36 @@ Note that the parse uses identifier not just for variables, but for types etc."
              (f90-ts--node-type-p node "comment"))
     (string-match (concat "^" f90-ts-special-comment-regexp)
                   (treesit-node-text node))))
+
+
+;; the regexp engine is lacking a case insensitive switch, so we need to
+;; lowercase the identifier by hand
+(defun f90-ts-builtin-p (node)
+  "Return true if NODE represents an builtin function.
+The function assumes that NODE is an identifier and only checks the
+text of the node."
+  (cl-assert (f90-ts--node-type-p node "identifier")
+             nil "builtin-p: identifier expected")
+  (let ((text (downcase (treesit-node-text node)))
+        (rx (regexp-opt
+             '("abs" "acos" "aimag" "aint" "allocated" "anint" "any" "asin"
+               "associated" "atan" "atan2" "btest" "ceiling" "char" "cmplx"
+               "conjg" "cos" "cosh" "count" "cshift" "date_and_time" "dble"
+               "dim" "dot_product" "dprod" "eoshift" "epsilon" "exp" "exponent"
+               "floor" "fraction" "huge" "iand" "ibclr" "ibits" "ibset" "ichar"
+               "ieor" "index" "int" "ior" "ishft" "ishftc" "kind" "lbound"
+               "len" "len_trim" "log" "log10" "logical" "matmul" "max"
+               "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
+               "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
+               "null" "pack" "precision" "present" "product" "radix"
+               "random_number" "random_seed" "range" "real" "repeat" "reshape"
+               "rrspacing" "scale" "scan" "selected_int_kind"
+               "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
+               "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
+               "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
+               "verify")
+             'symbols)))
+    (string-match-p rx text)))
 
 
 (defun f90-ts-in-string-p ()
@@ -812,25 +842,8 @@ comments in the tree. Must be parsed before plain comments."
    :feature 'builtin
    `((call_expression
       (identifier) @font-lock-builtin-face
-      (:match ,(regexp-opt
-                '("abs" "acos" "aimag" "aint" "allocated" "anint" "any" "asin"
-                  "associated" "atan" "atan2" "btest" "ceiling" "char" "cmplx"
-                  "conjg" "cos" "cosh" "count" "cshift" "date_and_time" "dble"
-                  "dim" "dot_product" "dprod" "eoshift" "epsilon" "exp" "exponent"
-                  "floor" "fraction" "huge" "iand" "ibclr" "ibits" "ibset" "ichar"
-                  "ieor" "index" "int" "ior" "ishft" "ishftc" "kind" "lbound"
-                  "len" "len_trim" "log" "log10" "logical" "matmul" "max"
-                  "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
-                  "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
-                  "null" "pack" "precision" "present" "product" "radix"
-                  "random_number" "random_seed" "range" "real" "repeat" "reshape"
-                  "rrspacing" "scale" "scan" "selected_int_kind"
-                  "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
-                  "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
-                  "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
-                  "verify")
-                'symbols)
-              @font-lock-builtin-face)))))
+      (:pred f90-ts-builtin-p @font-lock-builtin-face)))))
+
 
 (defun f90-ts--font-lock-rules-keyword ()
   "Font-lock rules for Fortran keywords."
