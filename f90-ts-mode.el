@@ -459,23 +459,47 @@ first statement is known."
   ;; with a label, if a (optional) label is present, skip it and extract
   ;; the keyword node;
   ;; in general, the AST looks like:
+  ;;
   ;; (do_loop
   ;;  (block_label_start_expression
-  ;;   (label)
+  ;;   'label'
   ;;   :)
   ;;  (do_statement do
   ;;  ...))
-  ;; we want to extract the unnamed node "do" of the statement following
-  ;; the block_label_start expression;
-  ;; unfortunately, if the label name is a reserved keyword, then (label)
-  ;; becomes (label name) and FIRST is anonymous node "name"
-  (let* ((nlabel (or (and (f90-ts--node-type-p first "label")
-                          first)
-                     (and first
-                          (treesit-node-parent first))))
-         (fparent (and nlabel (treesit-node-parent nlabel))))
-    (if (f90-ts--node-type-p fparent "block_label_start_expression")
-	    (let ((fp-next (treesit-node-next-sibling fparent)))
+  ;;
+  ;; but if label is a reserved keyword, it becomes
+  ;;
+  ;; (do_loop
+  ;;  (block_label_start_expression
+  ;;   'label'
+  ;;    keyword
+  ;;   :)
+  ;;  (do_statement do
+  ;;  ...))
+  ;;
+  ;; in both cases 'label' is an anonymous node;
+  ;; in the second case, it has a child,
+  ;;
+  ;; we want to extract the anonymous node "do" of the statement
+  ;; following the block_label_start expression,
+  ;; so first check we are within a block_label_start_expression
+  (let* ((parent (and first (treesit-node-parent first)))
+         (grandparent (and parent (treesit-node-parent parent)))
+         (block-label (cond
+                       ((and (f90-ts--node-type-p first "label")
+                             (f90-ts--node-type-p parent
+                                                  "block_label_start_expression"))
+                        parent)
+                       ((and (f90-ts--node-type-p parent "label")
+                             (f90-ts--node-type-p grandparent
+                                                  "block_label_start_expression"))
+                      grandparent)
+                       (t nil)))
+         )
+    (if block-label
+	    (let ((fp-next (treesit-node-next-sibling block-label)))
+          ;; next sibling is a statement label, we descend to find
+          ;; first leaf
           (cl-loop
            for n = fp-next then child
            for child = (treesit-node-child n 0)
@@ -702,7 +726,7 @@ must also match."
 (defun f90-ts--first-node-of-stmt (node)
   "Return the first node of the statement at which NODE is placed.
 Use f90-ts--first-node-on-line, check for continuation symbol and
-if present, further go back, skipping comments and empty line until
+if present, further go back, skipping comments and empty lines until
 beginning of statement is found."
   ;;(f90-ts-inspect-node :indent node "node")
   (cl-loop
@@ -2295,12 +2319,12 @@ different. Return true if something was changed."
                                           "))"
                                           ))
     ("derived_type_definition" . "(derived_type_definition (derived_type_statement \"type\" @construct (_) * (type_name) @name))")
-    ("if_statement"            . "(if_statement (block_label_start_expression (_) @name)? \"if\" @construct)")
-    ("do_loop"                 . "(do_loop (block_label_start_expression (_) @name)? (do_statement \"do\" @construct))")
-    ("associate_statement"     . "(associate_statement (block_label_start_expression (_) @name)? \"associate\" @construct)")
-    ("block_construct"         . "(block_construct (block_label_start_expression (_) @name)? \"block\" @construct)")
-    ("select_case_statement"   . "(select_case_statement (block_label_start_expression (_) @name)? \"select\" @construct)")
-    ("select_type_statement"   . "(select_type_statement (block_label_start_expression (_) @name)? \"select\" @construct)")
+    ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
+    ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct))")
+    ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
+    ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
+    ("select_case_statement"   . "(select_case_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
+    ("select_type_statement"   . "(select_type_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     )
   "Treesitter queries to extract relevant nodes for smart end completion.")
 
@@ -2336,14 +2360,14 @@ to match usage in opening and end statement."
               (capture-all (treesit-query-capture node query-root))
               (capture     (f90-ts--complete-smart-end-extract node capture-all))
               )
-    ;; @root is added to also get the root node of the captured subtree,
+    ;; @root is added in order to also get the root node of the captured subtree,
     ;; capture result is an alist (('root, root), ('construct, construct) ('name, name),
     ;; ('root, root), ('construct, construct) ('name, name), ...),
     ;; where root and name are the captured nodes,
     ;; we need to make sure that root=node, which might not be the case in nested block structure
     ;; (where the inner loop, if etc. also matches),
     ;; this could be done with the :anchor pattern, but it is rejected... syntax not valid?
-    ;;(f90-ts-log :complete "smart end name captured: cap-all=%s" capture-all)
+    (f90-ts-log :complete "smart end name captured: cap-all=%s" capture-all)
     (f90-ts-log :complete "smart end name captured: cap=%s" capture)
     (let* ((construct-node (alist-get 'construct capture))
            (name-node (alist-get 'name capture)))
