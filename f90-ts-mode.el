@@ -902,6 +902,9 @@ comments in the tree. Must be parsed before plain comments."
    :language 'fortran
    :feature 'keyword
    ;; match keywords exposed by the grammar
+   ;; note that this matches anonymous nodes representing the keyword,
+   ;; not the keyword text itself, and these nodes are always stored lower-case
+   ;; (hence no need to match case insensitive as is necessary with builtins)
    '((["program" "module" "submodule"
       "function" "subroutine" "procedure" "result"
       "end" "call"
