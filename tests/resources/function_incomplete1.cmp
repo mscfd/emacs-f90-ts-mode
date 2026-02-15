@@ -1,9 +1,0 @@
-(:indentation
-"function fun(i, j) result(f)
-     "
-
-:font-lock
-((1 1 9 font-lock-keyword-face) (1 10 13 font-lock-function-name-face) (1 13 14 f90-ts-font-lock-bracket-face) (1 15 16 f90-ts-font-lock-delimiter-face) (1 18 19 f90-ts-font-lock-bracket-face) (1 20 26 font-lock-keyword-face) (1 26 27 f90-ts-font-lock-bracket-face) (1 27 28 default) (1 28 29 f90-ts-font-lock-bracket-face))
-
-:tree
-"(translation_unit (function (function_statement name: (name) parameters: (parameters (identifier) (identifier)) (function_result (identifier))) (end_function_statement (MISSING \"end\"))))")

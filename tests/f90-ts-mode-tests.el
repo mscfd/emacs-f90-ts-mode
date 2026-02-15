@@ -1,144 +1,7 @@
 (require 'ert)
+(require 'ert-x)
+(require 'treesit)
 (require 'f90-ts-mode)
-
-;; mode activation
-
-
-(defconst f90-ts-mode-fortran-file-pattern "\\`[^.].*\\.f90\\'"
-  "Regexp matching fortran test files.")
-
-(defconst f90-ts-mode-compare-file-pattern "\\`[^.].*\\.cmp\\'"
-  "Regexp matching files to compare output with.")
-
-
-;;------------------------------------------------------------------------------
-;; Auxiliary stuff
-
-(defun f90-ts-mode-tests--indent-buffer ()
-  "Indent current buffer, including the final line. This is relevant as
-we also want to test the final line, which is relevant during typing
-at the end of file."
-  (indent-region (point-min) (point-max))
-  (save-excursion
-    (goto-char (point-max))
-    (indent-for-tab-command)))
-
-
-(defun f90-ts-mode-tests--resources-dir ()
-  "Get the test resources directory.
-Try the location of 'f90-ts-mode-tests, falling back to the current file."
-  (or f90-ts-mode-resources-dir
-      (error "Could not determine test directory.")))
-
-
-(defvar f90-ts-mode-resources-dir
-  (let* ((mode-file (symbol-file 'f90-ts-mode 'defun))
-         (root-dir (file-name-directory mode-file)))
-    (expand-file-name "tests/resources/" root-dir))
-  "Cached directory path for tests/resources.")
-
-
-(defun f90-ts-mode-tests--fortran-files ()
-  "Get all fortran test files in the resources directory."
-  (directory-files (f90-ts-mode-tests--resources-dir)
-                   t
-                   f90-ts-mode-fortran-file-pattern))
-
-
-;;------------------------------------------------------------------------------
-;; generate compare files for automatic testing
-
-(defun f90-ts-mode-tests--compare-file (f90-file)
-  "Get the compare-with file name for an F90-FILE."
-  (file-name-with-extension f90-file ".cmp"))
-
-
-(defun f90-ts-mode-tests--faces ()
-  "Return the list of all faces found in the curren buffer."
-  (let ((faces)
-        (fcollect)
-        (fstart))
-    (goto-char (point-min))
-    (setq fstart (point))
-
-    (while (not (eobp))
-      ;; get face at point and compare with currently collected face fcollect
-      (let ((fpoint (get-text-property (point) 'face)))
-        (when (and (or fcollect fpoint)
-                   (not (eq fpoint fcollect)))
-          ;; we have at least one face, at previous or current position, and if we
-          ;; have two faces, they are not equal
-          (when fcollect
-            ;; we are past currently collected face, store it in faces
-            ;; (face at point fpoint might or might not be nil)
-            (push (list (line-number-at-pos fstart) fstart (point) fcollect) faces))
-
-          ;; in any case, save the new face at point and its starting position
-          ;; (even if nil, then we remember there there is no face currently collected)
-          (setq fcollect fpoint)
-          (setq fstart (point))))
-
-      (forward-char))
-    (nreverse faces)))
-
-
-(defun f90-ts-mode-tests--capture-buffer-state ()
-  "Capture the current buffer state for comparison purposes."
-  (list
-   :indentation (substring-no-properties (buffer-string))
-   :font-lock (f90-ts-mode-tests--faces)
-   :tree (treesit-node-string (treesit-buffer-root-node))))
-
-
-(defun f90-ts-mode-tests--print-state (state state-file)
-  "Print STATE ot STATE-FILE in a way suitable for comparison as well as human reading."
-  (with-temp-file state-file
-    (let ((print-length nil)
-          (print-level nil)
-          (print-circle nil)
-          (print-escape-newlines nil))
-      ;; this short form is not very readable, add some newlines
-      ;; (still readable by read)
-      ;;(prin1 state (current-buffer))
-      (insert "(")
-      (prin1 :indentation (current-buffer))
-      (insert "\n")
-      (prin1 (plist-get state :indentation) (current-buffer))
-      (insert "\n\n")
-      (prin1 :font-lock (current-buffer))
-      (insert "\n")
-      (prin1 (plist-get state :font-lock) (current-buffer))
-      (insert "\n\n")
-      (prin1 :tree (current-buffer))
-      (insert "\n")
-      (prin1 (plist-get state :tree) (current-buffer))
-      (insert ")")
-      (insert "\n")
-      )))
-
-
-(defun f90-ts-mode-tests--update-compare (file)
-  "Generate and save compare file for FILE."
-  (f90-ts-mode-tests--run-with-testing
-   file
-   (lambda ()
-     (font-lock-ensure)
-     (f90-ts-mode-tests--indent-buffer)
-     (let ((state (f90-ts-mode-tests--capture-buffer-state))
-           (compare-file (f90-ts-mode-tests--compare-file file)))
-       (f90-ts-mode-tests--print-state state compare-file)
-       (message "saved compare file for %s" (file-name-nondirectory file))))))
-
-
-(defun f90-ts-mode-tests-update ()
-  "Generate compare files for all resource files."
-  (interactive)
-  (dolist (file (f90-ts-mode-tests--fortran-files))
-    (f90-ts-mode-tests--update-compare file)))
-
-
-;;------------------------------------------------------------------------------
-;; compare with compare files for automatic testing
 
 (defcustom f90-ts-mode-tests-diff-command "kompare"
   "External diff tool to use for test comparisons.
@@ -147,42 +10,18 @@ Can be 'kompare', 'meld', 'kdiff3', 'diffuse', etc."
   :group 'f90-ts-mode)
 
 
-(defun f90-ts-mode-tests--show-diff (file compare current label diff)
-  "Show diff between COMPARE and CURRENT using external tool."
-  (let* ((basename (file-name-sans-extension (file-name-nondirectory file)))
-         (compare-file (make-temp-file (format "f90-ts-mode-compare-%s-%s-" basename label)))
-         (current-file (make-temp-file (format "f90-ts-mode-current-%s-%s-" basename label)))
-         (printcmd (pcase label
-                     ("indentation" (lambda (obj _buffer) (insert obj)))
-                     (_             #'pp))))
-    (unwind-protect
-        (progn
-          (with-temp-file compare-file
-            (funcall printcmd compare-val (current-buffer)))
-          (with-temp-file current-file
-            (funcall printcmd current-val (current-buffer)))
-          (call-process diff nil 0 nil compare-file current-file)))
-    ))
+;;------------------------------------------------------------------------------
+;; Auxiliary stuff
 
-
-(defun f90-ts-mode-tests--compare-and-diff (file compare current key diff)
-  "Compare COMPARE and CURRENT for KEY, show diff if different.
-KEY is a plist key like :indentation, :font-lock, :tree.
-FILE is the source file being tested.
-If DIFF is non-nil it should be string of a diff tool to show differences
-with the compare state.
-If failure, then return the label which failed, otherwise nil."
-  (let* ((compare-val (plist-get compare key))
-         (current-val (plist-get current key))
-         (label (substring (symbol-name key) 1)) ; remove leading ":" of key
-         (cmp (equal compare-val current-val)))
-    ;;(message "cmp %s" compare-val)
-    ;;(message "cur %s" current-val)
-    (unless cmp
-      (when diff (f90-ts-mode-tests--show-diff file compare-val current-val label diff)))
-    ;; return label in case of an failure
-    (unless cmp label)))
-
+(defun f90-ts-mode-tests--indent-buffer ()
+  "Indent current buffer, including the final line. This is relevant as
+we also want to test the final line, which is relevant during typing
+at the end of file. Intended for incomplete files or those without
+final newline."
+  (indent-region (point-min) (point-max))
+  (save-excursion
+    (goto-char (point-max))
+    (indent-for-tab-command)))
 
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
@@ -268,31 +107,16 @@ selection of indentation rules is tested properly."
 
 
 ;;------------------------------------------------------------------------------
+;; ERT: basic stuff
 
-(ert-deftest f90-ts-mode-test-activates ()
+(ert-deftest f90-ts-mode-test/activates ()
   "Check whether f90-ts-mode properly starts."
+  (skip-unless (treesit-ready-p 'fortran))
   (with-temp-buffer
     (insert "program activation\nend program activation\n")
     (f90-ts-mode)
     (should (derived-mode-p 'f90-ts-mode))))
 
-
-(defun f90-ts-mode-tests-register ()
-  "Dynamically generate ERT tests for all resource files."
-  (cl-loop
-   for file in (f90-ts-mode-tests--fortran-files)
-   for test-name = (intern (format "f90-ts-mode-test/%s"
-                                   (file-name-nondirectory file)))
-   do (eval
-       `(ert-deftest ,test-name ()
-          (let ((label (f90-ts-mode-test-single ,file nil)))
-            (when label
-              (ert-fail (format "%s differs in %s"
-                                label
-                                ,(file-name-nondirectory file)))
-              ))
-          ))
-   ))
 
 (ert-deftest f90-ts-mode-test-intrinsic-vs-array ()
   "Test that intrinsics are highlighted as builtins, while arrays/unknowns are not."
@@ -448,55 +272,325 @@ end program main")
 end program main")))
 )
 
-;; (ert-deftest f90-ts-mode-test-resources ()
-;;   "Run all f90 files in folder resources and compare with pre-generated compare files."
-;;   (let ((f90-files (f90-ts-mode-tests--fortran-files)))
-;;     (dolist (file f90-files)
-;;       (let ((label (f90-ts-mode-test-single file nil)))
-;;         (when label
-;;           (ert-fail
-;;            (format "%s differs in %s"
-;;                    label
-;;                    (file-name-nondirectory file))))))))
+
+;;------------------------------------------------------------------------------
+;; ERTS: auxiliary
+
+(defvar f90-ts-mode-tests-erts-diff nil
+  "When nil, just fail in erts tests as usual.
+If non-nil it should contain a diff command as string, which is used to
+show the difference between actual and expected result.
+This variable is used to pass the diff option into the erts fail
+handling.")
 
 
-(defun f90-ts-mode-test-single (file diff)
-  "Run a single f90 file in folder resources and compare with pre-generated compare files.
-Return nil if test passes, otherwise the test category (indentation, font-lock etc.) which failed."
+(defvar f90-ts-mode-test-prepare-fun nil
+  "A function for preparing buffers, like remove all indent add
+ additional indent etc.")
+
+
+(defun f90-ts-mode-tests--show-diff (actual expected diff)
+  "Show diff between ACTUAL and EXPECTED external tool DIFF."
+  (let* ((actual-file (make-temp-file "f90-ts-mode-actual-"))
+         (expected-file (make-temp-file "f90-ts-mode-expected-")))
+    (unwind-protect
+        (progn
+          (with-temp-file actual-file
+            (insert actual))
+          (with-temp-file expected-file
+            (insert expected))
+          (call-process diff nil 0 nil actual-file expected-file)))
+    ))
+
+
+(defmacro f90-ts-mode-tests-erts-with-diff (&rest body)
+  "Execute BODY, containing some ert test. If an ERTS test fails and
+`f90-ts-mode-tests-erts-diff` is contains a diff command as string,
+launch the diff to compare actual and expected results."
+  `(if (not f90-ts-mode-tests-erts-diff)
+       (progn ,@body)
+     (condition-case err
+         (progn ,@body)
+       (ert-test-failed
+        (let* ((details (cadr err))
+               (actual (nth 1 details))
+               (expected (nth 2 details)))
+          (f90-ts-mode-tests--show-diff actual
+                                        expected
+                                        f90-ts-mode-tests-erts-diff)
+          ;; Re-signal the error so ERT still records the failure
+          (signal (car err) (cdr err)))))))
+
+
+(defun f90-ts-mode-test-remove-indent ()
+  "Remove any indentation from buffer."
+  (goto-char (point-min))
+  (while (not (eobp))
+    (delete-horizontal-space)
+    (forward-line 1)))
+
+
+(defun f90-ts-mode-test-add-indent ()
+  "Add additional indent to see whether reducing existing indentation
+causes any problems."
+  (goto-char (point-min))
+  (while (not (eobp))
+    (unless (looking-at-p "^[ \t]*$")
+      ;; do not add indentation to empty lines, these are not touched
+      ;; by indent-region
+      (indent-to (+ (current-indentation) 1)))
+    (forward-line 1)))
+
+
+(defun f90-ts-mode-tests-run (&optional diff-tool)
+  "Run all f90-ts-mode tests. If diff-tool is specified, use it in case
+of failure to show the difference."
   (interactive
-   (list (let* ((rdir (file-name-as-directory (f90-ts-mode-tests--resources-dir)))
-                (files (f90-ts-mode-tests--fortran-files)))
-           (expand-file-name
-            (completing-read "select F90 file: " files nil t)
-            rdir))
-         (read-string "diff command (empty for none): "
-                      f90-ts-mode-tests-diff-command)))
+   (list (completing-read "diff tool (empty for none): "
+                         (list "" f90-ts-mode-tests-diff-command)
+                         nil nil "")))
+  (let ((f90-ts-mode-tests-erts-diff
+         (and diff-tool
+              (not (string-empty-p diff-tool))
+              diff-tool)))
+    (ert "^f90-ts-mode-")))
 
-  (let ((compare-file (f90-ts-mode-tests--compare-file file)))
-    (ert-info ((format "testing file: %s" (file-name-nondirectory file)))
-      (should (file-exists-p compare-file))
-      (let ((compare (with-temp-buffer
-                       (insert-file-contents compare-file)
-                       (read (current-buffer))))
-            (current   (f90-ts-mode-tests--run-with-testing
-                        file
-                        (lambda ()
-                          (f90-ts-mode-tests--indent-buffer)
-                          (f90-ts-mode-tests--capture-buffer-state)))))
-        (let ((result (or (f90-ts-mode-tests--compare-and-diff file compare current :indentation diff)
-                          (f90-ts-mode-tests--compare-and-diff file compare current :font-lock diff)
-                          (f90-ts-mode-tests--compare-and-diff file compare current :tree diff))))
-          (when (called-interactively-p 'any)
-            (if result
-                (message "test file %s failed" (file-name-nondirectory file))
-              (message "test file %s succeeded" (file-name-nondirectory file))))
 
-          result)
-        ))))
+;;------------------------------------------------------------------------------
+;; ERTS: indentation
+
+(defun f90-ts-mode-tests-indent-erts-after ()
+  "If point is in a piece of code representing the after part in an
+erts file, then re-indent the code. The code must be delimited by
+markers =-= and =-=-= to be recognised as the after part."
+  (interactive)
+  (save-excursion
+    (condition-case err
+        (let ((beg (progn
+                     (unless (re-search-backward "^=-=\\(-=\\)?$" nil t)
+                       (user-error "start marker =-= not found"))
+                     (if (match-string 1)
+                         (user-error "wrong start marker: outside of 'after' code block")
+                       (forward-line 1)
+                       (point))))
+              (end (progn
+                     (unless (re-search-forward "^=-=\\(-=\\)?$" nil t)
+                       (user-error "end marker =-=-= not found"))
+                     (if (not (match-string 1))
+                         (user-error "wrong end marker: inside of 'before' code block")
+                       (beginning-of-line)
+                       (point)))))
+
+          (when (>= beg end)
+            (user-error "end marker must come after start marker"))
+
+          (let* ((code (buffer-substring beg end))
+                 (indented-code
+                  (with-temp-buffer
+                    (insert code)
+                    (f90-ts-mode)
+                    (f90-ts-mode-tests-with-custom-testing
+                     (indent-region (point-min) (point-max)))
+                    (buffer-substring-no-properties (point-min)
+                                                    (point-max)))))
+            (delete-region beg end)
+            (goto-char beg)
+            (insert indented-code)
+
+            (when (called-interactively-p 'interactive)
+              (message "'after' part of code block re-indented"))))
+
+      (error
+       (message "error: %s" (error-message-string err))))))
+
+
+(defun f90-ts-mode-tests-indent-region-register ()
+  "Dynamically generate ERT tests for all indent_region_*.erts files
+in the resource folder.
+For each such erts region file, three tests are executed
+(as-is/idempotency, remove ident, increase ident)."
+  (interactive)
+  (let ((indent-files (directory-files (ert-resource-directory)
+                                          nil
+                                          "^indent_region_.*\\.erts$")))
+    (when (called-interactively-p)
+      (message "register indentation files in ERT: %s"
+               (string-join indent-files ", ")))
+
+    (cl-loop
+     for file in indent-files
+     for test-name = (intern (format "f90-ts-mode-test/%s"
+                                     (file-name-sans-extension file)))
+     do (eval
+         `(ert-deftest ,test-name ()
+            (skip-unless (treesit-ready-p 'fortran))
+            (f90-ts-mode-tests-with-custom-testing
+
+             ;; no preparation, test as-is/idempotency
+             (ert-info ("test as-is/idempotency of indentation")
+               (let ((f90-ts-mode-test-prepare-fun nil))
+                 (f90-ts-mode-tests-erts-with-diff
+                  (ert-test-erts-file (ert-resource-file ,file)))))
+
+             (unless (string-match-p "indent_region_align" ,file)
+               (ert-info ("test with removed indentation")
+                 (let ((f90-ts-mode-test-prepare-fun 'f90-ts-mode-test-remove-indent))
+                   (f90-ts-mode-tests-erts-with-diff
+                    (ert-test-erts-file (ert-resource-file ,file))))))
+
+             (unless (string-match-p "indent_region_align" ,file)
+               (ert-info ("test with increased indentation")
+                 (let ((f90-ts-mode-test-prepare-fun 'f90-ts-mode-test-add-indent))
+                   (f90-ts-mode-tests-erts-with-diff
+                    (ert-test-erts-file (ert-resource-file ,file))))))
+             )))
+     )))
+
+;; dynamically register tests
+(f90-ts-mode-tests-indent-region-register)
+
+
+;;------------------------------------------------------------------------------
+;; ERT: font locking
+
+(defun f90-ts-mode-tests--next-boundary (beg end)
+  "Find next face or blank/non-blank boundary from BEG to END."
+  (let ((next-face-change (next-single-property-change beg 'face nil end))
+        (face (get-text-property beg 'face)))
+    (save-excursion
+      (goto-char beg)
+      (let ((is-blank (looking-at "[[:blank:]]")))
+        ;; if we have a face (in particular a comment), do not split on blanks
+        (cond
+         (face
+          next-face-change)
+
+         ;; search for blank/non-blank boundary between beg and next-face-change
+         ((re-search-forward (if is-blank "[^[:blank:]]" "[[:blank:]]")
+                             next-face-change t)
+          (match-beginning 0))
+
+         (t
+          ;; no face and no blank/non-blank boundary before next
+          ;; face starts or line ends
+          next-face-change))))))
+
+
+(defun f90-ts-mode-tests--annotate-faces ()
+  "Generate font-lock tests for the current line and insert them."
+  (interactive)
+  (save-excursion
+    (goto-char (line-beginning-position))
+    (let* ((start (point))
+           (end (line-end-position))
+           (span-faces
+            (cl-loop while (< (point) end)
+                     for face = (get-text-property (point) 'face)
+                     for next = (f90-ts-mode-tests--next-boundary (point) end)
+                     if (or face (not (looking-at "[[:blank:]]")))
+                       collect (list (max 1 (- (point) start))
+                                     (- next start)
+                                     face)
+                     do (goto-char next)))
+           )
+      (forward-line 1)
+      (cl-loop for (beg end face) in span-faces
+               do (when (< beg end)
+                    (insert "!"
+                            (make-string (1- beg) ?\s)
+                            (make-string (- end beg) ?^)
+                            (format " %s" face)
+                            "\n")))
+      )))
+
+
+(defun f90-ts-mode-tests-update-face-annotations ()
+  "Update face annotations in buffer.
+
+Start with indenting the whole buffer, then add a blank on any line
+which is not a font lock assertion line and which is not empty.
+Then process from last line to first. Remove existing annotation lines
+(those starting with ! followed by optional spaces and carets).
+For other lines, generate annotations using
+`f90-ts-mode-tests--annotate-faces'."
+  (interactive)
+  (f90-ts-mode-tests-with-custom-testing
+   (let* ((pos (point))
+          (pos-min (point-min))
+          (pos-max (point-max))
+          (was-modified (buffer-modified-p))
+          (content-before (buffer-substring-no-properties pos-min
+                                                          pos-max)))
+     (save-excursion
+       ;; always end buffer with a newline, the loop below starts by
+       ;; moving back one line
+       (goto-char (point-max))
+       (unless (bolp)
+         (insert "\n"))
+       (indent-region (point-min) (point-max))
+
+       ;; start at end of file, so that we can freely insert
+       (goto-char (point-max))
+
+       ;; if already at beginning of buffer (bobp), then forward-line
+       ;; returns number of lines left to move, which is 1, otherwise
+       ;; it always returns zero
+       (while (= 0 (forward-line -1))
+         (beginning-of-line)
+         (cond
+          ;; if this is an annotation line, delete it
+          ((looking-at "\\s-*!\\s-*\\^+")
+           (let ((start (point)))
+             (forward-line 1)
+             (delete-region start (point))))
+
+          ((not (looking-at "^\\s-*$"))
+           ;; regular but not empty line, annotate it;
+           ;; indent-region has removed any leading blanks,
+           ;; insert a blank to allow exact caret assertions
+           (insert " ")
+           (backward-char 1)
+           (f90-ts-mode-tests--annotate-faces))))
+       )
+     (if (and (= pos-min (point-min))
+              (= pos-max (point-max))
+              (string= content-before
+                       (buffer-substring-no-properties (point-min) (point-max))))
+         (progn
+           ;; do not reset modified status on an unsaved buffer!
+           (unless was-modified
+             (set-buffer-modified-p nil))
+           ;; content is the same, jump to the old position
+           (goto-char pos))
+       (goto-char (point-max))))))
+
+
+(defun f90-ts-mode-tests-font-lock-register ()
+  "Dynamically generate ERT tests for all font_lock_*.f90 files
+in the resource folder."
+  (interactive)
+  (let ((font-lock-files (directory-files (ert-resource-directory)
+                                          nil
+                                          "^font_lock_.*\\.f90$")))
+    (when (called-interactively-p)
+      (message "register font lock files in ERT: %s"
+               (string-join font-lock-files ", ")))
+    (cl-loop
+     for file in font-lock-files
+     for test-name = (intern (format "f90-ts-mode-test/%s"
+                                     (file-name-sans-extension file)))
+     do (eval
+         `(ert-deftest ,test-name ()
+            (skip-unless (treesit-ready-p 'fortran))
+            (f90-ts-mode-tests-with-custom-testing
+              (ert-font-lock-test-file
+               (ert-resource-file ,file)
+               'f90-ts-mode))))
+     )))
 
 
 ;; dynamically register tests
-(f90-ts-mode-tests-register)
+(f90-ts-mode-tests-font-lock-register)
 
 
 (provide 'f90-ts-mode-tests)

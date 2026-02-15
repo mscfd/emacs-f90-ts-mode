@@ -1,0 +1,17 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test-prepare-fun
+      (funcall f90-ts-mode-test-prepare-fun))
+    (f90-ts-mode-tests--indent-buffer))
+
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Name: Program1
+=-=
+program program1
+ write(*,'(a)') 'hello'
+=-=-=
