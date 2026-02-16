@@ -204,13 +204,18 @@ completion."
 ;;------------------------------------------------------------------------------
 ;; ERTS: indentation
 
-(defun f90-ts-mode-tests-indent-erts-after (&optional prep-fn)
+(defun f90-ts-mode-tests-update-erts-after (&optional update-fn)
   "If point is in a piece of code representing the after part in an
-erts file, then re-indent the code. The code must be delimited by
-markers =-= and =-=-= to be recognised as the after part.
-Before indentation and if non-nil, apply PREP-FN to the code."
+erts file, then apply an update function to the code. The code must be
+delimited by markers =-= and =-=-= to be recognised as the after part.
+If UPDATE-FN is non-nil, then apply the update function.
+If UPDATE-FN is nil, apply indent-region itself.
+
+The prepare and then indent steps are done together in a test run,
+but here they are executed separately, so that intermediate results
+can be observed and checked."
   (interactive
-   (let* ((choices '(("none" . nil)
+   (let* ((choices '(("indent-region" . nil)
                      ("remove indentation" . f90-ts-mode-test-remove-indent)
                      ("add some indentation" . f90-ts-mode-test-add-indent)
                      ("shorten end statements to 'end'" . f90-ts-mode-test-shorten-to-end)))
@@ -237,74 +242,84 @@ Before indentation and if non-nil, apply PREP-FN to the code."
           (when (>= beg end)
             (user-error "end marker must come after start marker"))
 
-          (let* ((code (buffer-substring beg end))
-                 (indented-code
+          (let* ((code (buffer-substring-no-properties beg
+                                                       end))
+                 (updated-code
                   (with-temp-buffer
                     (insert code)
                     (f90-ts-mode)
                     (f90-ts-mode-tests-with-custom-testing
-                     (when prep-fn
-                       (funcall prep-fn))
-                     ;;(indent-region (point-min) (point-max))
-                     )
+                     (if update-fn
+                         (funcall update-fn)
+                       (indent-region (point-min) (point-max))))
                     (buffer-substring-no-properties (point-min)
                                                     (point-max)))))
-            (delete-region beg end)
-            (goto-char beg)
-            (insert indented-code)
-
-            (when (called-interactively-p 'interactive)
-              (message "'after' part of code block re-indented"))))
+            (if (string= code updated-code)
+                (when (called-interactively-p 'interactive)
+                  (message "'after' part of code block not changed by update"))
+              (delete-region beg end)
+              (goto-char beg)
+              (insert updated-code)
+              (when (called-interactively-p 'interactive)
+                (message "'after' part of code block updated"))
+              )
+            )
+          )
 
       (error
        (message "error: %s" (error-message-string err))))))
 
 
-(defun f90-ts-mode-tests-indent-region-register ()
-  "Dynamically generate ERT tests for all indent_region_*.erts files
-in the resource folder.
-For each such erts region file, three tests are executed
-(as-is/idempotency, remove ident, increase ident)."
-  (interactive)
-  (let ((indent-files (directory-files (ert-resource-directory)
-                                          nil
-                                          "^indent_region_.*\\.erts$")))
-    (when (called-interactively-p)
-      (message "register indentation files in ERT: %s"
-               (string-join indent-files ", ")))
-
-    (cl-loop
-     for file in indent-files
-     for test-name = (intern (format "f90-ts-mode-test/%s"
-                                     (file-name-sans-extension file)))
-     do (eval
-         `(ert-deftest ,test-name ()
-            (skip-unless (treesit-ready-p 'fortran))
-            (f90-ts-mode-tests-with-custom-testing
-
-             ;; no preparation, test as-is/idempotency
-             (ert-info ("test as-is/idempotency of indentation")
-               (let ((f90-ts-mode-test-prepare-fun nil))
+(defun f90-ts-mode-tests-indent-register (files prep-fns)
+  "Dynamically generate tests for all FILES assumed to be in erts
+format, one test per file.
+For each test, run the specified prep-fns functions."
+  (cl-loop
+   for file in files
+   for test-name = (intern (format "f90-ts-mode-test/%s"
+                                   (file-name-sans-extension file)))
+   do (eval
+     `(ert-deftest ,test-name ()
+        (skip-unless (treesit-ready-p 'fortran))
+        (f90-ts-mode-tests-with-custom-testing
+         (cl-loop
+          for prep-fn in ',prep-fns
+          do (ert-info ((if prep-fn
+                            (format "test with prep-fn: %s" prep-fn)
+                          "test without modifications"))
+               (message "test %s with prepare function <%s>" ,file prep-fn)
+               (let ((f90-ts-mode-test-prepare-fun prep-fn))
                  (f90-ts-mode-tests-erts-with-diff
-                  (ert-test-erts-file (ert-resource-file ,file)))))
+                  (ert-test-erts-file (ert-resource-file ,file))))))
+         )))
+   ))
 
-             (unless (string-match-p "indent_region_align" ,file)
-               (ert-info ("test with removed indentation")
-                 (let ((f90-ts-mode-test-prepare-fun 'f90-ts-mode-test-remove-indent))
-                   (f90-ts-mode-tests-erts-with-diff
-                    (ert-test-erts-file (ert-resource-file ,file))))))
 
-             (unless (string-match-p "indent_region_align" ,file)
-               (ert-info ("test with increased indentation")
-                 (let ((f90-ts-mode-test-prepare-fun 'f90-ts-mode-test-add-indent))
-                   (f90-ts-mode-tests-erts-with-diff
-                    (ert-test-erts-file (ert-resource-file ,file))))))
-             )))
-     )))
+;; register tests, general indentation
+;; (with three different prep functions to vary initial indentation)
+(f90-ts-mode-tests-indent-register
+ '("indent_region_basic.erts"
+   "indent_region_constructs.erts"
+   "indent_region_nonewline.erts"
+   "indent_region_preproc.erts")
+ '(nil ; no modification
+   f90-ts-mode-test-remove-indent
+   f90-ts-mode-test-add-indent
+   f90-ts-mode-test-shorten-to-end)
+ )
 
-;; dynamically register tests
-(f90-ts-mode-tests-indent-region-register)
+(f90-ts-mode-tests-indent-register
+ '("indent_region_smart_end.erts")
+ '(nil ; no modification
+   f90-ts-mode-test-shorten-to-end)
+ )
 
+;; alignment tests, leave as is, the alignment variant to apply
+;; should be specified for each test header (default: keep-or-first)
+(f90-ts-mode-tests-indent-register
+ '("indent_region_align.erts")
+ '(nil ; no preparation
+   ))
 
 
 ;;------------------------------------------------------------------------------
