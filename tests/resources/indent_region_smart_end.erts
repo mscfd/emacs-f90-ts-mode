@@ -1,0 +1,537 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test-prepare-fun
+      (funcall f90-ts-mode-test-prepare-fun))
+    (indent-region (point-min) (point-max)))
+
+Point-Char: |
+
+Name: constructs with labels 1
+=-=
+subroutine labels()
+     if_label: if (i > 10) then
+          nested_if: if (cond1 .and. cond2) then
+               call labels()
+          end if nested_if
+     end if if_label
+end subroutine labels
+=-=-=
+
+Name: constructs with labels 2
+=-=
+subroutine labels()
+     do_label: do i = 1,10
+          nested_do: do while (i < 5)
+               ! comment
+
+          end do nested_do
+     end do do_label
+end subroutine labels
+=-=-=
+
+Name: constructs with labels 3
+=-=
+subroutine labels()
+     assoc_label: associate (value1 => 1, &
+                             value2 => 2)
+          nested_assoc: associate(bar => b+a+r)
+               write(u,fmt) bar
+          end associate nested_assoc
+     end associate assoc_label
+end subroutine labels
+=-=-=
+
+Name: constructs with labels 4
+=-=
+subroutine labels()
+     block_label: block
+          use my_mod
+          integer :: i
+          real :: r
+          nested_block: block
+               use other_mod
+               logical :: check
+               i = ceiling(r)
+          end block nested_block
+     end block block_label
+end subroutine labels
+=-=-=
+
+Name: constructs with labels 5
+=-=
+subroutine labels()
+     select_case_label: select case (x)
+     case (1)
+          ! comment 1
+     case (2)
+          nested_select_case: select case (str)
+          case ('action')
+               call action()
+          case default
+               call other()
+          end select nested_select_case
+     case default
+          call default()
+     end select select_case_label
+end subroutine labels
+=-=-=
+
+Name: constructs with labels 6
+=-=
+subroutine labels()
+     select_type_label: select type (self%obj)
+     type is (implementation_A_t)
+          call self%obj%compute()
+     class is (abstract_B_t)
+          call self%obj%evaluate()
+     class default
+          nested_select_type: select type (self%foo)
+          class is (vector_t)
+               print *,'have foo'
+          end select nested_select_type
+     end select select_type_label
+end subroutine labels
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 1
+=-=
+subroutine lower_case()
+     call some_thing()
+     fff:IF (abc) then
+          uvw: if (uvw) then
+               If (trs) then
+               end
+          end
+     end
+end subroutine lower_case
+=-=
+subroutine lower_case()
+     call some_thing()
+     fff:IF (abc) then
+          uvw: if (uvw) then
+               If (trs) then
+               End If
+          end if uvw
+     END IF fff
+end subroutine lower_case
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 2
+=-=
+SUBROUTINE ALL_UPPER()
+     call some_thing_else()
+end subroutine all_upper
+=-=
+SUBROUTINE ALL_UPPER()
+     call some_thing_else()
+END SUBROUTINE ALL_UPPER
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 3
+=-=
+Subroutine Title_case()
+     call some_thing_new()
+end subroutine title_case
+=-=
+Subroutine Title_case()
+     call some_thing_new()
+End Subroutine Title_case
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 4
+=-=
+module lower_mod
+type :: lower_t
+end type lower_t
+TYPE :: upper_t
+end type upper_t
+Type :: title_t
+end type title_t
+end module lower_mod
+=-=
+module lower_mod
+ type :: lower_t
+ end type lower_t
+ TYPE :: upper_t
+ END TYPE upper_t
+ Type :: title_t
+ End Type title_t
+end module lower_mod
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 5
+=-=
+MODULE UPPER_MOD
+type :: lower_t
+end
+TYPE :: upper_t
+end
+Type :: title_t
+end
+contains
+logical function  lower_case()
+     call some_thing()
+end function lower_case
+=-=
+MODULE UPPER_MOD
+ type :: lower_t
+ end type lower_t
+ TYPE :: upper_t
+ END TYPE upper_t
+ Type :: title_t
+ End Type title_t
+contains
+ logical function  lower_case()
+      call some_thing()
+ end function lower_case
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 6
+=-=
+logical FUNCTION ALL_UPPER()
+     call some_thing_else()
+end function all_upper
+=-=
+logical FUNCTION ALL_UPPER()
+     call some_thing_else()
+END FUNCTION ALL_UPPER
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 7
+=-=
+logical Function Title_case()
+     call some_thing_new()
+end function title_case
+=-=
+logical Function Title_case()
+     call some_thing_new()
+End Function Title_case
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 8
+=-=
+Module title_mod
+ interface lower_i
+      module procedure xyz
+      module procedure uvw
+ end interface lower_i
+ INTERFACE UPPER_iface
+      module procedure xyz
+      module procedure uvw
+ end interface upper_iface
+ Interface Title_iface
+      module procedure xyz
+      module procedure uvw
+ end interface title_iface
+
+ abstract interface
+      real(real32) function f_ifc(x)
+           import real32
+           real(real32), intent(in) :: x
+      end function f_ifc
+ end
+ ABSTRACT INTERFACE
+      real(real32) FUNCTION g_ifc(x)
+           import real32
+           real(real32), intent(in) :: x
+      end
+ end
+ Abstract Interface
+      real(real32) Function h_ifc(x)
+           import real32
+           real(real32), intent(in) :: x
+      end
+ end
+
+interface operator(.cross.)
+   module procedure cross_product
+end ! add the (.cross.)
+INTERFACE OPERATOR(.cross.)
+   module procedure cross_product
+end! add the (.cross.)
+Interface Operator(.cross.)
+   module procedure cross_product
+end     ! add the (.cross.)
+
+interface operator(//)
+   module procedure concat_word
+end
+INTERFACE OPERATOR(<=)
+   module procedure compare_word
+end
+Interface Operator(**)
+   module procedure multiply_word
+end
+
+interface assignment(=)
+   module procedure assign_obj_X
+   module procedure assign_obj_Y
+end
+INTERFACE ASSIGNMENT(=)
+   module procedure assign_obj_X
+   module procedure assign_obj_Y
+end
+Interface Assignment(=)
+   module procedure assign_obj_X
+   module procedure assign_obj_Y
+end
+
+end module
+=-=
+Module title_mod
+ interface lower_i
+      module procedure xyz
+      module procedure uvw
+ end interface lower_i
+ INTERFACE UPPER_iface
+      module procedure xyz
+      module procedure uvw
+ END INTERFACE UPPER_iface
+ Interface Title_iface
+      module procedure xyz
+      module procedure uvw
+ End Interface Title_iface
+
+ abstract interface
+      real(real32) function f_ifc(x)
+           import real32
+           real(real32), intent(in) :: x
+      end function f_ifc
+ end interface
+ ABSTRACT INTERFACE
+      real(real32) FUNCTION g_ifc(x)
+           import real32
+           real(real32), intent(in) :: x
+      END FUNCTION g_ifc
+ END INTERFACE
+ Abstract Interface
+      real(real32) Function h_ifc(x)
+           import real32
+           real(real32), intent(in) :: x
+      End Function h_ifc
+ End Interface
+
+ interface operator(.cross.)
+      module procedure cross_product
+ end interface operator(.cross.) ! add the (.cross.)
+ INTERFACE OPERATOR(.cross.)
+      module procedure cross_product
+ END INTERFACE OPERATOR(.cross.)! add the (.cross.)
+ Interface Operator(.cross.)
+      module procedure cross_product
+ End Interface Operator(.cross.)     ! add the (.cross.)
+
+ interface operator(//)
+      module procedure concat_word
+ end interface operator(//)
+ INTERFACE OPERATOR(<=)
+      module procedure compare_word
+ END INTERFACE OPERATOR(<=)
+ Interface Operator(**)
+      module procedure multiply_word
+ End Interface Operator(**)
+
+ interface assignment(=)
+      module procedure assign_obj_X
+      module procedure assign_obj_Y
+ end interface assignment(=)
+ INTERFACE ASSIGNMENT(=)
+      module procedure assign_obj_X
+      module procedure assign_obj_Y
+ END INTERFACE ASSIGNMENT(=)
+ Interface Assignment(=)
+      module procedure assign_obj_X
+      module procedure assign_obj_Y
+ End Interface Assignment(=)
+
+End Module title_mod
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 9
+=-=
+submodule (lowerCase) lowerCase_smod
+CONTAINS
+ SUBROUTINE level1()
+ contains
+    Subroutine level2()
+    contains
+       subroutine level3()
+       END SUBROUTINE level3
+    end subroutine level2
+ end subroutine level1
+end
+=-=
+submodule (lowerCase) lowerCase_smod
+CONTAINS
+ SUBROUTINE level1()
+ contains
+    Subroutine level2()
+    contains
+       subroutine level3()
+       end subroutine level3
+    End Subroutine level2
+ END SUBROUTINE level1
+end submodule lowerCase_smod
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 10
+=-=
+SUBMODULE (upperCase) upperCase_smod
+CONTAINS
+ integer FUNCTION level1()
+ contains
+    integer Function level2()
+    contains
+       integer function level3()
+       END FUNCTION level3
+    end function level2
+ end function level1
+end submodule
+=-=
+SUBMODULE (upperCase) upperCase_smod
+CONTAINS
+ integer FUNCTION level1()
+ contains
+    integer Function level2()
+    contains
+       integer function level3()
+       end function level3
+    End Function level2
+ END FUNCTION level1
+END SUBMODULE upperCase_smod
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 11
+=-=
+Submodule (TitleCase) TitleCase_smod
+Contains
+ SUBROUTINE test_do()
+     level1:do WHILE (cond1)
+          level2: Do i=1,10
+               DO
+                    level4: DO j = 1,10
+                    end
+               End
+          End level2
+     end LEVEL1
+ End Subroutine TEST_DO
+end
+=-=
+Submodule (TitleCase) TitleCase_smod
+Contains
+ SUBROUTINE test_do()
+      level1:do WHILE (cond1)
+           level2: Do i=1,10
+                DO
+                     level4: DO j = 1,10
+                     END DO level4
+                END DO
+           End Do level2
+      end do level1
+ END SUBROUTINE test_do
+End Submodule TitleCase_smod
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 12
+=-=
+program lowerprog
+ first: associate (i => 5)
+      SECOND: ASSOCIATE (j => 6)
+           ASSOCIATE (j => 6)
+                Third: Associate (k => 7, &
+                  l => 8, &
+                  m => 9)
+                end
+           end
+      end associate
+ end associate
+end lower
+=-=
+program lowerprog
+ first: associate (i => 5)
+      SECOND: ASSOCIATE (j => 6)
+           ASSOCIATE (j => 6)
+                Third: Associate (k => 7, &
+                                  l => 8, &
+                                  m => 9)
+                End Associate Third
+           END ASSOCIATE
+      END ASSOCIATE SECOND
+ end associate first
+end program lowerprog
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 13
+=-=
+PROGRAM UPPERPROG
+end upper
+=-=
+PROGRAM UPPERPROG
+END PROGRAM UPPERPROG
+=-=-=
+
+Name: smart end with lower-upper-title-camel-case 14
+=-=
+Program TitleProg
+
+ level_1: block
+      LEVEL_2: BLOCK
+           Level_3: Block
+           End Block Level_3
+      END BLOCK LEVEL_2
+ end block level_1
+
+ outer: select case (x)
+ case (1)
+      MIDDLE: SELECT case (y)
+      case (2)
+           Inner: Select CASE (z)
+           case default
+           End Select Inner
+      END SELECT MIDDLE
+ end select outer
+
+ BIG: SELECT type (x)
+ type is (s)
+      Somewhat: Select Type (y)
+      class is (t)
+           small: select Type (z)
+           class is (unknown)
+           END
+      END
+ END
+
+end title
+=-=
+Program TitleProg
+
+ level_1: block
+      LEVEL_2: BLOCK
+           Level_3: Block
+           End Block Level_3
+      END BLOCK LEVEL_2
+ end block level_1
+
+ outer: select case (x)
+ case (1)
+      MIDDLE: SELECT case (y)
+      case (2)
+           Inner: Select CASE (z)
+           case default
+           End Select Inner
+      END SELECT MIDDLE
+ end select outer
+
+ BIG: SELECT type (x)
+ type is (s)
+      Somewhat: Select Type (y)
+      class is (t)
+           small: select Type (z)
+           class is (unknown)
+           end select small
+      End Select Somewhat
+ END SELECT BIG
+
+End Program TitleProg
+=-=-=
