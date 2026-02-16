@@ -204,11 +204,19 @@ completion."
 ;;------------------------------------------------------------------------------
 ;; ERTS: indentation
 
-(defun f90-ts-mode-tests-indent-erts-after ()
+(defun f90-ts-mode-tests-indent-erts-after (&optional prep-fn)
   "If point is in a piece of code representing the after part in an
 erts file, then re-indent the code. The code must be delimited by
-markers =-= and =-=-= to be recognised as the after part."
-  (interactive)
+markers =-= and =-=-= to be recognised as the after part.
+Before indentation and if non-nil, apply PREP-FN to the code."
+  (interactive
+   (let* ((choices '(("none" . nil)
+                     ("remove indentation" . f90-ts-mode-test-remove-indent)
+                     ("add some indentation" . f90-ts-mode-test-add-indent)
+                     ("shorten end statements to 'end'" . f90-ts-mode-test-shorten-to-end)))
+          (choice (completing-read "preparation function to apply: " choices nil t)))
+     (list (cdr (assoc choice choices)))))
+
   (save-excursion
     (condition-case err
         (let ((beg (progn
@@ -235,7 +243,10 @@ markers =-= and =-=-= to be recognised as the after part."
                     (insert code)
                     (f90-ts-mode)
                     (f90-ts-mode-tests-with-custom-testing
-                     (indent-region (point-min) (point-max)))
+                     (when prep-fn
+                       (funcall prep-fn))
+                     ;;(indent-region (point-min) (point-max))
+                     )
                     (buffer-substring-no-properties (point-min)
                                                     (point-max)))))
             (delete-region beg end)
