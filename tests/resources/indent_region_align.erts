@@ -1,0 +1,347 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test-prepare-fun
+      (funcall f90-ts-mode-test-prepare-fun))
+    (indent-region (point-min) (point-max)))
+
+Point-Char: |
+
+Name: align various lists
+=-=
+subroutine simulate(set, fsim1, &
+                         fsim2, out)
+     real(kind=real32), dimension(:), &
+                        target, &
+
+                        intent(in) :: set
+     integer, dimension(:), &
+              allocatable, &
+              intent(out) :: fsim1, &
+                             fsim2
+
+     procedure(simulator_ifc) :: &
+            fsim
+
+     call sim_init(set, &
+                   out)
+     call sim_run(fsim, set, &
+                        out)
+end subroutine simulate
+=-=-=
+
+Name: align parameter list 1
+=-=
+SUBROUTINE DGEMM(TRANSA, TRANSB, &
+                 M, N, K, ALPHA, &
+                 A, LDA, &
+                 B, LDB, BETA, &
+                 C, LDC)
+     ! -- Scalar Arguments --
+     DOUBLE PRECISION ALPHA,BETA
+     INTEGER          K, LDA, LDB, LDC, M, N
+     CHARACTER        TRANSA, TRANSB
+
+     ! -- Array Arguments --
+     DOUBLE PRECISION A(LDA,*), B(LDB,*), C(LDC,*)
+     ! Code
+END SUBROUTINE DGEMM
+=-=-=
+
+Name: align parameter list 2
+=-=
+function fun_result(x, &
+                    y) result(r)
+end function fun_result
+=-=-=
+
+Name: align parameter list 3
+=-=
+real function fun_type(x, &
+                       y)
+end function fun_type
+=-=-=
+
+Name: align parameter list 4
+=-=
+subroutine sub_simple(x, y, z, &
+                      a, &
+                      ! comment
+                            b)
+end subroutine sub_simple
+=-=-=
+
+Name: align parameter list 5
+=-=
+module subroutine sub_mod(x, &
+       y)
+end subroutine sub_mod
+=-=
+module subroutine sub_mod(x, &
+                          y)
+end subroutine sub_mod
+=-=-=
+
+Name: align parameter list 6
+=-=
+! some fancy continuations
+function fun(x1, x2, x3, &
+                 x4, x5)&
+       result( &
+       ! this is my result
+
+       something &
+       )
+     logical :: something
+end function fun
+=-=-=
+
+Name: align logical expression 1
+=-=
+subroutine sub1()
+     do while (A1 .and. A2 .and. A3 .and. A4 &
+                  .and. B1)
+     end do
+     do while (A1 .and. A2 .and. A3 .and. A4 &
+                           .and. B1)
+     end do
+     do while (A1 .and. A2 .and. A3 .and. A4 &
+                                    .and. B1)
+     end do
+end subroutine sub1
+=-=-=
+
+Name: align logical expression 3
+=-=
+subroutine sub2()
+     do while (A1 .and. (A2 .and. A3) .and. A4 &
+                  .and. B1)
+     end do
+     do while (A1 .and. (A2 .and. A3) .and. A4 &
+                                      .and. B1)
+     end do
+end subroutine sub2
+=-=-=
+
+Name: align logical expression 3
+=-=
+subroutine sub3()
+     do while (A1 .and. (A2 .and. A3) .and. A4 &
+                  .and. (B1 == B2) &
+                  .or. C1)
+     end do
+     do while (A1 .and. (A2 .and. A3) .and. A4 &
+                  .and. (B1 == B2) &
+                                      .or. C1)
+     end do
+end subroutine sub3
+=-=-=
+
+Name: align logical expression 4
+=-=
+subroutine sub4()
+     do while (A1 .and. (A2 .and. A3) .and. &
+               A4 .and. (B1 == B2) &
+                  .or. C1)
+     end do
+     do while (A1 .and. (A2 .and. A3) .and. &
+                        A4 .and. (B1 == B2) &
+                           .or. C1)
+     end do
+     do while (A1 .and. (A2 .and. A3) .and. &
+                        A4 .and. (B1 == B2) &
+                                      .or. C1)
+     end do
+end subroutine sub4
+=-=-=
+
+Name: align logical expression 5
+=-=
+subroutine sub5()
+     do while (A1 .and. A2 .and. A3 .and. (B1 .or. &
+                                           B2))
+     end do
+end subroutine sub5
+=-=-=
+
+Name: align logical expression 6
+=-=
+subroutine sub6()
+     if (A1 .and. A2 .and. (A3 .or. A4) .and. &
+         B3 .and. B4 .and. &
+         (C1 .or. C2)) then
+     end if
+
+     if (A1 .and. A2 .and. (A3 .or. A4) .and. &
+                  B3 .and. B4 .and. &
+                           (C1 .or. C2)) then
+     end if
+
+     if (A1 .and. A2 .and. (A3 .or. A4) .and. &
+                           B3 .and. B4 .and. &
+                  (C1 .or. C2)) then
+     end if
+end subroutine sub6
+=-=-=
+
+Name: align logical expression 7
+=-=
+subroutine sub7()
+     if (A1 .and. A2 .and. (A3 .or. A4) .and. &
+          B1 &
+                       .and. C1 .and. C2 &
+                     .eqv. D1 .and. D2 &
+                               .or. D1 .and. D2 .and. &
+                         E1) then
+     end if
+end subroutine sub7
+=-=
+subroutine sub7()
+     if (A1 .and. A2 .and. (A3 .or. A4) .and. &
+         B1 &
+            .and. C1 .and. C2 &
+                     .eqv. D1 .and. D2 &
+            .or. D1 .and. D2 .and. &
+         E1) then
+     end if
+end subroutine sub7
+=-=-=
+
+Name: align logical expression 8
+=-=
+subroutine sub8()
+   flag =     condition1(p1, &
+                         p2) &
+              .or. condition2(q1, q2, &
+                                  q3) &
+              .and. (condition3(a1,a2,a3&
+                               )&
+                     .or. condition4(&
+                                    fun1(x,y), &
+                                     fun2(u,v)) &
+.eqv. condition5(&
+                 fun1(x,y), &
+                fun2(u,v)) &
+                              )&
+.neqv. condition6(&
+                  fun1(x,y), &
+                  fun2(u,v) &
+) &
+)
+end subroutine sub8
+=-=
+subroutine sub8()
+     flag =     condition1(p1, &
+                           p2) &
+                .or. condition2(q1, q2, &
+                                    q3) &
+                .and. (condition3(a1,a2,a3&
+                                 )&
+                       .or. condition4(&
+            fun1(x,y), &
+                                       fun2(u,v)) &
+                       .eqv. condition5(&
+                                        fun1(x,y), &
+                                        fun2(u,v)) &
+                      )&
+                .neqv. condition6(&
+                                  fun1(x,y), &
+                                  fun2(u,v) &
+                                 ) &
+            )
+end subroutine sub8
+=-=-=
+
+Name: align associate list 1
+=-=
+subroutine sub()
+     associate(expr => sqrt(p**2/4.0 - q), &
+               result => arr(5))
+          points: associate(p &
+                            => self%points_active, &
+                            q &
+                            => self%points_inactive &
+                           )
+          end associate points
+     end associate
+end subroutine sub
+=-=-=
+
+Name: align associate list 2
+=-=
+subroutine sub()
+     components: associate(matrix_A => this%model_A%mat, &
+                           matrix_B => this%model_B%mat, &
+                           N => this%model_size)
+     end associate components
+end subroutine sub
+=-=-=
+
+Name: align associate list 3
+=-=
+subroutine sub()
+     associate(test => 1+2, &
+
+               after_empty_line => 3+4)
+     end associate
+end subroutine sub
+=-=-=
+
+Name: align associate list 4
+=-=
+subroutine sub()
+     associate(test => 1+2, &
+                          ! comment
+               after_comment_line => 3+4)
+     end associate
+end subroutine sub
+=-=-=
+
+Name: align associate list 5
+=-=
+subroutine sub()
+     associate(test => 1+2, &
+
+                    ! comment
+
+               after_empty_and_comment_lines => 3+4)
+     end associate
+end subroutine sub
+=-=-=
+
+Name: align argument lists 6
+=-=
+function eval() result(w)
+     call algorithm(fun1(a, b), fun2(x, y, &
+              z, &
+                                   ), &
+                            fun3(u, &
+            v, &
+              w))
+end
+=-=
+function eval() result(w)
+     call algorithm(fun1(a, b), fun2(x, y, &
+                                     z, &
+                                    ), &
+                    fun3(u, &
+                         v, &
+                         w))
+end function eval
+=-=-=
+
+Name: write/read item list
+=-=
+subroutine sub()
+     write(*,format_string_for_testing) &       !comment
+            ! comment
+            val1, val2, val3, & ! comment
+
+            ! some more comment
+
+
+            ! comment
+
+            final_val
+end subroutine sub
+=-=-=
