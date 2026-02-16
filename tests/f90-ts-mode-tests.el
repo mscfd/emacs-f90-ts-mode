@@ -187,18 +187,18 @@ causes any problems."
     (forward-line 1)))
 
 
-(defun f90-ts-mode-tests-run (&optional diff-tool)
-  "Run all f90-ts-mode tests. If diff-tool is specified, use it in case
-of failure to show the difference."
-  (interactive
-   (list (completing-read "diff tool (empty for none): "
-                         (list "" f90-ts-mode-tests-diff-command)
-                         nil nil "")))
-  (let ((f90-ts-mode-tests-erts-diff
-         (and diff-tool
-              (not (string-empty-p diff-tool))
-              diff-tool)))
-    (ert "^f90-ts-mode-")))
+(defun f90-ts-mode-test-shorten-to-end ()
+  "Shorten end statements to just 'end', intended for testing smart end
+completion."
+  (goto-char (point-min))
+  (while (not (eobp))
+    (beginning-of-line)
+    ;; preserve trailing whitespace characters possibly
+    ;; followed by a comment
+    ;; (note: looking-at case insensitive)
+    (when (looking-at "\\(\\s-*end\\)[^!\n]*?\\(\\s-*[!\n]\\)")
+      (replace-match "\\1\\2"))
+    (forward-line 1)))
 
 
 ;;------------------------------------------------------------------------------
@@ -293,6 +293,7 @@ For each such erts region file, three tests are executed
 
 ;; dynamically register tests
 (f90-ts-mode-tests-indent-region-register)
+
 
 
 ;;------------------------------------------------------------------------------
@@ -436,6 +437,23 @@ in the resource folder."
 
 ;; dynamically register tests
 (f90-ts-mode-tests-font-lock-register)
+
+
+;;------------------------------------------------------------------------------
+
+(defun f90-ts-mode-tests-run (&optional diff-tool)
+  "Run all f90-ts-mode tests. If diff-tool is specified, use it in case
+of failure to show the difference."
+  (interactive
+   (list (completing-read "diff tool (empty for none): "
+                         (list "" f90-ts-mode-tests-diff-command)
+                         nil nil "")))
+  (let ((f90-ts-mode-tests-erts-diff
+         (and diff-tool
+              (not (string-empty-p diff-tool))
+              diff-tool)))
+    (ert "^f90-ts-mode-")))
+
 
 
 (provide 'f90-ts-mode-tests)
