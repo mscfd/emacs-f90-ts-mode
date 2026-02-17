@@ -1,9 +1,9 @@
 Code:
   (lambda ()
     (f90-ts-mode)
-    (when f90-ts-mode-test-prepare-fun
-      (funcall f90-ts-mode-test-prepare-fun))
-    (f90-ts-mode-test--indent-buffer))
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
 
 Point-Char: |
 
@@ -11,6 +11,9 @@ No-Before-Newline
 No-After-Newline
 
 Name: Program1
+=-=
+program program1
+ write(*,'(a)') 'hello'
 =-=
 program program1
  write(*,'(a)') 'hello'

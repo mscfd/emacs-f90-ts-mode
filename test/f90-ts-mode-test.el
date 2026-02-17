@@ -11,17 +11,33 @@ Can be 'kompare', 'meld', 'kdiff3', 'diffuse', etc."
 
 
 ;;------------------------------------------------------------------------------
-;; Auxiliary stuff
+;; Indentation functions for erts files
 
-(defun f90-ts-mode-test--indent-buffer ()
+(defun f90-ts-mode-test--indent-by-region ()
+  "Indent whole current buffer with f90-ts-indent-and-complete-region."
+  (f90-ts-indent-and-complete-region (point-min) (point-max)))
+
+
+(defun f90-ts-mode-test--indent-by-line ()
+  "Indent whole current buffer line by line. This is intended for
+testing f90-ts-indent-and-complete-line."
+  (cl-loop initially (goto-char (point-min))
+         do (unless (looking-at-p "^[[:space:]]*$")
+              (f90-ts-indent-and-complete-line))
+         while (zerop (forward-line 1))))
+
+
+(defun f90-ts-mode-test--indent-buffer-last-tab ()
   "Indent current buffer, including the final line. This is relevant as
 we also want to test the final line, which is relevant during typing
 at the end of file. Intended for incomplete files or those without
 final newline."
-  (indent-region (point-min) (point-max))
-  (save-excursion
-    (goto-char (point-max))
-    (indent-for-tab-command)))
+  (goto-char (point-max))
+  (beginning-of-line)
+  (f90-ts-indent-and-complete-region (point-min) (point))
+  (goto-char (point-max))
+  (f90-ts-indent-and-complete-line))
+
 
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
@@ -32,6 +48,7 @@ final newline."
     f90-ts-indent-block
     f90-ts-indent-continued
     f90-ts-indent-lists-region
+    f90-ts-indent-lists-line
     f90-ts-indent-list-always-include-default
     f90-ts-special-var-regexp
     f90-ts-separator-comment-regexp
@@ -58,6 +75,7 @@ final newline."
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
     (f90-ts-indent-lists-region . keep-or-first)
+    (f90-ts-indent-lists-line . keep-or-first)
     (f90-ts-indent-list-always-include-default . nil)
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
@@ -129,9 +147,15 @@ This variable is used to pass the diff option into the erts fail
 handling.")
 
 
-(defvar f90-ts-mode-test-prepare-fun nil
-  "A function for preparing buffers, like remove all indent add
+(defvar f90-ts-mode-test--prepare-fn nil
+  "A function for preparing a buffer, like remove all indent add
  additional indent etc.")
+
+
+(defvar f90-ts-mode-test--action-fn nil
+  "A function for performing some indent action in a buffer,
+like indent whole buffer as a whole by region, line-by-line
+or just a single line etc.")
 
 
 (defun f90-ts-mode-test--show-diff (actual expected diff)
@@ -167,7 +191,7 @@ launch the diff to compare actual and expected results."
           (signal (car err) (cdr err)))))))
 
 
-(defun f90-ts-mode-test-remove-indent ()
+(defun f90-ts-mode-test--remove-indent ()
   "Remove any indentation from buffer."
   (goto-char (point-min))
   (while (not (eobp))
@@ -175,19 +199,19 @@ launch the diff to compare actual and expected results."
     (forward-line 1)))
 
 
-(defun f90-ts-mode-test-add-indent ()
+(defun f90-ts-mode-test--add-indent ()
   "Add additional indent to see whether reducing existing indentation
 causes any problems."
   (goto-char (point-min))
   (while (not (eobp))
     (unless (looking-at-p "^[ \t]*$")
       ;; do not add indentation to empty lines, these are not touched
-      ;; by indent-region
+      ;; by f90-ts-indent-and-complete-region
       (indent-to (+ (current-indentation) 1)))
     (forward-line 1)))
 
 
-(defun f90-ts-mode-test-shorten-to-end ()
+(defun f90-ts-mode-test--shorten-to-end ()
   "Shorten end statements to just 'end', intended for testing smart end
 completion."
   (goto-char (point-min))
@@ -211,15 +235,17 @@ delimited by markers =-= and =-=-= to be recognised as the after part.
 If UPDATE-FN is non-nil, then apply the update function.
 If UPDATE-FN is nil, apply indent-region itself and use INDENT-VARIANT
 as variant for how to indent continued lines.
+(Note that this actually uses f90-ts-indent-and-complete-region, which
+is called by indent-region usually.)
 
 The prepare and then indent steps are done together in a test run,
 but here they are executed separately, so that intermediate results
 can be observed and checked."
   (interactive
    (let* ((update-fn-choices '(("indent-region" . nil)
-                               ("remove indentation" . f90-ts-mode-test-remove-indent)
-                               ("add some indentation" . f90-ts-mode-test-add-indent)
-                               ("shorten end statements to 'end'" . f90-ts-mode-test-shorten-to-end)))
+                               ("remove indentation" . f90-ts-mode-test--remove-indent)
+                               ("add some indentation" . f90-ts-mode-test--add-indent)
+                               ("shorten end statements to 'end'" . f90-ts-mode-test--shorten-to-end)))
           (chosen-update-fn (cdr (assoc
                                   (completing-read "preparation function to apply: "
                                                    update-fn-choices nil t)
@@ -265,7 +291,7 @@ can be observed and checked."
                          (funcall update-fn)
                        (let ((f90-ts-indent-lists-region indent-variant))
                          (message "variants: %s %s" f90-ts-indent-lists-region indent-variant)
-                         (indent-region (point-min) (point-max)))))
+                         (f90-ts-indent-and-complete-region (point-min) (point-max)))))
                     (buffer-substring-no-properties (point-min)
                                                     (point-max)))))
             (if (string= code updated-code)
@@ -284,7 +310,7 @@ can be observed and checked."
        (message "error: %s" (error-message-string err))))))
 
 
-(defun f90-ts-mode-test-indent-register (files prep-fns)
+(defun f90-ts-mode-test-indent-register (files prep-fns action-fns)
   "Dynamically generate tests for all FILES assumed to be in erts
 format, one test per file.
 For each test, run the specified prep-fns functions."
@@ -298,16 +324,25 @@ For each test, run the specified prep-fns functions."
         (f90-ts-mode-test-with-custom-testing
          (cl-loop
           for prep-fn in ',prep-fns
-          do (ert-info ((if prep-fn
-                            (format "test with prep-fn: %s" prep-fn)
-                          "test without modifications"))
-               (message "test %s with prepare function <%s>" ,file prep-fn)
-               (let ((f90-ts-mode-test-prepare-fun prep-fn))
-                 (f90-ts-mode-test-erts-with-diff
-                  (ert-test-erts-file (ert-resource-file ,file))))))
+          do (cl-loop
+              for action-fn in ',action-fns
+              do (let ((info-text (concat
+                                   (if prep-fn
+                                       (format "prep-fn: %s" prep-fn)
+                                     "prep-fn: none")
+                                   (format ", action-fn: %s" action-fn))))
+                   (ert-info (info-text)
+                     (message "test %s, %s" ,file info-text)
+                     (let ((f90-ts-mode-test--prepare-fn prep-fn)
+                           (f90-ts-mode-test--action-fn action-fn))
+                       (f90-ts-mode-test-erts-with-diff
+                        (ert-test-erts-file (ert-resource-file ,file))))))))
          )))
    ))
 
+
+;; TODO: test setup is pretty heavy, we do not need to run almost all
+;; combinations of preparation and action function
 
 ;; register tests, general indentation
 ;; (with three different prep functions to vary initial indentation)
@@ -316,18 +351,34 @@ For each test, run the specified prep-fns functions."
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
    "indent_region_nonewline.erts"
-   "indent_region_preproc.erts"
-   "indent_integration_collatz.erts")
+   "indent_region_preproc.erts")
  '(nil ; no modification
-   f90-ts-mode-test-remove-indent
-   f90-ts-mode-test-add-indent
-   f90-ts-mode-test-shorten-to-end)
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-by-region
+   f90-ts-mode-test--indent-by-line
+   )
  )
+
+
+(f90-ts-mode-test-indent-register
+ '("indent_region_nonewline.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-buffer-last-tab)
+ )
+
 
 (f90-ts-mode-test-indent-register
  '("indent_region_smart_end.erts")
  '(nil ; no modification
-   f90-ts-mode-test-shorten-to-end)
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-by-region
+   f90-ts-mode-test--indent-by-line
+   )
  )
 
 ;; alignment tests, leave as is, the alignment variant to apply
@@ -335,7 +386,22 @@ For each test, run the specified prep-fns functions."
 (f90-ts-mode-test-indent-register
  '("indent_region_align.erts")
  '(nil ; no preparation
-   ))
+   )
+ '(f90-ts-mode-test--indent-by-region)
+ )
+
+
+;; more expensive integration tests
+(f90-ts-mode-test-indent-register
+ '("indent_integration_collatz.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-by-region
+   ;;f90-ts-mode-test--indent-by-line
+   )
+ )
 
 
 ;;------------------------------------------------------------------------------
@@ -415,7 +481,7 @@ For other lines, generate annotations using
        (goto-char (point-max))
        (unless (bolp)
          (insert "\n"))
-       (indent-region (point-min) (point-max))
+       (f90-ts-indent-and-complete-region (point-min) (point-max))
 
        ;; start at end of file, so that we can freely insert
        (goto-char (point-max))
@@ -423,7 +489,7 @@ For other lines, generate annotations using
        ;; if already at beginning of buffer (bobp), then forward-line
        ;; returns number of lines left to move, which is 1, otherwise
        ;; it always returns zero
-       (while (= 0 (forward-line -1))
+       (while (zerop (forward-line -1))
          (beginning-of-line)
          (cond
           ;; if this is an annotation line, delete it
@@ -434,7 +500,7 @@ For other lines, generate annotations using
 
           ((not (looking-at "^\\s-*$"))
            ;; regular but not empty line, annotate it;
-           ;; indent-region has removed any leading blanks,
+           ;; f90-ts-indent-and-complete-region has removed any leading blanks,
            ;; insert a blank to allow exact caret assertions
            (insert " ")
            (backward-char 1)

@@ -1,9 +1,9 @@
 Code:
   (lambda ()
     (f90-ts-mode)
-    (when f90-ts-mode-test-prepare-fun
-      (funcall f90-ts-mode-test-prepare-fun))
-    (indent-region (point-min) (point-max)))
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
 
 Point-Char: |
 
