@@ -2718,26 +2718,49 @@ using treesitter nodes representing end constructs."
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
+
   (let ((beg-pos (if (markerp beg) (marker-position beg) beg))
         (end-pos (if (markerp end) (marker-position end) end)))
-    (let* ((root (treesit-buffer-root-node))
-           (end-stmts (f90-ts--search-subtree
-                       root
-                       (lambda (n) (member (treesit-node-type n) f90-ts--complete-end-structs))
-                       beg-pos end-pos
-                       t t)))
-      ;; process in reverse order (from last to first, search-subtree returns
-      ;; in reversed order (due to last argument t), this way node positions do
-      ;; not become stale after completion of end statements
-      (cl-loop
-       for node in end-stmts
-       do (f90-ts--complete-smart-end-node node)
-       ))))
+
+    ;;(f90-ts-inspect-node :complete (treesit-node-at beg-pos) "creg0")
+
+    (cl-loop
+     with pos = beg-pos
+     for node = (treesit-search-forward
+                 (treesit-node-at pos)
+                 (lambda (n)
+                   ;;(f90-ts-inspect-node :complete n "cregs")
+                   (and (< pos (treesit-node-start n))
+                        (member (treesit-node-type n)
+                                f90-ts--complete-end-structs)))
+                 nil
+                 t)
+     while node
+     do (let ((start (treesit-node-start node)))
+          (f90-ts-inspect-node :complete node "cccn")
+          (f90-ts--complete-smart-end-node node)
+          (setq pos (+ 3 start)))
+     )
+    ))
 
 
 (defun f90-ts-indent-and-complete-region (beg end)
   "Indent region and execute smart end completion in specified region,
-based on the treesitter tree overlapping that region."
+based on the treesitter tree overlapping that region.
+For region based indentation, we should first execute smart end
+completion, as this might repair the tree, and only then execute
+indentation. For single line it does not matter. Example:
+
+`module do_mod
+contains
+ subroutine do_sub()
+ end function do_sub
+end module do_mod`
+
+At the end function line, 'end' represents the end subroutine statement,
+hence indentation as well as smart end completetion both work. However,
+the keyword 'function' after 'end' starts a new function and muddles the
+subsequent tree."
   (interactive
    (if (use-region-p)
        (list (region-beginning) (region-end))
@@ -2751,8 +2774,8 @@ based on the treesitter tree overlapping that region."
           ;; end marker should stay after inserted text
           (setq beg-marker (copy-marker beg))
           (setq end-marker (copy-marker end t))
-          (treesit-indent-region beg-marker end-marker)
           (f90-ts-complete-smart-end-region beg-marker end-marker))
+          (treesit-indent-region beg-marker end-marker)
       (when beg-marker (set-marker beg-marker nil))
       (when end-marker (set-marker end-marker nil)))))
 
