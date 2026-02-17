@@ -128,41 +128,41 @@ jumping and nil turns of smart end completion."
   '((t :foreground "Sienna4"
        :weight medium))
   "Face for custom font-lock highlighting."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 (defface f90-ts-font-lock-bracket-face
   '((t :foreground "BlueViolet"
        :weight bold))
   "Face for custom font-lock highlighting."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-operator-face
   '((t :foreground "Brown3"
        :weight bold))
   "Face for custom font-lock highlighting."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-openmp-face
   '((t :foreground "turquoise4"
        :weight medium))
   "Face for openmp statements."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-special-var-face
   '((t :foreground "blue4"
        :weight semi-bold))
   "Face for special variables like self or this."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-separator-comment-face
   '((t :foreground "Sienna4"
        :weight bold))
   "Face for separator comments."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 ;;------------------------------------------------------------------------------
@@ -222,7 +222,7 @@ jumping and nil turns of smart end completion."
 
 
 ;;------------------------------------------------------------------------------
-;; auxiliary predicates
+;; other options
 
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching names of special variables like
@@ -259,6 +259,9 @@ Used for applying a separator font lock face and alignment with parent node."
   :safe #'stringp
   :group 'f90-ts)
 
+
+;;------------------------------------------------------------------------------
+;; auxiliary predicates
 
 (defun f90-ts--node-type-p (node type)
   "If TYPE is nil, return true and ignore NODE.
