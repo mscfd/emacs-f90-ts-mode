@@ -3,7 +3,7 @@
 (require 'treesit)
 (require 'f90-ts-mode)
 
-(defcustom f90-ts-mode-tests-diff-command "kompare"
+(defcustom f90-ts-mode-test-diff-command "kompare"
   "External diff tool to use for test comparisons.
 Can be 'kompare', 'meld', 'kdiff3', 'diffuse', etc."
   :type 'string
@@ -13,7 +13,7 @@ Can be 'kompare', 'meld', 'kdiff3', 'diffuse', etc."
 ;;------------------------------------------------------------------------------
 ;; Auxiliary stuff
 
-(defun f90-ts-mode-tests--indent-buffer ()
+(defun f90-ts-mode-test--indent-buffer ()
   "Indent current buffer, including the final line. This is relevant as
 we also want to test the final line, which is relevant during typing
 at the end of file. Intended for incomplete files or those without
@@ -26,7 +26,7 @@ final newline."
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
 
-(defconst f90-ts-mode-tests-managed-custom
+(defconst f90-ts-mode-test-managed-custom
   '(f90-ts-indent-toplevel
     f90-ts-indent-contain
     f90-ts-indent-block
@@ -39,20 +39,20 @@ final newline."
   "Custom variables whose values can be temporarily overridden.")
 
 
-(defvar f90-ts-mode-tests-saved-custom-values
+(defvar f90-ts-mode-test-saved-custom-values
   '()
   "Alist of saved custom variable values for temporary overrides.")
 
 
-(defun f90-ts-mode-tests-save-custom ()
-  "Save current custom values of `f90-ts-mode-tests-managed-custom`."
-  (setq f90-ts-mode-tests-saved-custom-values
+(defun f90-ts-mode-test-save-custom ()
+  "Save current custom values of `f90-ts-mode-test-managed-custom`."
+  (setq f90-ts-mode-test-saved-custom-values
         (mapcar (lambda (var)
                   (cons var (symbol-value var)))
-                f90-ts-mode-tests-managed-custom)))
+                f90-ts-mode-test-managed-custom)))
 
 
-(defconst f90-ts-mode-tests-custom-testing
+(defconst f90-ts-mode-test-custom-testing
   '((f90-ts-indent-toplevel . 1)
     (f90-ts-indent-contain . 3)
     (f90-ts-indent-block . 5)
@@ -66,36 +66,36 @@ final newline."
   "Alist of custom variable values for testing purposes.")
 
 
-(defun f90-ts-mode-tests-set-custom-testing ()
+(defun f90-ts-mode-test-set-custom-testing ()
   "Save current values and apply temporary ones for testing purposes."
-  (f90-ts-mode-tests-save-custom)
-  (dolist (entry f90-ts-mode-tests-custom-testing)
+  (f90-ts-mode-test-save-custom)
+  (dolist (entry f90-ts-mode-test-custom-testing)
     (set (car entry) (cdr entry))))
 
 
-(defun f90-ts-mode-tests-restore-custom ()
+(defun f90-ts-mode-test-restore-custom ()
   "Restore previously saved custom variable values."
-  (unless f90-ts-mode-tests-saved-custom-values
-    (error "f90-ts-mode-tests: No saved custom variable state to restore"))
-  (dolist (entry f90-ts-mode-tests-saved-custom-values)
+  (unless f90-ts-mode-test-saved-custom-values
+    (error "f90-ts-mode-test: No saved custom variable state to restore"))
+  (dolist (entry f90-ts-mode-test-saved-custom-values)
     (set (car entry) (cdr entry)))
-  (setq f90-ts-mode-tests-saved-custom-values nil))
+  (setq f90-ts-mode-test-saved-custom-values nil))
 
 
-(defmacro f90-ts-mode-tests-with-custom-testing (&rest body)
-  `(let ((f90-ts-mode-tests-saved-custom-values nil))
+(defmacro f90-ts-mode-test-with-custom-testing (&rest body)
+  `(let ((f90-ts-mode-test-saved-custom-values nil))
      (unwind-protect
          (progn
-           (f90-ts-mode-tests-set-custom-testing)
+           (f90-ts-mode-test-set-custom-testing)
            ,@body)
-       (f90-ts-mode-tests-restore-custom))))
+       (f90-ts-mode-test-restore-custom))))
 
 
-(defun f90-ts-mode-tests--run-with-testing (file body-fn)
+(defun f90-ts-mode-test--run-with-testing (file body-fn)
   "Run BODY-FN on FILE with custom values for testing. For example, use
 different indentation values for each indentation type, so that
 selection of indentation rules is tested properly."
-  (f90-ts-mode-tests-with-custom-testing
+  (f90-ts-mode-test-with-custom-testing
    (let ((f90-ts-log-categories '()))
      (with-temp-buffer
        (insert-file-contents file)
@@ -121,7 +121,7 @@ selection of indentation rules is tested properly."
 ;;------------------------------------------------------------------------------
 ;; ERTS: auxiliary
 
-(defvar f90-ts-mode-tests-erts-diff nil
+(defvar f90-ts-mode-test-erts-diff nil
   "When nil, just fail in erts tests as usual.
 If non-nil it should contain a diff command as string, which is used to
 show the difference between actual and expected result.
@@ -134,7 +134,7 @@ handling.")
  additional indent etc.")
 
 
-(defun f90-ts-mode-tests--show-diff (actual expected diff)
+(defun f90-ts-mode-test--show-diff (actual expected diff)
   "Show diff between ACTUAL and EXPECTED external tool DIFF."
   (let* ((actual-file (make-temp-file "f90-ts-mode-actual-"))
          (expected-file (make-temp-file "f90-ts-mode-expected-")))
@@ -148,11 +148,11 @@ handling.")
     ))
 
 
-(defmacro f90-ts-mode-tests-erts-with-diff (&rest body)
+(defmacro f90-ts-mode-test-erts-with-diff (&rest body)
   "Execute BODY, containing some ert test. If an ERTS test fails and
-`f90-ts-mode-tests-erts-diff` is contains a diff command as string,
+`f90-ts-mode-test-erts-diff` is contains a diff command as string,
 launch the diff to compare actual and expected results."
-  `(if (not f90-ts-mode-tests-erts-diff)
+  `(if (not f90-ts-mode-test-erts-diff)
        (progn ,@body)
      (condition-case err
          (progn ,@body)
@@ -160,9 +160,9 @@ launch the diff to compare actual and expected results."
         (let* ((details (cadr err))
                (actual (nth 1 details))
                (expected (nth 2 details)))
-          (f90-ts-mode-tests--show-diff actual
-                                        expected
-                                        f90-ts-mode-tests-erts-diff)
+          (f90-ts-mode-test--show-diff actual
+                                       expected
+                                       f90-ts-mode-test-erts-diff)
           ;; Re-signal the error so ERT still records the failure
           (signal (car err) (cdr err)))))))
 
@@ -204,7 +204,7 @@ completion."
 ;;------------------------------------------------------------------------------
 ;; ERTS: indentation
 
-(defun f90-ts-mode-tests-update-erts-after (&optional update-fn indent-variant)
+(defun f90-ts-mode-test-update-erts-after (&optional update-fn indent-variant)
   "If point is in a piece of code representing the after part in an
 erts file, then apply an update function to the code. The code must be
 delimited by markers =-= and =-=-= to be recognised as the after part.
@@ -260,7 +260,7 @@ can be observed and checked."
                   (with-temp-buffer
                     (insert code)
                     (f90-ts-mode)
-                    (f90-ts-mode-tests-with-custom-testing
+                    (f90-ts-mode-test-with-custom-testing
                      (if update-fn
                          (funcall update-fn)
                        (let ((f90-ts-indent-lists-region indent-variant))
@@ -284,7 +284,7 @@ can be observed and checked."
        (message "error: %s" (error-message-string err))))))
 
 
-(defun f90-ts-mode-tests-indent-register (files prep-fns)
+(defun f90-ts-mode-test-indent-register (files prep-fns)
   "Dynamically generate tests for all FILES assumed to be in erts
 format, one test per file.
 For each test, run the specified prep-fns functions."
@@ -295,7 +295,7 @@ For each test, run the specified prep-fns functions."
    do (eval
      `(ert-deftest ,test-name ()
         (skip-unless (treesit-ready-p 'fortran))
-        (f90-ts-mode-tests-with-custom-testing
+        (f90-ts-mode-test-with-custom-testing
          (cl-loop
           for prep-fn in ',prep-fns
           do (ert-info ((if prep-fn
@@ -303,7 +303,7 @@ For each test, run the specified prep-fns functions."
                           "test without modifications"))
                (message "test %s with prepare function <%s>" ,file prep-fn)
                (let ((f90-ts-mode-test-prepare-fun prep-fn))
-                 (f90-ts-mode-tests-erts-with-diff
+                 (f90-ts-mode-test-erts-with-diff
                   (ert-test-erts-file (ert-resource-file ,file))))))
          )))
    ))
@@ -311,7 +311,7 @@ For each test, run the specified prep-fns functions."
 
 ;; register tests, general indentation
 ;; (with three different prep functions to vary initial indentation)
-(f90-ts-mode-tests-indent-register
+(f90-ts-mode-test-indent-register
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
@@ -324,7 +324,7 @@ For each test, run the specified prep-fns functions."
    f90-ts-mode-test-shorten-to-end)
  )
 
-(f90-ts-mode-tests-indent-register
+(f90-ts-mode-test-indent-register
  '("indent_region_smart_end.erts")
  '(nil ; no modification
    f90-ts-mode-test-shorten-to-end)
@@ -332,7 +332,7 @@ For each test, run the specified prep-fns functions."
 
 ;; alignment tests, leave as is, the alignment variant to apply
 ;; should be specified for each test header (default: keep-or-first)
-(f90-ts-mode-tests-indent-register
+(f90-ts-mode-test-indent-register
  '("indent_region_align.erts")
  '(nil ; no preparation
    ))
@@ -341,7 +341,7 @@ For each test, run the specified prep-fns functions."
 ;;------------------------------------------------------------------------------
 ;; ERT: font locking
 
-(defun f90-ts-mode-tests--next-boundary (beg end)
+(defun f90-ts-mode-test--next-boundary (beg end)
   "Find next face or blank/non-blank boundary from BEG to END."
   (let ((next-face-change (next-single-property-change beg 'face nil end))
         (face (get-text-property beg 'face)))
@@ -364,7 +364,7 @@ For each test, run the specified prep-fns functions."
           next-face-change))))))
 
 
-(defun f90-ts-mode-tests--annotate-faces ()
+(defun f90-ts-mode-test--annotate-faces ()
   "Generate font-lock tests for the current line and insert them."
   (interactive)
   (save-excursion
@@ -374,7 +374,7 @@ For each test, run the specified prep-fns functions."
            (span-faces
             (cl-loop while (< (point) end)
                      for face = (get-text-property (point) 'face)
-                     for next = (f90-ts-mode-tests--next-boundary (point) end)
+                     for next = (f90-ts-mode-test--next-boundary (point) end)
                      if (or face (not (looking-at "[[:blank:]]")))
                        collect (list (max 1 (- (point) start))
                                      (- next start)
@@ -392,7 +392,7 @@ For each test, run the specified prep-fns functions."
       )))
 
 
-(defun f90-ts-mode-tests-update-face-annotations ()
+(defun f90-ts-mode-test-update-face-annotations ()
   "Update face annotations in buffer.
 
 Start with indenting the whole buffer, then add a blank on any line
@@ -400,9 +400,9 @@ which is not a font lock assertion line and which is not empty.
 Then process from last line to first. Remove existing annotation lines
 (those starting with ! followed by optional spaces and carets).
 For other lines, generate annotations using
-`f90-ts-mode-tests--annotate-faces'."
+`f90-ts-mode-test--annotate-faces'."
   (interactive)
-  (f90-ts-mode-tests-with-custom-testing
+  (f90-ts-mode-test-with-custom-testing
    (let* ((pos (point))
           (pos-min (point-min))
           (pos-max (point-max))
@@ -438,7 +438,7 @@ For other lines, generate annotations using
            ;; insert a blank to allow exact caret assertions
            (insert " ")
            (backward-char 1)
-           (f90-ts-mode-tests--annotate-faces))))
+           (f90-ts-mode-test--annotate-faces))))
        )
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
@@ -453,7 +453,7 @@ For other lines, generate annotations using
        (goto-char (point-max))))))
 
 
-(defun f90-ts-mode-tests-font-lock-register (files)
+(defun f90-ts-mode-test-font-lock-register (files)
   "Dynamically generate ERT tests for all font_lock_*.f90 files
 in the resource folder."
   (cl-loop
@@ -463,7 +463,7 @@ in the resource folder."
    do (eval
        `(ert-deftest ,test-name ()
           (skip-unless (treesit-ready-p 'fortran))
-          (f90-ts-mode-tests-with-custom-testing
+          (f90-ts-mode-test-with-custom-testing
            (ert-font-lock-test-file
             (ert-resource-file ,file)
             'f90-ts-mode))))
@@ -471,7 +471,7 @@ in the resource folder."
 
 
 ;; register font lock tests
-(f90-ts-mode-tests-font-lock-register
+(f90-ts-mode-test-font-lock-register
  '("font_lock_basic.f90"
    "font_lock_builtin.f90"
    "font_lock_comments.f90"
@@ -482,14 +482,14 @@ in the resource folder."
 
 ;;------------------------------------------------------------------------------
 
-(defun f90-ts-mode-tests-run (&optional diff-tool)
+(defun f90-ts-mode-test-run (&optional diff-tool)
   "Run all f90-ts-mode tests. If diff-tool is specified, use it in case
 of failure to show the difference."
   (interactive
    (list (completing-read "diff tool (empty for none): "
-                         (list "" f90-ts-mode-tests-diff-command)
+                         (list "" f90-ts-mode-test-diff-command)
                          nil nil "")))
-  (let ((f90-ts-mode-tests-erts-diff
+  (let ((f90-ts-mode-test-erts-diff
          (and diff-tool
               (not (string-empty-p diff-tool))
               diff-tool)))
@@ -497,4 +497,4 @@ of failure to show the difference."
 
 
 
-(provide 'f90-ts-mode-tests)
+(provide 'f90-ts-mode-test)
