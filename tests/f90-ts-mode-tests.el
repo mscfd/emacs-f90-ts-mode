@@ -313,6 +313,7 @@ For each test, run the specified prep-fns functions."
 ;; (with three different prep functions to vary initial indentation)
 (f90-ts-mode-tests-indent-register
  '("indent_region_basic.erts"
+   "indent_region_comments.erts"
    "indent_region_constructs.erts"
    "indent_region_nonewline.erts"
    "indent_region_preproc.erts")
