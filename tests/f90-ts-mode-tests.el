@@ -204,23 +204,35 @@ completion."
 ;;------------------------------------------------------------------------------
 ;; ERTS: indentation
 
-(defun f90-ts-mode-tests-update-erts-after (&optional update-fn)
+(defun f90-ts-mode-tests-update-erts-after (&optional update-fn indent-variant)
   "If point is in a piece of code representing the after part in an
 erts file, then apply an update function to the code. The code must be
 delimited by markers =-= and =-=-= to be recognised as the after part.
 If UPDATE-FN is non-nil, then apply the update function.
-If UPDATE-FN is nil, apply indent-region itself.
+If UPDATE-FN is nil, apply indent-region itself and use INDENT-VARIANT
+as variant for how to indent continued lines.
 
 The prepare and then indent steps are done together in a test run,
 but here they are executed separately, so that intermediate results
 can be observed and checked."
   (interactive
-   (let* ((choices '(("indent-region" . nil)
-                     ("remove indentation" . f90-ts-mode-test-remove-indent)
-                     ("add some indentation" . f90-ts-mode-test-add-indent)
-                     ("shorten end statements to 'end'" . f90-ts-mode-test-shorten-to-end)))
-          (choice (completing-read "preparation function to apply: " choices nil t)))
-     (list (cdr (assoc choice choices)))))
+   (let* ((update-fn-choices '(("indent-region" . nil)
+                               ("remove indentation" . f90-ts-mode-test-remove-indent)
+                               ("add some indentation" . f90-ts-mode-test-add-indent)
+                               ("shorten end statements to 'end'" . f90-ts-mode-test-shorten-to-end)))
+          (chosen-update-fn (cdr (assoc
+                                  (completing-read "preparation function to apply: "
+                                                   update-fn-choices nil t)
+                                  update-fn-choices)))
+          (indent-variant-choices (mapcar (lambda (x) (cons (symbol-name (cdr x)) (cdr x)))
+                                          f90-ts-indent-lists-options))
+          (chosen-indent-variant
+           (unless chosen-update-fn  ; chosen-update-fn=nil is option indent-region
+             (cdr (assoc
+                   (completing-read "indent option: "
+                                    indent-variant-choices nil t)
+                   indent-variant-choices)))))
+     (list chosen-update-fn chosen-indent-variant)))
 
   (save-excursion
     (condition-case err
@@ -251,7 +263,9 @@ can be observed and checked."
                     (f90-ts-mode-tests-with-custom-testing
                      (if update-fn
                          (funcall update-fn)
-                       (indent-region (point-min) (point-max))))
+                       (let ((f90-ts-indent-lists-region indent-variant))
+                         (message "variants: %s %s" f90-ts-indent-lists-region indent-variant)
+                         (indent-region (point-min) (point-max)))))
                     (buffer-substring-no-properties (point-min)
                                                     (point-max)))))
             (if (string= code updated-code)
