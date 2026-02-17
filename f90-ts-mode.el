@@ -68,9 +68,10 @@ subroutine bodies, control statements (do, if, associate ...)."
 
 (defconst f90-ts-indent-lists-options
   '(radio (const :tag "Keep if aligned or align to first element" keep-or-first)
+          (const :tag "Keep if aligned or rotate to next element" keep-or-rotate)
           (const :tag "Always align with first element" always-first)
           (const :tag "Indent as for continued lines" continued-line)
-          (const :tag "Rotate elements" rotate))
+          (const :tag "Rotate to next element" rotate))
   "Options for indentation of list like structures on continued lines.")
 
 (defcustom f90-ts-indent-lists-region 'keep-or-first
@@ -1668,7 +1669,7 @@ some predicates like being of compatible symbol type to NODE-SYM."
 
 
 (defun f90-ts--align-continued-col-pos (items)
-  "Map a list of ITEMS of nodes or otherwise obtained pair
+  "Map a list of ITEMS of nodes or otherwise obtained pairs
 (buffer positions offset), to a list of triples of
 column number, buffer position and offset."
   (seq-map
@@ -1708,17 +1709,34 @@ take the element with the largest buffer position."
 
 
 (defun f90-ts--align-continued-select (items cur-col variant)
-  "From a list ITEMS of nodes or other determined column positions,
+  "From a list ITEMS of nodes or otherwise selected column positions,
 determine relevant column positions and select column depending on
 CUR-COL, which has current column.
 The selected column is return as (anchor offset)."
+  ;; not that entries in col-pos are triples
+  ;; cp = (column, buffer position, offset),
+  ;; where buffer position must be start of a previous node to ensure
+  ;; that treesitter buffering in indent-region works as expected,
   (let* ((col-pos-unsorted (f90-ts--align-continued-col-pos items))
          (col-pos (f90-ts--align-continued-cp-sort col-pos-unsorted))
          (aligned-at (seq-find (lambda (cp) (= cur-col (car cp)))
-                               col-pos)))
+                                 col-pos)))
     (f90-ts-log :indent "cont columns-positions unsorted: %s" col-pos-unsorted)
     (f90-ts-log :indent "cont columns-positions: %s" col-pos)
+    ;; the selection process selects a triple, drops the column and returns
+    ;; the two remaining elements (buffer position, offset)
     (cond
+     ((and col-pos
+           (or (eq variant 'rotate)
+               (and (not aligned-at) (eq variant 'keep-or-rotate))
+               ))
+      ;; go to next column or wrap around,
+      ;; recall that col-pos is sorted by columns
+      (let ((aligned-next (seq-find (lambda (cp) (< cur-col (car cp)))
+                                    col-pos)))
+        ;; next if there is a next, otherwise first entry
+        (or (cdr aligned-next) (cdar col-pos))))
+
      ((and col-pos
            (or (eq variant 'always-first)
                (not aligned-at)))
@@ -1728,24 +1746,12 @@ The selected column is return as (anchor offset)."
       (cdar col-pos))
 
      ((and aligned-at
-           (eq variant 'keep-or-first))
+           (member variant '(keep-or-first keep-or-rotate)))
       (f90-ts-log :indent "cont aligned and keep/first: aligned-at = %s" aligned-at)
       ;; aligned, keep current column, but use proper element from col-pos
       ;; as anchor, otherwise indent-region does not take indentation of anchor
       ;; position into account
       (cdr aligned-at))
-
-     ((and aligned-at
-           (eq variant 'rotate))
-      ;; aligned, rotate (go to next column or wrap around)
-      ;; recall that col-pos is sorted by columns
-      (let* ((next-cp
-              (seq-find (lambda (cp) (< cur-col (car cp)))
-                        col-pos)))
-        (f90-ts-log :indent "cont aligned and rotate: next-pos = %s" next-cp)
-        ;; if there is a next-col, take it, otherwise get column of first
-        ;; argument on previous line
-        (or (cdr next-cp) (cdar col-pos))))
 
      (t
       ;; no previous arguments, do something else
@@ -1759,7 +1765,7 @@ The selected column is return as (anchor offset)."
 
 (defun f90-ts--align-continued-list-anchor (variant node list-context prev-stmt-1)
   "Determine items on continued lines in a list-like context and use
-their buffer positions for alignmet. If anonymous node like parenthesis,
+their buffer positions for alignment. If anonymous node like parenthesis,
 comma etc, then do the same, but rotate through items with symbols
 of same kind on previous argument lines."
   (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
