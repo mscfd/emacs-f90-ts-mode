@@ -453,32 +453,31 @@ For other lines, generate annotations using
        (goto-char (point-max))))))
 
 
-(defun f90-ts-mode-tests-font-lock-register ()
+(defun f90-ts-mode-tests-font-lock-register (files)
   "Dynamically generate ERT tests for all font_lock_*.f90 files
 in the resource folder."
-  (interactive)
-  (let ((font-lock-files (directory-files (ert-resource-directory)
-                                          nil
-                                          "^font_lock_.*\\.f90$")))
-    (when (called-interactively-p)
-      (message "register font lock files in ERT: %s"
-               (string-join font-lock-files ", ")))
-    (cl-loop
-     for file in font-lock-files
-     for test-name = (intern (format "f90-ts-mode-test/%s"
-                                     (file-name-sans-extension file)))
-     do (eval
-         `(ert-deftest ,test-name ()
-            (skip-unless (treesit-ready-p 'fortran))
-            (f90-ts-mode-tests-with-custom-testing
-              (ert-font-lock-test-file
-               (ert-resource-file ,file)
-               'f90-ts-mode))))
-     )))
+  (cl-loop
+   for file in files
+   for test-name = (intern (format "f90-ts-mode-test/%s"
+                                   (file-name-sans-extension file)))
+   do (eval
+       `(ert-deftest ,test-name ()
+          (skip-unless (treesit-ready-p 'fortran))
+          (f90-ts-mode-tests-with-custom-testing
+           (ert-font-lock-test-file
+            (ert-resource-file ,file)
+            'f90-ts-mode))))
+   ))
 
 
-;; dynamically register tests
-(f90-ts-mode-tests-font-lock-register)
+;; register font lock tests
+(f90-ts-mode-tests-font-lock-register
+ '("font_lock_basic.f90"
+   "font_lock_builtin.f90"
+   "font_lock_comments.f90"
+   "font_lock_openmp.f90"
+   "font_lock_special_var.f90"
+   "font_lock_integration_collatz.f90"))
 
 
 ;;------------------------------------------------------------------------------
