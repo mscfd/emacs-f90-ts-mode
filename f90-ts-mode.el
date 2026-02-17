@@ -75,16 +75,26 @@ subroutine bodies, control statements (do, if, associate ...)."
   "Options for indentation of list like structures on continued lines.")
 
 (defcustom f90-ts-indent-lists-region 'keep-or-first
-  "Options for how to indent list like structures on continued lines,
-used as default setting, in particular if indent-region is invoked."
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as default setting in 'indent-region'
+and similar operations."
   :type f90-ts-indent-lists-options
   :group 'f90-ts)
 
 (defcustom f90-ts-indent-lists-line 'rotate
-  "Options for how to indent list like structures on continued lines,
-used for indentation of a single line. Used in function
-f90-ts-indent-for-tab-command, which can be bound to a key like <tab>."
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as default setting in
+'indent-for-tab-command' and similar operations (TAB on a single line)."
   :type f90-ts-indent-lists-options
+  :group 'f90-ts)
+
+(defcustom f90-ts-indent-list-always-include-default nil
+  "Always include the default continued line column in list of selected
+columns for alignment.
+This column is the column of the first line of the continued statement
+plus the value of 'f90-ts-indent-continued'."
+  :type 'boolean
+  :safe  'booleanp
   :group 'f90-ts)
 
 ;;------------------------------------------------------------------------------
@@ -1606,6 +1616,12 @@ type definition."
 ;;++++++++++++++
 ;; additional anchor for aligned lists:
 
+(defun f90-ts--align-continued-cont-anchor (prev-stmt-1)
+  "Return the standard continued line indentation, which is a pair of
+position of prev-stmt-1 and the indent-continued offset."
+  (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued))
+
+
 (defun f90-ts--align-continued-default-anchor (_list-context items-filtered _node-sym prev-stmt-1)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS-FILTERED has any nodes.
@@ -1613,7 +1629,7 @@ The default list consists of one single value which is standard
 continued line indentation."
   (unless items-filtered
     (list
-     (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued)
+     (f90-ts--align-continued-cont-anchor prev-stmt-1)
      )))
 
 
@@ -1782,14 +1798,18 @@ of same kind on previous argument lines."
                             items-prev
                             node-sym))
            (anchors-other (funcall get-other list-context items-filtered node-sym prev-stmt-1))
+           (anchor-cont (and f90-ts-indent-list-always-include-default
+                             (list (f90-ts--align-continued-cont-anchor prev-stmt-1))))
            )
 
       (f90-ts-log :indent "cont items context: %s" items-context)
       (f90-ts-log :indent "cont items prev: %s" items-prev)
       (f90-ts-log :indent "cont items filtered: %s" items-filtered)
       (f90-ts-log :indent "cont anchor other: %s" anchors-other)
+      (f90-ts-log :indent "cont anchor cont: %s" anchor-cont)
 
-      (f90-ts--align-continued-select (append anchors-other
+      (f90-ts--align-continued-select (append anchor-cont
+                                              anchors-other
                                               items-filtered)
                                       cur-col
                                       variant))))
