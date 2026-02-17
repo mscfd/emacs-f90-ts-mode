@@ -67,26 +67,32 @@ subroutine bodies, control statements (do, if, associate ...)."
   :group 'f90-ts-indent)
 
 (defconst f90-ts-indent-lists-options
-  '(radio (const :tag "Keep if aligned or align to first element" keep-or-first)
-          (const :tag "Keep if aligned or rotate to next element" keep-or-rotate)
-          (const :tag "Always align with first element" always-first)
-          (const :tag "Indent as for continued lines" continued-line)
-          (const :tag "Rotate to next element" rotate))
+  '(("keep if aligned or align to first element" . keep-or-first)
+    ("keep if aligned or rotate to next element" . keep-or-rotate)
+    ("always align with first element" . always-first)
+    ("indent as for continued lines" . continued-line)
+    ("rotate elements" . rotate))
   "Options for indentation of list like structures on continued lines.")
+
+(defconst f90-ts--indent-lists-radio
+  `(radio ,@(mapcar (lambda (x)
+                      `(const :tag ,(car x) ,(cdr x)))
+                    f90-ts-indent-lists-options))
+  "Prepared options list for defcustoms.")
 
 (defcustom f90-ts-indent-lists-region 'keep-or-first
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in 'indent-region'
 and similar operations."
-  :type f90-ts-indent-lists-options
-  :group 'f90-ts)
+  :type f90-ts--indent-lists-radio
+  :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-lists-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
-  :type f90-ts-indent-lists-options
-  :group 'f90-ts)
+  :type f90-ts--indent-lists-radio
+  :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-always-include-default nil
   "Always include the default continued line column in list of selected
@@ -95,7 +101,7 @@ This column is the column of the first line of the continued statement
 plus the value of 'f90-ts-indent-continued'."
   :type 'boolean
   :safe  'booleanp
-  :group 'f90-ts)
+  :group 'f90-ts-indent)
 
 ;;------------------------------------------------------------------------------
 
