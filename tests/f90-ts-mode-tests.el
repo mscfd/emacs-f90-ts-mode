@@ -316,7 +316,8 @@ For each test, run the specified prep-fns functions."
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
    "indent_region_nonewline.erts"
-   "indent_region_preproc.erts")
+   "indent_region_preproc.erts"
+   "indent_integration_collatz.erts")
  '(nil ; no modification
    f90-ts-mode-test-remove-indent
    f90-ts-mode-test-add-indent
