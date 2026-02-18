@@ -1,0 +1,26 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: Program1
+=-=
+program program1
+ write(*,'(a)') 'hello'
+end program program1
+=-=-=
+
+Name: Program2
+=-=
+program program2
+ integer :: i
+
+ do i = 1,10
+      print *,'i = ', i
+ end do
+end program program2
+=-=-=

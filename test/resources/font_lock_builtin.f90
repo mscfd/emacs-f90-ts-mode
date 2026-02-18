@@ -1,0 +1,108 @@
+ program test_builtin_1
+!^^^^^^^ font-lock-keyword-face
+!        ^^^^^^^^^^^^^^ font-lock-function-name-face
+  integer :: i
+! ^^^^^^^ font-lock-type-face
+!         ^^ f90-ts-font-lock-delimiter-face
+!            ^ nil
+  real :: x, y(10)
+! ^^^^ font-lock-type-face
+!      ^^ f90-ts-font-lock-delimiter-face
+!         ^ nil
+!          ^ f90-ts-font-lock-delimiter-face
+!            ^ nil
+!             ^ f90-ts-font-lock-bracket-face
+!              ^^ font-lock-number-face
+!                ^ f90-ts-font-lock-bracket-face
+  if (allocated(y)) then
+! ^^ font-lock-keyword-face
+!    ^ f90-ts-font-lock-bracket-face
+!     ^^^^^^^^^ font-lock-builtin-face
+!              ^ f90-ts-font-lock-bracket-face
+!               ^ nil
+!                ^^ f90-ts-font-lock-bracket-face
+!                   ^^^^ font-lock-keyword-face
+       x = min(1.0, 2.0)
+!      ^ nil
+!        ^ f90-ts-font-lock-operator-face
+!          ^^^ font-lock-builtin-face
+!             ^ f90-ts-font-lock-bracket-face
+!              ^^^ font-lock-number-face
+!                 ^ f90-ts-font-lock-delimiter-face
+!                   ^^^ font-lock-number-face
+!                      ^ f90-ts-font-lock-bracket-face
+       y(1) = unknown(x)
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^^^^ nil
+!                    ^ f90-ts-font-lock-bracket-face
+!                     ^ nil
+!                      ^ f90-ts-font-lock-bracket-face
+       y(2) = Asin(x)
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^ font-lock-builtin-face
+!                 ^ f90-ts-font-lock-bracket-face
+!                  ^ nil
+!                   ^ f90-ts-font-lock-bracket-face
+       y(3) = MODULO(y(1))
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^^^ font-lock-builtin-face
+!                   ^ f90-ts-font-lock-bracket-face
+!                    ^ nil
+!                     ^ f90-ts-font-lock-bracket-face
+!                      ^ font-lock-number-face
+!                       ^^ f90-ts-font-lock-bracket-face
+       y(4) = abs_vec(v)
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^^^^ nil
+!                    ^ f90-ts-font-lock-bracket-face
+!                     ^ nil
+!                      ^ f90-ts-font-lock-bracket-face
+       y(5) = dim2()
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^ nil
+!                 ^^ f90-ts-font-lock-bracket-face
+       y(6) = compute_sum(x)
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^^^^^^^^ nil
+!                        ^ f90-ts-font-lock-bracket-face
+!                         ^ nil
+!                          ^ f90-ts-font-lock-bracket-face
+       y(7) = doScanFast()
+!      ^ nil
+!       ^ f90-ts-font-lock-bracket-face
+!        ^ font-lock-number-face
+!         ^ f90-ts-font-lock-bracket-face
+!           ^ f90-ts-font-lock-operator-face
+!             ^^^^^^^^^^ nil
+!                       ^^ f90-ts-font-lock-bracket-face
+  end if
+! ^^^ font-lock-keyword-face
+!     ^^ font-lock-keyword-face
+ end program test_builtin_1
+!^^^ font-lock-keyword-face
+!    ^^^^^^^ font-lock-keyword-face
+!            ^^^^^^^^^^^^^^ font-lock-function-name-face

@@ -252,7 +252,18 @@ where emacs can find it.
 ```
 
 
+## Testing with ERT
+
+The mode comes with a number of tests in `test/resources`, which cover part of the already
+implemented features.
+Adding, updating and running tests is done in `test/f90-ts-mode-test.el`
+Currently there are tests for indent-region (`indent-region_*.erts`) and for font locking (`font_lock_*.f90).
+
+
+## Setup
+
 This is a quite extensive way to load and setup f90-ts-mode, intended for development purposes:
+
 ```elisp
 (defun f90-ts-toggle-mode ()
   "Toggle between `f90-mode' (legacy) and `f90-ts-mode'."
@@ -298,19 +309,25 @@ This is a quite extensive way to load and setup f90-ts-mode, intended for develo
   (define-key f90-ts-mode-map (kbd "A-h p") #'treesit-inspect-node-at-point)
   (define-key f90-ts-mode-map (kbd "A-h f") #'describe-face)
 
+  ;; add/update font-lock test annotations (for test/resources font lock files)
+  (define-key f90-ts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-face-annotations)
+  )
+
 (global-set-key (kbd "A-h j") #'f90-ts-toggle-mode)
 (global-set-key (kbd "A-h k") #'f90-ts-mode)
 
-(defun f90-ts-tests-run ()
-  "Reload and run all f90-ts-mode tests."
-  (interactive)
-  ;; Run tests and display results
-  (ert "^f90-ts-mode-"))
-
 (with-eval-after-load 'f90-ts-mode
-  (require 'f90-ts-mode-tests nil t))
+  (require 'f90-ts-mode-test nil t))
 
-(global-set-key (kbd "A-h t") #'f90-ts-tests-run)
-(global-set-key (kbd "A-h u") #'f90-ts-mode-tests-update)
-(global-set-key (kbd "A-h s") #'f90-ts-mode-test-single)
+(global-set-key (kbd "A-h i") #'f90-ts-mode-switch-custom)
+(global-set-key (kbd "A-h t") (lambda () (interactive)
+                                (f90-ts-mode-test-run)))
+(global-set-key (kbd "A-h d") (lambda () (interactive)
+                                (f90-ts-mode-test-run
+                                 f90-ts-mode-test-diff-command)))
+
+(add-hook 'erts-mode-hook
+          (lambda ()
+            (local-set-key (kbd "A-h u")
+                           #'f90-ts-mode-test-indent-erts-after)))
 ```

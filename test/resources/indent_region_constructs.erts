@@ -1,0 +1,220 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: if statement 2
+=-=
+subroutine if_stmt()
+     if (predicate(a,b,c)) then
+          call action1()
+          call action2()
+     else
+          call action3()
+     end if
+end subroutine if_stmt
+=-=-=
+
+Name: if statement 2
+=-=
+subroutine if_stmt()
+     if (x > y) then
+          ! comment 1
+     elseif (x < y) then
+          ! comment 2
+     else
+          ! comment 3
+     end if
+end subroutine if_stmt
+=-=-=
+
+Name: if statement 3
+=-=
+subroutine if_stmt()
+     if (x > y) then
+          ! comment 1
+     elseif (x < y) then
+          ! comment 2
+     else
+          ! comment 3
+     end if
+end subroutine if_stmt
+=-=-=
+
+Name: if statement 4
+=-=
+subroutine if_stmt()
+     name: if (condition) then
+          call foo()
+     elseif (x > y) then
+          ! comment
+     elseif (a .eqv. b) then
+
+          if (condition .or. .false.) x = fun1(y)
+          if (2*5 > x) then
+               print *, x
+          end if
+          inner: if (.true.) then
+               ! comment
+          end if inner
+     else
+
+     end if name
+end subroutine if_stmt
+=-=-=
+
+Name: do loop constructs 1
+=-=
+module do_mod
+contains
+ function do_fun() result(x)
+      do
+           print *, "Hello ERT, testing me?"
+      end do
+ end function do_fun
+end module do_mod
+=-=-=
+
+Name: do loop constructs 2
+=-=
+submodule (do_mod) do_sub
+contains
+ module function do_fun() result(x)
+      with_exit_: do
+           if (i > 10) exit
+           i = i + 1
+      end do with_exit_
+ end function do_fun
+end submodule do_sub
+=-=-=
+
+Name: do loop constructs 3
+=-=
+module do_mod
+contains
+ integer function do_fun()
+      do while (val < 1.0)
+           val = update(val)
+      end do
+ end function do_fun
+end module do_mod
+=-=-=
+
+Name: do loop constructs 4
+=-=
+module do_mod
+contains
+ elemental function do_fun()
+      nested_1: do while (flag .eqv. .true.)
+           flag = .false.
+           some_if: if (cond) then
+                nested_2: do while (k < 5)
+                     k = k - 1
+                end do nested_2
+           end if some_if
+           flag = check(k)
+      end do nested_1
+ end function do_fun
+end module do_mod
+=-=-=
+
+Name: do loop constructs 5
+=-=
+module do_mod
+contains
+ pure function do_fun()
+      sum = 0
+      do i = 1,10
+           inner: do j = 1,10
+                sum = sum + i*j
+           end do inner
+      end do
+ end function do_fun
+end module do_mod
+=-=-=
+
+Name: do loop constructs 6
+=-=
+module do_mod
+contains
+ subroutine do_sub()
+      label_A: do while (A)
+           label_B: do B = 100,1,-3
+                label_C: do
+                     if (cond(A,B,C) > 30) exit
+                end do label_C
+           end do label_B
+      end do label_A
+ end subroutine do_sub
+end module do_mod
+=-=-=
+
+Name: do loop constructs 7
+=-=
+module do_mod
+contains
+ recursive subroutine do_sub()
+      do while (A)
+           do B = 100,1,-3
+                do
+                     ! comment
+                     if (cond(A,B,C) > 30) exit
+                end do
+           end do
+      end do
+ end subroutine do_sub
+end module do_mod
+=-=-=
+
+Name: constructs with io operations
+=-=
+subroutine io()
+     read: associate(x => arr(2))
+          read(*,*) x
+     end associate read
+
+     readx: block
+          integer :: i
+          read(*,*) i
+     end block readx
+
+     print: do value = 1,10
+          print *, 'hello', value
+     end do print
+
+     printy: do while (check(arg1))
+          print *, 'hello', value
+     end do printy
+
+     write: if (result > 10) then
+          write(unit,'(es15.5,f12.3)') expr, result
+     end if write
+
+     writez: select case (ix)
+     case (1)
+          write(*,*) 'A'
+     case default
+          write(*,*) 'B'
+     end select writez
+end subroutine io
+=-=-=
+
+Name: nested associate and do with construct names
+=-=
+subroutine matrix_op(this)
+     components: associate(matrix_A => this%model_A%mat, &
+                           matrix_B => this%model_B%mat, &
+                           N => this%model_size)
+          outer:do i = 1,N
+               inner:do j = 1,N
+                    matrix_R(i,j) = matrix_A(i,j) &
+                           - matrix_B(i,j)
+               end do inner
+          end do outer
+     end associate components
+end subroutine matrix_op
+=-=-=
