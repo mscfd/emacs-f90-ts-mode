@@ -171,6 +171,7 @@ jumping and nil turns of smart end completion."
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+    (define-key map (kbd "A-<return>") 'f90-ts-break-line)
     (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
     (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
     (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)

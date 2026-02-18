@@ -1,0 +1,121 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Name: program 1
+=-=
+program program1
+| write(*,'(a)') 'hello'
+=-=
+program program1
+ |write(*,'(a)') 'hello'
+=-=-=
+
+Name: function 1
+=-=
+function fun(i, j) result(f)
+     |
+=-=-=
+
+Name: function 2
+=-=
+
+subroutine sub()
+end subroutine sub
+
+real(real32) function foo(arg1)
+     |
+=-=-=
+
+Name: subroutine 1
+=-=
+
+subroutine sub(arg)
+     |
+=-=-=
+
+Name: subroutine 2
+=-=
+
+recursive subroutine sub(arg)
+     |
+=-=-=
+
+Name: subroutine 2
+=-=
+subroutine foo()
+     name: if (condition) then
+|     call foo()
+     elseif (x > y) then
+          ! comment
+     end if
+=-=
+subroutine foo()
+     name: if (condition) then
+          |call foo()
+     elseif (x > y) then
+          ! comment
+     end if
+=-=-=
+
+Name: associate 1
+=-=
+subroutine assoc()
+     ! this not aligned under a, as no associate statement
+     ! is recognised by the parser
+     associate(a => b, &
+            |
+=-=-=
+
+Name: associate 2
+=-=
+subroutine assoc()
+     associate(a => b)
+          |
+=-=-=
+
+Name: if clause 1
+=-=
+subroutine foo()
+   if (condition) then
+        return
+   else
+        |
+=-=-=
+
+Name: if clause 2
+=-=
+subroutine foo()
+   if (condition) then
+        ! comment
+   else
+        |
+=-=-=
+
+Name: if clause 3
+=-=
+! my sub
+subroutine foo()
+     if (condition) then
+     elseif (flag) then
+          |
+=-=-=
+
+Name: if clause 4
+=-=
+subroutine foo()
+     if (condition) then
+          call foo()
+     else
+          return
+          ! comment
+          |
+=-=-=
