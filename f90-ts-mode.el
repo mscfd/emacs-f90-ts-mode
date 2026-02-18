@@ -67,24 +67,41 @@ subroutine bodies, control statements (do, if, associate ...)."
   :group 'f90-ts-indent)
 
 (defconst f90-ts-indent-lists-options
-  '(radio (const :tag "Keep if aligned or align to first element" keep-or-first)
-          (const :tag "Always align with first element" always-first)
-          (const :tag "Indent as for continued lines" continued-line)
-          (const :tag "Rotate elements" rotate))
+  '(("keep if aligned or align to first element" . keep-or-first)
+    ("keep if aligned or rotate to next element" . keep-or-rotate)
+    ("always align with first element" . always-first)
+    ("indent as for continued lines" . continued-line)
+    ("rotate elements" . rotate))
   "Options for indentation of list like structures on continued lines.")
 
+(defconst f90-ts--indent-lists-radio
+  `(radio ,@(mapcar (lambda (x)
+                      `(const :tag ,(car x) ,(cdr x)))
+                    f90-ts-indent-lists-options))
+  "Prepared options list for defcustoms.")
+
 (defcustom f90-ts-indent-lists-region 'keep-or-first
-  "Options for how to indent list like structures on continued lines,
-used as default setting, in particular if indent-region is invoked."
-  :type f90-ts-indent-lists-options
-  :group 'f90-ts)
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as default setting in 'indent-region'
+and similar operations."
+  :type f90-ts--indent-lists-radio
+  :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-lists-line 'rotate
-  "Options for how to indent list like structures on continued lines,
-used for indentation of a single line. Used in function
-f90-ts-indent-for-tab-command, which can be bound to a key like <tab>."
-  :type f90-ts-indent-lists-options
-  :group 'f90-ts)
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as default setting in
+'indent-for-tab-command' and similar operations (TAB on a single line)."
+  :type f90-ts--indent-lists-radio
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-indent-list-always-include-default nil
+  "Always include the default continued line column in list of selected
+columns for alignment.
+This column is the column of the first line of the continued statement
+plus the value of 'f90-ts-indent-continued'."
+  :type 'boolean
+  :safe  'booleanp
+  :group 'f90-ts-indent)
 
 ;;------------------------------------------------------------------------------
 
@@ -111,41 +128,41 @@ jumping and nil turns of smart end completion."
   '((t :foreground "Sienna4"
        :weight medium))
   "Face for custom font-lock highlighting."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 (defface f90-ts-font-lock-bracket-face
   '((t :foreground "BlueViolet"
        :weight bold))
   "Face for custom font-lock highlighting."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-operator-face
   '((t :foreground "Brown3"
        :weight bold))
   "Face for custom font-lock highlighting."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-openmp-face
   '((t :foreground "turquoise4"
        :weight medium))
   "Face for openmp statements."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-special-var-face
   '((t :foreground "blue4"
        :weight semi-bold))
   "Face for special variables like self or this."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-separator-comment-face
   '((t :foreground "Sienna4"
        :weight bold))
   "Face for separator comments."
-  :group 'f90-ts)
+  :group 'f90-ts-font-lock)
 
 
 ;;------------------------------------------------------------------------------
@@ -205,7 +222,7 @@ jumping and nil turns of smart end completion."
 
 
 ;;------------------------------------------------------------------------------
-;; auxiliary predicates
+;; other options
 
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching names of special variables like
@@ -242,6 +259,9 @@ Used for applying a separator font lock face and alignment with parent node."
   :safe #'stringp
   :group 'f90-ts)
 
+
+;;------------------------------------------------------------------------------
+;; auxiliary predicates
 
 (defun f90-ts--node-type-p (node type)
   "If TYPE is nil, return true and ignore NODE.
@@ -1605,6 +1625,12 @@ type definition."
 ;;++++++++++++++
 ;; additional anchor for aligned lists:
 
+(defun f90-ts--align-continued-cont-anchor (prev-stmt-1)
+  "Return the standard continued line indentation, which is a pair of
+position of prev-stmt-1 and the indent-continued offset."
+  (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued))
+
+
 (defun f90-ts--align-continued-default-anchor (_list-context items-filtered _node-sym prev-stmt-1)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS-FILTERED has any nodes.
@@ -1612,7 +1638,7 @@ The default list consists of one single value which is standard
 continued line indentation."
   (unless items-filtered
     (list
-     (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued)
+     (f90-ts--align-continued-cont-anchor prev-stmt-1)
      )))
 
 
@@ -1668,7 +1694,7 @@ some predicates like being of compatible symbol type to NODE-SYM."
 
 
 (defun f90-ts--align-continued-col-pos (items)
-  "Map a list of ITEMS of nodes or otherwise obtained pair
+  "Map a list of ITEMS of nodes or otherwise obtained pairs
 (buffer positions offset), to a list of triples of
 column number, buffer position and offset."
   (seq-map
@@ -1708,17 +1734,34 @@ take the element with the largest buffer position."
 
 
 (defun f90-ts--align-continued-select (items cur-col variant)
-  "From a list ITEMS of nodes or other determined column positions,
+  "From a list ITEMS of nodes or otherwise selected column positions,
 determine relevant column positions and select column depending on
 CUR-COL, which has current column.
 The selected column is return as (anchor offset)."
+  ;; not that entries in col-pos are triples
+  ;; cp = (column, buffer position, offset),
+  ;; where buffer position must be start of a previous node to ensure
+  ;; that treesitter buffering in indent-region works as expected,
   (let* ((col-pos-unsorted (f90-ts--align-continued-col-pos items))
          (col-pos (f90-ts--align-continued-cp-sort col-pos-unsorted))
          (aligned-at (seq-find (lambda (cp) (= cur-col (car cp)))
-                               col-pos)))
+                                 col-pos)))
     (f90-ts-log :indent "cont columns-positions unsorted: %s" col-pos-unsorted)
     (f90-ts-log :indent "cont columns-positions: %s" col-pos)
+    ;; the selection process selects a triple, drops the column and returns
+    ;; the two remaining elements (buffer position, offset)
     (cond
+     ((and col-pos
+           (or (eq variant 'rotate)
+               (and (not aligned-at) (eq variant 'keep-or-rotate))
+               ))
+      ;; go to next column or wrap around,
+      ;; recall that col-pos is sorted by columns
+      (let ((aligned-next (seq-find (lambda (cp) (< cur-col (car cp)))
+                                    col-pos)))
+        ;; next if there is a next, otherwise first entry
+        (or (cdr aligned-next) (cdar col-pos))))
+
      ((and col-pos
            (or (eq variant 'always-first)
                (not aligned-at)))
@@ -1728,24 +1771,12 @@ The selected column is return as (anchor offset)."
       (cdar col-pos))
 
      ((and aligned-at
-           (eq variant 'keep-or-first))
+           (member variant '(keep-or-first keep-or-rotate)))
       (f90-ts-log :indent "cont aligned and keep/first: aligned-at = %s" aligned-at)
       ;; aligned, keep current column, but use proper element from col-pos
       ;; as anchor, otherwise indent-region does not take indentation of anchor
       ;; position into account
       (cdr aligned-at))
-
-     ((and aligned-at
-           (eq variant 'rotate))
-      ;; aligned, rotate (go to next column or wrap around)
-      ;; recall that col-pos is sorted by columns
-      (let* ((next-cp
-              (seq-find (lambda (cp) (< cur-col (car cp)))
-                        col-pos)))
-        (f90-ts-log :indent "cont aligned and rotate: next-pos = %s" next-cp)
-        ;; if there is a next-col, take it, otherwise get column of first
-        ;; argument on previous line
-        (or (cdr next-cp) (cdar col-pos))))
 
      (t
       ;; no previous arguments, do something else
@@ -1759,7 +1790,7 @@ The selected column is return as (anchor offset)."
 
 (defun f90-ts--align-continued-list-anchor (variant node list-context prev-stmt-1)
   "Determine items on continued lines in a list-like context and use
-their buffer positions for alignmet. If anonymous node like parenthesis,
+their buffer positions for alignment. If anonymous node like parenthesis,
 comma etc, then do the same, but rotate through items with symbols
 of same kind on previous argument lines."
   (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
@@ -1776,14 +1807,18 @@ of same kind on previous argument lines."
                             items-prev
                             node-sym))
            (anchors-other (funcall get-other list-context items-filtered node-sym prev-stmt-1))
+           (anchor-cont (and f90-ts-indent-list-always-include-default
+                             (list (f90-ts--align-continued-cont-anchor prev-stmt-1))))
            )
 
       (f90-ts-log :indent "cont items context: %s" items-context)
       (f90-ts-log :indent "cont items prev: %s" items-prev)
       (f90-ts-log :indent "cont items filtered: %s" items-filtered)
       (f90-ts-log :indent "cont anchor other: %s" anchors-other)
+      (f90-ts-log :indent "cont anchor cont: %s" anchor-cont)
 
-      (f90-ts--align-continued-select (append anchors-other
+      (f90-ts--align-continued-select (append anchor-cont
+                                              anchors-other
                                               items-filtered)
                                       cur-col
                                       variant))))
