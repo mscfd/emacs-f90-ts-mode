@@ -66,7 +66,7 @@ subroutine bodies, control statements (do, if, associate ...)."
   :safe  'integerp
   :group 'f90-ts-indent)
 
-(defconst f90-ts-indent-lists-options
+(defconst f90-ts-indent-list-options
   '(("keep if aligned or align to primary column" . keep-or-primary)
     ("keep if aligned or rotate to next column" . keep-or-rotate)
     ("always align with primary column" . always-primary)
@@ -74,24 +74,24 @@ subroutine bodies, control statements (do, if, associate ...)."
     ("rotate columns" . rotate))
   "Options for indentation of list like structures on continued lines.")
 
-(defconst f90-ts--indent-lists-radio
+(defconst f90-ts--indent-list-radio
   `(radio ,@(mapcar (lambda (x)
                       `(const :tag ,(car x) ,(cdr x)))
-                    f90-ts-indent-lists-options))
+                    f90-ts-indent-list-options))
   "Prepared options list for defcustoms.")
 
-(defcustom f90-ts-indent-lists-region 'keep-or-primary
+(defcustom f90-ts-indent-list-region 'keep-or-primary
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in 'indent-region'
 and similar operations."
-  :type f90-ts--indent-lists-radio
+  :type f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
-(defcustom f90-ts-indent-lists-line 'rotate
+(defcustom f90-ts-indent-list-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
-  :type f90-ts--indent-lists-radio
+  :type f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-always-include-default t
@@ -1987,14 +1987,14 @@ list items (like arguments in a procedure call). Otherwise determine
 standard indentation for continued lines.
 
 Exact behaviour is determined by custom variables
-`f90-ts-indent-lists-line` and `f90-ts-indent-lists-region`.
+`f90-ts-indent-list-line` and `f90-ts-indent-list-region`.
 
 Note that due to the matcher, we already know that we are on a
 continued line of a continued statement. The statement line itself
 is not catched by the continued line matcher."
   (let* ((variant (if f90-ts--align-continued-variant-tab
-                      f90-ts-indent-lists-line
-                    f90-ts-indent-lists-region))
+                      f90-ts-indent-list-line
+                    f90-ts-indent-list-region))
          (prev-stmt-1 (f90-ts--previous-stmt-first node parent))
          (default-anchor-offset (if prev-stmt-1
                                     (list (treesit-node-start prev-stmt-1)
