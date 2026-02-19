@@ -94,7 +94,7 @@ context on continued lines. Used as default setting in
   :type f90-ts--indent-lists-radio
   :group 'f90-ts-indent)
 
-(defcustom f90-ts-indent-list-always-include-default nil
+(defcustom f90-ts-indent-list-always-include-default t
   "Always include the default continued line column in list of selected
 columns for alignment.
 This column is the column of the first line of the continued statement
