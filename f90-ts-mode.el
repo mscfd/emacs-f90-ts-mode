@@ -1798,7 +1798,8 @@ of same kind on previous argument lines."
     (f90-ts-log :indent "cont location: %s, %s" node (f90-ts--align-node-symbol node))
     (f90-ts-log :indent "cont location: col=%s, line=%d, sym=%s" cur-col cur-line node-sym)
     (let* ((get-items (f90-ts--get-list-context-prop :get-items list-context))
-           (get-other (f90-ts--get-list-context-prop :get-other list-context))
+           (get-other (or (f90-ts--get-list-context-prop :get-other list-context)
+                          #'f90-ts--align-continued-default-anchor))
            (items-context (funcall get-items list-context node))
            (items-prev (seq-filter
                         (lambda (node) (< (f90-ts--node-line node)
@@ -1884,16 +1885,11 @@ offset is stored, the cache is expected to be nil.
                                :get-other f90-ts--align-continued-tuple-anchor))
     ("parameters"           . (:get-items f90-ts--align-continued-parameters-items
                                :get-other f90-ts--align-continued-tuple-anchor))
-    ("logical_expression"   . (:get-items f90-ts--align-continued-log-expr-items
-                               :get-other f90-ts--align-continued-default-anchor))
-    ("binding_list"         . (:get-items f90-ts--align-continued-binding-items
-                               :get-other f90-ts--align-continued-default-anchor))
-    ("final_statement"      . (:get-items f90-ts--align-continued-binding-items
-                               :get-other f90-ts--align-continued-default-anchor))
-    ("variable_declaration" . (:get-items f90-ts--align-continued-var-decl-items
-                               :get-other f90-ts--align-continued-default-anchor))
-    ("association_list"     . (:get-items f90-ts--align-continued-assocation-items
-                               :get-other f90-ts--align-continued-default-anchor))
+    ("logical_expression"   . (:get-items f90-ts--align-continued-log-expr-items))
+    ("binding_list"         . (:get-items f90-ts--align-continued-binding-items))
+    ("final_statement"      . (:get-items f90-ts--align-continued-binding-items))
+    ("variable_declaration" . (:get-items f90-ts--align-continued-var-decl-items))
+    ("association_list"     . (:get-items f90-ts--align-continued-assocation-items))
     )
   "List of tree-sitter node types presenting some kind of list context
 which is suitable for alignment indentation.
