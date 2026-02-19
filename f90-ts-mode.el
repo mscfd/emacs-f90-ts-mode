@@ -1632,36 +1632,47 @@ position of prev-stmt-1 and the indent-continued offset."
   (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued))
 
 
-(defun f90-ts--align-continued-default-anchor (_list-context items-filtered _node-sym prev-stmt-1)
+(defun f90-ts--align-continued-default-anchor (_list-context items _node-sym prev-stmt-1)
   "Return a list of default positions (anchors) depending on
-LIST-CONTEXT, NODE-SYM and whether ITEMS-FILTERED has any nodes.
-The default list consists of one single value which is standard
-continued line indentation."
-  (unless items-filtered
-    (list
-     (f90-ts--align-continued-cont-anchor prev-stmt-1)
-     )))
+LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
+An anchor is a pair (position offset).
+
+The default list consists of one single pair which is standard
+continued line indentation (pos-prev-stmt-1 f90-ts-indent-continued).
+
+The returned list must contain at least one item. The first entry is
+used as 'first; anchor/fallback position."
+  (list
+   (if items
+       ;; find item with smallest column number
+       (car (seq-sort-by #'f90-ts--node-column #'< items))
+     (f90-ts--align-continued-cont-anchor prev-stmt-1))))
 
 
-(defun f90-ts--align-continued-tuple-anchor (list-context items-filtered node-sym prev-stmt-1)
-  "Return a list of default anchor positions depending on context and
-whether ITEMS-FILTERED has any nodes.
+(defun f90-ts--align-continued-tuple-anchor (list-context items node-sym prev-stmt-1)
+  "Return a list of default positions (anchors) depending on
+LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
+An anchor is a pair (position offset).
+
 For argument lists (call sub(...)) and parameters (subroutine sub (...)),
 a default and fallback position is to align one column position to the
-right of the initial opening parenthesis."
+right of the initial opening parenthesis. This specific position is
+returned as first element of the list"
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
                  (f90-ts--node-type-p list-context "parameters"))
              nil "expected list context: argument_list or parameters, got '%s'" list-context)
+  ;; filter nil entries using identity
   (seq-filter #'identity
               (list
-               ;; always offer one column to the right of opening
-               ;; parenthesis position, except for closing parenthesis
-               (unless (eq node-sym 'parenthesis)
-                 (list (treesit-node-start list-context) 1))
-               ;; offer default continued line indentation if items-filtered is empty
-               (unless items-filtered
-                 (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued))
+               ;; for closing parenthesis, align to opening parenthesis,
+               ;; for other node types, align one position to the right of it
+               (list (treesit-node-start list-context)  ;; anchor position and offset
+                     (if (eq node-sym 'parenthesis) 0 1))
+               ;; add default continued line indentation if items is empty
+               (unless items
+                 (list (treesit-node-start prev-stmt-1)
+                       f90-ts-indent-continued))
                )))
 
 
@@ -1694,25 +1705,22 @@ some predicates like being of compatible symbol type to NODE-SYM."
       )))
 
 
-(defun f90-ts--align-continued-col-pos (items)
-  "Map a list of ITEMS of nodes or otherwise obtained pairs
-(buffer positions offset), to a list of triples of
-column number, buffer position and offset."
-  (seq-map
-   (lambda (n)
-     (if (treesit-node-p n)
-         (list
-          ;; some node, compute column number and buffer position, offset=0
-          (f90-ts--node-column n)
-          (treesit-node-start n)
-          0)
-       ;; a pair (buffer position, offset) add column
-       ;; compute column at position and then add offset
-       ;; (do not compute column at position + offset, this might not be valid)
-       (cons
-        (+ (f90-ts--column-number-at-pos (car n)) (cadr n))
-        n)))
-   items))
+(defun f90-ts--align-continued-map-col-pos (anchor)
+  "Map an ANCHOR, which is either a node or an otherwise obtained
+pair (positions offset), to a triple (column, position, offset).
+For a node, position is start of node and offset is zero."
+  (if (treesit-node-p anchor)
+      (list
+       ;; some node, compute column number and buffer position, offset=0
+       (f90-ts--node-column anchor)
+       (treesit-node-start anchor)
+       0)
+    ;; a pair (buffer position, offset) add column
+    ;; compute column at position and then add offset
+    ;; (do not compute column at position + offset, this might not be valid)
+    (cons
+     (+ (f90-ts--column-number-at-pos (car anchor)) (cadr anchor))
+     anchor)))
 
 
 (defun f90-ts--align-continued-cp-sort (cp-alist)
@@ -1734,43 +1742,64 @@ take the element with the largest buffer position."
     (seq-sort (lambda (a b) (< (car a) (car b))) cp-alist-unique)))
 
 
-(defun f90-ts--align-continued-select (items cur-col variant)
+(defun f90-ts--align-continued-select (first items cur-col variant)
   "From a list ITEMS of nodes or otherwise selected column positions,
 determine relevant column positions and select column depending on
-CUR-COL, which has current column.
+VARIANT and CUR-COL which is the current column.
+
+FIRST is a default/fallback anchor (position offset). Depending on
+VARIANT (like keep-or-first) and current alignment, FIRST is selected.
+
 The selected column is return as (anchor offset)."
-  ;; not that entries in col-pos are triples
+  ;; note that entries in col-pos are triples
   ;; cp = (column, buffer position, offset),
   ;; where buffer position must be start of a previous node to ensure
   ;; that treesitter buffering in indent-region works as expected,
-  (let* ((col-pos-unsorted (f90-ts--align-continued-col-pos items))
+  (let* ((col-pos-unsorted (seq-map #'f90-ts--align-continued-map-col-pos items))
          (col-pos (f90-ts--align-continued-cp-sort col-pos-unsorted))
          (aligned-at (seq-find (lambda (cp) (= cur-col (car cp)))
-                                 col-pos)))
+                                 col-pos))
+         (first-col-pos (f90-ts--align-continued-map-col-pos first)))
+    ;; :get-other-fn should always return some fallback position
+    ;; (like prev-stmt-1+default indent for continued lines), and thus
+    ;; there must always be some anchors in col-pos
+    (cl-assert col-pos nil "no relevant columns found")
+
     (f90-ts-log :indent "cont columns-positions unsorted: %s" col-pos-unsorted)
     (f90-ts-log :indent "cont columns-positions: %s" col-pos)
     ;; the selection process selects a triple, drops the column and returns
     ;; the two remaining elements (buffer position, offset)
     (cond
-     ((and col-pos
-           (or (eq variant 'rotate)
-               (and (not aligned-at) (eq variant 'keep-or-rotate))
-               ))
+     ;; special case (e.g. after inserting newline by <return> or f90-line-break)
+     ;; check whether we are before first entry in col-pos, in this
+     ;; case we go to FIRST, not to first entry in col-pos
+     ((< cur-col (caar col-pos))
+      (cdr first-col-pos))
+
+     ;; cases: (aligned, rotate), (not-aligned, rotate),
+     ;;        (not-aligned,keep-or-rotate)
+     ((or (eq variant 'rotate)
+          (and (not aligned-at)
+               (eq variant 'keep-or-rotate)))
       ;; go to next column or wrap around,
       ;; recall that col-pos is sorted by columns
       (let ((aligned-next (seq-find (lambda (cp) (< cur-col (car cp)))
                                     col-pos)))
-        ;; next if there is a next, otherwise first entry
-        (or (cdr aligned-next) (cdar col-pos))))
+        ;; next if there is a next, otherwise first entry (not necessarily first)
+        (or (cdr aligned-next)
+            (cdar col-pos))))
 
-     ((and col-pos
-           (or (eq variant 'always-first)
-               (not aligned-at)))
-      (f90-ts-log :indent "cont take first: col-pos = %s" (car col-pos))
+     ;; cases: (not-aligned, keep-or-first),
+     ;;        (aligned-always-first), (not-aligned, always-first)
+     ((or (not aligned-at)
+          (eq variant 'always-first))
+      (f90-ts-log :indent "cont take first: first=%s" first)
       ;; we have relevant items, and either always-first or not aligned
       ;; retrieve buffer position for first entry
-      (cdar col-pos))
+      (cdr first-col-pos))
 
+     ;; cases: (aligned, keep-or-first)
+     ;;        (aligned, keep-or-rotate)
      ((and aligned-at
            (member variant '(keep-or-first keep-or-rotate)))
       (f90-ts-log :indent "cont aligned and keep/first: aligned-at = %s" aligned-at)
@@ -1780,12 +1809,9 @@ The selected column is return as (anchor offset)."
       (cdr aligned-at))
 
      (t
-      ;; no previous arguments, do something else
-      ;; actually this should not happen, the :get-other-fn function
-      ;; should always return some fallback position
-      ;; (like prev-stmt-1+default indent for continued lines)
-      (cl-assert t nil "no relevant columns found")
-      nil)
+      ;; all eight cases plus node before minimal column are covered above
+      (cl-assert col-pos nil "cond logic not complete")
+      (cdr first-col-pos))
      )))
 
 
@@ -1801,27 +1827,38 @@ of same kind on previous argument lines."
            (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
                           #'f90-ts--align-continued-default-anchor))
            (items-context (funcall get-items list-context node))
+           ;; filter by line number, use only items on some previous line
            (items-prev (seq-filter
                         (lambda (node) (< (f90-ts--node-line node)
                                           cur-line))
                         items-context))
+           ;; further filter by symbol type node-sym of current node at point
            (items-filtered (f90-ts--align-continued-items-filter
                             items-prev
                             node-sym))
-           (anchors-other (funcall get-other list-context items-filtered node-sym prev-stmt-1))
-           (anchor-cont (and f90-ts-indent-list-always-include-default
-                             (list (f90-ts--align-continued-cont-anchor prev-stmt-1))))
+           ;; get other relevant anchors (an anchor is a pair (position offset) or a node)
+           (anchors-other (funcall get-other
+                                   list-context items-filtered node-sym prev-stmt-1))
+           ;; if selected, add default continued offset position as anchor
+           (anchor-extra (and f90-ts-indent-list-always-include-default
+                              (f90-ts--align-continued-cont-anchor prev-stmt-1)))
+           ;; anchor-first is used as 'first' in keep-or-first, always-first etc.
+           (anchor-first (car anchors-other))
+           ;; final list of anchors (which are nodes or pairs (position offset))
+           (anchors-final (append (and anchor-extra (list anchor-extra))
+                                   anchors-other
+                                   items-filtered))
            )
 
       (f90-ts-log :indent "cont items context: %s" items-context)
       (f90-ts-log :indent "cont items prev: %s" items-prev)
       (f90-ts-log :indent "cont items filtered: %s" items-filtered)
       (f90-ts-log :indent "cont anchor other: %s" anchors-other)
-      (f90-ts-log :indent "cont anchor cont: %s" anchor-cont)
+      (f90-ts-log :indent "cont anchor cont: %s" anchor-extra)
+      (f90-ts-log :indent "cont anchors final: %s" anchors-final)
 
-      (f90-ts--align-continued-select (append anchor-cont
-                                              anchors-other
-                                              items-filtered)
+      (f90-ts--align-continued-select anchor-first
+                                      anchors-final
                                       cur-col
                                       variant))))
 
@@ -1879,7 +1916,10 @@ offset is stored, the cache is expected to be nil.
 
 ;; get-items: function to determine node items in the list context
 ;;            relevant for alignment
-;; get-other: other columns for alignment (default values and fallback values)
+;; get-other: other columns for alignment (default and fallback values),
+;;            must return a non-empty list of anchors, the first anchor
+;;            in the list is used as first/fallback position (for example
+;;            in keep-or-first option)
 (defconst f90-ts--list-context-types
   '(("argument_list"        . (:get-items-fn f90-ts--align-continued-arguments-items
                                :get-other-fn f90-ts--align-continued-tuple-anchor))

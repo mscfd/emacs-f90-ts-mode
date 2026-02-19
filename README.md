@@ -107,8 +107,8 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argy, just_this, &
                              argz)
 ```
-Five options are currently implemented: `continued-line`, `keep-or-first`, `keep-or-next`,
-`always-first` and `rotate`.
+Five options are currently implemented: `continued-line`, `rotate`, `keep-or-first`,
+`keep-or-rotate` and `always-first`.
 Moreover, `f90-ts-indent-list-always-include-default` controls whether simple indentation for
 continued lines should always be added (for example even in an argument context as above).
 Remark: currently options and variants are intended to experiment with and see what might work

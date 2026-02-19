@@ -238,7 +238,7 @@ subroutine sub8()
                 .and. (condition3(a1,a2,a3&
                                  )&
                        .or. condition4(&
-            fun1(x,y), &
+                                       fun1(x,y), &
                                        fun2(u,v)) &
                        .eqv. condition5(&
                                         fun1(x,y), &
