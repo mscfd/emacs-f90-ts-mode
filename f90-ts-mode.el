@@ -1781,7 +1781,7 @@ The selected column is return as (anchor offset)."
 
      (t
       ;; no previous arguments, do something else
-      ;; actually this should not happen, the :get-other function
+      ;; actually this should not happen, the :get-other-fn function
       ;; should always return some fallback position
       ;; (like prev-stmt-1+default indent for continued lines)
       (cl-assert t nil "no relevant columns found")
@@ -1797,8 +1797,8 @@ of same kind on previous argument lines."
   (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
     (f90-ts-log :indent "cont location: %s, %s" node (f90-ts--align-node-symbol node))
     (f90-ts-log :indent "cont location: col=%s, line=%d, sym=%s" cur-col cur-line node-sym)
-    (let* ((get-items (f90-ts--get-list-context-prop :get-items list-context))
-           (get-other (or (f90-ts--get-list-context-prop :get-other list-context)
+    (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
+           (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
                           #'f90-ts--align-continued-default-anchor))
            (items-context (funcall get-items list-context node))
            (items-prev (seq-filter
@@ -1881,15 +1881,15 @@ offset is stored, the cache is expected to be nil.
 ;;            relevant for alignment
 ;; get-other: other columns for alignment (default values and fallback values)
 (defconst f90-ts--list-context-types
-  '(("argument_list"        . (:get-items f90-ts--align-continued-arguments-items
-                               :get-other f90-ts--align-continued-tuple-anchor))
-    ("parameters"           . (:get-items f90-ts--align-continued-parameters-items
-                               :get-other f90-ts--align-continued-tuple-anchor))
-    ("logical_expression"   . (:get-items f90-ts--align-continued-log-expr-items))
-    ("binding_list"         . (:get-items f90-ts--align-continued-binding-items))
-    ("final_statement"      . (:get-items f90-ts--align-continued-binding-items))
-    ("variable_declaration" . (:get-items f90-ts--align-continued-var-decl-items))
-    ("association_list"     . (:get-items f90-ts--align-continued-assocation-items))
+  '(("argument_list"        . (:get-items-fn f90-ts--align-continued-arguments-items
+                               :get-other-fn f90-ts--align-continued-tuple-anchor))
+    ("parameters"           . (:get-items-fn f90-ts--align-continued-parameters-items
+                               :get-other-fn f90-ts--align-continued-tuple-anchor))
+    ("logical_expression"   . (:get-items-fn f90-ts--align-continued-log-expr-items))
+    ("binding_list"         . (:get-items-fn f90-ts--align-continued-binding-items))
+    ("final_statement"      . (:get-items-fn f90-ts--align-continued-binding-items))
+    ("variable_declaration" . (:get-items-fn f90-ts--align-continued-var-decl-items))
+    ("association_list"     . (:get-items-fn f90-ts--align-continued-assocation-items))
     )
   "List of tree-sitter node types presenting some kind of list context
 which is suitable for alignment indentation.
