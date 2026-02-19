@@ -74,8 +74,8 @@ final newline."
     (f90-ts-indent-contain . 3)
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
-    (f90-ts-indent-lists-region . keep-or-first)
-    (f90-ts-indent-lists-line . keep-or-first)
+    (f90-ts-indent-lists-region . keep-or-primary)
+    (f90-ts-indent-lists-line . keep-or-primary)
     (f90-ts-indent-list-always-include-default . nil)
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
@@ -393,7 +393,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
 
 
 ;; alignment tests, leave as is, the alignment variant to apply
-;; should be specified for each test header (default: keep-or-first)
+;; should be specified for each test header (default: keep-or-primary)
 (f90-ts-mode-test-indent-register
  "f90-ts-mode"
  '("indent_region_align.erts")

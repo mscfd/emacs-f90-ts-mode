@@ -67,11 +67,11 @@ subroutine bodies, control statements (do, if, associate ...)."
   :group 'f90-ts-indent)
 
 (defconst f90-ts-indent-lists-options
-  '(("keep if aligned or align to first element" . keep-or-first)
-    ("keep if aligned or rotate to next element" . keep-or-rotate)
-    ("always align with first element" . always-first)
-    ("indent as for continued lines" . continued-line)
-    ("rotate elements" . rotate))
+  '(("keep if aligned or align to primary column" . keep-or-primary)
+    ("keep if aligned or rotate to next column" . keep-or-rotate)
+    ("always align with primary column" . always-primary)
+    ("indent to first line of statement with offset `f90-ts-indent-continued`" . continued-line)
+    ("rotate columns" . rotate))
   "Options for indentation of list like structures on continued lines.")
 
 (defconst f90-ts--indent-lists-radio
@@ -80,7 +80,7 @@ subroutine bodies, control statements (do, if, associate ...)."
                     f90-ts-indent-lists-options))
   "Prepared options list for defcustoms.")
 
-(defcustom f90-ts-indent-lists-region 'keep-or-first
+(defcustom f90-ts-indent-lists-region 'keep-or-primary
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in 'indent-region'
 and similar operations."
@@ -1226,7 +1226,9 @@ associates and others."
 ;; matchers
 
 (defun f90-ts--continued-line-first-is ()
-  "Check whether we are first continued line of a continued statement.
+  "Return matcher which chechs whether point is at first continued line
+of a continued statement (i.e. the second line of the continued
+statement).
 This line is indented relative to the statements first line.
 All other line use indentation of previous line."
   (lambda (node parent bol &rest _)
@@ -1641,7 +1643,7 @@ The default list consists of one single pair which is standard
 continued line indentation (pos-prev-stmt-1 f90-ts-indent-continued).
 
 The returned list must contain at least one item. The first entry is
-used as 'first; anchor/fallback position."
+used as primary anchor/fallback position."
   (list
    (if items
        ;; find item with smallest column number
@@ -1656,7 +1658,7 @@ An anchor is a pair (position offset).
 
 For argument lists (call sub(...)) and parameters (subroutine sub (...)),
 a default and fallback position is to align one column position to the
-right of the initial opening parenthesis. This specific position is
+right of the initial opening parenthesis. This primary position is
 returned as first element of the list"
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
@@ -1679,12 +1681,6 @@ returned as first element of the list"
 ;;++++++++++++++
 ;; list context: items and columns
 
-;; TODO: if no suitable symbol is found, use first item position and
-;; default continued indent position, example:
-;; associate(some_very_long_name &
-;;                => x)
-;; suggest anchor with offset 0 and 5 for "=>" relative to
-;; first position of some_very_long_name
 (defun f90-ts--align-continued-items-filter (items node-sym)
   "From a list ITEMS of node items select relevant nodes satisfying
 some predicates like being of compatible symbol type to NODE-SYM."
@@ -1742,13 +1738,14 @@ take the element with the largest buffer position."
     (seq-sort (lambda (a b) (< (car a) (car b))) cp-alist-unique)))
 
 
-(defun f90-ts--align-continued-select (first items cur-col variant)
+(defun f90-ts--align-continued-select (primary items cur-col variant)
   "From a list ITEMS of nodes or otherwise selected column positions,
 determine relevant column positions and select column depending on
 VARIANT and CUR-COL which is the current column.
 
-FIRST is a default/fallback anchor (position offset). Depending on
-VARIANT (like keep-or-first) and current alignment, FIRST is selected.
+PRIMARY is a default/fallback anchor (position offset). Depending on
+VARIANT (like keep-or-primary) and current alignment, PRIMARY is
+selected.
 
 The selected column is return as (anchor offset)."
   ;; note that entries in col-pos are triples
@@ -1759,7 +1756,7 @@ The selected column is return as (anchor offset)."
          (col-pos (f90-ts--align-continued-cp-sort col-pos-unsorted))
          (aligned-at (seq-find (lambda (cp) (= cur-col (car cp)))
                                  col-pos))
-         (first-col-pos (f90-ts--align-continued-map-col-pos first)))
+         (primary-col-pos (f90-ts--align-continued-map-col-pos primary)))
     ;; :get-other-fn should always return some fallback position
     ;; (like prev-stmt-1+default indent for continued lines), and thus
     ;; there must always be some anchors in col-pos
@@ -1771,10 +1768,10 @@ The selected column is return as (anchor offset)."
     ;; the two remaining elements (buffer position, offset)
     (cond
      ;; special case (e.g. after inserting newline by <return> or f90-line-break)
-     ;; check whether we are before first entry in col-pos, in this
-     ;; case we go to FIRST, not to first entry in col-pos
+     ;; check whether we are before first entry in col-pos,
+     ;; if this is the case we go to primary, not to first entry in col-pos
      ((< cur-col (caar col-pos))
-      (cdr first-col-pos))
+      (cdr primary-col-pos))
 
      ;; cases: (aligned, rotate), (not-aligned, rotate),
      ;;        (not-aligned,keep-or-rotate)
@@ -1785,24 +1782,21 @@ The selected column is return as (anchor offset)."
       ;; recall that col-pos is sorted by columns
       (let ((aligned-next (seq-find (lambda (cp) (< cur-col (car cp)))
                                     col-pos)))
-        ;; next if there is a next, otherwise first entry (not necessarily first)
+        ;; next if there is a next, otherwise first entry (not necessarily primary)
         (or (cdr aligned-next)
             (cdar col-pos))))
 
-     ;; cases: (not-aligned, keep-or-first),
-     ;;        (aligned-always-first), (not-aligned, always-first)
+     ;; cases: (not-aligned, keep-or-primary),
+     ;;        (aligned-always-primary), (not-aligned, always-primary)
      ((or (not aligned-at)
-          (eq variant 'always-first))
-      (f90-ts-log :indent "cont take first: first=%s" first)
-      ;; we have relevant items, and either always-first or not aligned
-      ;; retrieve buffer position for first entry
-      (cdr first-col-pos))
+          (eq variant 'always-primary))
+      (cdr primary-col-pos))
 
-     ;; cases: (aligned, keep-or-first)
+     ;; cases: (aligned, keep-or-primary)
      ;;        (aligned, keep-or-rotate)
      ((and aligned-at
-           (member variant '(keep-or-first keep-or-rotate)))
-      (f90-ts-log :indent "cont aligned and keep/first: aligned-at = %s" aligned-at)
+           (member variant '(keep-or-primary
+                             keep-or-rotate)))
       ;; aligned, keep current column, but use proper element from col-pos
       ;; as anchor, otherwise indent-region does not take indentation of anchor
       ;; position into account
@@ -1811,7 +1805,7 @@ The selected column is return as (anchor offset)."
      (t
       ;; all eight cases plus node before minimal column are covered above
       (cl-assert col-pos nil "cond logic not complete")
-      (cdr first-col-pos))
+      (cdr primary-col-pos))
      )))
 
 
@@ -1842,8 +1836,8 @@ of same kind on previous argument lines."
            ;; if selected, add default continued offset position as anchor
            (anchor-extra (and f90-ts-indent-list-always-include-default
                               (f90-ts--align-continued-cont-anchor prev-stmt-1)))
-           ;; anchor-first is used as 'first' in keep-or-first, always-first etc.
-           (anchor-first (car anchors-other))
+           ;; anchor-primary is used as 'primary' in keep-or-primary, always-primary etc.
+           (anchor-primary (car anchors-other))
            ;; final list of anchors (which are nodes or pairs (position offset))
            (anchors-final (append (and anchor-extra (list anchor-extra))
                                    anchors-other
@@ -1857,7 +1851,7 @@ of same kind on previous argument lines."
       (f90-ts-log :indent "cont anchor cont: %s" anchor-extra)
       (f90-ts-log :indent "cont anchors final: %s" anchors-final)
 
-      (f90-ts--align-continued-select anchor-first
+      (f90-ts--align-continued-select anchor-primary
                                       anchors-final
                                       cur-col
                                       variant))))
@@ -1917,9 +1911,9 @@ offset is stored, the cache is expected to be nil.
 ;; get-items: function to determine node items in the list context
 ;;            relevant for alignment
 ;; get-other: other columns for alignment (default and fallback values),
-;;            must return a non-empty list of anchors, the first anchor
-;;            in the list is used as first/fallback position (for example
-;;            in keep-or-first option)
+;;            must return a non-empty list of anchors, the primary anchor
+;;            in the list is used as primary/fallback position (for example
+;;            in keep-or-primary option)
 (defconst f90-ts--list-context-types
   '(("argument_list"        . (:get-items-fn f90-ts--align-continued-arguments-items
                                :get-other-fn f90-ts--align-continued-tuple-anchor))
