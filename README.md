@@ -41,15 +41,15 @@ The following can be used to check whether versions are correct:
 
 Additionally to the usual faces, there are some extra custom faces:
 
-| Face Name                                 | Description                                        |
-|-------------------------------------------|----------------------------------------------------|
-| `f90-ts-font-lock-intrinsic-face`         | intrinsic procedures and functions                 |
-| `f90-ts-font-lock-delimiter-face`         | delimiters such as commas and separators           |
-| `f90-ts-font-lock-bracket-face`           | brackets and parentheses                           |
-| `f90-ts-font-lock-operator-face`          | operators and assignments                          |
-| `f90-ts-font-lock-openmp-face`            | openmp directives                                  |
-| `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)            |
-| `f90-ts-font-lock-separator-comment-face` | separator comments (e.g. `---------`, `arguments`) |
+| Face Name                                 | Description                                           |
+|-------------------------------------------|-------------------------------------------------------|
+| `f90-ts-font-lock-intrinsic-face`         | intrinsic procedures and functions                    |
+| `f90-ts-font-lock-delimiter-face`         | delimiters such as commas and separators              |
+| `f90-ts-font-lock-bracket-face`           | brackets and parentheses                              |
+| `f90-ts-font-lock-operator-face`          | operators and assignments                             |
+| `f90-ts-font-lock-openmp-face`            | openmp directives                                     |
+| `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)               |
+| `f90-ts-font-lock-separator-comment-face` | separator comments (e.g. `!---------`, `! arguments`) |
 
 Special variables are recognised by regexp matching with customizable variable `f90-ts-special-var-regexp`.
 Separator comments are recognised by regexp matching with customizable variable `f90-ts-separator-comment-regexp`.
@@ -107,37 +107,40 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argy, just_this, &
                              argz)
 ```
-Four options are currently implemented: `continued-line`, `keep-or-first`, `always-first` and `rotate`
+Five options are currently implemented: `continued-line`, `keep-or-first`, `keep-or-next`,
+`always-first` and `rotate`.
+Moreover, `f90-ts-indent-list-always-include-default` controls whether simple indentation for
+continued lines should always be added (for example even in an argument context as above).
+Remark: currently options and variants are intended to experiment with and see what might work
+and is worth keeping.
+
 Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-lists-region`
-and `f90-ts-indent-lists-line`, respecitvely.
+and `f90-ts-indent-lists-line`, respectively.
 
 TODO:
 * implement further list like structures, refine existing once
-* add fifth option: `keep-or-next`
-* use same option for region and line indentation, and provide other options like rotate or always first
-by separate functions bound to keys like `C-<tab>`, `M-<tab>` and `A-<tab>` etc.
 * handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
 
 
 #### Separator comments
 
 Separator comments are recognised by regexp `f90-ts-separator-comment-regexp`.
-Highlight is done with `f90-ts-font-lock-separator-comment-face`.
+Highlighting is done with `f90-ts-font-lock-separator-comment-face`.
 Additionally these special comments are also aligned differently.
 Normal comments are indented like statements. Separator comments are aligned to their parent node.
-For example, if regexp for separator comments is `\\(arguments\|===\\)`, then indentation would look like:
+For example, if the regexp for separator comments is `\\(!\\( arguments\|===\\)$\\)`,
+indentation looks like:
 
 ```
 subroutine sub(arg1, arg2)
 ! arguments
    ! arg1 must be a positive number
    integer, intent(in) :: arg1, arg2
-! ===
+!===
   ! print arguments
   print *, arg1, arg2
 end subroutine sub
 ```
-
 
 
 ### Smart end completion
@@ -147,19 +150,24 @@ using the treesitter generated AST. Lower, upper and title case of construct key
 end statement, including whether to use `end`, `END` or `End`.
 
 
-#### Indentation of whole structures
+### Indentation of continued statements and blocks
 
-For incomplete block, indentation is sometimes not correct, due to an incomplete AST produced by the parser.
-To easily indent a whole structure once it can be assumed to be complete structurally, indentation of the whole
-structure closed by the `end` statement at point can be performed in conjunction with smart end completion.
-If smart end completion has changed the end statement then indent-region is called for the whole block.
-This experimental feature is controlled by customizable variable `f90-ts-smart-end-indent-if-changed`.
+For incomplete statements on continued lines or incomplete structure blocks,
+indentation is sometimes not correct, due to an incomplete AST produced by the parser.
+
+Indentation of continued statements from begin of statement to line at point is done by
+`f90-ts-indent-and-complete-stmt`, which is bound to `C-<tab>`.
+
+This same function also indents a whole block if executed at its `end struct` line.
+
 
 
 ### Breaking and joining lines
 
 Inspired by the legacy f90 mode as well. Continued lines can be created by breaking a line or reduced
 by joining two consecutive lines connected by continuation symbol `&`.
+Functions for break and join operations are bound to `A-<return>` (break),
+`A-<backspace>` (join with previous line) and `A-<delete>` (join with next line).
 
 
 #### Breaking lines
@@ -231,6 +239,40 @@ Default Keybindings:
 
 
 
+## Testing with ERT
+
+The mode comes with a number of tests in `test/resources`, which cover part of the already
+implemented features.
+Registering and running tests is done in `test/f90-ts-mode-test.el`
+Currently there are tests for indentation (`indent_*.erts`) and for font locking
+(`font_lock_*.f90`).
+
+Standard tests are named `f90-ts-mode/...`, whereas expensive tests start with `f90-ts-mode-extra/...`.
+Registering is done semi-automatic in `f90-ts-mode-test-indent-register` and
+`f90-ts-mode-test-font-lock-register`.
+
+Tests are run with a prescribed set of custom variables. In particular indentation values are chosen
+all differently, such that errors can be spotted more easily.
+
+
+### Indentation tests
+
+Indentation tests are in erts file format. For indentation of an after part between `=-=` and `=-=-=`,
+function `f90-ts-mode-test-update-erts-after` can be used (first remove point char `|` if present) to
+help setting up a new test.
+
+
+### Font lock tests
+
+Font lock tests are in f90 files, with a caret assertion notations. This notation can be automatically
+generated for new files or updated by `f90-ts-mode-test-update-face-annotations`.
+The code is automatically indented by 1, as assertion lines start with a !, so that faces at column 0
+cannot be checked.
+The generated annotations are exhaustive.
+
+Note: fortran test code should NOT use the caret `^`, even in comments, as the ert parser gets confused.
+
+
 ## Installation
 
 The f90-ts-mode relies on the master branch of the patched treesitter fortran grammar at
@@ -252,15 +294,7 @@ where emacs can find it.
 ```
 
 
-## Testing with ERT
-
-The mode comes with a number of tests in `test/resources`, which cover part of the already
-implemented features.
-Adding, updating and running tests is done in `test/f90-ts-mode-test.el`
-Currently there are tests for indent-region (`indent-region_*.erts`) and for font locking (`font_lock_*.f90).
-
-
-## Setup
+### Setup
 
 This is a quite extensive way to load and setup f90-ts-mode, intended for development purposes:
 
@@ -321,10 +355,13 @@ This is a quite extensive way to load and setup f90-ts-mode, intended for develo
 
 (global-set-key (kbd "A-h i") #'f90-ts-mode-switch-custom)
 (global-set-key (kbd "A-h t") (lambda () (interactive)
-                                (f90-ts-mode-test-run)))
+                                (f90-ts-mode-test-run "^f90-ts-mode/")))
 (global-set-key (kbd "A-h d") (lambda () (interactive)
                                 (f90-ts-mode-test-run
+                                 "^f90-ts-mode/"
                                  f90-ts-mode-test-diff-command)))
+;; select ert-regexp and diff tool interactively
+(global-set-key (kbd "A-h s") #'f90-ts-mode-test-run)
 
 (add-hook 'erts-mode-hook
           (lambda ()
