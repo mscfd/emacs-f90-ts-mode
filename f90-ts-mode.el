@@ -1480,7 +1480,7 @@ If NODE is nil return nil."
           (_    'named)))))))
 
 
-(defun f90-ts--align-continued-location (node)
+(defun f90-ts--align-list-location (node)
   "Determine node dependent position related values. These are current
 column, line number and symbol type at point (for deciding
 where to align). If NODE is nil, then no relevant node is at point and
@@ -1501,7 +1501,7 @@ line."
 ;;++++++++++++++
 ;; list context: association_list
 
-(defun f90-ts--align-continued-expand-assoc (nodes)
+(defun f90-ts--align-list-expand-assoc (nodes)
   "Replace association nodes in list NODES by their first two children,
 which are field 'name' and '=>'. There is no handling of the selector
 part currently. Skip continuation symbols, which might be between
@@ -1518,32 +1518,32 @@ part currently. Skip continuation symbols, which might be between
    nodes))
 
 
-(defun f90-ts--align-continued-assocation-items (list-context _node)
+(defun f90-ts--align-list-assocation-items (list-context _node)
   "Determine relevant childrens of LIST-CONTEXT = 'association_list'."
   (cl-assert (f90-ts--node-type-p list-context "association_list")
              nil "expected list context: association_list, got '%s'" list-context)
   ;; expand it, as the it contains a list of nodes, whose children are required
   (when-let ((children (treesit-node-children list-context)))
     ;;(f90-ts-log :indent "assoc_list children: %s" children)
-    (f90-ts--align-continued-expand-assoc children)))
+    (f90-ts--align-list-expand-assoc children)))
 
 
 ;;++++++++++++++
 ;; list context: logical_expression
 
-(defun f90-ts--align-continued-expand-log-expr (node)
+(defun f90-ts--align-list-expand-log-expr (node)
   "Recursively compute relevant children of a nested logical expression
 tree. An expression like A .and. B .and. C is roughly represented as
 logical_expression(logical_expression(A .and. B), .and. C).
 The routine returns the five children A, .and., B, and., C.
 It does not descend into parenthesized_expressions."
   (if (f90-ts--node-type-p node "logical_expression")
-      (mapcan #'f90-ts--align-continued-expand-log-expr
+      (mapcan #'f90-ts--align-list-expand-log-expr
               (treesit-node-children node))
     (list node)))
 
 
-(defun f90-ts--align-continued-log-expr-items (list-context _node)
+(defun f90-ts--align-list-log-expr-items (list-context _node)
   "Determine relevant childrens of LIST-CONTEXT = 'logical_expression'."
   (cl-assert (f90-ts--node-type-p list-context "logical_expression")
              nil "expected list context: logical_expression, got '%s'" list-context)
@@ -1557,7 +1557,7 @@ It does not descend into parenthesized_expressions."
                     list-context
                     (lambda (n) (f90-ts--node-type-p n "logical_expression")))))
     (f90-ts-inspect-node :indent root "root")
-    (let ((children (f90-ts--align-continued-expand-log-expr root)))
+    (let ((children (f90-ts--align-list-expand-log-expr root)))
       ;; (f90-ts-log :indent "cont-logexpr: %s" children)
       children)))
 
@@ -1565,7 +1565,7 @@ It does not descend into parenthesized_expressions."
 ;;++++++++++++++
 ;; list context: parameters
 
-(defun f90-ts--align-continued-parameters-items (list-context _node)
+(defun f90-ts--align-list-parameters-items (list-context _node)
   "Determine relevant childrens of LIST-CONTEXT = 'parameters'."
   (cl-assert (f90-ts--node-type-p list-context "parameters")
              nil "expected list context: parameters, got '%s'" list-context)
@@ -1576,7 +1576,7 @@ It does not descend into parenthesized_expressions."
 ;;++++++++++++++
 ;; list context: binding_list, final_statement
 
-(defun f90-ts--align-continued-binding-items (list-context _node)
+(defun f90-ts--align-list-binding-items (list-context _node)
   "Determine relevant childrens of LIST-CONTEXT = 'binding_list'
 or 'final_statement'. Both occur in the contains part of a derived
 type definition."
@@ -1591,7 +1591,7 @@ type definition."
 ;;++++++++++++++
 ;; list context: variable_declarations
 
-(defun f90-ts--align-continued-var-decl-items (list-context node)
+(defun f90-ts--align-list-var-decl-items (list-context node)
   "Determine relevant childrens of LIST-CONTEXT = 'variable_declaration'."
   (cl-assert (f90-ts--node-type-p list-context "variable_declaration")
              nil "expected list context: variable_declaration, got '%s'" list-context)
@@ -1618,7 +1618,7 @@ type definition."
 ;;++++++++++++++
 ;; list context: arguments
 
-(defun f90-ts--align-continued-arguments-items (list-context _node)
+(defun f90-ts--align-list-arguments-items (list-context _node)
   "Determine relevant childrens of LIST-CONTEXT = 'argument_list'."
   (cl-assert (f90-ts--node-type-p list-context "argument_list")
              nil "expected list context: argument_list, got '%s'" list-context)
@@ -1628,13 +1628,13 @@ type definition."
 ;;++++++++++++++
 ;; additional anchor for aligned lists:
 
-(defun f90-ts--align-continued-cont-anchor (prev-stmt-1)
+(defun f90-ts--align-list-cont-anchor (prev-stmt-1)
   "Return the standard continued line indentation, which is a pair of
 position of prev-stmt-1 and the indent-continued offset."
   (list (treesit-node-start prev-stmt-1) f90-ts-indent-continued))
 
 
-(defun f90-ts--align-continued-default-anchor (_list-context items _node-sym prev-stmt-1)
+(defun f90-ts--align-list-default-anchor (_list-context items _node-sym prev-stmt-1)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
@@ -1648,10 +1648,10 @@ used as primary anchor/fallback position."
    (if items
        ;; find item with smallest column number
        (car (seq-sort-by #'f90-ts--node-column #'< items))
-     (f90-ts--align-continued-cont-anchor prev-stmt-1))))
+     (f90-ts--align-list-cont-anchor prev-stmt-1))))
 
 
-(defun f90-ts--align-continued-tuple-anchor (list-context items node-sym prev-stmt-1)
+(defun f90-ts--align-list-tuple-anchor (list-context items node-sym prev-stmt-1)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
@@ -1681,7 +1681,7 @@ returned as first element of the list"
 ;;++++++++++++++
 ;; list context: items and columns
 
-(defun f90-ts--align-continued-items-filter (items node-sym)
+(defun f90-ts--align-list-items-filter (items node-sym)
   "From a list ITEMS of node items select relevant nodes satisfying
 some predicates like being of compatible symbol type to NODE-SYM."
   ;; if node-sym is not known take almost all kind of nodes, except for continuation symbol
@@ -1701,7 +1701,7 @@ some predicates like being of compatible symbol type to NODE-SYM."
       )))
 
 
-(defun f90-ts--align-continued-map-col-pos (anchor)
+(defun f90-ts--align-list-map-col-pos (anchor)
   "Map an ANCHOR, which is either a node or an otherwise obtained
 pair (positions offset), to a triple (column, position, offset).
 For a node, position is start of node and offset is zero."
@@ -1719,7 +1719,7 @@ For a node, position is start of node and offset is zero."
      anchor)))
 
 
-(defun f90-ts--align-continued-cp-sort (cp-alist)
+(defun f90-ts--align-list-cp-sort (cp-alist)
   "Make list CP-LIST of (column position offset) triples unique by
 column position. For several entries with same column number,
 take the element with the largest buffer position."
@@ -1738,7 +1738,7 @@ take the element with the largest buffer position."
     (seq-sort (lambda (a b) (< (car a) (car b))) cp-alist-unique)))
 
 
-(defun f90-ts--align-continued-select (primary items cur-col variant)
+(defun f90-ts--align-list-select (primary items cur-col variant)
   "From a list ITEMS of nodes or otherwise selected column positions,
 determine relevant column positions and select column depending on
 VARIANT and CUR-COL which is the current column.
@@ -1752,11 +1752,11 @@ The selected column is return as (anchor offset)."
   ;; cp = (column, buffer position, offset),
   ;; where buffer position must be start of a previous node to ensure
   ;; that treesitter buffering in indent-region works as expected,
-  (let* ((col-pos-unsorted (seq-map #'f90-ts--align-continued-map-col-pos items))
-         (col-pos (f90-ts--align-continued-cp-sort col-pos-unsorted))
+  (let* ((col-pos-unsorted (seq-map #'f90-ts--align-list-map-col-pos items))
+         (col-pos (f90-ts--align-list-cp-sort col-pos-unsorted))
          (aligned-at (seq-find (lambda (cp) (= cur-col (car cp)))
                                  col-pos))
-         (primary-col-pos (f90-ts--align-continued-map-col-pos primary)))
+         (primary-col-pos (f90-ts--align-list-map-col-pos primary)))
     ;; :get-other-fn should always return some fallback position
     ;; (like prev-stmt-1+default indent for continued lines), and thus
     ;; there must always be some anchors in col-pos
@@ -1809,17 +1809,17 @@ The selected column is return as (anchor offset)."
      )))
 
 
-(defun f90-ts--align-continued-list-anchor (variant node list-context prev-stmt-1)
+(defun f90-ts--align-list-list-anchor (variant node list-context prev-stmt-1)
   "Determine items on continued lines in a list-like context and use
 their buffer positions for alignment. If anonymous node like parenthesis,
 comma etc, then do the same, but rotate through items with symbols
 of same kind on previous argument lines."
-  (seq-let (cur-col cur-line node-sym) (f90-ts--align-continued-location node)
+  (seq-let (cur-col cur-line node-sym) (f90-ts--align-list-location node)
     (f90-ts-log :indent "cont location: %s, %s" node (f90-ts--align-node-symbol node))
     (f90-ts-log :indent "cont location: col=%s, line=%d, sym=%s" cur-col cur-line node-sym)
     (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
            (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
-                          #'f90-ts--align-continued-default-anchor))
+                          #'f90-ts--align-list-default-anchor))
            (items-context (funcall get-items list-context node))
            ;; filter by line number, use only items on some previous line
            (items-prev (seq-filter
@@ -1827,7 +1827,7 @@ of same kind on previous argument lines."
                                           cur-line))
                         items-context))
            ;; further filter by symbol type node-sym of current node at point
-           (items-filtered (f90-ts--align-continued-items-filter
+           (items-filtered (f90-ts--align-list-items-filter
                             items-prev
                             node-sym))
            ;; get other relevant anchors (an anchor is a pair (position offset) or a node)
@@ -1835,7 +1835,7 @@ of same kind on previous argument lines."
                                    list-context items-filtered node-sym prev-stmt-1))
            ;; if selected, add default continued offset position as anchor
            (anchor-extra (and f90-ts-indent-list-always-include-default
-                              (f90-ts--align-continued-cont-anchor prev-stmt-1)))
+                              (f90-ts--align-list-cont-anchor prev-stmt-1)))
            ;; anchor-primary is used as 'primary' in keep-or-primary, always-primary etc.
            (anchor-primary (car anchors-other))
            ;; final list of anchors (which are nodes or pairs (position offset))
@@ -1851,10 +1851,10 @@ of same kind on previous argument lines."
       (f90-ts-log :indent "cont anchor cont: %s" anchor-extra)
       (f90-ts-log :indent "cont anchors final: %s" anchors-final)
 
-      (f90-ts--align-continued-select anchor-primary
-                                      anchors-final
-                                      cur-col
-                                      variant))))
+      (f90-ts--align-list-select anchor-primary
+                                 anchors-final
+                                 cur-col
+                                 variant))))
 
 
 ;;++++++++++++++
@@ -1914,16 +1914,16 @@ offset is stored, the cache is expected to be nil.
 ;;            must return a non-empty list of anchors, the primary anchor
 ;;            in the list is used as primary/fallback position (for example
 ;;            in keep-or-primary option)
-(defconst f90-ts--list-context-types
-  '(("argument_list"        . (:get-items-fn f90-ts--align-continued-arguments-items
-                               :get-other-fn f90-ts--align-continued-tuple-anchor))
-    ("parameters"           . (:get-items-fn f90-ts--align-continued-parameters-items
-                               :get-other-fn f90-ts--align-continued-tuple-anchor))
-    ("logical_expression"   . (:get-items-fn f90-ts--align-continued-log-expr-items))
-    ("binding_list"         . (:get-items-fn f90-ts--align-continued-binding-items))
-    ("final_statement"      . (:get-items-fn f90-ts--align-continued-binding-items))
-    ("variable_declaration" . (:get-items-fn f90-ts--align-continued-var-decl-items))
-    ("association_list"     . (:get-items-fn f90-ts--align-continued-assocation-items))
+(defconst f90-ts--align-list-context-types
+  '(("argument_list"        . (:get-items-fn f90-ts--align-list-arguments-items
+                               :get-other-fn f90-ts--align-list-tuple-anchor))
+    ("parameters"           . (:get-items-fn f90-ts--align-list-parameters-items
+                               :get-other-fn f90-ts--align-list-tuple-anchor))
+    ("logical_expression"   . (:get-items-fn f90-ts--align-list-log-expr-items))
+    ("binding_list"         . (:get-items-fn f90-ts--align-list-binding-items))
+    ("final_statement"      . (:get-items-fn f90-ts--align-list-binding-items))
+    ("variable_declaration" . (:get-items-fn f90-ts--align-list-var-decl-items))
+    ("association_list"     . (:get-items-fn f90-ts--align-list-assocation-items))
     )
   "List of tree-sitter node types presenting some kind of list context
 which is suitable for alignment indentation.
@@ -1935,7 +1935,7 @@ And the associated function to extract relevant children for alignemnt.")
 from the list-context-type alist."
   ;;(f90-ts-log :indent "context-prop: context=%s " (treesit-node-type list-context))
   (let ((properties (alist-get (treesit-node-type list-context)
-                               f90-ts--list-context-types
+                               f90-ts--align-list-context-types
                                 nil
                                 nil
                                 #'string=))
@@ -1944,7 +1944,7 @@ from the list-context-type alist."
     (plist-get properties pkey)))
 
 
-(defun f90-ts--align-continued-list-context (pos parent ps-key)
+(defun f90-ts--align-list-list-context (pos parent ps-key)
   "In case some list alignment option is active, determine whether we
 are within a list type context and the relevant context node. Often
 this is PARENT, but sometimes a related node like grandparent, etc.
@@ -1961,13 +1961,13 @@ Return value nil signals that this is not a list context."
            (lambda (n) (and (< (f90-ts--node-line n) line)
                             (<= line (line-number-at-pos (treesit-node-end n)))
                             (assoc (treesit-node-type n)
-                                   f90-ts--list-context-types)))))
+                                   f90-ts--align-list-context-types)))))
          (stmt-min ; stmt-max serves as implicit upper bound
           (treesit-parent-until
            parent
            (lambda (n) (and (< (f90-ts--node-line n) line)
                             (assoc (treesit-node-type n)
-                                   f90-ts--list-context-types)))
+                                   f90-ts--align-list-context-types)))
            t ; include parent in search
            ))
          )
@@ -2012,16 +2012,16 @@ is not catched by the continued line matcher."
                default-anchor-offset
              (let* ((ps-key (f90-ts--previous-stmt-keyword-by-first prev-stmt-1))
                     (pos (f90-ts--node-start-or-point node))
-                    (list-context (f90-ts--align-continued-list-context pos parent ps-key))
+                    (list-context (f90-ts--align-list-list-context pos parent ps-key))
                     )
                (f90-ts-log :indent "continued line: list-context=%s" list-context)
                (f90-ts-log :indent "continued region: %s" (treesit-node-on (treesit-node-start prev-stmt-1)
                                                                            (treesit-node-end parent)))
                (if list-context
-                   (f90-ts--align-continued-list-anchor variant
-                                                        node
-                                                        list-context
-                                                        prev-stmt-1)
+                   (f90-ts--align-list-list-anchor variant
+                                                   node
+                                                   list-context
+                                                   prev-stmt-1)
                  ;; default continued line indentation
                  default-anchor-offset)))))
       (f90-ts-log :indent "cont anchor final: %s" anchor-offset)
