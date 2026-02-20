@@ -47,8 +47,8 @@ final newline."
     f90-ts-indent-contain
     f90-ts-indent-block
     f90-ts-indent-continued
-    f90-ts-indent-lists-region
-    f90-ts-indent-lists-line
+    f90-ts-indent-list-region
+    f90-ts-indent-list-line
     f90-ts-indent-list-always-include-default
     f90-ts-special-var-regexp
     f90-ts-separator-comment-regexp
@@ -74,8 +74,8 @@ final newline."
     (f90-ts-indent-contain . 3)
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
-    (f90-ts-indent-lists-region . keep-or-first)
-    (f90-ts-indent-lists-line . keep-or-first)
+    (f90-ts-indent-list-region . keep-or-primary)
+    (f90-ts-indent-list-line . keep-or-primary)
     (f90-ts-indent-list-always-include-default . nil)
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
@@ -256,7 +256,7 @@ can be observed and checked."
                                                    update-fn-choices nil t)
                                   update-fn-choices)))
           (indent-variant-choices (mapcar (lambda (x) (cons (symbol-name (cdr x)) (cdr x)))
-                                          f90-ts-indent-lists-options))
+                                          f90-ts-indent-list-options))
           (chosen-indent-variant
            (unless chosen-update-fn  ; chosen-update-fn=nil is option indent-region
              (cdr (assoc
@@ -294,8 +294,8 @@ can be observed and checked."
                     (f90-ts-mode-test-with-custom-testing
                      (if update-fn
                          (funcall update-fn)
-                       (let ((f90-ts-indent-lists-region indent-variant))
-                         (message "variants: %s %s" f90-ts-indent-lists-region indent-variant)
+                       (let ((f90-ts-indent-list-region indent-variant))
+                         (message "variants: %s %s" f90-ts-indent-list-region indent-variant)
                          (f90-ts-indent-and-complete-region (point-min) (point-max)))))
                     (buffer-substring-no-properties (point-min)
                                                     (point-max)))))
@@ -393,7 +393,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
 
 
 ;; alignment tests, leave as is, the alignment variant to apply
-;; should be specified for each test header (default: keep-or-first)
+;; should be specified for each test header (default: keep-or-primary)
 (f90-ts-mode-test-indent-register
  "f90-ts-mode"
  '("indent_region_align.erts")

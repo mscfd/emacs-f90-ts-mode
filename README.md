@@ -107,15 +107,15 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argy, just_this, &
                              argz)
 ```
-Five options are currently implemented: `continued-line`, `keep-or-first`, `keep-or-next`,
-`always-first` and `rotate`.
+Five options are currently implemented: `continued-line`, `rotate`, `keep-or-primary`,
+`keep-or-rotate` and `always-primary`.
 Moreover, `f90-ts-indent-list-always-include-default` controls whether simple indentation for
 continued lines should always be added (for example even in an argument context as above).
 Remark: currently options and variants are intended to experiment with and see what might work
 and is worth keeping.
 
-Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-lists-region`
-and `f90-ts-indent-lists-line`, respectively.
+Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-list-region`
+and `f90-ts-indent-list-line`, respectively.
 
 TODO:
 * implement further list like structures, refine existing once
