@@ -1222,6 +1222,122 @@ associates and others."
 ;;------------------------------------------------------------------------------
 ;; Indentation
 
+(defvar-local f90-ts--indent-cache nil
+  "Current indent cache vector:
+[node parent child0 prev-sib prev-stmt-first prev-stmt-key].
+Slots 2+ are lazily filled.
+Value `unset` means not yet computed.
+Value nil means that this node does not exist. For example, on empty
+lines, the node itself is nil.")
+
+(defconst f90-ts--indent-cache-size 6
+  "Fixed size for f90-ts--indent-cache.")
+
+;; slot indices of indent cache
+;; nodes
+(defconst f90-ts--indent-slot-node                0)
+(defconst f90-ts--indent-slot-parent              1)
+(defconst f90-ts--indent-slot-child0              2)
+(defconst f90-ts--indent-slot-prev-sib            3)
+(defconst f90-ts--indent-slot-prev-stmt-first     4)
+(defconst f90-ts--indent-slot-prev-stmt-keyword   5)
+;; anchor and/or offset data
+;; (matcher or anchor can sometimes determine anchor/offset
+;; in more complex rules, like for continued lines)
+;;(defconst f90-ts--indent-slot-anchor        6)
+;;(defconst f90-ts--indent-slot-offset        7)
+
+
+(defun f90-ts--indent-cache-print ()
+  "Print out current cache state."
+
+  (if (null f90-ts--indent-cache)
+      (f90-ts-log :indent "cache: nil" f90-ts--indent-cache)
+    (f90-ts-inspect-node :indent (f90-ts--indent-cached-node)       "node@cache")
+    (f90-ts-inspect-node :indent (f90-ts--indent-cached-parent)     "parent@cache")
+    (f90-ts-inspect-node :indent (f90-ts--indent-child0)            "child0@cache")
+    (f90-ts-inspect-node :indent (f90-ts--indent-prev-sib)          "prev-sib@cache")
+    (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-first)   "prev-stmt-1@cache")
+    (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-keyword) "prev-stmt-k@cache")))
+
+
+(defmacro f90-ts--indent-with-cache (slot query)
+  "Return cache value at SLOT if value is present. If SLOT is not
+populated, compute value using QUERY, store the result and return it."
+  `(let ((val (aref f90-ts--indent-cache ,slot)))
+     (if (eq val 'unset)
+         (let ((result ,query))
+           (aset f90-ts--indent-cache ,slot result)
+           result)
+       val)))
+
+
+(defun f90-ts--indent-cached-node ()
+  "Return cached node at index 0."
+  (and f90-ts--indent-cache
+       (aref f90-ts--indent-cache f90-ts--indent-slot-node)))
+
+
+(defun f90-ts--indent-cached-parent ()
+  "Return cached parent at index 0."
+  (and f90-ts--indent-cache
+       (aref f90-ts--indent-cache f90-ts--indent-slot-parent)))
+
+
+(defun f90-ts--indent-cache-valid-p (node parent)
+  "Check whether cache is valid and not empty or stale.
+Note that node and parent are live nodes, so a simple
+comparison suffices."
+  (and f90-ts--indent-cache
+       (eq node   (f90-ts--indent-cached-node))
+       (eq parent (f90-ts--indent-cached-parent))))
+
+
+(defun f90-ts--indent-ensure-cache (node parent)
+  "Return cache for NODE and PARENT, reusing it if the cache is valid."
+  (when (not (f90-ts--indent-cache-valid-p node parent))
+      (setq f90-ts--indent-cache (make-vector f90-ts--indent-cache-size 'unset))
+      (aset f90-ts--indent-cache f90-ts--indent-slot-node   node)
+      (aset f90-ts--indent-cache f90-ts--indent-slot-parent parent))
+  f90-ts--indent-cache)
+
+
+(defun f90-ts--indent-child0 ()
+  "Return first child of node. Use cached value or compute."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-child0
+   (let ((node (f90-ts--indent-cached-node)))
+     (and node (treesit-node-child node 0 t)))))
+
+
+(defun f90-ts--indent-prev-stmt-first ()
+  "Return result of f90-ts--previous-stmt-first. Use cached value
+or compute."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-prev-stmt-first
+   (let ((node   (f90-ts--indent-cached-node))
+         (parent (f90-ts--indent-cached-parent)))
+     (f90-ts--previous-stmt-first node parent))))
+
+
+(defun f90-ts--indent-prev-stmt-keyword ()
+  "Return result of f90-ts--previous-stmt-keyword. Use cached value
+or compute."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-prev-stmt-keyword
+   (let ((first (f90-ts--indent-prev-stmt-first)))
+     (f90-ts--previous-stmt-keyword-by-first first))))
+
+
+(defun f90-ts--indent-prev-sib ()
+  "Return result of f90-ts--previous-sibling. Use cached value
+or compute."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-prev-sib
+   (let ((parent (aref f90-ts--indent-cache f90-ts--indent-slot-parent)))
+     (f90-ts--previous-sibling parent))))
+
+
 ;;++++++++++++++
 ;; matchers
 
