@@ -1325,38 +1325,6 @@ trailing comments."
         result))))
 
 
-(defun p-ps-pss (type-p type-ps type-pss)
-  "Matcher that checks types of parent, previous statement and next
-sibling of previous statement.
-This matcher with the previous statement nodes is mainly used for
-incomplete statements with error nodes and empty lines, where node
-is nil and parent an ERROR."
-  (lambda (node parent bol &rest _)
-    (let* ((prev-stmt (f90-ts--previous-stmt-keyword node parent))
-           (ps-sib (and prev-stmt (treesit-node-next-sibling prev-stmt))))
-      (let ((result (and (f90-ts--node-type-p parent type-p)
-                         (f90-ts--node-type-p prev-stmt type-ps)
-                         (f90-ts--node-type-p ps-sib type-pss))))
-        (when result
-          (f90-ts-log :indent "match: type-p type-ps type-pss= %s, %s, %s" type-p type-ps type-pss))
-        result))))
-
-;; not used currently
-(defun n-p-nps-pps (type-n type-p type-nps type-pps)
-  "Matcher that checks types of node, parent and previous node sibling and previous parent sibling."
-  (lambda (node parent bol &rest _)
-    (let ((npsib (and node (treesit-node-prev-sibling node)))
-          (ppsib (and parent (treesit-node-prev-sibling parent))))
-
-      (let ((result (and (f90-ts--node-type-p node type-n)
-                         (f90-ts--node-type-p parent type-p)
-                         (f90-ts--node-type-p npsib type-nps)
-                         (f90-ts--node-type-p ppsib type-pps))))
-        (when result
-          (f90-ts-log :indent "match: type-n type-p type-nps, type-pps = %s, %s, %s, %s" type-n type-p type-nps type-pps))
-        result))))
-
-
 (defun n-p-ch-psib (type-n type-p type-ch type-psib)
   "Matcher that checks types of node, parent, first child of node
 and previous sibling of node (actually last child of parent previous
