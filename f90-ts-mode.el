@@ -1228,22 +1228,24 @@ Value `unset` means not yet computed.
 Value nil means that this node does not exist. For example, on empty
 lines, the node itself is nil.")
 
-(defconst f90-ts--indent-cache-size 6
+(defconst f90-ts--indent-cache-size 8
   "Fixed size for f90-ts--indent-cache.")
 
 ;; slot indices of indent cache
 ;; nodes
-(defconst f90-ts--indent-slot-node                0)
-(defconst f90-ts--indent-slot-parent              1)
-(defconst f90-ts--indent-slot-child0              2)
-(defconst f90-ts--indent-slot-prev-sib-by-parent  3)
-(defconst f90-ts--indent-slot-prev-stmt-first     4)
-(defconst f90-ts--indent-slot-prev-stmt-keyword   5)
+(defconst f90-ts--indent-slot-node               0)
+(defconst f90-ts--indent-slot-parent             1)
+(defconst f90-ts--indent-slot-child0             2)
+(defconst f90-ts--indent-slot-prev-sib-by-parent 3)
+(defconst f90-ts--indent-slot-prev-stmt-first    4)
+(defconst f90-ts--indent-slot-prev-stmt-keyword  5)
 ;; anchor and/or offset data
-;; (matcher or anchor can sometimes determine anchor/offset
-;; in more complex rules, like for continued lines)
-;;(defconst f90-ts--indent-slot-anchor        6)
-;;(defconst f90-ts--indent-slot-offset        7)
+;; note: matcher or anchor can sometimes determine anchor/offset
+;; in more complex rules, like for continued lines, and it is not
+;; possible to pass any results from matcher to anchor to offset
+;; in simple indent rules machinery
+(defconst f90-ts--indent-slot-anchor             6)
+(defconst f90-ts--indent-slot-offset             7)
 
 
 (defun f90-ts--indent-cache-print ()
@@ -1256,7 +1258,9 @@ lines, the node itself is nil.")
     (f90-ts-inspect-node :indent (f90-ts--indent-child0)             "child0@cache")
     (f90-ts-inspect-node :indent (f90-ts--indent-prev-sib-by-parent) "psibp@cache")
     (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-first)    "pstmt-1@cache")
-    (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-keyword)  "pstmt-k@cache")))
+    (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-keyword)  "pstmt-k@cache")
+    (f90-ts-log :indent "anchor@cache = %s" (f90-ts--indent-cached-anchor))
+    (f90-ts-log :indent "offset@cache = %s" (f90-ts--indent-cached-offset))))
 
 
 (defmacro f90-ts--indent-with-cache (slot query)
@@ -1335,6 +1339,34 @@ or compute."
    f90-ts--indent-slot-prev-stmt-keyword
    (let ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
      (f90-ts--previous-stmt-keyword-by-first pstmt-1))))
+
+
+(defun f90-ts--indent-anchor-cache (anchor)
+  "Store ANCHOR in cache."
+  (aset f90-ts--indent-cache
+        f90-ts--indent-slot-anchor
+        anchor))
+
+
+(defun f90-ts--indent-offset-cache (offset)
+  "Store OFFSET in cache."
+  (aset f90-ts--indent-cache
+        f90-ts--indent-slot-offset
+        offset))
+
+
+(defun f90-ts--indent-cached-anchor ()
+  "Return cached anchor."
+  (and f90-ts--indent-cache
+       (aref f90-ts--indent-cache
+             f90-ts--indent-slot-anchor)))
+
+
+(defun f90-ts--indent-cached-offset ()
+  "Return cached offset."
+  (and f90-ts--indent-cache
+       (aref f90-ts--indent-cache
+             f90-ts--indent-slot-offset)))
 
 
 ;;++++++++++++++
@@ -1489,6 +1521,13 @@ with the previous relevant line."
       bol)))
 
 
+(defun f90-ts--cached-anchor (_node _parent _bol)
+  "Return cached anchor. This function requires that the used matcher
+has computed and stored the anchor (and possibly offset).
+Currently not used."
+  (f90-ts--indent-cached-anchor))
+
+
 ;;++++++++++++++
 ;; offset functions: general
 
@@ -1516,6 +1555,13 @@ inside module, submodule or program, otherwise use f90-ts-indent-contain."
                  (f90-ts--node-type-p ggparent "translation_unit")))
         f90-ts-indent-toplevel
       f90-ts-indent-contain)))
+
+
+(defun f90-ts--cached-offset (_node _parent _bol)
+  "Return cached offset. This function requires that the matcher or
+the anchor have computed and stored the offset.
+Currently this is used by continued lines matcher/anchor."
+  (f90-ts--indent-cached-offset))
 
 
 ;;++++++++++++++
@@ -1935,53 +1981,6 @@ of same kind on previous argument lines."
 ;; anchor functions: continued lines
 ;; determine whether list or standard case
 
-(defvar-local f90-ts--continued-line-offset-cache nil
-  "This is necessary to separate anchor and offset function for
-continued lines. After determining an anchor node myanchor on a
-previous line, we cannot return (treesit-node-start myanchor) plus
-offset. This buffer position can be on the current line, and then
-indentation fails. So we cache the offset and return position of
-myanchor.
-This variable stores computed offset as (bol . offset). The bol is
-only used in an assertion to ensure that offset is not stale.
-
-Once the cached value is used, it is also removed. Thus if a new
-offset is stored, the cache is expected to be nil.
-")
-
-
-(defun f90-ts--continued-line-offset-cache-set (bol offset)
-  "Store BOL and OFFSET in cache."
-  ;;(cl-assert (not f90-ts--continued-line-offset-cache)
-  ;;           "offset cache is not nil (continued line)")
-  (unless f90-ts--continued-line-offset-cache
-    (f90-ts-log :indent "continued line: offset cache is not nil, cache=%s"
-                f90-ts--continued-line-offset-cache))
-  (setq f90-ts--continued-line-offset-cache (cons bol offset)))
-
-
-(defun f90-ts--continued-line-offset (_node _parent bol)
-  "Return cached offset. Use BOL to assert that cached offset is valid."
-  (let ((bol-cached (car-safe f90-ts--continued-line-offset-cache))
-        (offset-cached (cdr-safe f90-ts--continued-line-offset-cache))
-        )
-    ;;(cl-assert (and bol-cached
-    ;;                (eq bol bol-cached))
-    ;;           nil
-    ;;           "stale offset found (continued line), bol expected %s, got %s" bol-cached bol)
-
-    (if (not bol-cached)
-        (f90-ts-log :indent "continued line: no cached offset")
-      (unless (eq bol bol-cached)
-        (f90-ts-log :indent "continued line: stale offset, bol=%s, cached=%s"
-                    bol f90-ts--continued-line-offset-cache)))
-
-    ;; clear cache
-    (setq f90-ts--continued-line-offset-cache nil)
-    (or offset-cached
-        0)))
-
-
 ;; get-items: function to determine node items in the list context
 ;;            relevant for alignment
 ;; get-other: other columns for alignment (default and fallback values),
@@ -2077,7 +2076,6 @@ is not catched by the continued line matcher."
 
     (f90-ts-log :indent "continued line: variant=%s" variant)
     (f90-ts-log :indent "continued line: default=%s, bol=%s" default-anchor-offset bol)
-    (f90-ts-log :indent "continued line: offset cache=%s" f90-ts--continued-line-offset-cache)
 
     (let ((anchor-offset
            (if (or (eq variant 'continued-line)
@@ -2098,8 +2096,10 @@ is not catched by the continued line matcher."
                  ;; default continued line indentation
                  default-anchor-offset)))))
       (f90-ts-log :indent "cont anchor final: %s" anchor-offset)
-      ;; cache offset for offset function, return anchor
-      (f90-ts--continued-line-offset-cache-set bol (cadr anchor-offset))
+      ;; cache anchor and offset for offset function, return anchor
+      ;; (strictly, anchor does not need to be cached)
+      (f90-ts--indent-anchor-cache (car anchor-offset))
+      (f90-ts--indent-offset-cache (cadr anchor-offset))
       (car anchor-offset)
       )))
 
@@ -2209,7 +2209,7 @@ with !$ or !$omp")
     ;;                  x3, x4, x5) &
     ;;      result(val)
     ;; by how much should result be indented? x3 is not a good anchor!
-    (f90-ts--continued-line-is f90-ts--continued-line-anchor f90-ts--continued-line-offset)
+    (f90-ts--continued-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
     )
   "Indentation rules for continued lines. Argument lists and similar continued lines must have been dealt with before.")
 
