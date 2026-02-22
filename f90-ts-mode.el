@@ -1715,7 +1715,7 @@ LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
 
 The default list consists of one single pair which is standard
-continued line indentation (pos-prev-stmt-1 f90-ts-indent-continued).
+continued line indentation (pos-of-prev-stmt-1 f90-ts-indent-continued).
 
 The returned list must contain at least one item. The first entry is
 used as primary anchor/fallback position."
@@ -2070,14 +2070,13 @@ is not catched by the continued line matcher."
   (let* ((variant (if f90-ts--align-continued-variant-tab
                       f90-ts-indent-list-line
                     f90-ts-indent-list-region))
-         (prev-stmt-1 (f90-ts--previous-stmt-first node parent))
+         (prev-stmt-1 (f90-ts--indent-prev-stmt-first))
          (default-anchor-offset (if prev-stmt-1
                                     (list (treesit-node-start prev-stmt-1)
                                           f90-ts-indent-continued)
                                   (list bol 0))))
 
     (f90-ts-log :indent "continued line: variant=%s" variant)
-    (f90-ts-log :indent "continued line: prev-stmt-1=%s" prev-stmt-1)
     (f90-ts-log :indent "continued line: default=%s, bol=%s" default-anchor-offset bol)
     (f90-ts-log :indent "continued line: offset cache=%s" f90-ts--continued-line-offset-cache)
 
