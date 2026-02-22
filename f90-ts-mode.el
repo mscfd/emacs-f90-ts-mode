@@ -565,30 +565,28 @@ lines to first line of continued statement.
 Ignore nodes which do not satisfy the predicate
 `f90-ts--node-not-comment-or-error-p` during ascend or descend
 (for example comment nodes)."
-  (let ((cur-line (f90-ts--line-number-at-node-or-pos node))
-        (predicate #'f90-ts--node-not-comment-or-error-p)
-        (n (or node parent))
-        prev-sib)  ; previous sibling for children scans (ascending and descending)
-    ;;(f90-ts-inspect-node :auxiliary node "prev-stmt-node")
-    ;;(f90-ts-inspect-node :auxiliary parent "prev-stmt-parent")
-    ;;(f90-ts-inspect-node :auxiliary n "prev-stmt-n")
-    ;; ascend until a previous sibling was found
-    (while (and n (not prev-sib))
-      (setq prev-sib (f90-ts--before-child n cur-line predicate))
-      ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib1")
-      (setq n (treesit-node-parent n)))
-
-    (let ((prev-descend prev-sib))
-      ;; descend the previous sibling to find sub nodes which are still previous to current line
-      (while (and prev-sib (> (treesit-node-child-count prev-sib) 0))
-        (setq prev-sib (f90-ts--before-child prev-descend cur-line predicate))
-        ;;(f90-ts-inspect-node :auxiliary prev-sib "prevsib2")
-        (setq prev-descend (or prev-sib prev-descend)))
-
-      ;; return the first leaf on the line where prev-descend is placed
-      ;; (take continuation lines into account and go to beginning of statement)
-      (and prev-descend (f90-ts--first-node-of-stmt prev-descend))
-      )))
+  (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
+         (predicate #'f90-ts--node-not-comment-or-error-p)
+         ;; ascend until a previous ancestor is found
+         (prev-sib-of-anc
+          (cl-loop for ancestor = (or node parent) then (treesit-node-parent ancestor)
+                   while ancestor
+                   for relative = (f90-ts--before-child ancestor cur-line predicate)
+                   when relative return relative))
+         ;; descend prev-sib-of-anc to find the deepest node still before current line
+         (prev-descend
+          (and prev-sib-of-anc
+               (cl-loop for sib = prev-sib-of-anc then next
+                        for next = (and (> (treesit-node-child-count sib) 0)
+                                        (f90-ts--before-child sib cur-line predicate))
+                        ;; if there is a next, continue and shift next to sib
+                        ;; with for sib=next in the first line
+                        while next
+                        finally return sib)))
+         )
+    ;; take continuation lines into account and go to beginning of statement
+    (and prev-descend
+         (f90-ts--first-node-of-stmt prev-descend))))
 
 
 (defun f90-ts--prev-sib-by-parent (parent)
