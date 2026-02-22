@@ -42,34 +42,7 @@ final newline."
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
 
-(defconst f90-ts-mode-test-managed-custom
-  '(f90-ts-indent-toplevel
-    f90-ts-indent-contain
-    f90-ts-indent-block
-    f90-ts-indent-continued
-    f90-ts-indent-list-region
-    f90-ts-indent-list-line
-    f90-ts-indent-list-always-include-default
-    f90-ts-special-var-regexp
-    f90-ts-separator-comment-regexp
-    require-final-newline)
-  "Custom variables whose values can be temporarily overridden.")
-
-
-(defvar f90-ts-mode-test-saved-custom-values
-  '()
-  "Alist of saved custom variable values for temporary overrides.")
-
-
-(defun f90-ts-mode-test-save-custom ()
-  "Save current custom values of `f90-ts-mode-test-managed-custom`."
-  (setq f90-ts-mode-test-saved-custom-values
-        (mapcar (lambda (var)
-                  (cons var (symbol-value var)))
-                f90-ts-mode-test-managed-custom)))
-
-
-(defconst f90-ts-mode-test-custom-testing
+(defconst f90-ts-mode-test-custom-settings
   '((f90-ts-indent-toplevel . 1)
     (f90-ts-indent-contain . 3)
     (f90-ts-indent-block . 5)
@@ -79,29 +52,44 @@ final newline."
     (f90-ts-indent-list-always-include-default . nil)
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
+    (indent-tabs-mode . nil)
     (require-final-newline . nil)
     )
   "Alist of custom variable values for testing purposes.")
 
 
+(defvar f90-ts-mode-test-custom-saved
+  nil
+  "Alist of saved custom variable values for temporary overrides.
+It has the same structure and the same set of keys as
+`f90-ts-mode-test-custom-settings`")
+
+
+(defun f90-ts-mode-test-save-custom ()
+  "Save current custom values of managed variables listed as keys in
+`f90-ts-mode-test-custom-settings`."
+  (setq f90-ts-mode-test-custom-saved
+        (cl-loop for (var . _) in f90-ts-mode-test-custom-settings
+                 collect (cons var (default-value var)))))
+
 (defun f90-ts-mode-test-set-custom-testing ()
   "Save current values and apply temporary ones for testing purposes."
   (f90-ts-mode-test-save-custom)
-  (dolist (entry f90-ts-mode-test-custom-testing)
-    (set (car entry) (cdr entry))))
+  (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
+           do (set-default var val)))
 
 
 (defun f90-ts-mode-test-restore-custom ()
   "Restore previously saved custom variable values."
-  (unless f90-ts-mode-test-saved-custom-values
+  (unless f90-ts-mode-test-custom-saved
     (error "f90-ts-mode-test: No saved custom variable state to restore"))
-  (dolist (entry f90-ts-mode-test-saved-custom-values)
-    (set (car entry) (cdr entry)))
-  (setq f90-ts-mode-test-saved-custom-values nil))
+  (cl-loop for (var . val) in f90-ts-mode-test-custom-saved
+           do (set-default var val))
+  (setq f90-ts-mode-test-custom-saved nil))
 
 
 (defmacro f90-ts-mode-test-with-custom-testing (&rest body)
-  `(let ((f90-ts-mode-test-saved-custom-values nil))
+  `(let ((f90-ts-mode-test-custom-saved nil))
      (unwind-protect
          (progn
            (f90-ts-mode-test-set-custom-testing)
@@ -118,7 +106,6 @@ selection of indentation rules is tested properly."
      (with-temp-buffer
        (insert-file-contents file)
        (f90-ts-mode)
-       (setq-local indent-tabs-mode nil)
        (treesit-parser-create 'fortran)
        (font-lock-ensure)
        (funcall body-fn)))))
