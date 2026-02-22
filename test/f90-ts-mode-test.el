@@ -315,7 +315,34 @@ can be observed and checked."
        (message "error: %s" (error-message-string err))))))
 
 
-(defun f90-ts-mode-test-indent-register (prefix files prep-fns action-fns)
+(defun f90-ts-mode-test-register (prefix files)
+  "Dynamically generate tests for all FILES assumed to be in erts
+format, one test per file. Necessary preparation and action to test
+must be given in the Code preamble within the erts test.
+PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
+  (cl-loop
+   for file in files
+   for name-base = (string-replace
+                    "_" "-"
+                    (replace-regexp-in-string
+                     "^\\(indent_region\\|\\(indent\\|break\\|join\\)_line\\)_"
+                     "\\1/"
+                     (file-name-sans-extension file)))
+   for test-name = (intern
+                    (format "%s/custom/%s"
+                            prefix
+                            name-base))
+   do (eval
+       `(ert-deftest ,test-name ()
+          (skip-unless (treesit-ready-p 'fortran))
+          (message "test %s" ,file)
+          (f90-ts-mode-test-with-custom-testing
+           (f90-ts-mode-test-erts-with-diff
+            (ert-test-erts-file (ert-resource-file ,file))))))
+   ))
+
+
+(defun f90-ts-mode-test-prep-act-register (prefix files prep-fns action-fns)
   "Dynamically generate tests for all FILES assumed to be in erts
 format, one test per file and per prep-fn/action-fn combination.
 PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
@@ -360,7 +387,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
 
 ;; register tests, general indentation
 ;; (with three different prep functions to vary initial indentation)
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
@@ -373,7 +400,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
  )
 
 
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
  '("indent_region_smart_end.erts")
  '(nil ; no modification
@@ -383,7 +410,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
  )
 
 
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
  '("indent_line_incomplete.erts")
  '(nil ; no modification
@@ -394,7 +421,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
 
 ;; alignment tests, leave as is, the alignment variant to apply
 ;; should be specified for each test header (default: keep-or-primary)
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
  '("indent_region_align.erts")
  '(nil ; no preparation
@@ -402,8 +429,16 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
  '(f90-ts-mode-test--indent-by-region)
  )
 
+
+;; indentation tests, which do not fit the prep/action scheme 
+(f90-ts-mode-test-register
+ "f90-ts-mode"
+ '("indent_region_partial.erts")
+ )
+
+
 ;; expensive tests
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode-extra"
  '("indent_integration_collatz.erts")
  '(nil ; no modification
@@ -416,7 +451,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
 
 ;; tests already registered with indent-by-region
 ;; note that indent-by-line requires reparsing after each line
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode-extra"
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
@@ -429,7 +464,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
  )
 
 
-(f90-ts-mode-test-indent-register
+(f90-ts-mode-test-prep-act-register
  "f90-ts-mode-extra"
  '("indent_region_smart_end.erts")
  '(nil ; no modification
