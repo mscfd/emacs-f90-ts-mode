@@ -596,7 +596,7 @@ Ignore nodes which do not satisfy the predicate
 line, it often happens that node=nil, but parent is some relevant node,
 whose children, which are kind of siblings to nil-node-position, can be
 used to determine things like indentation.
-For the first sibling itself, we do not exclude ERROR nodes, then the
+For the first sibling itself, we do not exclude ERROR nodes. Then the
 ERROR node is descended (usually just one step) to find a node with relevant
 structure type, like subroutine_statement or similar."
   (let* ((cur-line (line-number-at-pos))
@@ -1423,7 +1423,7 @@ trailing comments."
 (defun n-p-ps (type-n type-p type-ps)
   "Matcher that checks types of node, parent and previous statement."
   (lambda (node parent bol &rest _)
-    (let ((prev-stmt (f90-ts--previous-stmt-keyword node parent)))
+    (let ((prev-stmt (f90-ts--indent-prev-stmt-keyword)))
       (let ((result (and (f90-ts--node-type-p node type-n)
                          (f90-ts--node-type-p parent type-p)
                          (f90-ts--node-type-p prev-stmt type-ps))))
@@ -1440,13 +1440,8 @@ trailing comments."
 and previous sibling of node (actually last child of parent previous
 to position, which also works for node=nil)."
   (lambda (node parent bol &rest _)
-    (let* ((child0 (and node (treesit-node-child node 0 t)))
-           (prev-sib (and parent
-                          (f90-ts--previous-sibling parent))))
-      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: node=%s" (and node (treesit-node-type node)))
-      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: parent=%s" (and parent (treesit-node-type parent)))
-      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: child0=%s" (and child0 (treesit-node-type child0)))
-      ;;(f90-ts-log :indent "n-p-ch-psib-matcher: prevsib=%s" (and prev-sib (treesit-node-type prev-sib)))
+    (let* ((child0 (f90-ts--indent-child0))
+           (prev-sib (f90-ts--indent-prev-sib)))
       (and (f90-ts--node-type-p node type-n)
            (f90-ts--node-type-p parent type-p)
            (f90-ts--node-type-p child0 type-ch)
