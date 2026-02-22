@@ -1225,92 +1225,74 @@ associates and others."
 ;;++++++++++++++
 ;; matchers
 
-(defun f90-ts--continued-line-first-is ()
-  "Return matcher which chechs whether point is at first continued line
-of a continued statement (i.e. the second line of the continued
-statement).
-This line is indented relative to the statements first line.
-All other line use indentation of previous line."
-  (lambda (node parent bol &rest _)
-    (when-let ((prev-stmt (f90-ts--previous-stmt-first node parent))
-               (pos (f90-ts--node-start-or-pos node)))
-      (f90-ts--after-stmt-line1-p prev-stmt pos)
-      )))
+(defun f90-ts--continued-line-is (node parent _bol &rest _)
+  "A matcher which check whether we are on some continued line of a
+continued statement. The first statement line itself is not matched."
+  (cond
+   (node
+    (let ((pos (treesit-node-start node)))
+      (f90-ts--pos-is-continued-p pos)))
+
+   (parent
+    ;; node=nil but parent is a proper node, then we are probably on an empty line
+    (when-let ((psib (f90-ts--previous-sibling parent)))
+      ;; previous-sibling already excludes comment node, hence we can directly
+      ;; check whether there is an ampersand
+      (f90-ts--node-type-p psib "&")))))
 
 
-;; this is also true for the first continued line, if this needs
-;; extra handling, then the matcher for the first line should be called first
-(defun f90-ts--continued-line-some-is ()
-  "Check whether we are on some continued line of a continued statement."
-  (lambda (node parent bol &rest _)
-    (cond
-     (node
-      (let ((pos (treesit-node-start node)))
-        (f90-ts--pos-is-continued-p pos)))
-
-     (parent
-      ;; node=nil but parent is a proper node, then we are probably on an empty line
-      (when-let ((psib (f90-ts--previous-sibling parent)))
-        ;; previous-sibling already excludes comment node, hence we can directly
-        ;; check whether there is an ampersand
-        (f90-ts--node-type-p psib "&"))))))
-
-
-(defun f90-ts--openmp-comment-is ()
+(defun f90-ts--openmp-comment-is (node _parent _bol &rest _)
   "Matcher that checks whether node is an openmp comment."
-  (lambda (node parent bol &rest _)
-    (and (f90-ts--node-type-p node "comment")
-         (f90-ts-openmp-node-p node))))
+  (and (f90-ts--node-type-p node "comment")
+       (f90-ts-openmp-node-p node)))
 
-(defun f90-ts--preproc-node-is ()
+
+(defun f90-ts--preproc-node-is (node _parent _bol &rest _)
   "Matcher that checks whether node is a fortran preprocessor node."
-  (lambda (node parent bol &rest _)
-    (and node (f90-ts-preproc-node-p node))))
+  (and node (f90-ts-preproc-node-p node)))
 
 
-(defun f90-ts--preproc-at-toplevel-is ()
+(defun f90-ts--preproc-at-toplevel-is (_node parent _bol &rest _)
   "Matcher that checks if parent is a preprocessor node and its first
 non-preprocessor ancestor is a toplevel node (program, module, etc.)."
   ;; Content inside preprocessor:
   ;; - Search up the tree for the first "Ancestor" that is NOT a
   ;;   preprocessor node.
   ;; - If that ancestor is a module or program -> toplevel indent
-  (lambda (_n parent &rest _)
-     (and parent
-          (f90-ts-preproc-node-p parent)
-          (let ((ancestor (treesit-parent-until
-                           parent
-                           (lambda (n)
-                             (not (f90-ts-preproc-node-p n))))))
-            (and ancestor
-                 (string-match-p "module\\|program" (treesit-node-type ancestor)))))))
+  (and parent
+       (f90-ts-preproc-node-p parent)
+       (let ((ancestor (treesit-parent-until
+                        parent
+                        (lambda (n)
+                          (not (f90-ts-preproc-node-p n))))))
+         (and ancestor
+              (string-match-p "module\\|program"
+                              (treesit-node-type ancestor))))))
 
 
-(defun f90-ts--separator-comment-is ()
+(defun f90-ts--separator-comment-is (node _parent _bol &rest _)
   "Matcher that checks whether node is a separator comment.
 These are aligned to their parents."
-  (lambda (node parent bol &rest _)
-    (and (f90-ts--node-type-p node "comment")
-         (f90-ts-separator-comment-node-p node))))
+  (and (f90-ts--node-type-p node "comment")
+       (f90-ts-separator-comment-node-p node)))
 
 
-(defun f90-ts--comment-region-is ()
+(defun f90-ts--comment-region-is (node _parent _bol &rest _)
   "Matcher that checks whether node and previous node are comments
 and are of same type (both separator or both other).
 Use first node of previous line (skipping empty lines) to avoid
 trailing comments."
-  (lambda (node parent bol &rest _)
-    (when (f90-ts--node-type-p node "comment")
-      (when-let* ((prev-sib (treesit-node-prev-sibling node))
-                  (prev-line (f90-ts--first-node-on-line
-                              (treesit-node-start prev-sib))))
-        (f90-ts-inspect-node :indent node "node")
-        (f90-ts-inspect-node :indent prev-sib "prev-sib")
-        (f90-ts-inspect-node :indent prev-line "prev-line")
-        (and (f90-ts--node-type-p prev-line "comment")
-             (eq (not (f90-ts-separator-comment-node-p node))
-                 (not (f90-ts-separator-comment-node-p prev-line))))
-        ))))
+  (when (f90-ts--node-type-p node "comment")
+    (when-let* ((prev-sib (treesit-node-prev-sibling node))
+                (prev-line (f90-ts--first-node-on-line
+                            (treesit-node-start prev-sib))))
+      (f90-ts-inspect-node :indent node "node")
+      (f90-ts-inspect-node :indent prev-sib "prev-sib")
+      (f90-ts-inspect-node :indent prev-line "prev-line")
+      (and (f90-ts--node-type-p prev-line "comment")
+           (eq (not (f90-ts-separator-comment-node-p node))
+               (not (f90-ts-separator-comment-node-p prev-line))))
+      )))
 
 
 (defun n-p-ps (type-n type-p type-ps)
@@ -1321,7 +1303,10 @@ trailing comments."
                          (f90-ts--node-type-p parent type-p)
                          (f90-ts--node-type-p prev-stmt type-ps))))
         (when result
-          (f90-ts-log :indent "match: type-n type-p type-ps = %s, %s, %s" type-n type-p type-ps))
+          (f90-ts-log :indent "match: type-n type-p type-ps = %s, %s, %s"
+                      type-n
+                      type-p
+                      type-ps))
         result))))
 
 
@@ -2061,7 +2046,7 @@ debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
   `(;; indent a sequence of openmp statements, these are comments starting
     ;; with !$, so this needs to be done before comments are processed
     ,@(f90-ts-indent-rules-info "openmp")
-    ((f90-ts--openmp-comment-is) column-0 0)
+    (f90-ts--openmp-comment-is column-0 0)
     )
   "Indentation rules for openmp. Currently openmp are comment nodes, which start
 with !$ or !$omp")
@@ -2075,24 +2060,26 @@ with !$ or !$omp")
     ,@(f90-ts-indent-rules-info "comments")
     ;; indent a sequence of comments of same kind (separator or other)
     ;; with respect to previous comment
-    ((f90-ts--comment-region-is) prev-sibling 0)
+    (f90-ts--comment-region-is prev-sibling 0)
     ;; indent separator comments like their parent nodes
     ;; this check is after the region check, hence previous sibling
     ;; is not a comment of same kind
-    ((f90-ts--separator-comment-is) parent 0)
+    (f90-ts--separator-comment-is parent 0)
     )
   "Indentation rules for comments (excluding openmp statements).")
+
 
 (defvar f90-ts-indent-rules-preproc
   `(;; indent preprocessor directive.
     ,@(f90-ts-indent-rules-info "preprocessor directive")
     ;; Directive itself: no indent
-    ((f90-ts--preproc-node-is) column-0 0)
+    (f90-ts--preproc-node-is column-0 0)
     ;; Directive with preproc parent at toplevel
-    ((f90-ts--preproc-at-toplevel-is) grand-parent f90-ts-indent-toplevel)
+    (f90-ts--preproc-at-toplevel-is grand-parent f90-ts-indent-toplevel)
     ;; Other
     ((n-p-gp nil "preproc_.*" nil) grand-parent f90-ts-indent-block))
   "Indentation rules for preprocessor directives.")
+
 
 (defvar f90-ts-indent-rules-continued
   `(;; handle continued lines
@@ -2112,7 +2099,7 @@ with !$ or !$omp")
     ;;                  x3, x4, x5) &
     ;;      result(val)
     ;; by how much should result be indented? x3 is not a good anchor!
-    ((f90-ts--continued-line-some-is) f90-ts--continued-line-anchor f90-ts--continued-line-offset)
+    (f90-ts--continued-line-is f90-ts--continued-line-anchor f90-ts--continued-line-offset)
     )
   "Indentation rules for continued lines. Argument lists and similar continued lines must have been dealt with before.")
 
