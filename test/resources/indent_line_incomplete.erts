@@ -49,7 +49,7 @@ recursive subroutine sub(arg)
      |
 =-=-=
 
-Name: subroutine 2
+Name: subroutine 3
 =-=
 subroutine foo()
      name: if (condition) then
