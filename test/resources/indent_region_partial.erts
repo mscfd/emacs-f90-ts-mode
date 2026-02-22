@@ -1,0 +1,99 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (indent-region 1 54))
+
+Name: indent region partial start
+=-=
+|subroutine sub_1()
+call sub_2()
+end subroutine sub_1
+
+subroutine sub_2()
+call sub_3()
+end subroutine sub_2
+
+subroutine sub_3()
+call sub_1()
+end subroutine sub_3
+=-=
+subroutine sub_1()
+     call sub_2()
+end subroutine sub_1
+|
+subroutine sub_2()
+call sub_3()
+end subroutine sub_2
+
+subroutine sub_3()
+call sub_1()
+end subroutine sub_3
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (indent-region 55 108))
+
+Name: indent region partial middle
+=-=
+|subroutine sub_1()
+call sub_2()
+end subroutine sub_1
+
+subroutine sub_2()
+call sub_3()
+end subroutine sub_2
+
+subroutine sub_3()
+call sub_1()
+end subroutine sub_3
+=-=
+subroutine sub_1()
+call sub_2()
+end subroutine sub_1
+
+subroutine sub_2()
+     call sub_3()
+end subroutine sub_2
+|
+subroutine sub_3()
+call sub_1()
+end subroutine sub_3
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (indent-region 109 162))
+
+Name: indent region partial end
+=-=
+|subroutine sub_1()
+call sub_2()
+end subroutine sub_1
+
+subroutine sub_2()
+call sub_3()
+end subroutine sub_2
+
+subroutine sub_3()
+call sub_1()
+end subroutine sub_3
+
+=-=
+subroutine sub_1()
+call sub_2()
+end subroutine sub_1
+
+subroutine sub_2()
+call sub_3()
+end subroutine sub_2
+
+subroutine sub_3()
+     call sub_1()
+end subroutine sub_3
+|
+=-=-=
