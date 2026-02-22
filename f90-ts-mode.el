@@ -1303,11 +1303,21 @@ comparison suffices."
 
 
 (defun f90-ts--indent-child0 ()
-  "Return first child of node. Use cached value or compute."
+  "Return first named child of node. Use cached value or compute."
   (f90-ts--indent-with-cache
    f90-ts--indent-slot-child0
    (let ((node (f90-ts--indent-cached-node)))
      (and node (treesit-node-child node 0 t)))))
+
+
+(defun f90-ts--indent-prev-sib ()
+  "Return result of f90-ts--previous-sibling. Use cached value
+or compute."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-prev-sib
+   (let ((parent (aref f90-ts--indent-cache f90-ts--indent-slot-parent)))
+     (and parent
+          (f90-ts--previous-sibling parent)))))
 
 
 (defun f90-ts--indent-prev-stmt-first ()
@@ -1329,17 +1339,16 @@ or compute."
      (f90-ts--previous-stmt-keyword-by-first first))))
 
 
-(defun f90-ts--indent-prev-sib ()
-  "Return result of f90-ts--previous-sibling. Use cached value
-or compute."
-  (f90-ts--indent-with-cache
-   f90-ts--indent-slot-prev-sib
-   (let ((parent (aref f90-ts--indent-cache f90-ts--indent-slot-parent)))
-     (f90-ts--previous-sibling parent))))
-
-
 ;;++++++++++++++
 ;; matchers
+
+(defun f90-ts--populate-cache (node parent _bol &rest _)
+  "A dummy matcher which always fails, but initialises the indent cache
+for a new indentation run. It should be the very first rule to be
+executed."
+  (f90-ts--indent-ensure-cache node parent)
+  nil)
+
 
 (defun f90-ts--continued-line-is (node parent _bol &rest _)
   "A matcher which check whether we are on some continued line of a
@@ -2110,14 +2119,9 @@ additionally some node and parent info if MSG=first."
     (f90-ts-log :indent "---------info %s--------------" msg)
     (when (or (string= msg "first") (string= msg "catch all"))
       (let* ((grandparent (and parent (treesit-node-parent parent)))
-             (prev-stmt (f90-ts--previous-stmt-keyword node parent))
-             (pssib (and prev-stmt (treesit-node-next-sibling prev-stmt)))
-             ;;(npsib (and node (treesit-node-prev-sibling node)))
-             ;;(ppsib (and parent (treesit-node-prev-sibling parent)))
-             (child0 (and node (treesit-node-child node 0 t)))
-             (sibling0 (and parent (treesit-node-child parent 0 t))) ;; first named sibling
-             (prev-sib (and parent (f90-ts--previous-sibling parent)))
-             )
+             (prev-stmt (f90-ts--indent-prev-stmt-keyword))
+             (child0 (f90-ts--indent-child0)))
+
         (f90-ts-log :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
                     (point) bol (line-beginning-position) (line-number-at-pos))
         (let ((ttttt (format "types n-p-gp-ps-ch = %s, %s, %s, %s, %s"
@@ -2126,24 +2130,15 @@ additionally some node and parent info if MSG=first."
                              (and grandparent (treesit-node-type grandparent))
                              (and prev-stmt (treesit-node-type prev-stmt))
                              (and child0 (treesit-node-type child0)))))
-          (f90-ts-log :indent (propertize ttttt 'face '(:foreground "brown3"))))
-        (f90-ts-inspect-node :indent node "info[node]")
-        (f90-ts-inspect-node :indent parent "info[parent]")
-        (f90-ts-inspect-node :indent grandparent "info[grandparent]")
-        (f90-ts-inspect-node :indent prev-stmt "info[prevstmt]")
-        (f90-ts-inspect-node :indent pssib "info[pssib]")
-        (f90-ts-inspect-node :indent child0 "info[child0]")
-        (f90-ts-inspect-node :indent sibling0 "info[firstsib]")
-        (f90-ts-inspect-node :indent prev-sib "info[prevsib]")
-        ;;(f90-ts-inspect-node :indent npsib "info[npsib]")
-        ;;(f90-ts-inspect-node :indent ppsib "info[ppsib]")
+          (f90-ts-log :indent (propertize ttttt 'face '(:foreground "brown2")))
+          (f90-ts--indent-cache-print))
         ))
     nil))
 
 
 (defun f90-ts-indent-rules-info (msg)
-  "Used to create a debug indentation rule, which never matches but prints some
-debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
+  "Create a debug indentation rule, which never matches, but prints
+some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
   `(;; for testing purposes
     ((fail-info-is ,msg) parent 0)))
 
@@ -2151,11 +2146,13 @@ debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
 ;;++++++++++++++
 ;; simple indentation rules
 
-(defvar f90-ts-indent-rules-test-first
-  `(;; for testing purposes
+(defvar f90-ts-indent-rules-start
+  `(;; populate cache and then always fail
+    (f90-ts--populate-cache parent 0)
     ,@(f90-ts-indent-rules-info "first")
     )
-  "Indentation rules executed first and intended for testing purposes.")
+  "Indentation rules executed at start. The main purpose is to fill the
+indentation cache for the new run.")
 
 
 (defvar f90-ts-indent-rules-openmp
@@ -2382,7 +2379,7 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules
   `((fortran
-     ,@f90-ts-indent-rules-test-first
+     ,@f90-ts-indent-rules-start
      ,@f90-ts-indent-rules-preproc
      ,@f90-ts-indent-rules-openmp
      ,@f90-ts-indent-rules-comments
