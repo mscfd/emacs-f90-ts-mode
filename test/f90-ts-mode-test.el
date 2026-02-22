@@ -335,7 +335,6 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
    do (eval
        `(ert-deftest ,test-name ()
           (skip-unless (treesit-ready-p 'fortran))
-          (message "test %s" ,file)
           (f90-ts-mode-test-with-custom-testing
            (f90-ts-mode-test-erts-with-diff
             (ert-test-erts-file (ert-resource-file ,file))))))
@@ -376,7 +375,6 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
                   (skip-unless (treesit-ready-p 'fortran))
                   (ert-info
                    (,info-text)
-                   (message "test %s, %s" ,file ,info-text)
                    (f90-ts-mode-test-with-custom-testing
                     (let ((f90-ts-mode-test--prepare-fn ',prep-fn)
                           (f90-ts-mode-test--action-fn ',action-fn))
