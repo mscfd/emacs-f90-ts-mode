@@ -2031,7 +2031,7 @@ is not catched by the continued line matcher."
 additionally some node and parent info if MSG=first."
   (lambda (node parent bol &rest _)
     (f90-ts-log :indent "---------info %s--------------" msg)
-    (when (or (string= msg "first") (string= msg "catch all"))
+    (when (or (string= msg "start") (string= msg "catch all"))
       (let* ((grandparent (and parent (treesit-node-parent parent)))
              (psibp (f90-ts--indent-prev-sib-by-parent))
              (pstmt-k (f90-ts--indent-prev-stmt-keyword))
@@ -2065,7 +2065,7 @@ some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
 (defvar f90-ts-indent-rules-start
   `(;; populate cache and then always fail
     (f90-ts--populate-cache parent 0)
-    ,@(f90-ts-indent-rules-info "first")
+    ;;,@(f90-ts-indent-rules-info "start")
     )
   "Indentation rules executed at start. The main purpose is to fill the
 indentation cache for the new run.")
@@ -2074,7 +2074,6 @@ indentation cache for the new run.")
 (defvar f90-ts-indent-rules-openmp
   `(;; indent a sequence of openmp statements, these are comments starting
     ;; with !$, so this needs to be done before comments are processed
-    ,@(f90-ts-indent-rules-info "openmp")
     (f90-ts--openmp-comment-is column-0 0)
     )
   "Indentation rules for openmp. Currently openmp are comment nodes, which start
@@ -2086,7 +2085,6 @@ with !$ or !$omp")
     ;; in a sequence of comments can be aligned like a normal statement,
     ;; but if a comment follows another comment, then we need an extra rule
     ;; to align to previous comment
-    ,@(f90-ts-indent-rules-info "comments")
     ;; indent a sequence of comments of same kind (separator or other)
     ;; with respect to previous comment
     (f90-ts--comment-region-is prev-sibling 0)
@@ -2100,7 +2098,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-preproc
   `(;; indent preprocessor directive.
-    ,@(f90-ts-indent-rules-info "preprocessor directive")
     ;; Directive itself: no indent
     (f90-ts--preproc-node-is column-0 0)
     ;; Directive with preproc parent at toplevel
@@ -2112,7 +2109,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-continued
   `(;; handle continued lines
-    ,@(f90-ts-indent-rules-info "continued")
     ;; special case, first node is closing parenthesis means this is a continued line
     ((n-p-gp ")" "parenthesized_expression" nil) parent 0)
     ;; it is easy to see whether we are on a continued line (not the first line
@@ -2136,7 +2132,6 @@ with !$ or !$omp")
 (defvar f90-ts-indent-rules-internal-proc
   `(;; contains statements in modules, programs, subroutines or functions,
     ;; no indentation for contains
-    ,@(f90-ts-indent-rules-info "internal_proc")
     ((node-is    "internal_procedures")         parent 0)
     ((parent-is  "internal_procedures")         parent f90-ts--indent-toplevel-offset)
     ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--indent-toplevel-offset)
@@ -2146,8 +2141,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-prog-mod
   `(;; program or module interface part (before contains) and end statement
-    ,@(f90-ts-indent-rules-info "program module")
-
     ;; in all cases: first match node with end_xyz_statement, and then only
     ;; whether parent is xyz, as parent is xyz in both cases
 
@@ -2170,7 +2163,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-function
   `(;; functions and subroutine bodies
-    ,@(f90-ts-indent-rules-info "function")
     ((node-is    "end_subroutine_statement") parent 0)
     ((node-is    "end_function_statement")   parent 0)
     ((parent-is  "subroutine")               parent f90-ts-indent-block)
@@ -2183,7 +2175,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-interface
   `(;; (abstract) interface bodies
-    ,@(f90-ts-indent-rules-info "interface")
     ((node-is    "end_interface_statement") parent 0)
     ((parent-is  "interface")               parent f90-ts-indent-block)
     ((n-p-pstmtk nil "ERROR" "interface")   parent f90-ts-indent-block)
@@ -2193,7 +2184,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-derived-type
   `(;; type definitions
-    ,@(f90-ts-indent-rules-info "derived type")
     ((n-p-gp       "end_type_statement"      "derived_type_definition" nil)                      parent 0)
     ((n-p-ch-psibp "derived_type_procedures" "derived_type_definition" "contains_statement" nil) parent 0)
     ((n-p-ch-psibp "ERROR"                   "derived_type_definition" "contains_statement" nil) parent 0)
@@ -2205,7 +2195,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-if
   `(;; if-then-else statements
-    ,@(f90-ts-indent-rules-info "if then else")
     ;; this must be first, as its parent is an if-statement
     ;; but node=nil/something and parent=if_statement is possible (some line after if)
     ((n-p-gp     "end_if_statement" "if_statement"  nil)      parent 0)
@@ -2236,7 +2225,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-control
   `(;; control statements
-    ,@(f90-ts-indent-rules-info "control")
     ((n-p-gp     "end_do_loop" "do_loop" nil)  parent 0)
     ((n-p-pstmtk nil           "do_loop" "do") parent f90-ts-indent-block)  ;; proper do block (with or without while)
     ((n-p-pstmtk nil           "ERROR"   "do") previous-stmt-anchor f90-ts-indent-block)
@@ -2255,7 +2243,6 @@ with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-select
   `(;; control statements
-    ,@(f90-ts-indent-rules-info "select type statement")
     ((n-p-gp     "end_select_statement" "select_type_statement" nil)              parent 0)
     ((n-p-pstmtk "type_statement"       "select_type_statement" nil)              parent 0)
     ((n-p-pstmtk nil                    "select_type_statement" "type")           parent f90-ts-indent-block)
@@ -2266,7 +2253,6 @@ with !$ or !$omp")
     ((n-p-gp     nil                    "ERROR"                 "type_statement") grand-parent f90-ts-indent-block)
     ((parent-is                         "select_type_statement")                  parent 0)
 
-    ,@(f90-ts-indent-rules-info "select case statement")
     ((n-p-gp     "end_select_statement" "select_case_statement" nil)              parent 0)
     ((n-p-pstmtk "case_statement"       "select_case_statement" nil)              parent 0)
     ((n-p-pstmtk nil                    "select_case_statement" "case")           parent f90-ts-indent-block)
@@ -2281,13 +2267,13 @@ with !$ or !$omp")
 (defvar f90-ts-indent-rules-catch-all
   `(;; final catch-all rule, with a fallback anchor which also prints
     ;; some diagnostics to allow adding further rules
-    ,@(f90-ts-indent-rules-info "catch remaining")
     ((n-p-ch-psibp nil "translation_unit" nil "subroutine_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
     ((parent-is "translation_unit") column-0 0)
-    ,@(f90-ts-indent-rules-info "catch all")
+
+    ;;,@(f90-ts-indent-rules-info "catch all")
     (catch-all catch-all-anchor 0)
     )
   "Final indentation rule to handle default case and catch anything else.")
