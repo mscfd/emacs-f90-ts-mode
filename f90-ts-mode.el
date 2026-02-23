@@ -3195,11 +3195,9 @@ FMT + ARGS are passed to `format' to determine the log message."
 (defun f90-ts-log-show ()
   "Show the f90-ts log buffer in the current frame."
   (interactive)
-  (let ((buf (get-buffer "*f90-ts-log*")))
-    (if buf
-        (with-selected-frame (selected-frame)
-          (switch-to-buffer buf))
-      (message "no *f90-ts-log* buffer present"))))
+  (let ((buf (f90-ts--log-get-buffer)))
+    (with-selected-frame (selected-frame)
+      (switch-to-buffer buf))))
 
 
 (defvar f90-ts-log-mode-map
