@@ -4,12 +4,11 @@
 based on Emacs’s built-in **Tree-sitter** support (requires Emacs 29+).
 
 The mode is under **development**, features might only be partially implemented.
-It also has quite extensive debug logging in a separate `*f90-ts-log*` buffer, which
-can be controlled by custom variable `f90-ts-log-categories`.
 
-
-Currently it relies on the upstream treesitter grammar fork
-[mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran.git)
+Currently it relies on a recent tree-sitter grammar version of fortran at
+[official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
+There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
+[mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
 
 
 
@@ -54,15 +53,14 @@ Additionally to the usual faces, there are some extra custom faces:
 Special variables are recognised by regexp matching with customizable variable `f90-ts-special-var-regexp`.
 Separator comments are recognised by regexp matching with customizable variable `f90-ts-separator-comment-regexp`.
 
-
 *Note*: Executing `M-x describe-face` can be used to find out which face is applied and to customize it if necessary.
 
 
 ### Indentation
 
-Indentation is still missing quite a number of statements. But it covers most commonly used statements, including error
-cases which frequently happen during typing. Lines within incomplete and unfinished blocks are mostly correctly inlined,
-but sometimes, the treesitter AST is just not usable.
+Indentation is still missing quite a number of statements. But it covers most commonly used statements,
+including some error cases which frequently happen during typing. Lines within incomplete and unfinished
+blocks are mostly correctly inlined, but sometimes, the treesitter AST is just not usable.
 
 Customizable variables for indentations are:
 
@@ -70,30 +68,36 @@ Customizable variables for indentations are:
 |----------------------------------|-----------------------------------------------------------------------------|
 | `f90-ts-indent-toplevel`         | extra indentation applied to contain sections at the top level              |
 | `f90-ts-indent-contain`          | extra indentation applied to nested contain sections                        |
-| `f90-ts-indent-block`            | extra indentation applied to most blocks, such as functions, subroutines, and control statements (`do`, `if`, `associate`, etc.) |
+| `f90-ts-indent-block`            | extra indentation applied to most blocks                                    |
 | `f90-ts-indent-continued`        | extra indentation applied to continued lines                                |
 
-*Remark*: f90-ts-indent-toplevel is used to reduce the indentation of anything which is right below the program
-or (sub)module level. This is done as this indentation level usually does not improve readability, as almost
-everything except for very few lines (like module, contains and end line) is indented.
+
+
+*Remarks*
+- statement blocks are features such as `functions`, `subroutines`, control statements (`do`, `if`, `select`)
+  and other block structures (`associate`, `block` etc.)
+- f90-ts-indent-toplevel is used to reduce the indentation of anything which is right below the program
+  or (sub)module level. This is done as this indentation level usually does not improve readability,
+  as almost everything except for very few lines (like module, contains and end line) is indented.
 
 Currently implemented rules are:
 
-| Rule Set              | Description                                                                              |
-|-----------------------|------------------------------------------------------------------------------------------|
-| openmp                | openmp directives stored as comments starting with `!$` or `!$omp`                       |
-| preproc               | indentation of and at preprocessor directives                                            |
-| comments              | for sequences of regular and separator comments                                          |
-| continued lines       | multi-line statements, column alignment for lists (like variable declarations, arguments, etc.) |
-| internal procedures   | `contains` sections and internal procedures in programs, modules and procedures          |
-| program / module      | program, module, and submodule bodies                                                    |
-| functions             | function and subroutine bodies, including `end function` / `end subroutine`              |
-| interfaces            | (abstract) interface blocks                                                              |
-| derived types         | derived-type definitions                                                                 |
-| if / then / else      | `if`, `elseif`, and `else` constructs                                                    |
-| control statements    | `do`, `block`, and `associate` constructs                                                |
-| select statements     | `select case` and `select type` statements                                               |
-| catch-all             | final fallback rule for unmatched cases                                                  |
+| Rule Set                | Description                                                                              |
+|-------------------------|------------------------------------------------------------------------------------------|
+| openmp                  | openmp directives stored as comments starting with `!$` or `!$omp`                       |
+| preproc                 | indentation of and at preprocessor directives                                            |
+| comments                | for sequences of regular and separator comments                                          |
+| continued lines         | multi-line statements, column alignment for lists (like variable declarations, arguments, etc.) |
+| internal procedures     | `contains` sections and internal procedures in `programs`, `(sub)modules`, `functions` and `subroutines` |
+| program / module        | `program`, `module`, and `submodule` bodies                                              |
+| functions               | `function` and `subroutine` bodies, including `end function` / `end subroutine`          |
+| translation unit        | some rules concerning toplevel translation unit and related ERROR cases                  |
+| interfaces              | (abstract) interface blocks                                                              |
+| derived types           | derived-type definitions                                                                 |
+| if / then / else        | `if`, `elseif`, and `else` constructs                                                    |
+| single block statements | `do`, `block`, and `associate` constructs                                                |
+| select statements       | `select case` and `select type` statements                                               |
+| catch-all               | final fallback rule for unmatched cases                                                  |
 
 
 #### Indentation of multiline statement
@@ -264,18 +268,31 @@ There is a Makefile for running the tests. Three targets are available: `test` (
 
 Indentation tests are in erts file format. For indentation of an after part between `=-=` and `=-=-=`,
 function `f90-ts-mode-test-update-erts-after` can be used (first remove point char `|` if present) to
-help setting up a new test.
+help setting up a new test. Indentation tests have prep-fn preparation function (like remove indentation)
+and an action function (like indent-region, indent-line all/single line).
+The erts files are used to check various combinations.
 
 
 ### Font lock tests
 
-Font lock tests are in f90 files, with a caret assertion notations. This notation can be automatically
+Font lock tests are in f90 files, with caret assertion notation. This notation can be automatically
 generated for new files or updated by `f90-ts-mode-test-update-face-annotations`.
-The code is automatically indented by 1, as assertion lines start with a !, so that faces at column 0
-cannot be checked.
-The generated annotations are exhaustive.
+The code is automatically indented by 1, as assertion lines start with a !, so that all faces
+including those which would be at column 0 can be checked properly.
+The generated annotations are exhaustive, including nil annotations to assert that part of the code
+is not highlighted.
 
 Note: fortran test code should NOT use the caret `^`, even in comments, as the ert parser gets confused.
+
+
+### Custom tests
+
+Custom tests are erts based tests with a custom Code block for each test (and thus do not fit the
+prep-fn/action-fn scheme of the indentation test above).
+This is used for testing indentation of just a region, break line and join line functions.
+
+
+
 
 
 ## Installation
@@ -301,75 +318,65 @@ where emacs can find it.
 
 ### Setup
 
-This is a quite extensive way to load and setup f90-ts-mode, intended for development purposes:
+With `use-package` in `init.el` (or elsewhere), the mode itself and optionally the testing module
+can be loaded.
 
 ```elisp
-(defun f90-ts-toggle-mode ()
-  "Toggle between `f90-mode' (legacy) and `f90-ts-mode'."
-  (interactive)
-  (if (eq major-mode 'f90-ts-mode)
-      (if (fboundp 'f90-mode)
-          (f90-mode)
-        (message "Legacy `f90-mode' not available"))
-    (f90-ts-mode)))
-
-
-(defun f90-ts-toggle-mode ()
-  "Toggle between `f90-mode' (legacy) and `f90-ts-mode'."
-  (interactive)
-  (if (eq major-mode 'f90-ts-mode)
-      (if (fboundp 'f90-mode)
-          (f90-mode)
-        (message "Legacy `f90-mode' not available"))
-    (f90-ts-mode)))
-
-
 (use-package f90-ts-mode
   ;; :ensure nil tells use-package NOT to try installing this from MELPA/ELPA.
   :ensure nil
+  :load-path "path_to/emacs-f90-ts-mode"
+  :mode ("\\.f90\\'" . f90-ts-mode)
+  :commands (f90-ts-mode)
 
-  ;; :defer t ensures the file is only loaded when the mode is called
-  ;:defer t
-
-  ;; commented: use legacy f90-mode during development by default
-  ;; :mode can be used to automatically enable the mode for Fortran files
-  :mode "\\.f90\\'"
-
-  ;; instead: specify functions that, when called, should trigger the loading of f90-ts-mode.el
-  :commands (f90-ts-toggle-mode f90-ts-mode)
+  :init
+  (require 'treesit)
+  (setq treesit-language-source-alist
+        (append treesit-language-source-alist
+                '((fortran "path_to/tree-sitter-fortran"))))
 
   :config
   (message "f90-ts-mode loaded")
 
-  ;; replaces the currently active frame with the log buffer, should work in any buffer
-  (global-set-key (kbd "A-h l") #'f90-ts-log-show)
+  :bind (;; global binding that triggers the load
+         ;; replaces the currently active frame with the log buffer,
+         ;; should work in any buffer
+         ("A-h k" . f90-ts-mode)
+         ("A-h l" . f90-ts-log-show)
 
-  (define-key f90-ts-mode-map (kbd "A-h m") #'treesit-explore-mode)
-  (define-key f90-ts-mode-map (kbd "A-h p") #'treesit-inspect-node-at-point)
-  (define-key f90-ts-mode-map (kbd "A-h f") #'describe-face)
-
-  ;; add/update font-lock test annotations (for test/resources font lock files)
-  (define-key f90-ts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-face-annotations)
+         ;; mode-specific bindings
+         :map f90-ts-mode-map
+         ("A-h m" . treesit-explore-mode)
+         ("A-h P" . treesit-inspect-node-at-point)
+         ("A-h p" . f90-ts-inspect-node-at-point)
+         )
   )
 
-(global-set-key (kbd "A-h j") #'f90-ts-toggle-mode)
-(global-set-key (kbd "A-h k") #'f90-ts-mode)
+;; only required for interactive testing
+(use-package f90-ts-mode-test
+  :ensure nil
+  ;; add the test subdirectory specifically for test related stuff
+  :load-path "path_to/emacs-f90-ts-mode/test"
 
-(with-eval-after-load 'f90-ts-mode
-  (require 'f90-ts-mode-test nil t))
+  :commands (f90-ts-mode-test-run
+             f90-ts-mode-test-update-erts-after
+             f90-ts-mode-test-update-face-annotations)
 
-(global-set-key (kbd "A-h i") #'f90-ts-mode-switch-custom)
-(global-set-key (kbd "A-h t") (lambda () (interactive)
-                                (f90-ts-mode-test-run "^f90-ts-mode/")))
-(global-set-key (kbd "A-h d") (lambda () (interactive)
-                                (f90-ts-mode-test-run
-                                 "^f90-ts-mode/"
-                                 f90-ts-mode-test-diff-command)))
-;; select ert-regexp and diff tool interactively
-(global-set-key (kbd "A-h s") #'f90-ts-mode-test-run)
+  :config
+  (message "f90-ts-mode-test loaded")
 
-(add-hook 'erts-mode-hook
-          (lambda ()
-            (local-set-key (kbd "A-h u")
-                           #'f90-ts-mode-test-indent-erts-after)))
+  :bind (;; global test commands
+         ("A-h i" . f90-ts-mode-switch-custom)
+         ("A-h t" . (lambda () (interactive)
+                      (f90-ts-mode-test-run "^f90-ts-mode/")))
+         ("A-h d" . (lambda () (interactive)
+                      (f90-ts-mode-test-run "^f90-ts-mode/"
+                                            f90-ts-mode-test-diff-command))))
+
+  :init
+  (require 'f90-ts-mode)
+  (define-key f90-ts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-face-annotations)
+  (require 'erts-mode)
+  (define-key erts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-erts-after)
+  )
 ```
