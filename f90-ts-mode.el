@@ -3271,25 +3271,6 @@ and `f90-comment-region-prefix'."
 ;;------------------------------------------------------------------------------
 ;; debug: log buffer
 
-(defconst f90-ts-log-categories-all
-  '(:info :debug :indent :fontlock :complete :auxiliary)
-  "List of all log categories supported by the log function.
-Mostly used to discover use of f90-ts-log without a missing or mistyped
-category argument.")
-
-(defcustom f90-ts-log-categories
-  '()
-  "List of enabled log categories for f90-tree-sitter.
-
-Each entry enables a class of info or debug messages in `f90-ts-log'."
-  ;; generated entries from the list are like (const :tag "debug" :debug)
-  :type `(set
-          ,@(mapcar (lambda (cat)
-                      `(const :tag ,(substring (symbol-name cat) 1) ,cat))
-                    f90-ts-log-categories-all))
-  :group 'f90-tree-sitter)
-
-
 (defconst f90-ts-log-buffer "*f90-ts-log*"
   "Buffer name used for f90 tree-sitter logging.")
 
@@ -3303,7 +3284,8 @@ Each entry enables a class of info or debug messages in `f90-ts-log'."
 
 
 (defun f90-ts--log-insert (category fmt &rest args)
-  "Insert a message given by FMT and ARGS into the log buffer."
+  "Insert a message given by FMT and ARGS and prefixed by CATEGORY
+into the log buffer."
   (let ((buf (f90-ts--log-get-buffer)))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
@@ -3334,16 +3316,12 @@ Each entry enables a class of info or debug messages in `f90-ts-log'."
 
 
 (defun f90-ts-log (category fmt &rest args)
-  "Log a message in CATEGORY if that category is enabled.
-CATEGORY is a keyword identifying the log category (e.g. :info or :indent).
-FMT + ARGS are passed to `format' and like message arguments."
-  (cond
-   ((memq category f90-ts-log-categories)
-    ;; use apply to properly forwards optional list of arguments args
-    (apply #'f90-ts--log-insert category fmt args))
-   ((not (memq category f90-ts-log-categories-all))
-    (f90-ts--log-insert :info "ERROR: unknown category <%s>" category))
-   ))
+  "Log a message in CATEGORY, which is used as a colour prefix to the
+message. Usual arguments for categories are `:indent', `:complete',
+`:auxiliary' etc.
+FMT + ARGS are passed to `format' to determine the log message."
+  ;; use apply to properly forwards optional list of arguments args
+  (apply #'f90-ts--log-insert category fmt args))
 
 
 (defun f90-ts-log-clear ()
@@ -3383,27 +3361,6 @@ FMT + ARGS are passed to `format' and like message arguments."
 
 ;;------------------------------------------------------------------------------
 ;; debug: node inspection and other stuff
-
-(defun f90-ts-debug-font-lock ()
-  "Show the compiled font-lock settings."
-  (interactive)
-  (pp treesit-font-lock-settings))
-
-
-(defun f90-ts-inspect-node (category node info)
-  "Show inspect info of treesitter NODE as a one-liner in the log buffer.
-Prefix the line with 'inspect<INFO>'."
-  (if node
-      (let* ((type  (treesit-node-type node))
-             (start (treesit-node-start node))
-             (end   (treesit-node-end node))
-             (len   (- end start))
-             (line  (f90-ts--node-line node))
-             (inspect-name  (f90-ts-treesit-inspect-node node)))
-        (f90-ts-log category "inspect<%s>: type= %s  -  name= %s - start=%d  end=%d  len=%d  line=%d"
-                    info type inspect-name start end len line))
-    (f90-ts-log category "inspect<%s>: nil" info)))
-
 
 (defun f90-ts-treesit-inspect-node (node-inspect)
   "Copy of treesit-inspect-node-at-point, but highlight provided
@@ -3449,6 +3406,21 @@ Return the constructed name."
         name
         (if (treesit-node-check node 'named) ")" "\""))))
     name))
+
+
+(defun f90-ts-inspect-node (category node info)
+  "Show inspect info of treesitter NODE as a one-liner in the log buffer.
+Prefix the line with 'inspect<INFO>'."
+  (if node
+      (let* ((type  (treesit-node-type node))
+             (start (treesit-node-start node))
+             (end   (treesit-node-end node))
+             (len   (- end start))
+             (line  (f90-ts--node-line node))
+             (inspect-name  (f90-ts-treesit-inspect-node node)))
+        (f90-ts-log category "inspect<%s>: type= %s  -  name= %s - start=%d  end=%d  len=%d  line=%d"
+                    info type inspect-name start end len line))
+    (f90-ts-log category "inspect<%s>: nil" info)))
 
 
 ;;------------------------------------------------------------------------------

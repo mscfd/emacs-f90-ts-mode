@@ -103,13 +103,12 @@ It has the same structure and the same set of keys as
 different indentation values for each indentation type, so that
 selection of indentation rules is tested properly."
   (f90-ts-mode-test-with-custom-testing
-   (let ((f90-ts-log-categories '()))
-     (with-temp-buffer
-       (insert-file-contents file)
-       (f90-ts-mode)
-       (treesit-parser-create 'fortran)
-       (font-lock-ensure)
-       (funcall body-fn)))))
+   (with-temp-buffer
+     (insert-file-contents file)
+     (f90-ts-mode)
+     (treesit-parser-create 'fortran)
+     (font-lock-ensure)
+     (funcall body-fn))))
 
 
 ;;------------------------------------------------------------------------------
