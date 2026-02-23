@@ -3060,7 +3060,9 @@ in the region, or, if already present, remove it."
 (defun f90-ts-comment-region-default (beg-region end-region)
   "Comment/uncomment every line in the region using default !!$ prefix."
   (interactive "*r")
-  (f90-comment-region-with-prefix beg-region end-region f90-comment-region-prefix))
+  (f90-ts-comment-region-with-prefix beg-region
+                                     end-region
+                                     f90-ts-comment-region-prefix))
 
 
 (defun f90-ts-comment-region-custom (beg-region end-region prefix)
@@ -3075,8 +3077,10 @@ and `f90-comment-region-prefix'."
     (region-end)
     (completing-read "choose comment prefix: "
                           (cons f90-comment-region-prefix f90-ts-extra-comment-prefixes)
-                          nil t nil nil f90-comment-region-prefix)))
-  (f90-comment-region-with-prefix beg-region end-region prefix))
+                          nil t nil nil f90-ts-comment-region-prefix)))
+  (f90-ts-comment-region-with-prefix beg-region
+                                     end-region
+                                     prefix))
 
 
 ;;------------------------------------------------------------------------------
