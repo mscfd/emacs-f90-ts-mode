@@ -1,16 +1,19 @@
 EMACS ?= emacs
 EMACSFLAGS = -batch -Q -L .
+LOAD = -l ert -l f90-ts-mode.el -l test/f90-ts-mode-test.el
 
 .PHONY: test
 test:
-	$(EMACS) $(EMACSFLAGS) -l ert \
-		-l f90-ts-mode.el \
-		-l tests/f90-ts-mode-tests.el \
-		-f ert-run-tests-batch-and-exit
+	$(EMACS) $(EMACSFLAGS) $(LOAD) \
+	--eval '(setq ert-batch-print-length nil ert-batch-print-level nil)' \
+	--eval '(ert-run-tests-batch-and-exit "^f90-ts-mode/")'
 
-.PHONY: create
-create:
-	$(EMACS) $(EMACSFLAGS) -l ert \
-		-l f90-ts-mode.el \
-		-l tests/f90-ts-mode-tests.el \
-		-f  f90-ts-mode-tests-generate-compare
+.PHONY: test-extra
+test-extra:
+	$(EMACS) $(EMACSFLAGS) $(LOAD) \
+		--eval '(ert-run-tests-batch-and-exit "^f90-ts-mode-extra/")'
+
+.PHONY: test-all
+test-all:
+	$(EMACS) $(EMACSFLAGS) $(LOAD) \
+		--eval '(ert-run-tests-batch-and-exit "^f90-ts-mode")'
