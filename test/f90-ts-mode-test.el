@@ -310,10 +310,12 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
    for file in files
    for name-base = (string-replace
                     "_" "-"
-                    (replace-regexp-in-string
-                     "^\\(indent_region\\|\\(indent\\|break\\|join\\)_line\\)_"
-                     "\\1/"
-                     (file-name-sans-extension file)))
+                    (string-remove-suffix
+                     "/"
+                     (replace-regexp-in-string
+                      "^\\(indent_region\\|\\(indent\\|break\\|join\\)_line\\)_?"
+                      "\\1/"
+                      (file-name-sans-extension file))))
    for test-name = (intern
                     (format "%s/custom/%s"
                             prefix
@@ -417,7 +419,9 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
 ;; indentation tests, which do not fit the prep/action scheme 
 (f90-ts-mode-test-register
  "f90-ts-mode"
- '("indent_region_partial.erts")
+ '("indent_region_partial.erts"
+   "break_line.erts"
+   "join_line.erts")
  )
 
 

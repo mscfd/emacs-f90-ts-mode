@@ -1,0 +1,86 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-join-line-prev))
+
+Name: join before statement 1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                |arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join before statement 2
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+|                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join before statement 3
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+    |            arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-join-line-next))
+
+Name: join after statement 1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| &
+                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join after statement 2
+=-=
+subroutine sub_1()
+     call sub_2(arg1, |&
+                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join after statement 3
+=-=
+subroutine sub_1()
+     call sub_2(arg1, |&
+
+
+
+                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=-=
