@@ -70,7 +70,7 @@ subroutine bodies, control statements (do, if, associate ...)."
   '(("keep if aligned or align to primary column" . keep-or-primary)
     ("keep if aligned or rotate to next column" . keep-or-rotate)
     ("always align with primary column" . always-primary)
-    ("indent to first line of statement with offset `f90-ts-indent-continued`" . continued-line)
+    ("indent to first line of statement with offset `f90-ts-indent-continued'" . continued-line)
     ("rotate columns" . rotate))
   "Options for indentation of list like structures on continued lines.")
 
@@ -238,7 +238,7 @@ self or this. Used for applying a special font lock face."
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments.
 This is used for applying the same comment starter in comment section, see
-`f90-ts-break-line`."
+`f90-ts-break-line'."
   :type 'regexp
   :safe #'stringp
   :group 'f90-ts)
@@ -474,7 +474,7 @@ encountered."
 
 
 (defun f90-ts--previous-stmt-keyword-by-first (first)
-  "Auxiliary function for `f90-ts--previous-stmt-keyword` or when
+  "Auxiliary function for `f90-ts--previous-stmt-keyword' or when
 first statement is known."
   ;; block structure statements like if, do, associate etc. can start
   ;; with a label, if a (optional) label is present, skip it and extract
@@ -532,7 +532,7 @@ first statement is known."
 
 (defun f90-ts--previous-stmt-keyword (node parent)
   "Return the statement leaf node (usually some keyword like if,
-elseif, do, etc.) for `f90-ts-prev-stmt-first`. In case of a block label
+elseif, do, etc.) for `f90-ts-prev-stmt-first'. In case of a block label
 The first leaf node is the label, not the keyword. For use as anchor,
 the label is required. For use as matcher, we need the keyword.
 Keyword nodes become relevant for incomplete code with ERROR nodes."
@@ -563,7 +563,7 @@ Finally return the leaf node at the start of the line. Follow continued
 lines to first line of continued statement.
 
 Ignore nodes which do not satisfy the predicate
-`f90-ts--node-not-comment-or-error-p` during ascend or descend
+`f90-ts--node-not-comment-or-error-p' during ascend or descend
 (for example comment nodes)."
   (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
          (predicate #'f90-ts--node-not-comment-or-error-p)
@@ -1224,7 +1224,7 @@ associates and others."
   "Current indent cache vector:
 [node parent child0 psibp pstmt-1 pstmt-k].
 Slots 2+ are lazily filled.
-Value `unset` means not yet computed.
+Value 'unset means not yet computed.
 Value nil means that this node does not exist. For example, on empty
 lines, the node itself is nil.")
 
@@ -2060,7 +2060,7 @@ list items (like arguments in a procedure call). Otherwise determine
 standard indentation for continued lines.
 
 Exact behaviour is determined by custom variables
-`f90-ts-indent-list-line` and `f90-ts-indent-list-region`.
+`f90-ts-indent-list-line' and `f90-ts-indent-list-region'.
 
 Note that due to the matcher, we already know that we are on a
 continued line of a continued statement. The statement line itself
@@ -2565,8 +2565,8 @@ message buffer, depending on position and whether 'blink is set."
 (defun f90-ts--complete-smart-end-region (node)
   "Find the end character to be replaced by end completion for node.
 We want to remove trailing white space characters, but keep comments
-or commands following an semicolon `;`. Moreover, incompletely typed
-text like in `end subr_out` with point at `_` should be handled as well."
+or commands following an semicolon ';'. Moreover, incompletely typed
+text like in 'end subr_out' with point at '_' should be handled as well."
   (save-excursion
     (goto-char (treesit-node-end node))
     (skip-chars-forward "^;!\n")
@@ -2582,8 +2582,8 @@ text like in `end subr_out` with point at `_` should be handled as well."
 (defun f90-ts--complete-smart-end-node (node)
   "Check whether NODE represents an end struct statement and try find
 a completion for it like structure type and name.
-Example: complete `end` closing a subroutine block by
-`end subroutine mysub`.
+Example: complete 'end' closing a subroutine block by
+'end subroutine mysub'.
 After the changes, NODE will become stale. The function returns the new
 statement node representing the whole block. This is used for the blink
 option or statement indentation."
@@ -2785,7 +2785,7 @@ point is at line containing its end statement."
 (defun f90-ts-indent-and-complete-line ()
   "Default function for indent and smart complete of end lines, bound
 to <tab. More advanced indentations of involved continued lines and
-block structures is done by `f90-ts--indent-and-complete-stmt`"
+block structures is done by `f90-ts--indent-and-complete-stmt'"
   (interactive)
   (f90-ts--indent-and-complete-line-aux nil))
 
@@ -2805,12 +2805,12 @@ completion or other extra stuff is not executed."
 
 
 (defun f90-ts-indent-and-complete-stmt ()
-  "In general, this just calls `f90-ts--indent-and-complete-line-aux`
+  "In general, this just calls `f90-ts--indent-and-complete-line-aux'
 with true for indent-block.
 However, if within a continued line region, determine first line of
 statement and indent region from this first line up to and including
 current line. If indentation of current line has not changed, then
-indent the current line by invoking `f90-ts--indent-and-complete` to
+indent the current line by invoking `f90-ts--indent-and-complete' to
 apply rules like rotation of list context items.
 Otherwise default indent with line choice."
   (interactive)
@@ -2896,11 +2896,11 @@ For region based indentation, we should first execute smart end
 completion, as this might repair the tree, and only then execute
 indentation. For single line it does not matter. Example:
 
-`module do_mod
+'module do_mod
 contains
  subroutine do_sub()
  end function do_sub
-end module do_mod`
+end module do_mod'
 
 At the end function line, 'end' represents the end subroutine statement,
 hence indentation as well as smart end completetion both work. However,
@@ -2935,7 +2935,7 @@ subsequent tree."
       (insert " &")))
 
 
-;; Portions of the following code are adapted from `f90.el`,
+;; Portions of the following code are adapted from `f90.el',
 ;; which is part of GNU Emacs.
 (defun f90-ts-break-line ()
   "Break line at point, insert continuation marker where necessary and indent."
@@ -2983,7 +2983,7 @@ subsequent tree."
 ;; and to unify the two join variants
 (defun f90-ts-join-line-prev ()
   "Join previous line with the current one, if it is part of a continued
-statement. This is (partially) a counterpart to `f90-ts-break-line`.
+statement. This is (partially) a counterpart to `f90-ts-break-line'.
 If previous line has comments (at end, next line etc.) joining is not
 done."
   (interactive)
@@ -3010,7 +3010,7 @@ done."
 
 (defun f90-ts-join-line-next ()
   "Join current line with the next one, if it is part of a continued
-statement. This is (partially) a counterpart to `f90-ts-break-line`.
+statement. This is (partially) a counterpart to `f90-ts-break-line'.
 If continued line has comments (at end, next line etc.) joining is not
 done."
   (interactive)
@@ -3179,7 +3179,7 @@ child."
   :group 'f90-ts)
 
 
-;; The following code are adapted from `f90.el`, which is part of GNU Emacs.
+;; The following code are adapted from `f90.el', which is part of GNU Emacs.
 (defun f90-ts-comment-region-with-prefix (beg-region end-region prefix)
   "Comment/uncomment every line in the region using comment prefix.
 Insert debug comment prefix at the start of every line
@@ -3206,8 +3206,8 @@ in the region, or, if already present, remove it."
 
 (defun f90-ts-comment-region-custom (beg-region end-region prefix)
   "Comment/uncomment every line in the region using custom PREFIX.
-If called interactively, prompt for a prefix from `f90-ts-extra-comment-prefixes`
-and `f90-comment-region-prefix`."
+If called interactively, prompt for a prefix from `f90-ts-extra-comment-prefixes'
+and `f90-comment-region-prefix'."
   (interactive
    (list
     (progn

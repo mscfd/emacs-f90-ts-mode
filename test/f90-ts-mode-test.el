@@ -62,15 +62,16 @@ final newline."
   nil
   "Alist of saved custom variable values for temporary overrides.
 It has the same structure and the same set of keys as
-`f90-ts-mode-test-custom-settings`")
+`f90-ts-mode-test-custom-settings'")
 
 
 (defun f90-ts-mode-test-save-custom ()
   "Save current custom values of managed variables listed as keys in
-`f90-ts-mode-test-custom-settings`."
+`f90-ts-mode-test-custom-settings'."
   (setq f90-ts-mode-test-custom-saved
         (cl-loop for (var . _) in f90-ts-mode-test-custom-settings
                  collect (cons var (default-value var)))))
+
 
 (defun f90-ts-mode-test-set-custom-testing ()
   "Save current values and apply temporary ones for testing purposes."
@@ -161,7 +162,7 @@ or just a single line etc.")
 
 (defmacro f90-ts-mode-test-erts-with-diff (&rest body)
   "Execute BODY, containing some ert test. If an ERTS test fails and
-`f90-ts-mode-test-erts-diff` is contains a diff command as string,
+`f90-ts-mode-test-erts-diff' is contains a diff command as string,
 launch the diff to compare actual and expected results."
   `(if (not f90-ts-mode-test-erts-diff)
        (progn ,@body)
