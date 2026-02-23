@@ -254,6 +254,11 @@ Registering is done semi-automatic in `f90-ts-mode-test-indent-register` and
 Tests are run with a prescribed set of custom variables. In particular indentation values are chosen
 all differently, such that errors can be spotted more easily.
 
+### Makefile
+
+There is a Makefile for running the tests. Three targets are available: `test` (standard tests),
+`test-extra` (expensive extra tests) and `test-all` for all tests.
+
 
 ### Indentation tests
 
