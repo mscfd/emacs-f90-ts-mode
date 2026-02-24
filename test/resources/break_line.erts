@@ -1,0 +1,106 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-break-line))
+
+Name: break statement 1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: break statement 2
+=-=
+subroutine sub_1()
+     call sub_2(arg1, |arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: break statement 3
+=-=
+subroutine sub_1()
+     call sub_2(arg1,    |  arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: break comment 1
+=-=
+subroutine sub_1()
+     ! comment1 comment2 |comment3 comment4
+     call sub_2(arg1, arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     ! comment1 comment2
+     ! |comment3 comment4
+     call sub_2(arg1, arg2)
+end subroutine sub_1
+=-=-=
+
+
+Name: break comment 2
+=-=
+subroutine sub_1()
+     !!$ comment1 comment2 |comment3 comment4
+     call sub_2(arg1, arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     !!$ comment1 comment2
+     !!$ |comment3 comment4
+     call sub_2(arg1, arg2)
+end subroutine sub_1
+=-=-=
+
+Name: break comment 3
+=-=
+subroutine sub_1()
+     !> comment1 comment2    |   comment3 comment4
+     call sub_2(arg1, arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     !> comment1 comment2
+     !> |comment3 comment4
+     call sub_2(arg1, arg2)
+end subroutine sub_1
+=-=-=
+
+
+Name: break openmp 1
+=-=
+subroutine sub_1()
+!$omp parallel do| schedule(static)
+     do i = 1,10
+        call sub_2(i)
+     end do
+!$omp end parallel
+end subroutine sub_1
+=-=
+subroutine sub_1()
+!$omp parallel do &
+!$omp |schedule(static)
+     do i = 1,10
+        call sub_2(i)
+     end do
+!$omp end parallel
+end subroutine sub_1
+=-=-=
