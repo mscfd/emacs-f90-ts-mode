@@ -3099,6 +3099,7 @@ and `f90-comment-region-prefix'."
 
 ;;------------------------------------------------------------------------------
 
+;;;###autoload
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
@@ -3210,6 +3211,7 @@ FMT + ARGS are passed to `format' to determine the log message."
         (erase-buffer)))))
 
 
+;;;###autoload
 (defun f90-ts-log-show ()
   "Show the f90-ts log buffer in the current frame."
   (interactive)

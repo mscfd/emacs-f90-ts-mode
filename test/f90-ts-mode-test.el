@@ -74,6 +74,7 @@ It has the same structure and the same set of keys as
                  collect (cons var (default-value var)))))
 
 
+;;;###autoload
 (defun f90-ts-mode-test-set-custom-testing ()
   "Save current values and apply temporary ones for testing purposes."
   (f90-ts-mode-test-save-custom)
@@ -81,6 +82,7 @@ It has the same structure and the same set of keys as
            do (set-default var val)))
 
 
+;;;###autoload
 (defun f90-ts-mode-test-restore-custom ()
   "Restore previously saved custom variable values."
   (unless f90-ts-mode-test-custom-saved
@@ -90,6 +92,7 @@ It has the same structure and the same set of keys as
   (setq f90-ts-mode-test-custom-saved nil))
 
 
+;;;###autoload
 (defmacro f90-ts-mode-test-with-custom-testing (&rest body)
   "Bind test settings dynamically using cl-progv, then call BODY-FN."
   `(let ((vars (mapcar #'car f90-ts-mode-test-custom-settings))
@@ -97,6 +100,8 @@ It has the same structure and the same set of keys as
      (cl-progv vars vals
        ,@body)))
 
+
+;;;###autoload
 (defun f90-ts-mode-test--run-with-testing (file body-fn)
   "Run BODY-FN on FILE with custom values for testing. For example, use
 different indentation values for each indentation type, so that
@@ -219,6 +224,7 @@ completion."
 ;;------------------------------------------------------------------------------
 ;; ERTS: indentation
 
+;;;###autoload
 (defun f90-ts-mode-test-update-erts-after (&optional update-fn indent-variant)
   "If point is in a piece of code representing the after part in an
 erts file, then apply an update function to the code. The code must be
@@ -516,6 +522,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
       )))
 
 
+;;;###autoload
 (defun f90-ts-mode-test-update-face-annotations ()
   "Update face annotations in buffer.
 
@@ -623,6 +630,7 @@ or f90-ts-mode-extra."
 
 ;;------------------------------------------------------------------------------
 
+;;;###autoload
 (defun f90-ts-mode-test-run (&optional regexp-test diff-tool)
   "Run all f90-ts-mode tests matching REGEXP-TEST. If DIFF-TOOL is
 specified, use it in case of failure to show the difference.
