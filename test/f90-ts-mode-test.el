@@ -1,3 +1,4 @@
+(require 'cl-lib)
 (require 'ert)
 (require 'ert-x)
 (require 'treesit)
@@ -530,6 +531,9 @@ For other lines, generate annotations using
           (was-modified (buffer-modified-p))
           (content-before (buffer-substring-no-properties pos-min
                                                           pos-max)))
+     (font-lock-flush pos-min pos-max)
+     (font-lock-ensure pos-min pos-max)
+
      (save-excursion
        ;; always end buffer with a newline, the loop below starts by
        ;; moving back one line
@@ -561,6 +565,7 @@ For other lines, generate annotations using
            (backward-char 1)
            (f90-ts-mode-test--annotate-faces))))
        )
+
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
               (string= content-before
