@@ -238,8 +238,7 @@ self or this. Used for applying a special font lock face."
   "Regular expression for matching and capturing comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments.
-This is used for applying the same comment starter in comment section, see
-`f90-ts-break-line'."
+This is used for applying the same comment starter, see `f90-ts-break-line'."
   :type 'regexp
   :safe #'stringp
   :group 'f90-ts)
@@ -259,6 +258,18 @@ Also add trailing whitespace characters to preserve indentation within comments.
 Used for applying a separator font lock face and alignment with parent node."
   :type 'regexp
   :safe #'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-comment-region-prefix "!!$"
+  "Comment prefix."
+  :type 'string
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
+  "List of additional comment prefixes for interactive selection."
+  :type '(repeat string)
   :group 'f90-ts)
 
 
@@ -3061,18 +3072,6 @@ child."
 
 ;;------------------------------------------------------------------------------
 ;; Comment region using some prefix
-
-(defcustom f90-ts-comment-region-prefix "!!$"
-  "Comment prefix."
-  :type 'string
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
-  "List of additional comment prefixes for interactive selection."
-  :type '(repeat string)
-  :group 'f90-ts)
-
 
 ;; The following code are adapted from `f90.el', which is part of GNU Emacs.
 (defun f90-ts-comment-region-with-prefix (beg-region end-region prefix)
