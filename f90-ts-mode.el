@@ -28,6 +28,7 @@
 ;;    Then run: M-x treesit-install-language-grammar RET fortran RET
 
 
+(require 'cl-lib)
 (require 'treesit)
 
 ;;------------------------------------------------------------------------------
@@ -295,16 +296,18 @@ Note that the parse uses identifier not just for variables, but for types etc."
   (when (f90-ts--node-type-p node "identifier")
     ;; we do not prepend or append symbol start or end assertions, as it should also
     ;; work with more general regexps (like highlight all variables with a certain prefix)
-    (string-match (concat "^"
-                          f90-ts-special-var-regexp
-                          "$")
-                  (treesit-node-text node))))
+    (string-match-p (concat "^"
+                            f90-ts-special-var-regexp
+                            "$")
+                    (treesit-node-text node))))
 
 
 (defun f90-ts-openmp-node-p (node)
   "Check if NODE is a comment node and has the openmp comment prefix."
   (when (f90-ts--node-type-p node "comment")
-    (string-match (concat "^" f90-ts-openmp-prefix-regexp) (treesit-node-text node))))
+    (string-match-p (concat "^" f90-ts-openmp-prefix-regexp)
+                    (treesit-node-text node))))
+
 
 (defun f90-ts-preproc-node-p (node)
   "Check if NODE is a preprocessor node and has the '#' prefix."
@@ -312,12 +315,13 @@ Note that the parse uses identifier not just for variables, but for types etc."
       (or (string-match "^preproc_" type)
           (string-prefix-p "#" type))))
 
+
 (defun f90-ts-separator-comment-node-p (node)
   "Check if NODE is a comment node and satisfies the separator comment regexp."
   (when (and (not (string-empty-p f90-ts-separator-comment-regexp))
              (f90-ts--node-type-p node "comment"))
-    (string-match (concat "^" f90-ts-separator-comment-regexp)
-                  (treesit-node-text node))))
+    (string-match-p (concat "^" f90-ts-separator-comment-regexp)
+                    (treesit-node-text node))))
 
 
 ;; the regexp engine is lacking a case insensitive switch, so we need to
@@ -854,6 +858,7 @@ comments in the tree. Must be parsed before plain comments."
       (:pred f90-ts-separator-comment-node-p @f90-ts-font-lock-separator-comment-face))
      ((comment) @font-lock-comment-face)
      )))
+
 
 (defun f90-ts--font-lock-rules-intrinsic ()
   "Font-lock rules for Fortran intrinsic functions."
