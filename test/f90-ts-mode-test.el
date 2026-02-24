@@ -1,3 +1,4 @@
+(require 'cl-lib)
 (require 'ert)
 (require 'ert-x)
 (require 'treesit)
@@ -90,13 +91,11 @@ It has the same structure and the same set of keys as
 
 
 (defmacro f90-ts-mode-test-with-custom-testing (&rest body)
-  `(let ((f90-ts-mode-test-custom-saved nil))
-     (unwind-protect
-         (progn
-           (f90-ts-mode-test-set-custom-testing)
-           ,@body)
-       (f90-ts-mode-test-restore-custom))))
-
+  "Bind test settings dynamically using cl-progv, then call BODY-FN."
+  `(let ((vars (mapcar #'car f90-ts-mode-test-custom-settings))
+         (vals (mapcar #'cdr f90-ts-mode-test-custom-settings)))
+     (cl-progv vars vals
+       ,@body)))
 
 (defun f90-ts-mode-test--run-with-testing (file body-fn)
   "Run BODY-FN on FILE with custom values for testing. For example, use
@@ -530,6 +529,9 @@ For other lines, generate annotations using
           (was-modified (buffer-modified-p))
           (content-before (buffer-substring-no-properties pos-min
                                                           pos-max)))
+     (font-lock-flush pos-min pos-max)
+     (font-lock-ensure pos-min pos-max)
+
      (save-excursion
        ;; always end buffer with a newline, the loop below starts by
        ;; moving back one line
@@ -561,6 +563,7 @@ For other lines, generate annotations using
            (backward-char 1)
            (f90-ts-mode-test--annotate-faces))))
        )
+
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
               (string= content-before
