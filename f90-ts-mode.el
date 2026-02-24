@@ -2081,8 +2081,8 @@ indentation cache for the new run.")
     ;; with !$, so this needs to be done before comments are processed
     (f90-ts--openmp-comment-is column-0 0)
     )
-  "Indentation rules for openmp. Currently openmp are comment nodes, which start
-with !$ or !$omp")
+  "Indentation rules for openmp. Currently openmp are comment nodes,
+which start with !$ or !$omp")
 
 
 (defvar f90-ts-indent-rules-comments
@@ -2131,7 +2131,8 @@ with !$ or !$omp")
     ;; by how much should result be indented? x3 is not a good anchor!
     (f90-ts--continued-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
     )
-  "Indentation rules for continued lines. Argument lists and similar continued lines must have been dealt with before.")
+  "Indentation rules for continued lines. Argument lists and similar
+continued lines must have been dealt with before.")
 
 
 (defvar f90-ts-indent-rules-internal-proc
@@ -2141,7 +2142,8 @@ with !$ or !$omp")
     ((parent-is  "internal_procedures")         parent f90-ts--indent-toplevel-offset)
     ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--indent-toplevel-offset)
     )
-  "Indentation rules for internal_proc node, which occurs in conjunction with contain statements.")
+  "Indentation rules for internal_proc node, which occurs in conjunction
+with contain statements.")
 
 
 (defvar f90-ts-indent-rules-prog-mod
@@ -2176,6 +2178,18 @@ with !$ or !$omp")
     ((n-p-pstmtk nil nil "function")             parent f90-ts-indent-block)
     )
   "Indentation rules for functions and subroutines.")
+
+
+(defvar f90-ts-indent-rules-translation-unit
+  `(;; statements related to toplevel subroutine or function statements,
+    ;; and ERROR cases (might or might not be toplevel)
+    ((n-p-ch-psibp nil "translation_unit" nil "subroutine_statement") parent f90-ts-indent-block)
+    ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
+    ((n-p-ch-psibp nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
+    ((n-p-ch-psibp nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
+    ((parent-is "translation_unit") column-0 0))
+  "Indentation rules for translation_unit and functions and subroutines
+not within a contains section (or hiding behind some ERROR node).")
 
 
 (defvar f90-ts-indent-rules-interface
@@ -2228,8 +2242,8 @@ with !$ or !$omp")
   "Indentation rules for if-then-else statements.")
 
 
-(defvar f90-ts-indent-rules-control
-  `(;; control statements
+(defvar f90-ts-indent-rules-single-region
+  `(;; structures with a single region block and linear execution
     ((n-p-gp     "end_do_loop" "do_loop" nil)  parent 0)
     ((n-p-pstmtk nil           "do_loop" "do") parent f90-ts-indent-block)  ;; proper do block (with or without while)
     ((n-p-pstmtk nil           "ERROR"   "do") previous-stmt-anchor f90-ts-indent-block)
@@ -2243,7 +2257,8 @@ with !$ or !$omp")
     ((n-p-pstmtk nil                       "associate_statement" "associate") parent f90-ts-indent-block)
     ((n-p-pstmtk nil                       "ERROR"               "associate") previous-stmt-anchor f90-ts-indent-block)
     )
-  "Indentation rules for control statements like do loops, associate and block statements.")
+  "Indentation rules for single region structures like do loops,
+associate and block statements.")
 
 
 (defvar f90-ts-indent-rules-select
@@ -2270,18 +2285,11 @@ with !$ or !$omp")
 
 
 (defvar f90-ts-indent-rules-catch-all
-  `(;; final catch-all rule, with a fallback anchor which also prints
-    ;; some diagnostics to allow adding further rules
-    ((n-p-ch-psibp nil "translation_unit" nil "subroutine_statement") parent f90-ts-indent-block)
-    ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
-    ((n-p-ch-psibp nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
-    ((n-p-ch-psibp nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
-    ((parent-is "translation_unit") column-0 0)
-
+  `(;; final catch-all rule
     ;;,@(f90-ts-indent-rules-info "catch all")
     (catch-all catch-all-anchor 0)
     )
-  "Final indentation rule to handle default case and catch anything else.")
+  "Final indentation rule to handle unmatched cases.")
 
 
 (defvar f90-ts-indent-rules
@@ -2294,10 +2302,11 @@ with !$ or !$omp")
      ,@f90-ts-indent-rules-internal-proc
      ,@f90-ts-indent-rules-prog-mod
      ,@f90-ts-indent-rules-function
+     ,@f90-ts-indent-rules-translation-unit
      ,@f90-ts-indent-rules-interface
      ,@f90-ts-indent-rules-derived-type
      ,@f90-ts-indent-rules-if
-     ,@f90-ts-indent-rules-control
+     ,@f90-ts-indent-rules-single-region
      ,@f90-ts-indent-rules-select
      ,@f90-ts-indent-rules-catch-all
      ))
