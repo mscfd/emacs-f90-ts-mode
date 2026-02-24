@@ -382,98 +382,6 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
                ))))
 
 
-;; register tests, general indentation
-;; (with three different prep functions to vary initial indentation)
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode"
- '("indent_region_basic.erts"
-   "indent_region_comments.erts"
-   "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
- '(nil ; no modification
-   f90-ts-mode-test--remove-indent
-   f90-ts-mode-test--add-indent)
- '(f90-ts-mode-test--indent-by-region)
- )
-
-
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode"
- '("indent_region_smart_end.erts")
- '(nil ; no modification
-   f90-ts-mode-test--shorten-to-end)
- '(f90-ts-mode-test--indent-by-region
-   )
- )
-
-
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode"
- '("indent_line_incomplete.erts")
- '(nil ; no modification
-   )
- '(f90-ts-indent-and-complete-line)
- )
-
-
-;; alignment tests, leave as is, the alignment variant to apply
-;; should be specified for each test header (default: keep-or-primary)
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode"
- '("indent_region_align.erts")
- '(nil ; no preparation
-   )
- '(f90-ts-mode-test--indent-by-region)
- )
-
-
-;; indentation tests, which do not fit the prep/action scheme 
-(f90-ts-mode-test-register
- "f90-ts-mode"
- '("indent_region_partial.erts"
-   "break_line.erts"
-   "join_line.erts"
-   "comment_region.erts")
- )
-
-
-;; expensive tests
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode-extra"
- '("indent_integration_collatz.erts")
- '(nil ; no modification
-   f90-ts-mode-test--remove-indent
-   f90-ts-mode-test--add-indent
-   f90-ts-mode-test--shorten-to-end)
- '(f90-ts-mode-test--indent-by-region
-   f90-ts-mode-test--indent-by-line)
- )
-
-;; tests already registered with indent-by-region
-;; note that indent-by-line requires reparsing after each line
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode-extra"
- '("indent_region_basic.erts"
-   "indent_region_comments.erts"
-   "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
- '(nil ; no modification
-   f90-ts-mode-test--remove-indent
-   f90-ts-mode-test--add-indent)
- '(f90-ts-mode-test--indent-by-line)
- )
-
-
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode-extra"
- '("indent_region_smart_end.erts")
- '(nil ; no modification
-   f90-ts-mode-test--shorten-to-end)
- '(f90-ts-mode-test--indent-by-line
-   )
- )
-
-
 ;;------------------------------------------------------------------------------
 ;; ERT: font locking
 
@@ -619,6 +527,106 @@ or f90-ts-mode-extra."
    ))
 
 
+;;------------------------------------------------------------------------------
+;; register tests
+
+
+;; general indentation with indent-region
+;; (with three different prep functions to vary initial indentation)
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode"
+ '("indent_region_basic.erts"
+   "indent_region_comments.erts"
+   "indent_region_constructs.erts"
+   "indent_region_preproc.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent)
+ '(f90-ts-mode-test--indent-by-region)
+ )
+
+
+;; smart end with specific shorten-to-end preparation
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode"
+ '("indent_region_smart_end.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-by-region
+   )
+ )
+
+
+;; incomplete code with ERROR nodes
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode"
+ '("indent_line_incomplete.erts")
+ '(nil ; no modification
+   )
+ '(f90-ts-indent-and-complete-line)
+ )
+
+
+;; alignment tests, leave as is, the alignment variant to apply
+;; should be specified for each test header (default: keep-or-primary)
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode"
+ '("indent_region_align.erts")
+ '(nil ; no preparation
+   )
+ '(f90-ts-mode-test--indent-by-region)
+ )
+
+
+;; indentation tests with custom erts Code block
+(f90-ts-mode-test-register
+ "f90-ts-mode"
+ '("indent_region_partial.erts"
+   "break_line.erts"
+   "join_line.erts"
+   "comment_region.erts")
+ )
+
+
+;; expensive tests
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode-extra"
+ '("indent_integration_collatz.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-by-region
+   f90-ts-mode-test--indent-by-line)
+ )
+
+;; expensive test variant of tests already registered
+;; with indent-by-region action;
+;; note that indent-by-line requires reparsing of the treesitter AST
+;; after each line, which is very expensive
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode-extra"
+ '("indent_region_basic.erts"
+   "indent_region_comments.erts"
+   "indent_region_constructs.erts"
+   "indent_region_preproc.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent)
+ '(f90-ts-mode-test--indent-by-line)
+ )
+
+
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode-extra"
+ '("indent_region_smart_end.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--shorten-to-end)
+ '(f90-ts-mode-test--indent-by-line
+   )
+ )
+
+
 ;; register font lock tests
 (f90-ts-mode-test-font-lock-register
  "f90-ts-mode"
@@ -629,6 +637,7 @@ or f90-ts-mode-extra."
    "font_lock_special_var.f90"))
 
 
+;; register extra font lock tests
 (f90-ts-mode-test-font-lock-register
  "f90-ts-mode-extra"
  '("font_lock_integration_collatz.f90"))
