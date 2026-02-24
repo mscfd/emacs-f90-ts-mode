@@ -5,7 +5,7 @@ Code:
     (f90-ts-mode)
     (f90-ts-join-line-prev))
 
-Name: join before statement 1
+Name: join prev statement 1
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
@@ -17,7 +17,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
-Name: join before statement 2
+Name: join prev statement 2
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
@@ -29,7 +29,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
-Name: join before statement 3
+Name: join prev statement 3
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
@@ -41,12 +41,64 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
+Name: join prev statement 4
+=-=
+real function test_fun()
+     test_fun = &
+
+
+     |       
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &|
+end function test_fun
+=-=-=
+
+Name: join prev statement 5
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+
+
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &|
+
+
+            & 6**5
+end function test_fun
+=-=-=
+
+Name: join prev statement 6
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+
+
+            6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &|
+
+
+            6**5
+end function test_fun
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
     (f90-ts-join-line-next))
 
-Name: join after statement 1
+Name: join next statement 1
 =-=
 subroutine sub_1()
      call sub_2(arg1,| &
@@ -58,7 +110,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
-Name: join after statement 2
+Name: join next statement 2
 =-=
 subroutine sub_1()
      call sub_2(arg1, |&
@@ -70,7 +122,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
-Name: join after statement 3
+Name: join next statement 3
 =-=
 subroutine sub_1()
      call sub_2(arg1, |&
@@ -83,4 +135,44 @@ end subroutine sub_1
 subroutine sub_1()
      call sub_2(arg1,| arg2)
 end subroutine sub_1
+=-=-=
+
+Name: join next statement 4
+=-=
+submodule (mod) subm
+type :: t
+     integer :: &  |
+
+
+            & i = 65
+end type t
+end submodule subm
+=-=
+submodule (mod) subm
+type :: t
+     integer ::| i = 65
+end type t
+end submodule subm
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-join-line-prev)
+    (f90-ts-join-line-next))
+
+Name: join multi statement 1
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+
+
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun =| 6**5
+end function test_fun
 =-=-=
