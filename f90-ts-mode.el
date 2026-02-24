@@ -3103,7 +3103,7 @@ in the region, or, if already present, remove it."
 (defun f90-ts-comment-region-custom (beg-region end-region prefix)
   "Comment/uncomment every line in the region using custom PREFIX.
 If called interactively, prompt for a prefix from `f90-ts-extra-comment-prefixes'
-and `f90-comment-region-prefix'."
+and `f90-ts-comment-region-prefix'."
   (interactive
    (list
     (progn
@@ -3111,7 +3111,7 @@ and `f90-comment-region-prefix'."
       (region-beginning))
     (region-end)
     (completing-read "choose comment prefix: "
-                          (cons f90-comment-region-prefix f90-ts-extra-comment-prefixes)
+                          (cons f90-ts-comment-region-prefix f90-ts-extra-comment-prefixes)
                           nil t nil nil f90-ts-comment-region-prefix)))
   (f90-ts-comment-region-with-prefix beg-region
                                      end-region

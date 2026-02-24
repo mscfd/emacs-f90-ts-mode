@@ -1,0 +1,237 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 1 69))
+
+Name: comment region all 1
+=-=
+subroutine sub_1()
+|     call to_be_commented()
+end subroutine sub_1
+
+=-=
+!!$subroutine sub_1()
+!!$     call to_be_commented()
+!!$end subroutine sub_1
+|
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 5 60))
+
+Name: comment region all 2
+=-=
+subroutine sub_1()
+|     call to_be_commented()
+end subroutine sub_1
+
+=-=
+!!$subroutine sub_1()
+!!$     call to_be_commented()
+!!$end subroutine sub_1
+|
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 1 78))
+
+Name: uncomment region all 1
+=-=
+|!!$subroutine sub_1()
+!!$     call to_be_commented()
+!!$end subroutine sub_1
+
+=-=
+subroutine sub_1()
+     call to_be_commented()
+end subroutine sub_1
+|
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 21 57))
+
+Name: uncomment region all 2
+=-=
+!!$subroutine sub_1()
+!!$     call to_be_commented()
+!!$end subroutine sub_1|
+
+=-=
+subroutine sub_1()
+     call to_be_commented()
+end subroutine sub_1
+|
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 20 91))
+
+Name: comment region some 1
+=-=
+subroutine sub_1()
+|     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+end subroutine sub_1
+=-=
+subroutine sub_1()
+!!$     call to_be_commented()
+!!$     comment: do i=1,10
+!!$     end do comment
+|end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 20 92))
+
+Name: comment region some 2
+=-=
+subroutine sub_1()
+     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+|end subroutine sub_1
+=-=
+subroutine sub_1()
+!!$     call to_be_commented()
+!!$     comment: do i=1,10
+!!$     end do comment
+|end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 20 91))
+
+Name: uncomment region some 1
+=-=
+subroutine sub_1()
+|!!$     call to_be_commented()
+!!$     comment: do i=1,10
+!!$     end do comment
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+|end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 20 92))
+
+Name: uncomment region some 2
+=-=
+subroutine sub_1()
+!!$     call to_be_commented()
+!!$     comment: |do i=1,10
+!!$     end do comment
+end subroutine sub_1
+
+=-=
+subroutine sub_1()
+     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+|end subroutine sub_1
+
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 20 92 "!%%!"))
+
+Name: comment region custom 1
+=-=
+subroutine sub_1()
+|     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+end subroutine sub_1
+=-=
+subroutine sub_1()
+!%%!     call to_be_commented()
+!%%!     comment: do i=1,10
+!%%!     end do comment
+|end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 20 95 "!%%! "))
+
+Name: comment region custom 2
+=-=
+subroutine sub_1()
+!     call to_be_commented()
+!     comment: do i=1,10
+!     end do comment
+|end subroutine sub_1
+=-=
+subroutine sub_1()
+!%%! !     call to_be_commented()
+!%%! !     comment: do i=1,10
+!%%! !     end do comment
+|end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 20 104 "!%%!"))
+
+Name: uncomment region custom 1
+=-=
+subroutine sub_1()
+|!%%!     call to_be_commented()
+!%%!     comment: do i=1,10
+!%%!     end do comment
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+|end subroutine sub_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 1 121 "!%%!"))
+
+Name: both-comment all custom 1
+=-=
+subroutine sub_1()
+!%%!     call to_be_commented()
+!%%!     comment: do i=1,10
+     end do |comment
+end subroutine sub_1
+
+=-=
+!%%!subroutine sub_1()
+     call to_be_commented()
+     comment: do i=1,10
+!%%!     end do comment
+!%%!end subroutine sub_1
+|
+=-=-=

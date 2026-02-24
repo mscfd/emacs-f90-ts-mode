@@ -355,7 +355,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
        for prep-fn in prep-fns
        for prep-name = (replace-regexp-in-string
                         "^f90-ts\\(?:-mode-test--\\|-\\)" ""
-                        (if prep-fn (symbol-name prep-fn) "none"))
+                        (if prep-fn (symbol-name prep-fn) "prep-none"))
        do (cl-loop
            for action-fn in action-fns
            for action-name = (replace-regexp-in-string
@@ -432,7 +432,8 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
  "f90-ts-mode"
  '("indent_region_partial.erts"
    "break_line.erts"
-   "join_line.erts")
+   "join_line.erts"
+   "comment_region.erts")
  )
 
 
