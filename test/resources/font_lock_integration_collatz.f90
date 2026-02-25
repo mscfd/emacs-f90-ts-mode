@@ -185,7 +185,7 @@
   ! ==========
 ! ^^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
        ! TODO: always copy this is O(n**2) and can become expensive
-!      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+!      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
        n = size(self%visitors)
 !      ^ nil
 !        ^ f90-ts-font-lock-operator-face

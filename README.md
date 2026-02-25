@@ -153,6 +153,13 @@ placed somewhere in `init.el` (or elsewhere).
 
 ### Syntax highlight
 
+The mode has four levels of font-locking, which is controlled by customizable variable `treesit-font-lock-level`.
+
+ - level 1: comment, preprocessor,
+ - level 2: builtin, keyword, string, type,
+ - level 3: constant, number,
+ - level 4: function, variable, operator, bracket, delimiter.
+
 Additionally to the usual faces, there are some extra custom faces:
 
 | Face Name                                 | Description                                           |

@@ -58,6 +58,8 @@ final newline."
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (f90-ts-comment-region-prefix . "!!$")
     (f90-ts-extra-comment-prefixes . '("!%%!" "!>"))
+    (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
+                                        ; also needs treesit-font-lock-recompute-features
     (indent-tabs-mode . nil)
     (require-final-newline . nil)
     )
@@ -84,7 +86,13 @@ It has the same structure and the same set of keys as
   "Save current values and apply temporary ones for testing purposes."
   (f90-ts-mode-test-save-custom)
   (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
-           do (set-default var val)))
+           do (progn
+                (when (local-variable-p var)
+                  ;; if current buffer has a local copy, set it as well
+                  (setq-local var val))
+                (set-default var val)))
+  ;; treesit-font-lock-level requires a recompute
+  (treesit-font-lock-recompute-features nil nil 'fortran))
 
 
 ;;;###autoload
@@ -93,7 +101,13 @@ It has the same structure and the same set of keys as
   (unless f90-ts-mode-test-custom-saved
     (error "f90-ts-mode-test: No saved custom variable state to restore"))
   (cl-loop for (var . val) in f90-ts-mode-test-custom-saved
-           do (set-default var val))
+           do (progn
+                (when (local-variable-p var)
+                  ;; if current buffer has a local copy, set it as well
+                  (setq-local var val))
+                (set-default var val)))
+  ;; treesit-font-lock-level requires a recompute
+  (treesit-font-lock-recompute-features nil nil 'fortran)
   (setq f90-ts-mode-test-custom-saved nil))
 
 
@@ -101,9 +115,29 @@ It has the same structure and the same set of keys as
 (defmacro f90-ts-mode-test-with-custom-testing (&rest body)
   "Bind test settings dynamically using cl-progv, then call BODY-FN."
   `(let ((vars (mapcar #'car f90-ts-mode-test-custom-settings))
-         (vals (mapcar #'cdr f90-ts-mode-test-custom-settings)))
+         (vals (mapcar #'cdr f90-ts-mode-test-custom-settings))
+         ;; save current buffer-local values for variables that have one
+         (saved-locals (cl-loop
+                        for (var . _ ) in f90-ts-mode-test-custom-settings
+                        when (local-variable-p var)
+                        collect (cons var
+                                      (buffer-local-value var (current-buffer)))
+                        )))
      (cl-progv vars vals
-       ,@body)))
+       ;; also set buffer-local values where needed
+       (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
+                when (local-variable-p var)
+                do (setq-local var val))
+       (unwind-protect
+           (progn
+             ;; treesit-font-lock-level requires a recompute
+             (treesit-font-lock-recompute-features nil nil 'fortran)
+             (progn ,@body))
+         ;; restore buffer-local values on exit
+         (cl-loop for (var . val) in saved-locals
+                  do (setq-local var val))
+         ;; treesit-font-lock-level requires a recompute
+         (treesit-font-lock-recompute-features nil nil 'fortran)))))
 
 
 ;;;###autoload
@@ -403,8 +437,8 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
           (match-beginning 0))
 
          (t
-          ;; no face and no blank/non-blank boundary before next
-          ;; face starts or line ends
+          ;; no face and no blank/non-blank boundary before next face
+          ;; starts or line ends
           next-face-change))))))
 
 
@@ -436,17 +470,41 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
       )))
 
 
+(defun f90-ts-mode-test--update-face-line (annotate)
+  "Update a single line in face annotation update process.
+If ANNOTATE is nil, just remove annotations, otherwise
+re-add annotations."
+  (beginning-of-line)
+  (cond
+   ;; if this is an annotation line, delete it
+   ((looking-at "\\s-*!\\s-*\\^+")
+    (let ((start (point)))
+      (forward-line 1)
+      (delete-region start (point))))
+
+   ((and annotate
+         (not (looking-at "^\\s-*$")))
+    ;; regular but not empty line, annotate it;
+    ;; f90-ts-indent-and-complete-region has removed any leading blanks,
+    ;; insert a blank to allow exact caret assertions
+    (insert " ")
+    (backward-char 1)
+    (f90-ts-mode-test--annotate-faces))))
+
+
 ;;;###autoload
-(defun f90-ts-mode-test-update-face-annotations ()
+(defun f90-ts-mode-test-update-face-annotations (annotate)
   "Update face annotations in buffer.
+If ANNOTATE is nil, just remove annotations, otherwise
+re-add annotations.
 
 Start with indenting the whole buffer, then add a blank on any line
 which is not a font lock assertion line and which is not empty.
 Then process from last line to first. Remove existing annotation lines
 (those starting with ! followed by optional spaces and carets).
-For other lines, generate annotations using
-`f90-ts-mode-test--annotate-faces'."
-  (interactive)
+For other lines, generate annotations."
+  (interactive
+   (list (y-or-n-p "With adding face annotations? (n = only remove) ")))
   (f90-ts-mode-test-with-custom-testing
    (let* ((pos (point))
           (pos-min (point-min))
@@ -472,22 +530,7 @@ For other lines, generate annotations using
        ;; returns number of lines left to move, which is 1, otherwise
        ;; it always returns zero
        (while (zerop (forward-line -1))
-         (beginning-of-line)
-         (cond
-          ;; if this is an annotation line, delete it
-          ((looking-at "\\s-*!\\s-*\\^+")
-           (let ((start (point)))
-             (forward-line 1)
-             (delete-region start (point))))
-
-          ((not (looking-at "^\\s-*$"))
-           ;; regular but not empty line, annotate it;
-           ;; f90-ts-indent-and-complete-region has removed any leading blanks,
-           ;; insert a blank to allow exact caret assertions
-           (insert " ")
-           (backward-char 1)
-           (f90-ts-mode-test--annotate-faces))))
-       )
+         (f90-ts-mode-test--update-face-line annotate))))
 
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
@@ -499,7 +542,7 @@ For other lines, generate annotations using
              (set-buffer-modified-p nil))
            ;; content is the same, jump to the old position
            (goto-char pos))
-       (goto-char (point-max))))))
+       (goto-char (point-max)))))
 
 
 (defun f90-ts-mode-test-font-lock-register (prefix files)
