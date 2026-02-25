@@ -58,6 +58,8 @@ final newline."
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (f90-ts-comment-region-prefix . "!!$")
     (f90-ts-extra-comment-prefixes . '("!%%!" "!>"))
+    (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
+                                        ; also needs treesit-font-lock-recompute-features
     (indent-tabs-mode . nil)
     (require-final-newline . nil)
     )
@@ -84,7 +86,13 @@ It has the same structure and the same set of keys as
   "Save current values and apply temporary ones for testing purposes."
   (f90-ts-mode-test-save-custom)
   (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
-           do (set-default var val)))
+           do (progn
+                (when (local-variable-p var)
+                  ;; if current buffer has a local copy, set it as well
+                  (setq-local var val))
+                (set-default var val)))
+  ;; treesit-font-lock-level requires a recompute
+  (treesit-font-lock-recompute-features nil nil 'fortran))
 
 
 ;;;###autoload
@@ -93,7 +101,13 @@ It has the same structure and the same set of keys as
   (unless f90-ts-mode-test-custom-saved
     (error "f90-ts-mode-test: No saved custom variable state to restore"))
   (cl-loop for (var . val) in f90-ts-mode-test-custom-saved
-           do (set-default var val))
+           do (progn
+                (when (local-variable-p var)
+                  ;; if current buffer has a local copy, set it as well
+                  (setq-local var val))
+                (set-default var val)))
+  ;; treesit-font-lock-level requires a recompute
+  (treesit-font-lock-recompute-features nil nil 'fortran)
   (setq f90-ts-mode-test-custom-saved nil))
 
 
@@ -101,9 +115,29 @@ It has the same structure and the same set of keys as
 (defmacro f90-ts-mode-test-with-custom-testing (&rest body)
   "Bind test settings dynamically using cl-progv, then call BODY-FN."
   `(let ((vars (mapcar #'car f90-ts-mode-test-custom-settings))
-         (vals (mapcar #'cdr f90-ts-mode-test-custom-settings)))
+         (vals (mapcar #'cdr f90-ts-mode-test-custom-settings))
+         ;; save current buffer-local values for variables that have one
+         (saved-locals (cl-loop
+                        for (var . _ ) in f90-ts-mode-test-custom-settings
+                        when (local-variable-p var)
+                        collect (cons var
+                                      (buffer-local-value var (current-buffer)))
+                        )))
      (cl-progv vars vals
-       ,@body)))
+       ;; also set buffer-local values where needed
+       (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
+                when (local-variable-p var)
+                do (setq-local var val))
+       (unwind-protect
+           (progn
+             ;; treesit-font-lock-level requires a recompute
+             (treesit-font-lock-recompute-features nil nil 'fortran)
+             (progn ,@body))
+         ;; restore buffer-local values on exit
+         (cl-loop for (var . val) in saved-locals
+                  do (setq-local var val))
+         ;; treesit-font-lock-level requires a recompute
+         (treesit-font-lock-recompute-features nil nil 'fortran)))))
 
 
 ;;;###autoload
