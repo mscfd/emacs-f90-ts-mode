@@ -3139,18 +3139,17 @@ and `f90-ts-comment-region-prefix'."
 
   ;; font-lock feature list controls what features are enabled for highlighting
   (setq-local treesit-font-lock-feature-list
-              '((comment preproc)               ; level 1
-                (builtin keyword string type)   ; level 2
-                (constant number)               ; level 3
-                (function variable operator)    ; level 4
-                (bracket delimiter)))           ; level 5
+              '((comment preproc)                                ; level 1
+                (builtin keyword string type)                    ; level 2
+                (constant number)                                ; level 3
+                (function variable operator bracket delimiter))) ; level 4
 
   ;; use the pre-defined font-lock rules variable
   (setq-local treesit-font-lock-settings
               (apply #'append f90-ts-font-lock-rules))
 
   ;; font-lock level
-  (setq-local treesit-font-lock-level 5)
+  (setq-local treesit-font-lock-level 4)
 
   ;; use the pre-defined indentation rules variable
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
