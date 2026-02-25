@@ -3124,18 +3124,17 @@ and `f90-ts-comment-region-prefix'."
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
-  (interactive)
   ;; check if treesit has a ready parser for 'fortran
   (unless (treesit-available-p)
     (error "Tree-sitter support is not available"))
 
   ;; create parser or report error
-  (if (not (treesit-ready-p 'fortran))
-      (message
-       (concat "Tree-sitter parser for 'fortran not ready. "
-               "Run `M-x treesit-install-language-grammar RET fortran RET' "
-               "or ensure treesit-language-source-alist points to a built grammar."))
-    (treesit-parser-create 'fortran))
+  (if (treesit-ready-p 'fortran)
+      (treesit-parser-create 'fortran)
+    (error
+     (concat "Tree-sitter parser for 'fortran not ready. "
+             "Run `M-x treesit-install-language-grammar RET fortran RET' "
+             "or ensure treesit-language-source-alist points to a built grammar.")))
 
   ;; font-lock feature list controls what features are enabled for highlighting
   (setq-local treesit-font-lock-feature-list
@@ -3148,17 +3147,16 @@ and `f90-ts-comment-region-prefix'."
   (setq-local treesit-font-lock-settings
               (apply #'append f90-ts-font-lock-rules))
 
-  ;; font-lock level
-  (setq-local treesit-font-lock-level 4)
-
   ;; use the pre-defined indentation rules variable
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
-  ;; basic setup helper provided by emacs for tree-sitter powered modes
-  (when (fboundp 'treesit-major-mode-setup)
-    (treesit-major-mode-setup))
+  ;; basic setup helper provided by emacs for tree-sitter powered modes,
+  ;; this must be called after setting setq-local variables above!
+  (treesit-major-mode-setup)
 
-  ;; set indentation functions (both add smart end completion)
+  ;; set indentation functions (both add smart end completion before
+  ;; indentation, so no hook available); this must be done AFTER
+  ;; calling treesit-major-mode-setup
   (setq-local indent-line-function #'f90-ts-indent-and-complete-line)
   (setq-local indent-region-function #'f90-ts-indent-and-complete-region)
 
