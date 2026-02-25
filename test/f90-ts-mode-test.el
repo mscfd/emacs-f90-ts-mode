@@ -403,8 +403,8 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
           (match-beginning 0))
 
          (t
-          ;; no face and no blank/non-blank boundary before next
-          ;; face starts or line ends
+          ;; no face and no blank/non-blank boundary before next face
+          ;; starts or line ends
           next-face-change))))))
 
 
@@ -436,17 +436,41 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
       )))
 
 
+(defun f90-ts-mode-test--update-face-line (annotate)
+  "Update a single line in face annotation update process.
+If ANNOTATE is nil, just remove annotations, otherwise
+re-add annotations."
+  (beginning-of-line)
+  (cond
+   ;; if this is an annotation line, delete it
+   ((looking-at "\\s-*!\\s-*\\^+")
+    (let ((start (point)))
+      (forward-line 1)
+      (delete-region start (point))))
+
+   ((and annotate
+         (not (looking-at "^\\s-*$")))
+    ;; regular but not empty line, annotate it;
+    ;; f90-ts-indent-and-complete-region has removed any leading blanks,
+    ;; insert a blank to allow exact caret assertions
+    (insert " ")
+    (backward-char 1)
+    (f90-ts-mode-test--annotate-faces))))
+
+
 ;;;###autoload
-(defun f90-ts-mode-test-update-face-annotations ()
+(defun f90-ts-mode-test-update-face-annotations (annotate)
   "Update face annotations in buffer.
+If ANNOTATE is nil, just remove annotations, otherwise
+re-add annotations.
 
 Start with indenting the whole buffer, then add a blank on any line
 which is not a font lock assertion line and which is not empty.
 Then process from last line to first. Remove existing annotation lines
 (those starting with ! followed by optional spaces and carets).
-For other lines, generate annotations using
-`f90-ts-mode-test--annotate-faces'."
-  (interactive)
+For other lines, generate annotations."
+  (interactive
+   (list (y-or-n-p "With adding face annotations? (n = only remove) ")))
   (f90-ts-mode-test-with-custom-testing
    (let* ((pos (point))
           (pos-min (point-min))
@@ -472,22 +496,7 @@ For other lines, generate annotations using
        ;; returns number of lines left to move, which is 1, otherwise
        ;; it always returns zero
        (while (zerop (forward-line -1))
-         (beginning-of-line)
-         (cond
-          ;; if this is an annotation line, delete it
-          ((looking-at "\\s-*!\\s-*\\^+")
-           (let ((start (point)))
-             (forward-line 1)
-             (delete-region start (point))))
-
-          ((not (looking-at "^\\s-*$"))
-           ;; regular but not empty line, annotate it;
-           ;; f90-ts-indent-and-complete-region has removed any leading blanks,
-           ;; insert a blank to allow exact caret assertions
-           (insert " ")
-           (backward-char 1)
-           (f90-ts-mode-test--annotate-faces))))
-       )
+         (f90-ts-mode-test--update-face-line annotate))))
 
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
@@ -499,7 +508,7 @@ For other lines, generate annotations using
              (set-buffer-modified-p nil))
            ;; content is the same, jump to the old position
            (goto-char pos))
-       (goto-char (point-max))))))
+       (goto-char (point-max)))))
 
 
 (defun f90-ts-mode-test-font-lock-register (prefix files)
