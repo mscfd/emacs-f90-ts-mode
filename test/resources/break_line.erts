@@ -104,3 +104,52 @@ subroutine sub_1()
 !$omp end parallel
 end subroutine sub_1
 =-=-=
+
+Name: break empty 1
+=-=
+integer function test_fun()
+     |test_fun = 6**5
+end function test_fun
+=-=
+integer function test_fun()
+
+     |test_fun = 6**5
+end function test_fun
+=-=-=
+
+Name: break empty 2
+=-=
+module mod
+ type :: t
+|
+ end type t
+end module
+=-=
+module mod
+ type :: t
+
+      |
+ end type t
+end module
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-break-line)
+    (f90-ts-break-line)
+    (f90-ts-break-line))
+
+Name: break multi 1
+=-=
+real function test_fun()
+     test_fun =|
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &
+
+
+            |
+end function test_fun
+=-=-=

@@ -238,8 +238,7 @@ self or this. Used for applying a special font lock face."
   "Regular expression for matching and capturing comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments.
-This is used for applying the same comment starter in comment section, see
-`f90-ts-break-line'."
+This is used for applying the same comment starter, see `f90-ts-break-line'."
   :type 'regexp
   :safe #'stringp
   :group 'f90-ts)
@@ -259,6 +258,18 @@ Also add trailing whitespace characters to preserve indentation within comments.
 Used for applying a separator font lock face and alignment with parent node."
   :type 'regexp
   :safe #'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-comment-region-prefix "!!$"
+  "Comment prefix."
+  :type 'string
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
+  "List of additional comment prefixes for interactive selection."
+  :type '(repeat string)
   :group 'f90-ts)
 
 
@@ -2878,20 +2889,38 @@ If previous line has comments (at end, next line etc.) joining is not
 done."
   (interactive)
   (let* ((first-node (f90-ts--first-node-on-line (point)))
-         (amp-node (when (and first-node
-                              (f90-ts--node-type-p first-node "&"))
-                     first-node))
-         (prev-node (and amp-node (treesit-node-prev-sibling amp-node))))
-    (cl-assert (f90-ts--node-type-p prev-node '("&" "comment"))
+         (amp-node (and (f90-ts--node-type-p first-node "&")
+                        first-node))
+         (prev-node (and amp-node
+                         (treesit-node-prev-sibling amp-node)))
+         (bol (save-excursion
+                (back-to-indentation)
+                (point))))
+    ;; if amp-node is non-nil it is the first node on line and thus the second
+    ;; (possibly virtual) ampersand of a continued statement, comments might be
+    ;; in between those two ampersands
+    (cl-assert (and amp-node
+                    (f90-ts--node-type-p prev-node '("&" "comment")))
                nil "internal error: prev node is not an ampersand or comment?")
     (if (and amp-node
              prev-node
              (f90-ts--node-type-p prev-node "&"))
-        (let ((beg (treesit-node-start prev-node))
-              (end (treesit-node-end amp-node)))
-          (delete-region beg end)
-          (goto-char beg)
-          (fixup-whitespace))
+        (let ((end (treesit-node-end amp-node)))
+          (if (= bol end)
+              ;; point is on the line of the ampersand, join completely
+              (let ((beg (treesit-node-start prev-node)))
+                (delete-region beg end)
+                (goto-char beg)
+                (fixup-whitespace))
+            ;; next proper continued line is not at point but later
+            (let ((beg (treesit-node-end prev-node)))
+              (cl-assert (< (line-number-at-pos bol)
+                            (line-number-at-pos end))
+                         nil "internal error: bol and end at same line?")
+              ;; do not delete the first &, as we also do not delete second &
+              (delete-region beg bol)
+              (goto-char beg)
+              (fixup-whitespace))))
       (message "join failed: not a simple continued line"))))
 
 
@@ -2902,11 +2931,15 @@ If continued line has comments (at end, next line etc.) joining is not
 done."
   (interactive)
   (let* ((last-node (f90-ts--last-node-on-line (point)))
-         (amp-node (when (and last-node
-                              (f90-ts--node-type-p last-node "&"))
-                     last-node))
+         (amp-node (and (f90-ts--node-type-p last-node "&")
+                        last-node))
          (next-node (and amp-node (treesit-node-next-sibling amp-node))))
-    (cl-assert (f90-ts--node-type-p next-node '("&" "comment"))
+    ;; if amp-node is non-nil it is the last node on line and an ampersand,
+    ;; thus next node is either (possibly virtual) ampersand of a continued
+    ;; statement, or a comment (which are allowed to be in between those two
+    ;; ampersands)
+    (cl-assert (and amp-node
+                    (f90-ts--node-type-p next-node '("&" "comment")))
                nil "internal error: next node is not an ampersand or comment?")
     (if (and amp-node
              next-node
@@ -3040,18 +3073,6 @@ child."
 ;;------------------------------------------------------------------------------
 ;; Comment region using some prefix
 
-(defcustom f90-ts-comment-region-prefix "!!$"
-  "Comment prefix."
-  :type 'string
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
-  "List of additional comment prefixes for interactive selection."
-  :type '(repeat string)
-  :group 'f90-ts)
-
-
 ;; The following code are adapted from `f90.el', which is part of GNU Emacs.
 (defun f90-ts-comment-region-with-prefix (beg-region end-region prefix)
   "Comment/uncomment every line in the region using comment prefix.
@@ -3082,7 +3103,7 @@ in the region, or, if already present, remove it."
 (defun f90-ts-comment-region-custom (beg-region end-region prefix)
   "Comment/uncomment every line in the region using custom PREFIX.
 If called interactively, prompt for a prefix from `f90-ts-extra-comment-prefixes'
-and `f90-comment-region-prefix'."
+and `f90-ts-comment-region-prefix'."
   (interactive
    (list
     (progn
@@ -3090,7 +3111,7 @@ and `f90-comment-region-prefix'."
       (region-beginning))
     (region-end)
     (completing-read "choose comment prefix: "
-                          (cons f90-comment-region-prefix f90-ts-extra-comment-prefixes)
+                          (cons f90-ts-comment-region-prefix f90-ts-extra-comment-prefixes)
                           nil t nil nil f90-ts-comment-region-prefix)))
   (f90-ts-comment-region-with-prefix beg-region
                                      end-region

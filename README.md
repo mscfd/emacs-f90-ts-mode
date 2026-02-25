@@ -23,6 +23,92 @@ The following can be used to check whether versions are correct:
 * `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25`
 
 
+
+## Installation
+
+The f90-ts-mode relies on the master branch of the patched treesitter fortran grammar at
+[mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran.git).
+Suggested patches are not yet merged into main treesitter fortran repo.
+
+The grammar needs to be generated with `tree-sitter generate` (or via npm), and installed in emacs,
+using the default instructions for installing a new grammar.
+
+
+Currently, f90-ts-mode.el is not provided as a package. It needs to be copied into a folder,
+where emacs can find it (e.g. via use-package).
+
+The repository can be cloned by:
+`git clone https://github.com/mscfd/emacs-f90-ts-mode.git path_to/emacs_f90_ts_mode`
+
+
+### Setup
+
+The mode itself and optionally the testing module can be loaded with `use-package`
+placed somewhere in `init.el` (or elsewhere).
+
+
+```elisp
+(use-package f90-ts-mode
+  ;; :ensure nil tells use-package NOT to try installing this from MELPA/ELPA.
+  :ensure nil
+  :load-path "path_to/emacs-f90-ts-mode"
+  :mode ("\\.f90\\'" . f90-ts-mode)
+  :commands (f90-ts-mode)
+
+  :init
+  (require 'treesit)
+  (setq treesit-language-source-alist
+        (append treesit-language-source-alist
+                '((fortran "path_to/tree-sitter-fortran"))))
+
+  :config
+  (message "f90-ts-mode loaded")
+
+  :bind (;; global binding that triggers the load
+         ;; replaces the currently active frame with the log buffer,
+         ;; should work in any buffer
+         ("A-h k" . f90-ts-mode)
+         ("A-h l" . f90-ts-log-show)
+
+         ;; mode-specific bindings
+         :map f90-ts-mode-map
+         ("A-h m" . treesit-explore-mode)
+         ("A-h P" . treesit-inspect-node-at-point)
+         ("A-h p" . f90-ts-inspect-node-at-point)
+         )
+  )
+
+;; only required for interactive testing
+(use-package f90-ts-mode-test
+  :ensure nil
+  ;; add the test subdirectory specifically for test related stuff
+  :load-path "path_to/emacs-f90-ts-mode/test"
+
+  :commands (f90-ts-mode-test-run
+             f90-ts-mode-test-update-erts-after
+             f90-ts-mode-test-update-face-annotations)
+
+  :config
+  (message "f90-ts-mode-test loaded")
+
+  :bind (;; global test commands
+         ("A-h i" . f90-ts-mode-switch-custom)
+         ("A-h t" . (lambda () (interactive)
+                      (f90-ts-mode-test-run "^f90-ts-mode/")))
+         ("A-h d" . (lambda () (interactive)
+                      (f90-ts-mode-test-run "^f90-ts-mode/"
+                                            f90-ts-mode-test-diff-command))))
+
+  :init
+  (require 'f90-ts-mode)
+  (define-key f90-ts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-face-annotations)
+  (require 'erts-mode)
+  (define-key erts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-erts-after)
+  )
+```
+
+
+
 ## Features
 (with inspiration from the legacy f90 mode in emacs)
 
@@ -105,7 +191,7 @@ Currently implemented rules are:
 Indentation of multiline statements is complex. Indentation for region works a bit differently than
 indentation of a single line. The reason is that indentation of a single line can rotate through
 eligible column given by similar items on previous lines:
-```
+```fortran
 call sub_with_many_arguments(argx, another, one_more, &
                                    another2, one_more2, &
                              argy, just_this, &
@@ -135,7 +221,7 @@ Normal comments are indented like statements. Separator comments are aligned to 
 For example, if the regexp for separator comments is `\\(!\\( arguments\|===\\)$\\)`,
 indentation looks like:
 
-```
+```fortran
 subroutine sub(arg1, arg2)
 ! arguments
    ! arg1 must be a positive number
@@ -182,14 +268,9 @@ then the comment starter (like '!>', '!<' or similar) is extracted, including in
 comment starter, and inserted into the new line to continue the comment.
 The comment starter is found by regexp `f90-ts-comment-prefix-regexp`, which can be customized if necessary.
 
-This can be bound to a key by
-```
-(define-key f90-ts-mode-map (kbd "<C-return>") #'f90-ts-break-line)
-```
-
 Whether a leading ampersand at the start of the new line is inserted is controlled by
-`f90-ts-beginning-ampersand`. However, this has not yet been tested, in particular in conjunction
-with list item alignment.
+`f90-ts-beginning-ampersand`. However, this has not yet been tested, in conjunction with indentation
+and in particular with list item alignment.
 
 
 #### Joining lines
@@ -287,96 +368,23 @@ Note: fortran test code should NOT use the caret `^`, even in comments, as the e
 
 ### Custom tests
 
-Custom tests are erts based tests with a custom Code block for each test (and thus do not fit the
-prep-fn/action-fn scheme of the indentation test above).
-This is used for testing indentation of just a region, break line and join line functions.
+Custom tests are erts based tests with a custom `Code` block for each test (and thus do not fit the
+prep-fn/action-fn scheme of the indentation tests above).
+This is used to test indentation of just a region, break and join line operations and
+to test the comment region functions.
 
-
-
-
-
-## Installation
-
-The f90-ts-mode relies on the master branch of the patched treesitter fortran grammar at
-[mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran.git).
-Suggested patches are not yet merged into main treesitter fortran repo.
-
-The grammar needs to be generated with `tree-sitter generate` (or via npm), and installed in emacs.
-
-
-Currently, f90-ts-mode.el is not provided as a package. It needs to be copied into a directory,
-where emacs can find it.
-
-
-```elisp
-(add-to-list 'load-path
-             "/home/user/path/to/f90/ts/mode")
-(add-to-list 'treesit-language-source-alist
-             '(fortran "/home/user/path/to/tree-sitter-fortran"))
-```
-
-
-### Setup
-
-With `use-package` in `init.el` (or elsewhere), the mode itself and optionally the testing module
-can be loaded.
-
-```elisp
-(use-package f90-ts-mode
-  ;; :ensure nil tells use-package NOT to try installing this from MELPA/ELPA.
-  :ensure nil
-  :load-path "path_to/emacs-f90-ts-mode"
-  :mode ("\\.f90\\'" . f90-ts-mode)
-  :commands (f90-ts-mode)
-
-  :init
-  (require 'treesit)
-  (setq treesit-language-source-alist
-        (append treesit-language-source-alist
-                '((fortran "path_to/tree-sitter-fortran"))))
-
-  :config
-  (message "f90-ts-mode loaded")
-
-  :bind (;; global binding that triggers the load
-         ;; replaces the currently active frame with the log buffer,
-         ;; should work in any buffer
-         ("A-h k" . f90-ts-mode)
-         ("A-h l" . f90-ts-log-show)
-
-         ;; mode-specific bindings
-         :map f90-ts-mode-map
-         ("A-h m" . treesit-explore-mode)
-         ("A-h P" . treesit-inspect-node-at-point)
-         ("A-h p" . f90-ts-inspect-node-at-point)
-         )
-  )
-
-;; only required for interactive testing
-(use-package f90-ts-mode-test
-  :ensure nil
-  ;; add the test subdirectory specifically for test related stuff
-  :load-path "path_to/emacs-f90-ts-mode/test"
-
-  :commands (f90-ts-mode-test-run
-             f90-ts-mode-test-update-erts-after
-             f90-ts-mode-test-update-face-annotations)
-
-  :config
-  (message "f90-ts-mode-test loaded")
-
-  :bind (;; global test commands
-         ("A-h i" . f90-ts-mode-switch-custom)
-         ("A-h t" . (lambda () (interactive)
-                      (f90-ts-mode-test-run "^f90-ts-mode/")))
-         ("A-h d" . (lambda () (interactive)
-                      (f90-ts-mode-test-run "^f90-ts-mode/"
-                                            f90-ts-mode-test-diff-command))))
-
-  :init
-  (require 'f90-ts-mode)
-  (define-key f90-ts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-face-annotations)
-  (require 'erts-mode)
-  (define-key erts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-erts-after)
-  )
+New tests can easiy be added by placing a test file in `test/resources` and registering it
+in `test/f90-ts-mode-test.el`. Registering looks like:
+```elsip
+(f90-ts-mode-test-prep-act-register
+ "f90-ts-mode"
+ '("indent_region_basic.erts"
+   "indent_region_comments.erts"
+   "indent_region_constructs.erts"
+   "indent_region_preproc.erts")
+ '(nil ; no modification
+   f90-ts-mode-test--remove-indent
+   f90-ts-mode-test--add-indent)
+ '(f90-ts-mode-test--indent-by-region)
+ )
 ```

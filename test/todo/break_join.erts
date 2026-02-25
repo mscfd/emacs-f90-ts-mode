@@ -1,0 +1,88 @@
+Name: join prev [fails]
+real function test_fun()
+     test_fun = &
+
+
+   |       ! comment
+end function test_fun
+
+
+
+Name: join prev [fails]
+=-=
+! join-prev: point at |
+module mod
+ type :: t
+
+      |
+ end type t
+end module
+=-=
+
+
+
+Name: join prev [fails]
+=-=
+! join-prev: point in line before comment
+module mod
+ type :: t
+
+      ! comment
+ end type t
+end module
+=-=
+
+
+Name: join next [fails]
+=-=
+module mod
+ type :: t
+      |
+      ! comment
+ end type t
+end module
+=-=
+
+
+Code:
+  (lambda ()
+   (f90-ts-mode)
+   (f90-ts-join-line-next))
+
+Name: join multi next [fails, prev works]
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = 6**5
+end function test_fun
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-join-line-prev))
+
+Name: join prev statement 5
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+
+            ! comment: this comment fails the join operation
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &|
+
+
+            &6**5
+end function test_fun
+=-=-=
