@@ -5,12 +5,42 @@ based on Emacs’s built-in **Tree-sitter** support (requires Emacs 29+).
 
 The mode is under **development**, features might only be partially implemented.
 
+
+## Table of Contents
+
+- [Installation](#installation)
+  - [Tree-sitter grammar](#tree-sitter-grammar)
+  - [Tree-sitter based mode](#tree-sitter-based-mode)
+  - [Setup](#setup)
+- [Features](#features)
+  - [Syntax highlight](#syntax-highlight)
+  - [Indentation](#indentation)
+    - [Indentation of multiline statement](#indentation-of-multiline-statement)
+    - [Separator comments](#separator-comments)
+  - [Smart end completion](#smart-end-completion)
+  - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
+  - [Breaking and joining lines](#breaking-and-joining-lines)
+    - [Breaking lines](#breaking-lines)
+    - [Joining lines](#joining-lines)
+  - [Comment region](#comment-region)
+  - [Mark regions based on tree-sitter nodes](#mark-regions-based-on-tree-sitter-nodes)
+- [Testing with ERT](#testing-with-ert)
+  - [Makefile](#makefile)
+  - [Indentation tests](#indentation-tests)
+  - [Font lock tests](#font-lock-tests)
+  - [Custom tests](#custom-tests)
+- [Logging and debugging](#logging-and-debugging)
+
+
+
+## Installation
+
+### Tree-sitter grammar
+
 Currently it relies on a recent tree-sitter grammar version of fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
 There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
-
-
 
 **NOTE**: The fortran grammar should be compiled with treesitter version 0.25.x, as emacs (including 30.2) does not yet support the 0.26 branch.
 For example, queries are not translated as expected by the 0.26 branch.
@@ -22,10 +52,6 @@ The following can be used to check whether versions are correct:
 * with `M-:` `(treesit-language-abi-version 'fortran)` should be 15
 * `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25`
 
-
-
-## Installation
-
 The f90-ts-mode relies on the master branch of the patched treesitter fortran grammar at
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran.git).
 Suggested patches are not yet merged into main treesitter fortran repo.
@@ -34,10 +60,13 @@ The grammar needs to be generated with `tree-sitter generate` (or via npm), and 
 using the default instructions for installing a new grammar.
 
 
+### Tree-sitter based mode
+
 Currently, f90-ts-mode.el is not provided as a package. It needs to be copied into a folder,
 where emacs can find it (e.g. via use-package).
 
 The repository can be cloned by:
+
 `git clone https://github.com/mscfd/emacs-f90-ts-mode.git path_to/emacs_f90_ts_mode`
 
 
@@ -78,7 +107,7 @@ placed somewhere in `init.el` (or elsewhere).
          )
   )
 
-;; only required for interactive testing
+;; only required for testing
 (use-package f90-ts-mode-test
   :ensure nil
   ;; add the test subdirectory specifically for test related stuff
@@ -162,9 +191,10 @@ Customizable variables for indentations are:
 *Remarks*
 - statement blocks are features such as `functions`, `subroutines`, control statements (`do`, `if`, `select`)
   and other block structures (`associate`, `block` etc.)
-- f90-ts-indent-toplevel is used to reduce the indentation of anything which is right below the program
+- `f90-ts-indent-toplevel` is used to reduce the indentation of anything which is right below the program
   or (sub)module level. This is done as this indentation level usually does not improve readability,
-  as almost everything except for very few lines (like module, contains and end line) is indented.
+  as almost everything except for very few lines (like `module`, `contains` and `end` line) is indented.
+
 
 Currently implemented rules are:
 
@@ -388,3 +418,21 @@ in `test/f90-ts-mode-test.el`. Registering looks like:
  '(f90-ts-mode-test--indent-by-region)
  )
 ```
+
+## Logging and debugging
+
+The following logging functions are available:
+
+* `f90-ts-inspect-node`
+* `f90-ts-log`
+* `f90-ts-log-clear`
+* `f90-ts-log-show`
+* `f90-ts--indent-cache-print`
+* `f90-ts-indent-rules-info` (using `fail-info-is`)
+
+All write into a dedicated log buffer `*f90-ts-log*` with its own minor mode to allow some
+dedicated keybindings.
+
+By default nothing is logged and the buffer is empty. There are almost no (not even commented)
+logging instruction in the code left. But the original extensive logging is available in
+branch `logging`, which will be kept alive for the time being.
