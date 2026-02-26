@@ -1764,7 +1764,7 @@ returned as first element of the list"
 ;;++++++++++++++
 ;; list context: items and columns
 
-(defun f90-ts--align-list-items-filter (items node-sym)
+(defun f90-ts--align-list-filter-items (items node-sym)
   "From a list ITEMS of node items select relevant nodes satisfying
 some predicates like being of compatible symbol type to NODE-SYM."
   ;; if node-sym is not known take almost all kind of nodes, except for continuation symbol
@@ -1883,6 +1883,34 @@ The selected column is return as (anchor offset)."
      )))
 
 
+(defun f90-ts--align-list-anchors-context (loc list-context)
+  "Filter relevant items from LIST-CONTEXT, which are possible
+alignment anchors for node. LOC is an alist which provides the node
+and further location data."
+  (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
+         (items-all (funcall get-items list-context loc))
+         ;; filter by line number, use only items on some previous line
+         (cur-line (alist-get 'line loc))
+         (items-prev (seq-filter
+                      (lambda (n) (< (f90-ts--node-line n)
+                                     cur-line))
+                      items-all)))
+    ;; further filter by symbol type node-sym of current node at point
+    (f90-ts--align-list-filter-items items-prev
+                                     (alist-get 'nsym loc))))
+
+
+(defun f90-ts--align-list-anchors-other (loc anchors-context list-context)
+  "Get other relevant anchors, depending on LIST-CONTEXT and already
+obtained list of ANCHORS-CONTEXT. LOC provides node and location data."
+  (let ((get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
+                       #'f90-ts--align-list-default-anchor)))
+    (funcall get-other
+             list-context
+             anchors-context
+             loc)))
+
+
 (defun f90-ts--align-list-anchor-offset (variant loc list-context)
   "Determine a pair '(anchor offset) for alignment of a node given as
 an alist LOC containing node, column, line number and node symbol.
@@ -1891,25 +1919,11 @@ LIST-CONTEXT. Additionally consider further anchors (like the first
 node of previous statement by pstmt-1), or other default positions
 like one column to the right of an opening parenthesis.
 Finally use VARIANT to select one pair."
-  (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
-         (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
-                        #'f90-ts--align-list-default-anchor))
-         (items-context (funcall get-items list-context loc))
-         ;; filter by line number, use only items on some previous line
-         (cur-line (alist-get 'line loc))
-         (items-prev (seq-filter
-                      (lambda (n) (< (f90-ts--node-line n)
-                                     cur-line))
-                      items-context))
-         ;; further filter by symbol type node-sym of current node at point
-         (items-filtered (f90-ts--align-list-items-filter
-                          items-prev
-                          (alist-get 'nsym loc)))
-         ;; get other relevant anchors (an anchor is a pair (position offset) or a node)
-         (anchors-other (funcall get-other
-                                 list-context
-                                 items-filtered
-                                 loc))
+  (let* ((anchors-context (f90-ts--align-list-anchors-context loc
+                                                              list-context))
+         (anchors-other   (f90-ts--align-list-anchors-other loc
+                                                            anchors-context
+                                                            list-context))
          ;; if selected, add default continued offset position as anchor
          (anchor-extra (and f90-ts-indent-list-always-include-default
                             (f90-ts--align-list-pstmt1-anchor)))
@@ -1918,8 +1932,7 @@ Finally use VARIANT to select one pair."
          ;; final list of anchors (which are nodes or pairs (position offset))
          (anchors-final (append (and anchor-extra (list anchor-extra))
                                  anchors-other
-                                 items-filtered))
-         )
+                                 anchors-context)))
     (f90-ts--align-list-select variant
                                (alist-get 'col loc)
                                anchor-primary
