@@ -431,14 +431,6 @@ find relevant nodes."
 ;; auxiliary walk and query functions
 
 
-(defun f90-ts--node-start-or-point (node)
-  "Return start of node or current point.
-During indentation, node is first node on the line, but on empty lines,
-node is nil and we need to fallback to point."
-  (or (and node (treesit-node-start node))
-      (point)))
-
-
 (defun f90-ts--search-subtree (root pred &optional start end prune reversed)
   "Collect nodes within subtree of ROOT (not necessarily the treesitter
 root) for which PRED returns non-nil.
@@ -1569,20 +1561,26 @@ If NODE is nil return nil."
 
 
 (defun f90-ts--align-list-location (node)
-  "Determine node dependent position related values. These are current
-column, line number and symbol type at point (for deciding
-where to align). If NODE is nil, then no relevant node is at point and
-point position is used instead. This is important for handling empty
-line."
+  "Determine node dependent position related values. These are position
+(start of node or point), column at position, line number and symbol
+type at point (for deciding where to align). If NODE is nil, then no
+relevant node is at point and point position is used instead. This is
+important for handling empty lines.
+The data is returned as an alist with keys 'node, 'pos, 'col, 'line
+and 'nsym."
   (if node
-      (list (f90-ts--node-column node)
-            (f90-ts--node-line node)
+      (list (cons 'node node)
+            (cons 'pos  (treesit-node-start node))
+            (cons 'col  (f90-ts--node-column node))
+            (cons 'line (f90-ts--node-line node))
             ;; decide which kind of (named or anonymous) nodes to filter
             ;; (argument, parentheses, comma, ampersend, etc)
-            (f90-ts--align-node-symbol node))
-    (list (f90-ts--column-number-at-pos (point))
-          (line-number-at-pos)
-          nil)
+            (cons 'nsym (f90-ts--align-node-symbol node)))
+    (list (cons 'node nil)
+          (cons 'pos  (point))
+          (cons 'col  (f90-ts--column-number-at-pos (point)))
+          (cons 'line (line-number-at-pos))
+          (cons 'nsym nil))
     ))
 
 
@@ -1814,7 +1812,7 @@ take the element with the largest buffer position."
     (seq-sort (lambda (a b) (< (car a) (car b))) cp-alist-unique)))
 
 
-(defun f90-ts--align-list-select (primary items cur-col variant)
+(defun f90-ts--align-list-select (variant cur-col primary items)
   "From a list ITEMS of nodes or otherwise selected column positions,
 determine relevant column positions and select column depending on
 VARIANT and CUR-COL which is the current column.
@@ -1831,7 +1829,7 @@ The selected column is return as (anchor offset)."
   (let* ((col-pos-unsorted (seq-map #'f90-ts--align-list-map-col-pos items))
          (col-pos (f90-ts--align-list-cp-sort col-pos-unsorted))
          (aligned-at (seq-find (lambda (cp) (= cur-col (car cp)))
-                                 col-pos))
+                               col-pos))
          (primary-col-pos (f90-ts--align-list-map-col-pos primary)))
     ;; :get-other-fn should always return some fallback position
     ;; (like pstmt-1+default indent for continued lines), and thus
@@ -1883,44 +1881,45 @@ The selected column is return as (anchor offset)."
      )))
 
 
-(defun f90-ts--align-list-anchor-offset (variant node list-context pstmt-1)
-  "Determine a pair '(anchor offset) for alignment of NODE.
+(defun f90-ts--align-list-anchor-offset (variant loc list-context pstmt-1)
+  "Determine a pair '(anchor offset) for alignment of a node given as
+an alist LOC containing node, column, line number and node symbol.
 To this end determine items on continued lines in the provided
 LIST-CONTEXT. Additionally consider further anchors (like the first node
 of previous statement PSTMT-1), or other default positions like one column
 to the right of an opening parenthesis.
 Finally use VARIANT to select one pair."
-  (seq-let (cur-col cur-line node-sym) (f90-ts--align-list-location node)
-    (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
-           (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
-                          #'f90-ts--align-list-default-anchor))
-           (items-context (funcall get-items list-context node))
-           ;; filter by line number, use only items on some previous line
-           (items-prev (seq-filter
-                        (lambda (node) (< (f90-ts--node-line node)
-                                          cur-line))
-                        items-context))
-           ;; further filter by symbol type node-sym of current node at point
-           (items-filtered (f90-ts--align-list-items-filter
-                            items-prev
-                            node-sym))
-           ;; get other relevant anchors (an anchor is a pair (position offset) or a node)
-           (anchors-other (funcall get-other
-                                   list-context items-filtered node-sym pstmt-1))
-           ;; if selected, add default continued offset position as anchor
-           (anchor-extra (and f90-ts-indent-list-always-include-default
-                              (f90-ts--align-list-cont-anchor pstmt-1)))
-           ;; anchor-primary is used as 'primary' in keep-or-primary, always-primary etc.
-           (anchor-primary (car anchors-other))
-           ;; final list of anchors (which are nodes or pairs (position offset))
-           (anchors-final (append (and anchor-extra (list anchor-extra))
-                                   anchors-other
-                                   items-filtered))
-           )
-      (f90-ts--align-list-select anchor-primary
-                                 anchors-final
-                                 cur-col
-                                 variant))))
+  (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
+         (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
+                        #'f90-ts--align-list-default-anchor))
+         (items-context (funcall get-items list-context (alist-get 'node loc)))
+         ;; filter by line number, use only items on some previous line
+         (cur-line (alist-get 'line loc))
+         (items-prev (seq-filter
+                      (lambda (n) (< (f90-ts--node-line n)
+                                     cur-line))
+                      items-context))
+         ;; further filter by symbol type node-sym of current node at point
+         (items-filtered (f90-ts--align-list-items-filter
+                          items-prev
+                          (alist-get 'nsym loc)))
+         ;; get other relevant anchors (an anchor is a pair (position offset) or a node)
+         (anchors-other (funcall get-other
+                                 list-context items-filtered (alist-get 'nsym loc) pstmt-1))
+         ;; if selected, add default continued offset position as anchor
+         (anchor-extra (and f90-ts-indent-list-always-include-default
+                            (f90-ts--align-list-cont-anchor pstmt-1)))
+         ;; anchor-primary is used as 'primary' in keep-or-primary, always-primary etc.
+         (anchor-primary (car anchors-other))
+         ;; final list of anchors (which are nodes or pairs (position offset))
+         (anchors-final (append (and anchor-extra (list anchor-extra))
+                                 anchors-other
+                                 items-filtered))
+         )
+    (f90-ts--align-list-select variant
+                               (alist-get 'col loc)
+                               anchor-primary
+                               anchors-final)))
 
 
 ;;++++++++++++++
@@ -1960,15 +1959,16 @@ from the list-context-type alist."
     (plist-get properties pkey)))
 
 
-(defun f90-ts--align-list-context (pos parent ps-key)
-  "In case some list alignment option is active, determine whether POS
-is within a list type context and the relevant context node. Often
-this is PARENT, but sometimes a related node like grandparent, etc.
-Previous statement keyword node PS-KEY is used to determine the maximal
-search space within the AST.
+(defun f90-ts--align-list-context (loc parent)
+  "In case some list alignment option is active, determine whether LOC
+contains a location within a list type context and the relevant context
+node. Often this is PARENT, but sometimes a related node like
+grandparent, etc.
 The smallest such context, starting on a previous line is returned.
 Return value nil signals that this is not a list context."
-  (let* ((line (line-number-at-pos pos))
+  (let* ((pos (alist-get 'pos loc))
+         (line (alist-get 'line loc))
+         (ps-key (f90-ts--indent-prev-stmt-keyword))
          (stmt-root (treesit-node-on (treesit-node-start ps-key)
                                      pos)))
     (when-let*
@@ -2015,12 +2015,11 @@ is not catched by the continued line matcher."
            (if (or (eq variant 'continued-line)
                    (not pstmt-1))
                default-anchor-offset
-             (let* ((ps-key (f90-ts--previous-stmt-keyword-by-first pstmt-1))
-                    (pos (f90-ts--node-start-or-point node))
-                    (list-context (f90-ts--align-list-context pos parent ps-key)))
+             (let* ((loc (f90-ts--align-list-location node))
+                    (list-context (f90-ts--align-list-context loc parent)))
                (if list-context
                    (f90-ts--align-list-anchor-offset variant
-                                                     node
+                                                     loc
                                                      list-context
                                                      pstmt-1)
                  ;; default continued line indentation
