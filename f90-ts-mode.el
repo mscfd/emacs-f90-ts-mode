@@ -1717,7 +1717,7 @@ position of pstmt-1 and the indent-continued offset."
           f90-ts-indent-continued)))
 
 
-(defun f90-ts--align-list-default-anchor (_list-context items _node-sym)
+(defun f90-ts--align-list-default-anchor (_list-context items _loc)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
@@ -1734,9 +1734,9 @@ used as primary anchor/fallback position."
      (f90-ts--align-list-pstmt1-anchor))))
 
 
-(defun f90-ts--align-list-tuple-anchor (list-context items node-sym)
+(defun f90-ts--align-list-tuple-anchor (list-context items loc)
   "Return a list of default positions (anchors) depending on
-LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
+LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
 
 For argument lists (call sub(...)) and parameters (subroutine sub (...)),
@@ -1753,7 +1753,7 @@ returned as first element of the list"
                ;; for closing parenthesis, align to opening parenthesis,
                ;; for other node types, align one position to the right of it
                (list (treesit-node-start list-context)  ;; anchor position and offset
-                     (if (eq node-sym 'parenthesis) 0 1))
+                     (if (eq (alist-get 'nsym loc) 'parenthesis) 0 1))
                ;; add default continued line indentation if items is empty
                (unless items
                  (list (treesit-node-start (f90-ts--indent-prev-stmt-first))
@@ -1909,7 +1909,7 @@ Finally use VARIANT to select one pair."
          (anchors-other (funcall get-other
                                  list-context
                                  items-filtered
-                                 (alist-get 'nsym loc)))
+                                 loc))
          ;; if selected, add default continued offset position as anchor
          (anchor-extra (and f90-ts-indent-list-always-include-default
                             (f90-ts--align-list-pstmt1-anchor)))
