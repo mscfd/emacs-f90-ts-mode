@@ -1604,7 +1604,7 @@ part currently. Skip continuation symbols, which might be between
    nodes))
 
 
-(defun f90-ts--align-list-assocation-items (list-context _node)
+(defun f90-ts--align-list-assocation-items (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'association_list'."
   (cl-assert (f90-ts--node-type-p list-context "association_list")
              nil "expected list context: association_list, got '%s'" list-context)
@@ -1628,7 +1628,7 @@ It does not descend into parenthesized_expressions."
     (list node)))
 
 
-(defun f90-ts--align-list-log-expr-items (list-context _node)
+(defun f90-ts--align-list-log-expr-items (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'logical_expression'."
   (cl-assert (f90-ts--node-type-p list-context "logical_expression")
              nil "expected list context: logical_expression, got '%s'" list-context)
@@ -1647,7 +1647,7 @@ It does not descend into parenthesized_expressions."
 ;;++++++++++++++
 ;; list context: parameters
 
-(defun f90-ts--align-list-parameters-items (list-context _node)
+(defun f90-ts--align-list-parameters-items (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'parameters'."
   (cl-assert (f90-ts--node-type-p list-context "parameters")
              nil "expected list context: parameters, got '%s'" list-context)
@@ -1658,7 +1658,7 @@ It does not descend into parenthesized_expressions."
 ;;++++++++++++++
 ;; list context: binding_list, final_statement
 
-(defun f90-ts--align-list-binding-items (list-context _node)
+(defun f90-ts--align-list-binding-items (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'binding_list'
 or 'final_statement'. Both occur in the contains part of a derived
 type definition."
@@ -1673,12 +1673,12 @@ type definition."
 ;;++++++++++++++
 ;; list context: variable_declarations
 
-(defun f90-ts--align-list-var-decl-items (list-context node)
+(defun f90-ts--align-list-var-decl-items (list-context loc)
   "Determine relevant childrens of LIST-CONTEXT = 'variable_declaration'."
   (cl-assert (f90-ts--node-type-p list-context "variable_declaration")
              nil "expected list context: variable_declaration, got '%s'" list-context)
   (when-let ((children (treesit-node-children list-context)))
-    (let* ((pos (f90-ts--node-start-or-point node))
+    (let* ((pos (alist-get 'pos loc))
            (attr-children (seq-filter (lambda (n)
                                         (string= (treesit-node-field-name n) "attribute"))
                                       children))
@@ -1699,7 +1699,7 @@ type definition."
 ;;++++++++++++++
 ;; list context: arguments
 
-(defun f90-ts--align-list-arguments-items (list-context _node)
+(defun f90-ts--align-list-arguments-items (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'argument_list'."
   (cl-assert (f90-ts--node-type-p list-context "argument_list")
              nil "expected list context: argument_list, got '%s'" list-context)
@@ -1892,7 +1892,7 @@ Finally use VARIANT to select one pair."
   (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
          (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
                         #'f90-ts--align-list-default-anchor))
-         (items-context (funcall get-items list-context (alist-get 'node loc)))
+         (items-context (funcall get-items list-context loc))
          ;; filter by line number, use only items on some previous line
          (cur-line (alist-get 'line loc))
          (items-prev (seq-filter
