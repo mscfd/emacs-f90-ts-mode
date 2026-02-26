@@ -827,16 +827,6 @@ those are not present in the tree."
     (current-column)))
 
 
-(defun f90-ts--node-start-or-pos (node)
-  "Return start position of node or position of point if node is nil.
-In indent-region batch processing, position by (point) is not valid,
-but node is always some node. On the other hand, indentation of a single
-line has node=nil on empty lines, in which case, we can and should
-return (point)."
-  (or (and node (treesit-node-start node))
-      (point)))
-
-
 (defun f90-ts--line-number-at-node-or-pos (node)
   "If NODE is non-nil, return line number at which start position is
 located, otherwise return line number of current point position."
