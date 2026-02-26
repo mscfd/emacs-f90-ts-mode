@@ -1893,11 +1893,13 @@ The selected column is return as (anchor offset)."
      )))
 
 
-(defun f90-ts--align-list-list-anchor (variant node list-context pstmt-1)
-  "Determine items on continued lines in a list-like context and use
-their buffer positions for alignment. If anonymous node like parenthesis,
-comma etc, then do the same, but rotate through items with symbols
-of same kind on previous argument lines."
+(defun f90-ts--align-list-anchor-offset (variant node list-context pstmt-1)
+  "Determine a pair '(anchor offset) for alignment of NODE.
+To this end determine items on continued lines in the provided
+LIST-CONTEXT. Additionally consider further anchors (like the first node
+of previous statement PSTMT-1), or other default positions like one column
+to the right of an opening parenthesis.
+Finally use VARIANT to select one pair."
   (seq-let (cur-col cur-line node-sym) (f90-ts--align-list-location node)
     (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
            (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
@@ -1968,10 +1970,12 @@ from the list-context-type alist."
     (plist-get properties pkey)))
 
 
-(defun f90-ts--align-list-list-context (pos parent ps-key)
-  "In case some list alignment option is active, determine whether we
-are within a list type context and the relevant context node. Often
+(defun f90-ts--align-list-context (pos parent ps-key)
+  "In case some list alignment option is active, determine whether POS
+is within a list type context and the relevant context node. Often
 this is PARENT, but sometimes a related node like grandparent, etc.
+Previous statement keyword node PS-KEY is used to determine the maximal
+search space within the AST.
 The smallest such context, starting on a previous line is returned.
 Return value nil signals that this is not a list context."
   (let* ((line (line-number-at-pos pos))
@@ -2023,12 +2027,12 @@ is not catched by the continued line matcher."
                default-anchor-offset
              (let* ((ps-key (f90-ts--previous-stmt-keyword-by-first pstmt-1))
                     (pos (f90-ts--node-start-or-point node))
-                    (list-context (f90-ts--align-list-list-context pos parent ps-key)))
+                    (list-context (f90-ts--align-list-context pos parent ps-key)))
                (if list-context
-                   (f90-ts--align-list-list-anchor variant
-                                                   node
-                                                   list-context
-                                                   pstmt-1)
+                   (f90-ts--align-list-anchor-offset variant
+                                                     node
+                                                     list-context
+                                                     pstmt-1)
                  ;; default continued line indentation
                  default-anchor-offset)))))
       ;; cache anchor and offset for offset function, return anchor
