@@ -1459,7 +1459,7 @@ to position, which also works for node=nil)."
 
 (defun previous-stmt-anchor (node parent bol)
   "Anchor at previous statements indentation."
-  (if-let ((pstmt-1 (f90-ts--previous-stmt-first node parent)))
+  (if-let ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
       (f90-ts--indent-pos-at-node pstmt-1)
     bol))
 
