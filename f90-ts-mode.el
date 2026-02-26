@@ -1709,13 +1709,15 @@ type definition."
 ;;++++++++++++++
 ;; additional anchor for aligned lists:
 
-(defun f90-ts--align-list-cont-anchor (pstmt-1)
+(defun f90-ts--align-list-pstmt1-anchor ()
   "Return the standard continued line indentation, which is a pair of
 position of pstmt-1 and the indent-continued offset."
-  (list (treesit-node-start pstmt-1) f90-ts-indent-continued))
+  (let ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
+    (list (treesit-node-start pstmt-1)
+          f90-ts-indent-continued)))
 
 
-(defun f90-ts--align-list-default-anchor (_list-context items _node-sym pstmt-1)
+(defun f90-ts--align-list-default-anchor (_list-context items _node-sym)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
@@ -1729,10 +1731,10 @@ used as primary anchor/fallback position."
    (if items
        ;; find item with smallest column number
        (car (seq-sort-by #'f90-ts--node-column #'< items))
-     (f90-ts--align-list-cont-anchor pstmt-1))))
+     (f90-ts--align-list-pstmt1-anchor))))
 
 
-(defun f90-ts--align-list-tuple-anchor (list-context items node-sym pstmt-1)
+(defun f90-ts--align-list-tuple-anchor (list-context items node-sym)
   "Return a list of default positions (anchors) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 An anchor is a pair (position offset).
@@ -1754,7 +1756,7 @@ returned as first element of the list"
                      (if (eq node-sym 'parenthesis) 0 1))
                ;; add default continued line indentation if items is empty
                (unless items
-                 (list (treesit-node-start pstmt-1)
+                 (list (treesit-node-start (f90-ts--indent-prev-stmt-first))
                        f90-ts-indent-continued))
                )))
 
@@ -1881,13 +1883,13 @@ The selected column is return as (anchor offset)."
      )))
 
 
-(defun f90-ts--align-list-anchor-offset (variant loc list-context pstmt-1)
+(defun f90-ts--align-list-anchor-offset (variant loc list-context)
   "Determine a pair '(anchor offset) for alignment of a node given as
 an alist LOC containing node, column, line number and node symbol.
 To this end determine items on continued lines in the provided
-LIST-CONTEXT. Additionally consider further anchors (like the first node
-of previous statement PSTMT-1), or other default positions like one column
-to the right of an opening parenthesis.
+LIST-CONTEXT. Additionally consider further anchors (like the first
+node of previous statement by pstmt-1), or other default positions
+like one column to the right of an opening parenthesis.
 Finally use VARIANT to select one pair."
   (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
          (get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
@@ -1905,10 +1907,12 @@ Finally use VARIANT to select one pair."
                           (alist-get 'nsym loc)))
          ;; get other relevant anchors (an anchor is a pair (position offset) or a node)
          (anchors-other (funcall get-other
-                                 list-context items-filtered (alist-get 'nsym loc) pstmt-1))
+                                 list-context
+                                 items-filtered
+                                 (alist-get 'nsym loc)))
          ;; if selected, add default continued offset position as anchor
          (anchor-extra (and f90-ts-indent-list-always-include-default
-                            (f90-ts--align-list-cont-anchor pstmt-1)))
+                            (f90-ts--align-list-pstmt1-anchor)))
          ;; anchor-primary is used as 'primary' in keep-or-primary, always-primary etc.
          (anchor-primary (car anchors-other))
          ;; final list of anchors (which are nodes or pairs (position offset))
@@ -2020,8 +2024,7 @@ is not catched by the continued line matcher."
                (if list-context
                    (f90-ts--align-list-anchor-offset variant
                                                      loc
-                                                     list-context
-                                                     pstmt-1)
+                                                     list-context)
                  ;; default continued line indentation
                  default-anchor-offset)))))
       ;; cache anchor and offset for offset function, return anchor
