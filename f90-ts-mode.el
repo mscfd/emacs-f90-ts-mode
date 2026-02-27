@@ -1858,19 +1858,13 @@ parenthesis. This primary position is returned as first element of the
 ;; list context: items and columns
 
 (defun f90-ts--align-list-filter-items (items node-sym)
-  "From a list ITEMS of node items select relevant nodes satisfying
-some predicates like being of compatible symbol type to NODE-SYM."
-  ;; if node-sym is not known take almost all kind of nodes, except for continuation symbol
-  (let ((pred-almost (lambda (n) (not (member (f90-ts--align-node-symbol n)
-                                              '(parenthesis ampersand)))))
-        (pred-node-sym (lambda (n) (eq (f90-ts--align-node-symbol n) node-sym))))
-    ;; filter nodes by predicate, and if symbol based selection is empty,
-    ;; fall back to almost-all symbol selection (all except ampersand)
-    (let ((items-almost (seq-filter pred-almost items))
-          (items-sym (and node-sym
-                          (seq-filter pred-node-sym items))))
-      (or items-sym items-almost)
-      )))
+  "From a list ITEMS of node items select compatible nodes.
+Currently these are nodes with the same NODE-SYM."
+  (when node-sym
+    (let ((pred-node-sym (lambda (n) (eq (f90-ts--align-node-symbol n)
+                                         node-sym))))
+      (seq-filter pred-node-sym
+                  items))))
 
 
 (defun f90-ts--align-list-map-col-pos (anchor)
