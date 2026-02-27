@@ -256,9 +256,9 @@ subroutine sub()
      associate(expr => sqrt(p**2/4.0 - q), &
                result => arr(5))
           points: associate(p &
-                            => self%points_active, &
+                                  => self%points_active, &
                             q &
-                            => self%points_inactive &
+                                  => self%points_inactive &
                            )
           end associate points
      end associate
@@ -289,7 +289,7 @@ Name: align associate list 4
 =-=
 subroutine sub()
      associate(test => 1+2, &
-                          ! comment
+               ! comment
                after_comment_line => 3+4)
      end associate
 end subroutine sub
@@ -300,7 +300,7 @@ Name: align associate list 5
 subroutine sub()
      associate(test => 1+2, &
 
-                    ! comment
+               ! comment
 
                after_empty_and_comment_lines => 3+4)
      end associate

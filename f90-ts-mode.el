@@ -1745,7 +1745,7 @@ node or a buffer position)."
                     items)))
 
 
-(defun f90-ts--align-list-anoff-other-default (_list-context items _loc)
+(defun f90-ts--align-list-other-default (_list-context items _loc)
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 
@@ -1761,14 +1761,14 @@ used as primary anchor/fallback position."
      (collect (f90-ts--align-list-pstmt1-anoff)))))
 
 
-(defun f90-ts--align-list-anoff-other-tuple (list-context items loc)
+(defun f90-ts--align-list-other-tuple (list-context items loc)
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 
 For argument lists (call sub(...)) and parameters (subroutine sub (...)),
 a default and fallback position is to align one column position to the
 right of the initial opening parenthesis. This primary position is
-returned as first element of the list"
+returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
                  (f90-ts--node-type-p list-context "parameters"))
@@ -1788,14 +1788,13 @@ returned as first element of the list"
    ))
 
 
-(defun f90-ts--align-list-anoff-other-log-expr (list-context items loc)
+(defun f90-ts--align-list-other-log-expr (list-context items loc)
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 
-For argument lists (call sub(...)) and parameters (subroutine sub (...)),
-a default and fallback position is to align one column position to the
-right of the initial opening parenthesis. This primary position is
-returned as first element of the list"
+For logical expressions a default and fallback position is to align
+with the start of the expression. This primary position is returned
+as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (f90-ts--node-type-p list-context "logical_expression")
              nil
@@ -1809,6 +1808,45 @@ returned as first element of the list"
    ;; for "(a .and. b & ...)", the logical expression starts at a,
    ;; which is also a good primary anchor
    (collect (treesit-node-start list-context) 0)
+
+   ;; add default continued line indentation if items is empty
+   (unless items
+     (collect (f90-ts--align-list-pstmt1-anoff)))
+   ))
+
+
+(defun f90-ts--align-list-other-association (list-context items loc)
+  "Return a list of default positions (anchors offset) depending on
+LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
+
+For association lists (associate(x => y, ...)), a default and fallback
+position is to align one column position to the right of the initial
+opening parenthesis. However, if node is the =>, then apply indent with
+f90-ts-indent-continued relative to opening
+parenthesis. This primary position is returned as first element of the
+ list."
+  ;; for argument_list, there should always be the opening parenthesis
+  (cl-assert (f90-ts--node-type-p list-context "association_list")
+             nil
+             "expected list context: association_list, got '%s'"
+             list-context)
+
+  (f90-ts-mode--collecting-anoff
+   (when items
+     (collect (f90-ts--align-list-smallest-anoff items)))
+
+   (let ((nsym (alist-get 'nsym loc))
+         (child-paren (treesit-node-child list-context 0 nil)))
+     (cl-assert (f90-ts--node-type-p child-paren "(")
+                nil
+                "expected opening parenthesis as child-0, got '%s'"
+                child-paren)
+     (collect (treesit-node-start child-paren)
+              (pcase nsym
+                ('associate   f90-ts-indent-continued) ; indents "=>"
+                ('parenthesis 0) ; indents ")"
+                (_            1) ; all other kind of nodes
+                )))
 
    ;; add default continued line indentation if items is empty
    (unless items
@@ -1938,7 +1976,7 @@ The selected column is return as (anchor offset)."
      )))
 
 
-(defun f90-ts--align-list-anoff-context (loc list-context)
+(defun f90-ts--align-list-anoff-items (loc list-context)
   "Filter relevant items from LIST-CONTEXT, which are possible
 alignment anchors for node. LOC is an alist which provides the node
 and further location data.
@@ -1961,7 +1999,7 @@ Note: for these anchor-offset pairs, the offset is 0 in general."
 and already obtained list of ANCHORS-CONTEXT. LOC provides node and
 location data."
   (let ((get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
-                       #'f90-ts--align-list-anoff-other-default)))
+                       #'f90-ts--align-list-other-default)))
     (funcall get-other
              list-context
              anchors-context
@@ -1976,11 +2014,11 @@ LIST-CONTEXT. Additionally consider further anchors (like the first
 node of previous statement by pstmt-1), or other default positions
 like one column to the right of an opening parenthesis.
 Finally use VARIANT to select one pair."
-  (let* ((anoff-context (f90-ts--align-list-anoff-context loc
-                                                          list-context))
-         (anoff-other   (f90-ts--align-list-anoff-other loc
-                                                        anoff-context
-                                                        list-context))
+  (let* ((anoff-items (f90-ts--align-list-anoff-items loc
+                                                      list-context))
+         (anoff-other (f90-ts--align-list-anoff-other loc
+                                                      anoff-items
+                                                      list-context))
          ;; if selected, add default continued offset position as anchor
          (anoff-extra (and f90-ts-indent-list-always-include-default
                            (f90-ts--align-list-pstmt1-anoff)))
@@ -1989,7 +2027,7 @@ Finally use VARIANT to select one pair."
          ;; final list of anchors (which are nodes or pairs (position offset))
          (anoff-final (append (and anoff-extra (list anoff-extra))
                               anoff-other
-                              anoff-context)))
+                              anoff-items)))
     (f90-ts--align-list-select variant
                                (alist-get 'col loc)
                                anoff-primary
@@ -2008,15 +2046,17 @@ Finally use VARIANT to select one pair."
 ;;            in keep-or-primary option)
 (defconst f90-ts--align-list-context-types
   '(("argument_list"        . (:get-items-fn f90-ts--align-list-items-arguments
-                               :get-other-fn f90-ts--align-list-anoff-other-tuple))
+                               :get-other-fn f90-ts--align-list-other-tuple))
     ("parameters"           . (:get-items-fn f90-ts--align-list-items-parameters
-                               :get-other-fn f90-ts--align-list-anoff-other-tuple))
+                               :get-other-fn f90-ts--align-list-other-tuple))
     ("logical_expression"   . (:get-items-fn f90-ts--align-list-items-log-expr
-                               :get-other-fn f90-ts--align-list-anoff-other-log-expr))
+                               :get-other-fn f90-ts--align-list-other-log-expr))
     ("binding_list"         . (:get-items-fn f90-ts--align-list-items-binding))
     ("final_statement"      . (:get-items-fn f90-ts--align-list-items-binding))
     ("variable_declaration" . (:get-items-fn f90-ts--align-list-items-var-decl))
-    ("association_list"     . (:get-items-fn f90-ts--align-list-items-assocation))
+    ("association_list"     . (:get-items-fn f90-ts--align-list-items-assocation
+                               :get-other-fn f90-ts--align-list-other-association))
+
     )
   "List of tree-sitter node types presenting some kind of list context
 which is suitable for alignment indentation.
