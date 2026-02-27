@@ -1604,7 +1604,7 @@ part currently. Skip continuation symbols, which might be between
    nodes))
 
 
-(defun f90-ts--align-list-assocation-items (list-context _loc)
+(defun f90-ts--align-list-items-assocation (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'association_list'."
   (cl-assert (f90-ts--node-type-p list-context "association_list")
              nil "expected list context: association_list, got '%s'" list-context)
@@ -1628,7 +1628,7 @@ It does not descend into parenthesized_expressions."
     (list node)))
 
 
-(defun f90-ts--align-list-log-expr-items (list-context _loc)
+(defun f90-ts--align-list-items-log-expr (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'logical_expression'."
   (cl-assert (f90-ts--node-type-p list-context "logical_expression")
              nil "expected list context: logical_expression, got '%s'" list-context)
@@ -1647,7 +1647,7 @@ It does not descend into parenthesized_expressions."
 ;;++++++++++++++
 ;; list context: parameters
 
-(defun f90-ts--align-list-parameters-items (list-context _loc)
+(defun f90-ts--align-list-items-parameters (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'parameters'."
   (cl-assert (f90-ts--node-type-p list-context "parameters")
              nil "expected list context: parameters, got '%s'" list-context)
@@ -1658,7 +1658,7 @@ It does not descend into parenthesized_expressions."
 ;;++++++++++++++
 ;; list context: binding_list, final_statement
 
-(defun f90-ts--align-list-binding-items (list-context _loc)
+(defun f90-ts--align-list-items-binding (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'binding_list'
 or 'final_statement'. Both occur in the contains part of a derived
 type definition."
@@ -1673,7 +1673,7 @@ type definition."
 ;;++++++++++++++
 ;; list context: variable_declarations
 
-(defun f90-ts--align-list-var-decl-items (list-context loc)
+(defun f90-ts--align-list-items-var-decl (list-context loc)
   "Determine relevant childrens of LIST-CONTEXT = 'variable_declaration'."
   (cl-assert (f90-ts--node-type-p list-context "variable_declaration")
              nil "expected list context: variable_declaration, got '%s'" list-context)
@@ -1699,7 +1699,7 @@ type definition."
 ;;++++++++++++++
 ;; list context: arguments
 
-(defun f90-ts--align-list-arguments-items (list-context _loc)
+(defun f90-ts--align-list-items-arguments (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'argument_list'."
   (cl-assert (f90-ts--node-type-p list-context "argument_list")
              nil "expected list context: argument_list, got '%s'" list-context)
@@ -1971,15 +1971,15 @@ Finally use VARIANT to select one pair."
 ;;            in the list is used as primary/fallback position (for example
 ;;            in keep-or-primary option)
 (defconst f90-ts--align-list-context-types
-  '(("argument_list"        . (:get-items-fn f90-ts--align-list-arguments-items
+  '(("argument_list"        . (:get-items-fn f90-ts--align-list-items-arguments
                                :get-other-fn f90-ts--align-list-anoff-other-tuple))
-    ("parameters"           . (:get-items-fn f90-ts--align-list-parameters-items
+    ("parameters"           . (:get-items-fn f90-ts--align-list-items-parameters
                                :get-other-fn f90-ts--align-list-anoff-other-tuple))
-    ("logical_expression"   . (:get-items-fn f90-ts--align-list-log-expr-items))
-    ("binding_list"         . (:get-items-fn f90-ts--align-list-binding-items))
-    ("final_statement"      . (:get-items-fn f90-ts--align-list-binding-items))
-    ("variable_declaration" . (:get-items-fn f90-ts--align-list-var-decl-items))
-    ("association_list"     . (:get-items-fn f90-ts--align-list-assocation-items))
+    ("logical_expression"   . (:get-items-fn f90-ts--align-list-items-log-expr))
+    ("binding_list"         . (:get-items-fn f90-ts--align-list-items-binding))
+    ("final_statement"      . (:get-items-fn f90-ts--align-list-items-binding))
+    ("variable_declaration" . (:get-items-fn f90-ts--align-list-items-var-decl))
+    ("association_list"     . (:get-items-fn f90-ts--align-list-items-assocation))
     )
   "List of tree-sitter node types presenting some kind of list context
 which is suitable for alignment indentation.
