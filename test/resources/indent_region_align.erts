@@ -226,7 +226,6 @@ subroutine sub8()
 .neqv. condition6(&
                   fun1(x,y), &
                   fun2(u,v) &
-) &
 )
 end subroutine sub8
 =-=
@@ -247,8 +246,7 @@ subroutine sub8()
                 .neqv. condition6(&
                                   fun1(x,y), &
                                   fun2(u,v) &
-                                 ) &
-            )
+                                 )
 end subroutine sub8
 =-=-=
 
