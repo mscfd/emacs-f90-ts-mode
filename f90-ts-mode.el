@@ -1584,6 +1584,30 @@ and 'nsym."
     ))
 
 
+(defun f90-ts--node-chain-root (node)
+  "Return the topmost ancestor of NODE that has the same node type.
+
+Intended for associative expressions represented as binarized trees,
+where repeated nesting of the same node type encodes a chain.  For
+example, for a logical expression chain like
+   (logical_expression
+    left:
+     (logical_expression
+      left:
+       (logical_expression
+        left: ...
+        right: ...
+       )
+      right: ...
+     )
+    right: ...)
+the function returns the outermost `logical_expression' node."
+  (let ((type (treesit-node-type node)))
+    (treesit-parent-while
+     node
+     (lambda (n) (f90-ts--node-type-p n type)))))
+
+
 ;;++++++++++++++
 ;; list context: association_list
 
@@ -1802,12 +1826,21 @@ as first element of the list."
              list-context)
 
   (f90-ts-mode--collecting-anoff
+   ;; use as primary anchor if item of compatible types are available
    (when items
      (collect (f90-ts--align-list-smallest-anoff items)))
 
    ;; for "(a .and. b & ...)", the logical expression starts at a,
-   ;; which is also a good primary anchor
-   (collect (treesit-node-start list-context) 0)
+   ;; first check previous sibling of list-context to see whether we
+   ;; can align with that, which is often is an opening parenthesis
+   ;; or an equal sign in logical assignment;
+   ;; use as primary anchor if no items of compatible type are available
+   (when-let* ((psib-context (treesit-node-prev-sibling list-context))
+               (psib-type (treesit-node-type psib-context)))
+     (when (member psib-type '("(" "="))
+       ;; "(": parent is parenthesized_expression or argument_list
+       ;; "=": parent is assignment_statement
+       (collect (treesit-node-start psib-context) 1)))
 
    ;; add default continued line indentation if items is empty
    (unless items
@@ -2088,7 +2121,11 @@ Return value nil signals that this is not a list context."
                             (<= line (line-number-at-pos (treesit-node-end n)))
                             (assoc (treesit-node-type n)
                                    f90-ts--align-list-context-types)))))
-         (stmt-min ; stmt-max serves as implicit upper bound
+         ;; stmt-max serves as implicit upper bound, if it is non-nil
+         ;; we are fine and can start a search, as the search ends at
+         ;; stmt-max at the latest, if it is nil, we do not need to look
+         ;; TODO: do we really need stmt-max?
+         (stmt-min
           (treesit-parent-until
            parent
            (lambda (n) (and (< (f90-ts--node-line n) line)
@@ -2096,7 +2133,11 @@ Return value nil signals that this is not a list context."
                                    f90-ts--align-list-context-types)))
            t ; include parent in search
            )))
-      stmt-min)))
+      (if (f90-ts--node-type-p stmt-min "logical_expression")
+          ;; find root of expression
+          ;; other candidates not yet supported: math_expression
+          (f90-ts--node-chain-root stmt-min)
+        stmt-min))))
 
 
 (defun f90-ts--continued-line-anchor (node parent bol &rest _)

@@ -210,44 +210,58 @@ end subroutine sub7
 Name: align logical expression 8
 =-=
 subroutine sub8()
-   flag =     condition1(p1, &
-                         p2) &
-              .or. condition2(q1, q2, &
-                                  q3) &
-              .and. (condition3(a1,a2,a3&
-                               )&
-                     .or. condition4(&
-                                    fun1(x,y), &
-                                     fun2(u,v)) &
+   f =     condition1(p1, &
+                      p2) &
+       .or. condition2(q1, q2, &
+                               q3) &
+           .and. (  condition3(a1,a2,a3&
+                            )&
+                  .or. condition4(&
+                                 fun1(x,y), &
+                                  fun2(u,v)) &
 .eqv. condition5(&
-                 fun1(x,y), &
-                fun2(u,v)) &
-                              )&
+              fun1(x,y), &
+             fun2(u,v)) &
+                           )&
 .neqv. condition6(&
-                  fun1(x,y), &
-                  fun2(u,v) &
+               fun1(x,y), &
+               fun2(u,v) &
 )
 end subroutine sub8
 =-=
 subroutine sub8()
-     flag =     condition1(p1, &
-                           p2) &
-                .or. condition2(q1, q2, &
-                                    q3) &
-                .and. (condition3(a1,a2,a3&
-                                 )&
-                       .or. condition4(&
-                                       fun1(x,y), &
-                                       fun2(u,v)) &
-                       .eqv. condition5(&
-                                        fun1(x,y), &
-                                        fun2(u,v)) &
-                      )&
-                .neqv. condition6(&
-                                  fun1(x,y), &
-                                  fun2(u,v) &
-                                 )
+     f =     condition1(p1, &
+                        p2) &
+        .or. condition2(q1, q2, &
+                        q3) &
+        .and. (  condition3(a1,a2,a3&
+                           )&
+               .or. condition4(&
+                               fun1(x,y), &
+                               fun2(u,v)) &
+               .eqv. condition5(&
+                                fun1(x,y), &
+                                fun2(u,v)) &
+              )&
+        .neqv. condition6(&
+                          fun1(x,y), &
+                          fun2(u,v) &
+                         )
 end subroutine sub8
+=-=-=
+
+Name: align logical expression 9
+=-=
+subroutine sub()
+     ! check that column one right to '(' and '=' is taken
+     if (     condition1(x) &
+         .or. condition2(x)) then
+          flag_has_property =     cond1 .or. cond2 &
+                             .or. cond2
+          call sub(      flag1 &
+                   .and. flag2)
+     end if
+end subroutine sub
 =-=-=
 
 Name: align associate list 1
