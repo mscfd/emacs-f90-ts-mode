@@ -1168,7 +1168,6 @@ associates and others."
    :language 'fortran
    :feature 'operator
    '((logical_expression operator: _  @f90-ts-font-lock-operator-face)
-     (logical_expression "\\.not\\."  @f90-ts-font-lock-operator-face)
      (math_expression    operator: _  @f90-ts-font-lock-operator-face)
      ("="                             @f90-ts-font-lock-operator-face)
      ("%"                             @f90-ts-font-lock-operator-face)
