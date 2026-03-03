@@ -434,6 +434,24 @@ find relevant nodes."
        (> (treesit-node-end node)   start)))
 
 
+(defconst f90-ts--node-expression-types
+  '("logical_expression"
+    "math_expression"
+    "relational_expression"
+    "concatenation_expression"
+    "unary_expression")
+  "Expression types for alignment purposes. These are required to have
+a field named operator. Note that logical and math expression overlap,
+as use defined operators are always interpreted as math expression,
+even if operating on bools (like some .imply. operator, for example).")
+
+
+(defun f90-ts--node-is-expression-p (node)
+  "Return true if NODE is of some expression type."
+  (member (treesit-node-type node)
+          f90-ts--node-expression-types))
+
+
 ;;------------------------------------------------------------------------------
 ;; auxiliary walk and query functions
 
@@ -1557,7 +1575,18 @@ If NODE is nil return nil."
       'comment)
 
      ((string= (treesit-node-field-name node) "operator")
-      'operator)
+      (let* ((parent (treesit-node-parent node))
+             (type (and parent (treesit-node-type parent))))
+      (pcase type
+        ("logical_expression"        'operator_logical)
+        ("math_expression"           'operator_math)
+        ("relational_expression"     'operator_relation)
+        ;; map concatenation to math_expression, as user defined
+        ;; operators are also handled by that way
+        ("concatentation_expression" 'operator_math)
+        ("unary_expression"          'operator_unary) ; really?
+        (_                           'operator) ; anything still missing?
+        )))
 
      ((f90-ts--node-type-p node "&")
       ;; text is not always "&" (like virtual ampersand at beginning of line)
@@ -1601,27 +1630,30 @@ and 'nsym."
 
 
 (defun f90-ts--node-chain-root (node)
-  "Return the topmost ancestor of NODE that has the same node type.
+  "Return the topmost ancestor of NODE in a chain of nodes of some
+expression type `f90-ts--node-expression-types'.
 
 Intended for associative expressions represented as binarized trees,
 where repeated nesting of the same node type encodes a chain.  For
-example, for a logical expression chain like
-   (logical_expression
+example, for a logical/math/relational etc. expression chain like
+   (binary_expression
     left:
-     (logical_expression
-      left:
-       (logical_expression
-        left: ...
-        right: ...
-       )
-      right: ...
+     (unary_expression
+     argument:
+      (binary_expression
+       left:
+        (binary_expression
+         left: ...
+         right: ...
+        )
+       right: ...
+      )
      )
     right: ...)
-the function returns the outermost `logical_expression' node."
-  (let ((type (treesit-node-type node)))
-    (treesit-parent-while
-     node
-     (lambda (n) (f90-ts--node-type-p n type)))))
+the function returns the outermost expression node."
+  (treesit-parent-while
+   node
+   #'f90-ts--node-is-expression-p))
 
 
 ;;++++++++++++++
@@ -1654,34 +1686,33 @@ part currently. Skip continuation symbols, which might be between
 
 
 ;;++++++++++++++
-;; list context: logical_expression
+;; list context: expressions
 
-(defun f90-ts--align-list-expand-log-expr (node)
+(defun f90-ts--align-list-expand-expression (node)
   "Recursively compute relevant children of a nested logical expression
 tree. An expression like A .and. B .and. C is roughly represented as
 logical_expression(logical_expression(A .and. B), .and. C).
 The routine returns the five children A, .and., B, and., C.
 It does not descend into parenthesized_expressions."
-  (if (f90-ts--node-type-p node "logical_expression")
-      (mapcan #'f90-ts--align-list-expand-log-expr
+  (if (f90-ts--node-is-expression-p node)
+      (mapcan #'f90-ts--align-list-expand-expression
               (treesit-node-children node))
     (list node)))
 
 
-(defun f90-ts--align-list-items-log-expr (list-context _loc)
+(defun f90-ts--align-list-items-expression (list-context _loc)
   "Determine relevant childrens of LIST-CONTEXT = 'logical_expression'."
-  (cl-assert (f90-ts--node-type-p list-context "logical_expression")
-             nil "expected list context: logical_expression, got '%s'" list-context)
-  ;; expand logical expression
-  ;; example: do while (cond1 .and. cond2 &
-  ;;                          .and. cond3)
-  ;; here: (cond1 .and. cond2) are implicitly parenthesised
-  ;; solution walk up to find root node of logical_expression type,
-  ;; then expand logical_expression (but not parenthesised_expression) recursively
-  (when-let ((root (treesit-parent-while
-                    list-context
-                    (lambda (n) (f90-ts--node-type-p n "logical_expression")))))
-    (f90-ts--align-list-expand-log-expr root)))
+  (cl-assert (f90-ts--node-is-expression-p list-context)
+             nil
+             "expected list context: some expression node, got list-context '%s'"
+             list-context)
+  ;; assert that we are already at the root of an expression chain
+  (cl-assert (eq list-context
+                 (f90-ts--node-chain-root list-context))
+             nil
+             "list context not root of chain of expression, list-context is '%s'"
+             list-context)
+  (f90-ts--align-list-expand-expression list-context))
 
 
 ;;++++++++++++++
@@ -1828,7 +1859,7 @@ returned as first element of the list."
    ))
 
 
-(defun f90-ts--align-list-other-log-expr (list-context items loc)
+(defun f90-ts--align-list-other-expression (list-context items loc)
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 
@@ -1836,9 +1867,9 @@ For logical expressions a default and fallback position is to align
 with the start of the expression. This primary position is returned
 as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
-  (cl-assert (f90-ts--node-type-p list-context "logical_expression")
+  (cl-assert (f90-ts--node-is-expression-p list-context)
              nil
-             "expected list context: logical_expression, got '%s'"
+             "expected list context: some expression, got '%s'"
              list-context)
 
   (f90-ts-mode--collecting-anoff
@@ -1846,10 +1877,10 @@ as first element of the list."
    (when items
      (collect (f90-ts--align-list-smallest-anoff items)))
 
-   ;; for "(a .and. b & ...)", the logical expression starts at a,
+   ;; for "(a .and. b & ...)", the expression starts at a,
    ;; first check previous sibling of list-context to see whether we
-   ;; can align with that, which is often is an opening parenthesis
-   ;; or an equal sign in logical assignment;
+   ;; can align with that, which often is an opening parenthesis
+   ;; or an equal sign in assignment statements;
    ;; use as primary anchor if no items of compatible type are available
    (when-let* ((psib-context (treesit-node-prev-sibling list-context))
                (psib-type (treesit-node-type psib-context)))
@@ -1858,7 +1889,7 @@ as first element of the list."
        ;; "=": parent is assignment_statement
        (collect (treesit-node-start psib-context) 1)))
 
-   ;; add default continued line indentation if items is empty
+   ;; add default continued line indentation if items list is empty
    (unless items
      (collect (f90-ts--align-list-pstmt1-anoff)))
    ))
@@ -2087,20 +2118,30 @@ Finally use VARIANT to select one pair."
 ;;            must return a non-empty list of anchors, the primary anchor
 ;;            in the list is used as primary/fallback position (for example
 ;;            in keep-or-primary option)
-(defconst f90-ts--align-list-context-types
-  '(("argument_list"        . (:get-items-fn f90-ts--align-list-items-arguments
-                               :get-other-fn f90-ts--align-list-other-tuple))
-    ("parameters"           . (:get-items-fn f90-ts--align-list-items-parameters
-                               :get-other-fn f90-ts--align-list-other-tuple))
-    ("logical_expression"   . (:get-items-fn f90-ts--align-list-items-log-expr
-                               :get-other-fn f90-ts--align-list-other-log-expr))
-    ("binding_list"         . (:get-items-fn f90-ts--align-list-items-binding))
-    ("final_statement"      . (:get-items-fn f90-ts--align-list-items-binding))
-    ("variable_declaration" . (:get-items-fn f90-ts--align-list-items-var-decl))
-    ("association_list"     . (:get-items-fn f90-ts--align-list-items-assocation
-                               :get-other-fn f90-ts--align-list-other-association))
-
-    )
+(defconst f90-ts--align-list-context-config
+  (let ((expr-options '(:get-items-fn f90-ts--align-list-items-expression
+                        :get-other-fn f90-ts--align-list-other-expression))
+        (bind-options '(:get-items-fn f90-ts--align-list-items-binding)))
+     (list
+      (cons "logical_expression"       expr-options)
+      (cons "math_expression"          expr-options)
+      (cons "relational_expression"    expr-options)
+      (cons "concatenation_expression" expr-options)
+      (cons "unary_expression"         expr-options)
+      (cons "binding_list"             bind-options)
+      (cons "final_statement"          bind-options)
+      (cons "argument_list"
+            '(:get-items-fn f90-ts--align-list-items-arguments
+              :get-other-fn f90-ts--align-list-other-tuple))
+      (cons "parameters"
+            '(:get-items-fn f90-ts--align-list-items-parameters
+              :get-other-fn f90-ts--align-list-other-tuple))
+      (cons "association_list"
+            '(:get-items-fn f90-ts--align-list-items-assocation
+              :get-other-fn f90-ts--align-list-other-association))
+      (cons "variable_declaration"
+            '(:get-items-fn f90-ts--align-list-items-var-decl))
+    ))
   "List of tree-sitter node types presenting some kind of list context
 which is suitable for alignment indentation.
 And the associated function to extract relevant children for alignemnt.")
@@ -2110,7 +2151,7 @@ And the associated function to extract relevant children for alignemnt.")
   "Lookup LIST-CONTEXT and return the property value for PKEY
 from the list-context-type alist."
   (let ((properties (alist-get (treesit-node-type list-context)
-                               f90-ts--align-list-context-types
+                               f90-ts--align-list-context-config
                                 nil
                                 nil
                                 #'string=)))
@@ -2136,7 +2177,7 @@ Return value nil signals that this is not a list context."
            (lambda (n) (and (< (f90-ts--node-line n) line)
                             (<= line (line-number-at-pos (treesit-node-end n)))
                             (assoc (treesit-node-type n)
-                                   f90-ts--align-list-context-types)))))
+                                   f90-ts--align-list-context-config)))))
          ;; stmt-max serves as implicit upper bound, if it is non-nil
          ;; we are fine and can start a search, as the search ends at
          ;; stmt-max at the latest, if it is nil, we do not need to look
@@ -2146,12 +2187,11 @@ Return value nil signals that this is not a list context."
            parent
            (lambda (n) (and (< (f90-ts--node-line n) line)
                             (assoc (treesit-node-type n)
-                                   f90-ts--align-list-context-types)))
+                                   f90-ts--align-list-context-config)))
            t ; include parent in search
            )))
-      (if (f90-ts--node-type-p stmt-min "logical_expression")
+      (if (f90-ts--node-is-expression-p stmt-min)
           ;; find root of expression
-          ;; other candidates not yet supported: math_expression
           (f90-ts--node-chain-root stmt-min)
         stmt-min))))
 
