@@ -530,19 +530,19 @@ For other lines, generate annotations."
        ;; returns number of lines left to move, which is 1, otherwise
        ;; it always returns zero
        (while (zerop (forward-line -1))
-         (f90-ts-mode-test--update-face-line annotate))))
+         (f90-ts-mode-test--update-face-line annotate)))
 
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
               (string= content-before
-                       (buffer-substring-no-properties (point-min) (point-max))))
+                       (buffer-substring-no-properties pos-min pos-max)))
          (progn
            ;; do not reset modified status on an unsaved buffer!
            (unless was-modified
              (set-buffer-modified-p nil))
            ;; content is the same, jump to the old position
            (goto-char pos))
-       (goto-char (point-max)))))
+       (goto-char (point-max))))))
 
 
 (defun f90-ts-mode-test-font-lock-register (prefix files)
