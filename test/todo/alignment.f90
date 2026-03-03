@@ -19,11 +19,3 @@ x = 5 + 6 &
 - 8 + &
 y
 end subroutine f
-
-! -value1 should be aligned one to the right of "="??
-subroutine sub()
-     my_result = &
-            -value1 + &
-             -7 * &
-             -value2
-end subroutine sub

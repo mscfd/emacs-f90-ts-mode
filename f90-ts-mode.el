@@ -280,8 +280,8 @@ Used for applying a separator font lock face and alignment with parent node."
   "If TYPE is nil, return true and ignore NODE.
 If NODE is nil and TYPE is non-nil, return nil.
 If TYPE is a string, return true if NODE is non-nil and is of type TYPE.
-If TYPE is a list of strings, return true if NODE is non-nil its type is
-among the elements of TYPE."
+If TYPE is a list of strings, return true if NODE is non-nil and its
+type is among the elements of TYPE."
   (or (not type)
       (and node
            (let ((type-n (treesit-node-type node)))
@@ -456,6 +456,7 @@ even if operating on bools (like some .imply. operator, for example).")
 ;; auxiliary walk and query functions
 
 
+;; currently not used, but might be useful
 (defun f90-ts--search-subtree (root pred &optional start end prune reversed)
   "Collect nodes within subtree of ROOT (not necessarily the treesitter
 root) for which PRED returns non-nil.
@@ -497,6 +498,27 @@ encountered."
               (not (f90-ts--node-type-p parent
                                         '("ERROR" "translation_unit"))))
    finally return current))
+
+
+(defun f90-ts--prev-sibling-predicate (node predicate)
+  "Find previous sibling of NODE satisfying PREDICATE.
+Repeat `treesit-node-prev-sibling' until a suitable sibling is found,
+or return nil."
+  (cl-loop
+   for sibling = (treesit-node-prev-sibling node)
+            then (treesit-node-prev-sibling sibling)
+   while sibling
+   when (funcall predicate sibling) return sibling))
+
+
+(defun f90-ts--prev-sibling-proper (node)
+  "Determine previous sibling of NODE, which is a \"proper\" node,
+excluding comments and ampersand."
+  (f90-ts--prev-sibling-predicate
+   node
+   (lambda (n)
+     (not (f90-ts--node-type-p n '("comment" "&"))))
+   ))
 
 
 (defun f90-ts--previous-stmt-keyword-by-first (first)
@@ -1574,6 +1596,12 @@ If NODE is nil return nil."
      ((f90-ts--node-type-p node "comment")
       'comment)
 
+     ((f90-ts--node-type-p node "unary_expression")
+      ;; is this the right approach and symbol?
+      ;; (not that of unary expressions, node is not the operator
+      ;; but the unary_expression node itself)
+      'operator_unary)
+
      ((string= (treesit-node-field-name node) "operator")
       (let* ((parent (treesit-node-parent node))
              (type (and parent (treesit-node-type parent))))
@@ -1584,7 +1612,7 @@ If NODE is nil return nil."
         ;; map concatenation to math_expression, as user defined
         ;; operators are also handled by that way
         ("concatentation_expression" 'operator_math)
-        ("unary_expression"          'operator_unary) ; really?
+        ;("unary_expression"          'operator_unary) ; can this happen here
         (_                           'operator) ; anything still missing?
         )))
 
@@ -1600,6 +1628,7 @@ If NODE is nil return nil."
           (","  'comma)
           ("&"  'ampersand)
           ("=>" 'associate)
+          ("="  'assignment)
           ;; default: argument for anything else (this is probably a named node
           ;; of type identifier, number_literal, call_expression etc.
           (_    'named)))))))
@@ -1882,7 +1911,7 @@ as first element of the list."
    ;; can align with that, which often is an opening parenthesis
    ;; or an equal sign in assignment statements;
    ;; use as primary anchor if no items of compatible type are available
-   (when-let* ((psib-context (treesit-node-prev-sibling list-context))
+   (when-let* ((psib-context (f90-ts--prev-sibling-proper list-context))
                (psib-type (treesit-node-type psib-context)))
      (when (member psib-type '("(" "="))
        ;; "(": parent is parenthesized_expression or argument_list
@@ -2149,13 +2178,81 @@ And the associated function to extract relevant children for alignemnt.")
 
 (defun f90-ts--get-list-context-prop (pkey list-context)
   "Lookup LIST-CONTEXT and return the property value for PKEY
-from the list-context-type alist."
+from `f90-ts--align-list-context-config' alist."
   (let ((properties (alist-get (treesit-node-type list-context)
                                f90-ts--align-list-context-config
                                 nil
                                 nil
                                 #'string=)))
     (plist-get properties pkey)))
+
+
+(defun f90-ts--align-list-context-max (loc)
+  "Determine, whether the continued statement at LOC contains any
+list-context subtree. This is the maximal node for any subtree
+searches."
+  (let* ((pos (alist-get 'pos loc))
+         (line (alist-get 'line loc))
+         (ps-key (f90-ts--indent-prev-stmt-keyword))
+         (stmt-root (treesit-node-on (treesit-node-start ps-key)
+                                     pos)))
+    (treesit-search-subtree
+     stmt-root
+     (lambda (n)
+       (and (<= (f90-ts--node-line n) line)
+            (<= line (line-number-at-pos (treesit-node-end n)))
+            (assoc (treesit-node-type n)
+                   f90-ts--align-list-context-config))))))
+
+
+(defun f90-ts--align-list-context-expr (loc parent)
+  "Determine, whether LOC is in an expression list context.
+For expression, we need to check node in LOC or PARENT (node might be
+nil). But we do not need to ascend further."
+  ;; always looking at PARENT fails for expressions like in
+  ;; x = &
+  ;;     y
+  ;; z = ( &
+  ;;      u)
+  ;; in both cases, node is already the root of the expression chain,
+  ;; looking at parent is wrong
+  (let* ((node (alist-get 'node loc))
+         (line (alist-get 'line loc))
+         (stmt-min
+          (or (and (f90-ts--node-is-expression-p node)
+                   node)
+              (and (f90-ts--node-is-expression-p parent)
+                   parent)))
+         ;; find root of expression
+         (expr-root (and stmt-min (f90-ts--node-chain-root stmt-min)))
+         (psib-root (and expr-root
+                         (f90-ts--prev-sibling-proper expr-root))))
+    ;; if expr-root is on the same line, return this as list-context,
+    ;; however, if the previous sibling is on a previous line
+    ;; and is "(" or "=" (which starts the context and is used for
+    ;; alignment, see the two examples above), then also return it
+    ;; otherwise return nil
+    (when (and expr-root
+               (or (< (f90-ts--node-line expr-root) line)
+                   (and (< (f90-ts--node-line psib-root) line)
+                        (f90-ts--node-type-p psib-root '("(" "=")))))
+      expr-root)))
+
+
+(defun f90-ts--align-list-context-other (loc parent)
+  "Determine, whether LOC is in a list-context, other than expressions.
+For these we might need to ascend a few steps."
+  (let ((node (or (alist-get 'node loc)
+                  parent))
+        (line (alist-get 'line loc)))
+    (treesit-parent-until
+     node
+     (lambda (n)
+       (and (< (f90-ts--node-line n) line)
+            (assoc (treesit-node-type n)
+                   f90-ts--align-list-context-config)))
+     t ; include node in search
+     )))
 
 
 (defun f90-ts--align-list-context (loc parent)
@@ -2165,35 +2262,10 @@ node. Often this is PARENT, but sometimes a related node like
 grandparent, etc.
 The smallest such context, starting on a previous line is returned.
 Return value nil signals that this is not a list context."
-  (let* ((pos (alist-get 'pos loc))
-         (line (alist-get 'line loc))
-         (ps-key (f90-ts--indent-prev-stmt-keyword))
-         (stmt-root (treesit-node-on (treesit-node-start ps-key)
-                                     pos)))
-    (when-let*
-        ((stmt-max
-          (treesit-search-subtree
-           stmt-root
-           (lambda (n) (and (< (f90-ts--node-line n) line)
-                            (<= line (line-number-at-pos (treesit-node-end n)))
-                            (assoc (treesit-node-type n)
-                                   f90-ts--align-list-context-config)))))
-         ;; stmt-max serves as implicit upper bound, if it is non-nil
-         ;; we are fine and can start a search, as the search ends at
-         ;; stmt-max at the latest, if it is nil, we do not need to look
-         ;; TODO: do we really need stmt-max?
-         (stmt-min
-          (treesit-parent-until
-           parent
-           (lambda (n) (and (< (f90-ts--node-line n) line)
-                            (assoc (treesit-node-type n)
-                                   f90-ts--align-list-context-config)))
-           t ; include parent in search
-           )))
-      (if (f90-ts--node-is-expression-p stmt-min)
-          ;; find root of expression
-          (f90-ts--node-chain-root stmt-min)
-        stmt-min))))
+  (let ((stmt-max (f90-ts--align-list-context-max loc)))
+    (when stmt-max
+      (or (f90-ts--align-list-context-expr loc parent)
+          (f90-ts--align-list-context-other loc parent)))))
 
 
 (defun f90-ts--continued-line-anchor (node parent bol &rest _)

@@ -211,9 +211,28 @@ Name: align unary expression 1
 =-=
 subroutine sub()
      my_result = &
-            -value1 + &
-             -7 * &
-             -value2
+                -value1 + &
+                -7 * &
+                -value2
+end subroutine sub
+=-=-=
+
+Name: align unary expression 2
+=-=
+subroutine sub()
+my_result = -value1 + &
+-7 * &
+-value2 * fun(.not. A, &
+.not. B, &
+-C)
+end subroutine sub
+=-=
+subroutine sub()
+     my_result = -value1 + &
+                -7 * &
+                -value2 * fun(.not. A, &
+                              .not. B, &
+                              -C)
 end subroutine sub
 =-=-=
 
@@ -238,3 +257,75 @@ subroutine sub()
 end subroutine sub
 =-=-=
 
+Name: align mixed expression 2
+=-=
+subroutine sub()
+my_result = (&
+-value1 + (&
+(a+b)+c) / &
+-7 * &
+-value2 &
+)
+end subroutine sub
+=-=
+subroutine sub()
+     my_result = (&
+                  -value1 + (&
+                             (a+b)+c) / &
+                  -7 * &
+                  -value2 &
+                 )
+end subroutine sub
+=-=-=
+
+Name: align nested expression 1
+=-=
+subroutine sub()
+associate(x => y, &
+z => long_name_1 * &
+long_name_2&
+)
+end associate
+end subroutine sub
+=-=
+subroutine sub()
+     associate(x => y, &
+               z => long_name_1 * &
+                    long_name_2&
+              )
+     end associate
+end subroutine sub
+=-=-=
+
+Name: align nested expression 2
+=-=
+subroutine sub()
+integer, parameter :: cos_phi &
+= cos(&
+3.14159265/180.0 * (&
+phi_1 + &
+phi_2) &
+), &
+cos_psi &
+= cos(&
+3.14159265/180.0 * (&
+-psi_1 - &
+psi_2) &
+)
+end subroutine sub
+=-=
+subroutine sub()
+     integer, parameter :: cos_phi &
+            = cos(&
+                  3.14159265/180.0 * (&
+                                      phi_1 + &
+                                      phi_2) &
+                 ), &
+                           cos_psi &
+            = cos(&
+                  3.14159265/180.0 * (&
+                                      -psi_1 - &
+                                       psi_2) &
+                 )
+end subroutine sub
+=-=-=
