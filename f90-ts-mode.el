@@ -405,6 +405,13 @@ Note that in fortran, a continuation symbol shall not be used on blank lines."
   (looking-back "^\\s-*" (line-beginning-position)))
 
 
+(defun f90-ts--node-not-number-literal-p (node)
+  "Return true if NODE is not a number_literal.
+(This predicate is necessary, as the :pred in queries does not seem to
+work with lambda expressions.)"
+  (not (string= (treesit-node-type node) "number_literal")))
+
+
 (defun f90-ts--node-is-ampersand-p (node)
   "Check whether node is continuation symbol &."
   (f90-ts--node-type-p node "&"))
@@ -1167,10 +1174,20 @@ associates and others."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'operator
-   '((logical_expression operator: _  @f90-ts-font-lock-operator-face)
-     (math_expression    operator: _  @f90-ts-font-lock-operator-face)
-     ("="                             @f90-ts-font-lock-operator-face)
-     ("%"                             @f90-ts-font-lock-operator-face)
+   '((logical_expression       operator: _  @f90-ts-font-lock-operator-face)
+     (math_expression          operator: _  @f90-ts-font-lock-operator-face)
+     (relational_expression    operator: _  @f90-ts-font-lock-operator-face)
+     (concatenation_expression operator: _  @f90-ts-font-lock-operator-face)
+     ("="                                   @f90-ts-font-lock-operator-face)
+     ("%"                                   @f90-ts-font-lock-operator-face)
+     ;; unary: only match user_defined_operator nodes with a non-number_literal argument
+     ;; (note: :pred does not seem to accept lambda expressions)
+     (unary_expression
+      operator: (user_defined_operator) @f90-ts-font-lock-operator-face)
+     ((unary_expression
+      operator: _ @f90-ts-font-lock-operator-face
+      argument: (_) @_unary_arg
+      (:pred f90-ts--node-not-number-literal-p @_unary_arg)))
    )))
 
 
