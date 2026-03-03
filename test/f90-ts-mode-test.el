@@ -675,8 +675,9 @@ or f90-ts-mode-extra."
  "f90-ts-mode"
  '("font_lock_basic.f90"
    "font_lock_builtin.f90"
-   "font_lock_comments.f90"
+   "font_lock_comment.f90"
    "font_lock_openmp.f90"
+   "font_lock_operator.f90"
    "font_lock_special_var.f90"))
 
 
