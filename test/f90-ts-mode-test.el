@@ -614,7 +614,9 @@ or f90-ts-mode-extra."
 ;; should be specified for each test header (default: keep-or-primary)
 (f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
- '("indent_region_align.erts")
+ '("indent_region_align_misc.erts"
+   "indent_region_align_expr.erts"
+   )
  '(nil ; no preparation
    )
  '(f90-ts-mode-test--indent-by-region)
