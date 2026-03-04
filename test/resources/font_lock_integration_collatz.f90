@@ -208,7 +208,7 @@
 !      ^^ font-lock-keyword-face
 !         ^ f90-ts-font-lock-bracket-face
 !          ^ nil
-!            ^ nil
+!            ^ f90-ts-font-lock-operator-face
 !              ^ font-lock-number-face
 !               ^ f90-ts-font-lock-bracket-face
 !                 ^ f90-ts-font-lock-delimiter-face
@@ -360,7 +360,7 @@
 !                   ^ f90-ts-font-lock-operator-face
 !                    ^^^^^^^^ nil
 !                            ^ f90-ts-font-lock-bracket-face
-!                              ^ nil
+!                              ^ f90-ts-font-lock-operator-face
 !                                ^ font-lock-number-face
 !                                  ^^^^^ f90-ts-font-lock-operator-face
 !                                        ^^^^ font-lock-builtin-face
@@ -369,7 +369,7 @@
 !                                                 ^ f90-ts-font-lock-operator-face
 !                                                  ^^^^^^^^ nil
 !                                                          ^ f90-ts-font-lock-bracket-face
-!                                                            ^^ nil
+!                                                            ^^ f90-ts-font-lock-operator-face
 !                                                               ^^ font-lock-number-face
 !                                                                 ^ f90-ts-font-lock-bracket-face
 !                                                                   ^^^^ font-lock-keyword-face
@@ -554,7 +554,7 @@
 !                ^^ font-lock-keyword-face
 !                   ^ f90-ts-font-lock-bracket-face
 !                    ^^^^^^ nil
-!                           ^^ nil
+!                           ^^ f90-ts-font-lock-operator-face
 !                              ^^^^^^^^ nil
 !                                      ^ f90-ts-font-lock-bracket-face
 !                                        ^^^^ font-lock-keyword-face
@@ -615,7 +615,7 @@
 !                ^^ font-lock-keyword-face
 !                   ^ f90-ts-font-lock-bracket-face
 !                    ^ nil
-!                      ^^ nil
+!                      ^^ f90-ts-font-lock-operator-face
 !                         ^ font-lock-number-face
 !                          ^ f90-ts-font-lock-bracket-face
 !                            ^^^^ font-lock-keyword-face
@@ -632,7 +632,7 @@
 !                              ^ f90-ts-font-lock-delimiter-face
 !                                ^ font-lock-number-face
 !                                 ^ f90-ts-font-lock-bracket-face
-!                                   ^^ nil
+!                                   ^^ f90-ts-font-lock-operator-face
 !                                      ^ font-lock-number-face
 !                                       ^ f90-ts-font-lock-bracket-face
 !                                         ^^^^ font-lock-keyword-face
@@ -881,7 +881,7 @@
 !                       ^ f90-ts-font-lock-bracket-face
 !                        ^ nil
 !                         ^ f90-ts-font-lock-bracket-face
-!                           ^^ nil
+!                           ^^ f90-ts-font-lock-operator-face
 !                              ^^^^ f90-ts-font-lock-special-var-face
 !                                  ^ f90-ts-font-lock-operator-face
 !                                   ^^^^^ nil
@@ -890,7 +890,7 @@
 !                                                  ^ f90-ts-font-lock-bracket-face
 !                                                   ^ nil
 !                                                    ^ f90-ts-font-lock-bracket-face
-!                                                      ^^ nil
+!                                                      ^^ f90-ts-font-lock-operator-face
 !                                                         ^ nil
 !                                                          ^ f90-ts-font-lock-bracket-face
 !                                                            ^^^^ font-lock-keyword-face
@@ -992,7 +992,7 @@
 !                             ^ f90-ts-font-lock-bracket-face
 !                              ^ f90-ts-font-lock-operator-face
 !                               ^^^^^^^^^^^^^^^ nil
-!                                               ^ nil
+!                                               ^ f90-ts-font-lock-operator-face
 !                                                 ^^^^^^^ nil
 !                                                        ^ f90-ts-font-lock-bracket-face
 !                                                          ^^^^ font-lock-keyword-face
@@ -1102,13 +1102,13 @@
 !           ^^ font-lock-keyword-face
 !              ^^ f90-ts-font-lock-bracket-face
 !                ^^^^^^^^^^^^ nil
-!                             ^ nil
+!                             ^ f90-ts-font-lock-operator-face
 !                               ^^^ nil
 !                                  ^ f90-ts-font-lock-bracket-face
 !                                    ^^^^^ f90-ts-font-lock-operator-face
 !                                          ^ f90-ts-font-lock-bracket-face
 !                                           ^^^ nil
-!                                               ^^ nil
+!                                               ^^ f90-ts-font-lock-operator-face
 !                                                  ^^^^^^^^^^ nil
 !                                                            ^^ f90-ts-font-lock-bracket-face
 !                                                               ^^^^ font-lock-keyword-face
@@ -1345,7 +1345,7 @@
 !           ^^ font-lock-keyword-face
 !              ^ f90-ts-font-lock-bracket-face
 !               ^^^^^^^^^^^^^^^^ nil
-!                                ^^ nil
+!                                ^^ f90-ts-font-lock-operator-face
 !                                   ^ font-lock-number-face
 !                                    ^ f90-ts-font-lock-bracket-face
 !                                      ^ f90-ts-font-lock-delimiter-face

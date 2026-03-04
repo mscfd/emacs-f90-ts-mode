@@ -530,19 +530,19 @@ For other lines, generate annotations."
        ;; returns number of lines left to move, which is 1, otherwise
        ;; it always returns zero
        (while (zerop (forward-line -1))
-         (f90-ts-mode-test--update-face-line annotate))))
+         (f90-ts-mode-test--update-face-line annotate)))
 
      (if (and (= pos-min (point-min))
               (= pos-max (point-max))
               (string= content-before
-                       (buffer-substring-no-properties (point-min) (point-max))))
+                       (buffer-substring-no-properties pos-min pos-max)))
          (progn
            ;; do not reset modified status on an unsaved buffer!
            (unless was-modified
              (set-buffer-modified-p nil))
            ;; content is the same, jump to the old position
            (goto-char pos))
-       (goto-char (point-max)))))
+       (goto-char (point-max))))))
 
 
 (defun f90-ts-mode-test-font-lock-register (prefix files)
@@ -614,7 +614,9 @@ or f90-ts-mode-extra."
 ;; should be specified for each test header (default: keep-or-primary)
 (f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
- '("indent_region_align.erts")
+ '("indent_region_align_misc.erts"
+   "indent_region_align_expr.erts"
+   )
  '(nil ; no preparation
    )
  '(f90-ts-mode-test--indent-by-region)
@@ -675,8 +677,9 @@ or f90-ts-mode-extra."
  "f90-ts-mode"
  '("font_lock_basic.f90"
    "font_lock_builtin.f90"
-   "font_lock_comments.f90"
+   "font_lock_comment.f90"
    "font_lock_openmp.f90"
+   "font_lock_operator.f90"
    "font_lock_special_var.f90"))
 
 

@@ -7,95 +7,6 @@ Code:
 
 Point-Char: |
 
-Name: align various lists
-=-=
-subroutine simulate(set, fsim1, &
-                         fsim2, out)
-     real(kind=real32), dimension(:), &
-                        target, &
-
-                        intent(in) :: set
-     integer, dimension(:), &
-              allocatable, &
-              intent(out) :: fsim1, &
-                             fsim2
-
-     procedure(simulator_ifc) :: &
-            fsim
-
-     call sim_init(set, &
-                   out)
-     call sim_run(fsim, set, &
-                        out)
-end subroutine simulate
-=-=-=
-
-Name: align parameter list 1
-=-=
-SUBROUTINE DGEMM(TRANSA, TRANSB, &
-                 M, N, K, ALPHA, &
-                 A, LDA, &
-                 B, LDB, BETA, &
-                 C, LDC)
-     ! -- Scalar Arguments --
-     DOUBLE PRECISION ALPHA,BETA
-     INTEGER          K, LDA, LDB, LDC, M, N
-     CHARACTER        TRANSA, TRANSB
-
-     ! -- Array Arguments --
-     DOUBLE PRECISION A(LDA,*), B(LDB,*), C(LDC,*)
-     ! Code
-END SUBROUTINE DGEMM
-=-=-=
-
-Name: align parameter list 2
-=-=
-function fun_result(x, &
-                    y) result(r)
-end function fun_result
-=-=-=
-
-Name: align parameter list 3
-=-=
-real function fun_type(x, &
-                       y)
-end function fun_type
-=-=-=
-
-Name: align parameter list 4
-=-=
-subroutine sub_simple(x, y, z, &
-                      a, &
-                      ! comment
-                            b)
-end subroutine sub_simple
-=-=-=
-
-Name: align parameter list 5
-=-=
-module subroutine sub_mod(x, &
-       y)
-end subroutine sub_mod
-=-=
-module subroutine sub_mod(x, &
-                          y)
-end subroutine sub_mod
-=-=-=
-
-Name: align parameter list 6
-=-=
-! some fancy continuations
-function fun(x1, x2, x3, &
-                 x4, x5)&
-       result( &
-       ! this is my result
-
-       something &
-       )
-     logical :: something
-end function fun
-=-=-=
-
 Name: align logical expression 1
 =-=
 subroutine sub1()
@@ -264,96 +175,157 @@ subroutine sub()
 end subroutine sub
 =-=-=
 
-Name: align associate list 1
+Name: align math expression 1
 =-=
 subroutine sub()
-     associate(expr => sqrt(p**2/4.0 - q), &
-               result => arr(5))
-          points: associate(p &
-                                  => self%points_active, &
-                            q &
-                                  => self%points_inactive &
-                           )
-          end associate points
+x = 5 + 6 &
+* 7 &
+- 8 + &
+y
+end subroutine sub
+=-=
+subroutine sub()
+     x = 5 + 6 &
+           * 7 &
+           - 8 + &
+             y
+end subroutine sub
+=-=-=
+
+Name: align math expression 2
+=-=
+subroutine sub()
+x = fun(x, 5 + &
+6)&
++ val
+end subroutine sub
+=-=
+subroutine sub()
+     x = fun(x, 5 + &
+                6)&
+        + val
+end subroutine sub
+=-=-=
+
+Name: align unary expression 1
+=-=
+subroutine sub()
+     my_result = &
+                -value1 + &
+                -7 * &
+                -value2
+end subroutine sub
+=-=-=
+
+Name: align unary expression 2
+=-=
+subroutine sub()
+my_result = -value1 + &
+-7 * &
+-value2 * fun(.not. A, &
+.not. B, &
+-C)
+end subroutine sub
+=-=
+subroutine sub()
+     my_result = -value1 + &
+                -7 * &
+                -value2 * fun(.not. A, &
+                              .not. B, &
+                              -C)
+end subroutine sub
+=-=-=
+
+Name: align mixed expression 1
+=-=
+subroutine sub()
+some_long_name =   very_long_expr1 &
+<  very_long_expr2 .or. &
+very_long_expr3 + &
+very_long_expr4 &
+>= very_long_expr5 + &
+very_long_expr6
+end subroutine sub
+=-=
+subroutine sub()
+     some_long_name =   very_long_expr1 &
+                     <  very_long_expr2 .or. &
+                        very_long_expr3 + &
+                        very_long_expr4 &
+                     >= very_long_expr5 + &
+                        very_long_expr6
+end subroutine sub
+=-=-=
+
+Name: align mixed expression 2
+=-=
+subroutine sub()
+my_result = (&
+-value1 + (&
+(a+b)+c) / &
+-7 * &
+-value2 &
+)
+end subroutine sub
+=-=
+subroutine sub()
+     my_result = (&
+                  -value1 + (&
+                             (a+b)+c) / &
+                  -7 * &
+                  -value2 &
+                 )
+end subroutine sub
+=-=-=
+
+Name: align nested expression 1
+=-=
+subroutine sub()
+associate(x => y, &
+z => long_name_1 * &
+long_name_2&
+)
+end associate
+end subroutine sub
+=-=
+subroutine sub()
+     associate(x => y, &
+               z => long_name_1 * &
+                    long_name_2&
+              )
      end associate
 end subroutine sub
 =-=-=
 
-Name: align associate list 2
+Name: align nested expression 2
 =-=
 subroutine sub()
-     components: associate(matrix_A => this%model_A%mat, &
-                           matrix_B => this%model_B%mat, &
-                           N => this%model_size)
-     end associate components
+integer, parameter :: cos_phi &
+= cos(&
+3.14159265/180.0 * (&
+phi_1 + &
+phi_2) &
+), &
+cos_psi &
+= cos(&
+3.14159265/180.0 * (&
+-psi_1 - &
+psi_2) &
+)
 end subroutine sub
-=-=-=
-
-Name: align associate list 3
 =-=
 subroutine sub()
-     associate(test => 1+2, &
-
-               after_empty_line => 3+4)
-     end associate
-end subroutine sub
-=-=-=
-
-Name: align associate list 4
-=-=
-subroutine sub()
-     associate(test => 1+2, &
-               ! comment
-               after_comment_line => 3+4)
-     end associate
-end subroutine sub
-=-=-=
-
-Name: align associate list 5
-=-=
-subroutine sub()
-     associate(test => 1+2, &
-
-               ! comment
-
-               after_empty_and_comment_lines => 3+4)
-     end associate
-end subroutine sub
-=-=-=
-
-Name: align argument lists 6
-=-=
-function eval() result(w)
-     call algorithm(fun1(a, b), fun2(x, y, &
-              z, &
-                                   ), &
-                            fun3(u, &
-            v, &
-              w))
-end
-=-=
-function eval() result(w)
-     call algorithm(fun1(a, b), fun2(x, y, &
-                                     z, &
-                                    ), &
-                    fun3(u, &
-                         v, &
-                         w))
-end function eval
-=-=-=
-
-Name: write/read item list
-=-=
-subroutine sub()
-     write(*,format_string_for_testing) &       !comment
-            ! comment
-            val1, val2, val3, & ! comment
-
-            ! some more comment
-
-
-            ! comment
-
-            final_val
+     integer, parameter :: cos_phi &
+            = cos(&
+                  3.14159265/180.0 * (&
+                                      phi_1 + &
+                                      phi_2) &
+                 ), &
+                           cos_psi &
+            = cos(&
+                  3.14159265/180.0 * (&
+                                      -psi_1 - &
+                                       psi_2) &
+                 )
 end subroutine sub
 =-=-=
