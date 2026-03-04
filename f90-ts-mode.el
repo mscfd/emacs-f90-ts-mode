@@ -95,6 +95,22 @@ context on continued lines. Primary choice used as default setting in
   :type f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
+(defcustom f90-ts-indent-list-line-2 'continued-line
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as secondary setting in
+'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
+A-<tab>, C-S-<tab>, etc."
+  :type f90-ts--indent-list-radio
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-indent-list-line-3 'primary
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as ternary setting in
+'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
+A-<tab>, C-S-<tab>, etc."
+  :type f90-ts--indent-list-radio
+  :group 'f90-ts-indent)
+
 (defcustom f90-ts-indent-list-always-include-default t
   "Always include the default continued line column in list of selected
 columns for alignment.
@@ -172,6 +188,11 @@ jumping and nil turns of smart end completion."
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+    ; <tab> is bound to indent-for-tab-command by default
+    (define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
+    (define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
+    (define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+
     (define-key map (kbd "A-<return>") 'f90-ts-break-line)
     (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
     (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
@@ -2938,8 +2959,8 @@ changed)."
 
 ;; line indentation for <tab>, C-<tab> etc.
 ;;  * f90-ts-indent-and-complete-stmt
-;;  * f90-ts-indent-and-complete-line
-;;  * f90-ts-indent-line
+;;  * f90-ts-indent-and-complete-line{-[2,3]}
+;;  * f90-ts-indent-line{-[2,3]}
 ;;
 ;; region indentation:
 ;;  * f90-ts-indent-and-complete-region
@@ -2965,12 +2986,12 @@ block structures is done by `f90-ts--indent-and-complete-stmt'"
    nil))
 
 
-(defun f90-ts-indent-line ()
+(defun f90-ts-indent-line (&optional variant)
   "Default function for indentation of a single line. Smart end
 completion or other extra stuff is not executed."
   (interactive)
   (let ((f90-ts--align-continued-variant-tab
-         f90-ts-indent-list-line))
+         (or variant f90-ts-indent-list-line)))
     (treesit-indent)))
 
 
@@ -3095,6 +3116,22 @@ subsequent tree."
           (treesit-indent-region beg-marker end-marker)
       (when beg-marker (set-marker beg-marker nil))
       (when end-marker (set-marker end-marker nil)))))
+
+
+(defun f90-ts-indent-for-tab-command-2 ()
+  "Variant 2 function for `indent-for-tab-command'. Use custom
+variant `f90-ts-indent-list-line-2' for execution."
+  (interactive)
+  (let ((f90-ts-indent-list-line f90-ts-indent-list-line-2))
+    (indent-for-tab-command)))
+
+
+(defun f90-ts-indent-for-tab-command-3 ()
+  "Variant 3 function for `indent-for-tab-command'. Use custom
+variant `f90-ts-indent-list-line-3' for execution."
+  (interactive)
+  (let ((f90-ts-indent-list-line f90-ts-indent-list-line-3))
+    (indent-for-tab-command)))
 
 
 ;;------------------------------------------------------------------------------
