@@ -1253,6 +1253,11 @@ associates and others."
 ;;------------------------------------------------------------------------------
 ;; Indentation
 
+(defvar-local f90-ts--align-continued-variant-tab nil
+  "Current variant for indentation, if nil use region variant,
+otherwise use some tab variant.")
+
+
 (defvar-local f90-ts--indent-cache nil
   "Current indent cache vector:
 [node parent child0 psibp pstmt-1 pstmt-k].
@@ -1261,8 +1266,10 @@ Value 'unset means not yet computed.
 Value nil means that this node does not exist. For example, on empty
 lines, the node itself is nil.")
 
+
 (defconst f90-ts--indent-cache-size 8
   "Fixed size for f90-ts--indent-cache.")
+
 
 ;; slot indices of indent cache
 ;; nodes
@@ -2281,9 +2288,8 @@ Exact behaviour is determined by custom variables
 Note that due to the matcher, we already know that we are on a
 continued line of a continued statement. The statement line itself
 is not catched by the continued line matcher."
-  (let* ((variant (if f90-ts--align-continued-variant-tab
-                      f90-ts-indent-list-line
-                    f90-ts-indent-list-region))
+  (let* ((variant (or f90-ts--align-continued-variant-tab
+                      f90-ts-indent-list-region))
          (pstmt-1 (f90-ts--indent-prev-stmt-first))
          (default-anchor-offset (if pstmt-1
                                     (list (treesit-node-start pstmt-1)
@@ -2822,7 +2828,8 @@ invoked after smart end completion to indent the whole block.
 If indentation changes something, the tree is updated and node-block
 becomes stale. In this case, the function return the node-block-new,
 otherwise nil."
-  (let (beg-marker
+  (let ((variant-saved f90-ts--align-continued-variant-tab)
+        beg-marker
         end-marker
         node-block-new)
     (unwind-protect
@@ -2836,8 +2843,8 @@ otherwise nil."
           (when (treesit-node-check node-block 'outdated)
             (setq node-block-new (treesit-node-on (marker-position beg-marker)
                                                   (marker-position end-marker))))
-      ;; revert to tab variant
-      (setq f90-ts--align-continued-variant-tab t)
+      ;; revert to saved tab variant
+      (setq f90-ts--align-continued-variant-tab variant-saved)
       (when beg-marker (set-marker beg-marker nil))
       (when end-marker (set-marker end-marker nil))))
     node-block-new))
@@ -2937,23 +2944,15 @@ changed)."
 ;; region indentation:
 ;;  * f90-ts-indent-and-complete-region
 
-(defvar-local f90-ts--align-continued-variant-tab nil
-  "Current variant for indentation, if nil use region variant,
-otherwise use tab variant.")
-
-
-(defun f90-ts--indent-and-complete-line-aux (indent-block)
-  "Auxiliary wrapper for indent-and-complete-line function. It takes
-an additional argument INDENT-BLOCK, which indents a whole block if
-point is at line containing its end statement."
-  (unwind-protect
-      (progn
-        (setq f90-ts--align-continued-variant-tab t)
-        (treesit-indent)
-        (f90-ts--complete-smart-tab indent-block)
-        )
-    (setq f90-ts--align-continued-variant-tab nil)
-    ))
+(defun f90-ts--indent-and-complete-line-aux (variant indent-block)
+  "Auxiliary wrapper for indent-and-complete-line function.
+VARIANT is the tab variant to be used.
+If INDENT-BLOCK is true, and point is at some end statement, then
+indent the whole block closed by the end statement after smart end
+completion."
+  (let ((f90-ts--align-continued-variant-tab variant))
+    (treesit-indent)
+    (f90-ts--complete-smart-tab indent-block)))
 
 
 (defun f90-ts-indent-and-complete-line ()
@@ -2961,19 +2960,18 @@ point is at line containing its end statement."
 to <tab. More advanced indentations of involved continued lines and
 block structures is done by `f90-ts--indent-and-complete-stmt'"
   (interactive)
-  (f90-ts--indent-and-complete-line-aux nil))
+  (f90-ts--indent-and-complete-line-aux
+   f90-ts-indent-list-line
+   nil))
 
 
 (defun f90-ts-indent-line ()
   "Default function for indentation of a single line. Smart end
 completion or other extra stuff is not executed."
   (interactive)
-  (unwind-protect
-      (progn
-        (setq f90-ts--align-continued-variant-tab t)
-        (treesit-indent))
-    (setq f90-ts--align-continued-variant-tab nil)
-    ))
+  (let ((f90-ts--align-continued-variant-tab
+         f90-ts-indent-list-line))
+    (treesit-indent)))
 
 
 (defun f90-ts-indent-and-complete-stmt ()
@@ -2994,7 +2992,9 @@ Otherwise default indent with line choice."
 
    ((not (f90-ts--pos-within-continued-stmt-p (point)))
     ;; just do indent-and-complete plus block indentation if applicable
-    (f90-ts--indent-and-complete-line-aux t))
+    (f90-ts--indent-and-complete-line-aux
+     f90-ts-indent-list-line ; use default line variant
+     t))
 
    (t
     ;; multi-line statement
