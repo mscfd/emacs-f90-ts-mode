@@ -70,7 +70,7 @@ subroutine bodies, control statements (do, if, associate ...)."
 (defconst f90-ts-indent-list-options
   '(("keep if aligned or align to primary column" . keep-or-primary)
     ("keep if aligned or rotate to next column" . keep-or-rotate)
-    ("always align with primary column" . always-primary)
+    ("always align with primary column" . primary)
     ("indent to first line of statement with offset `f90-ts-indent-continued'" . continued-line)
     ("rotate columns" . rotate))
   "Options for indentation of list like structures on continued lines.")
@@ -90,7 +90,7 @@ and similar operations."
 
 (defcustom f90-ts-indent-list-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
-context on continued lines. Used as default setting in
+context on continued lines. Primary choice used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
   :type f90-ts--indent-list-radio
   :group 'f90-ts-indent)
@@ -2064,9 +2064,9 @@ The selected column is return as (anchor offset)."
             (cdar col-pos))))
 
      ;; cases: (not-aligned, keep-or-primary),
-     ;;        (aligned-always-primary), (not-aligned, always-primary)
+     ;;        (aligned, primary), (not-aligned, primary)
      ((or (not aligned-at)
-          (eq variant 'always-primary))
+          (eq variant 'primary))
       (cdr primary-col-pos))
 
      ;; cases: (aligned, keep-or-primary)
@@ -2132,7 +2132,7 @@ Finally use VARIANT to select one pair."
          ;; if selected, add default continued offset position as anchor
          (anoff-extra (and f90-ts-indent-list-always-include-default
                            (f90-ts--align-list-pstmt1-anoff)))
-         ;; anoff-primary is used as 'primary' in keep-or-primary, always-primary etc.
+         ;; anoff-primary is used as 'primary' in keep-or-primary, primary etc.
          (anoff-primary (car anoff-other))
          ;; final list of anchors (which are nodes or pairs (position offset))
          (anoff-final (append (and anoff-extra (list anoff-extra))
