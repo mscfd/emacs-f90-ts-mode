@@ -688,30 +688,79 @@ PREDICATE. Take the last of all children satisfying this condition."
 
 
 (defun f90-ts--first-node-on-line (pos)
-  "Return the first node on the line at POS."
+  "Return the first node on the line at POS. Take virtual ampersand
+nodes into account, these are not returned by treesit-node-at and
+require extra work. If the line is empty, return nil."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
-    (let* ((node-indent (treesit-node-at (point)))
-           (node-amp1 (and (< 1 (point)) (treesit-node-at (1- (point)))))
-           (node-amp2 (and (bolp) node-amp1 (treesit-node-next-sibling node-amp1))))
-      ;; this is a bit tricky: for a continuation line, there are two unnamed nodes "&"
-      ;; one at the back-to-indentation position, and one on the previous line,
-      ;; but treesit-node-at does not return the ampersand at back-to-indentation, but
-      ;; the next leaf node with same start position;
-      ;; using (1- (point)) gives the proper ampersand, except if (point) is at
-      ;; beginning of line position, in this case:
-      ;;   if previous line closes with an ampersand, then amp2 contains that one
-      ;;   if previous line is empty, then amp1 contains the ampersand at beginning of line
-      ;;   if previous line is a comment (no ampersand required), then amp1 has the comment
-      ;;      and amp2 has the desired ampersand
+    (let* ((line (line-number-at-pos))
+           (indent-node (treesit-node-at (point)))
+           (prev-node (and (< 1 (point)) (treesit-node-at (1- (point)))))
+           (next-node (and prev-node
+                           (treesit-node-next-sibling prev-node))))
       (cond
-       ((f90-ts--node-type-p node-amp2 "&")
-        node-amp2)
-       ((f90-ts--node-type-p node-amp1 "&")
-        node-amp1)
+       ((and (= (f90-ts--node-line indent-node) line)
+             (treesit-node-eq prev-node indent-node))
+        ;; first exclude the default case: not at bolp, no virtual ampersand,
+        ;; indent-node and prev-node are identical and on the same line as pos
+        indent-node)
+
+       ((and prev-node
+             (= (f90-ts--node-line prev-node) line))
+        ;; prev-node is on the same line, but was not returned by treesit-node-at
+        ;; it must be a virtual node
+        (cl-assert (and (= (treesit-node-start prev-node)
+                           (treesit-node-end prev-node))
+                        (= (treesit-node-start prev-node)
+                           (treesit-node-start indent-node))
+                        (f90-ts--node-type-p prev-node "&"))
+                   nil "expected ampersand, but got %s" prev-node)
+        prev-node)
+
+       ((and prev-node
+             next-node
+             (< (f90-ts--node-line prev-node) line)
+             (= (f90-ts--node-line next-node) line))
+        (cl-assert (= (treesit-node-start indent-node)
+                      (treesit-node-start next-node))
+                   nil "expected same start of indent-node and next-node, but at %d got %s and %s "
+                   (point) indent-node next-node)
+        (if (< (treesit-node-end next-node)
+               (treesit-node-end indent-node))
+            (progn
+              ;; prev-node is on a previous line, (point) must be at bolp
+              (cl-assert (bolp)
+                         nil "expected bolp, but are at %d with node %s"
+                         (point) indent-node)
+              (cl-assert (f90-ts--node-type-p next-node "&")
+                         nil "expected next-node to be ampersand, but at %d got node %s"
+                         (point) next-node)
+              next-node)
+          indent-node))
+
+       ((and indent-node
+             (= line (f90-ts--node-line indent-node)))
+        ;; this happens at bolp and prev-node is on previous line belonging to a different
+        ;; statement without a next sibling;
+        ;; but it also might happen if a previous statement includes the newline and ends at
+        ;; start of line (which should not happen? Example:
+        ;; subroutine sub()
+        ;; contains
+        ;;    function fun()
+        ;;    end function fun
+        ;; end subroutine sub
+        ;; The function node ends at start of "end subroutine sub" line!
+        ;; TODO: resolve at grammar level, the EOS must be consumed elsewhere
+        (cl-assert (or (bolp)
+                       (and (< (f90-ts--node-line prev-node) line)
+                            (= (line-number-at-pos (treesit-node-end prev-node)) line)))
+                   nil "expected bolp or grammar EOS glitch, but at %d got %s and %s"
+                   (point) indent-node prev-node)
+        indent-node)
+
        (t
-        node-indent)))))
+        nil)))))
 
 
 (defun f90-ts--last-node-on-line (pos)
@@ -761,12 +810,15 @@ not the first line of such a statement.
 Either at start line there is an &. Or it is a comment, and going
 backwards by prev-sibling after a sequence of comments (and only
 comments), we find an &."
-  ;; if line is empty, first gives the next node on some subsequent
+  ;; if line is empty, n-first is nil and n-next is on some subsequent
   ;; line; if the line is after some continuation ampersand
-  ;; then next node is either a comment or the second ampersand,
+  ;; then n-start is either a comment or the second ampersand,
   ;; from which we can go backwards
-  (let* ((first (f90-ts--first-node-on-line pos)))
-    (f90-ts--find-first-ampersand first)))
+  (let* ((first-node (f90-ts--first-node-on-line pos))
+         (next-node (treesit-node-at pos))
+         (start-node (or first-node next-node)))
+    (when start-node
+      (f90-ts--find-first-ampersand start-node))))
 
 
 (defun f90-ts--line-continued-at-end-p (last pos)
@@ -2878,10 +2930,10 @@ Currently it handles end statements.
 
 If INDENT-BLOCK is true, then indent the whole block with indent-region."
   (when f90-ts-smart-end
-    (when-let* ((node-indent (f90-ts--node-at-indent-pos (point)))
-                (start (treesit-node-start node-indent))
+    (when-let* ((indent-node (f90-ts--node-at-indent-pos (point)))
+                (start (treesit-node-start indent-node))
                 (node (treesit-parent-while
-                       node-indent
+                       indent-node
                        (lambda (n) (= start (treesit-node-start n)))))
                 (end (treesit-node-end node)))
       (when (= (line-number-at-pos)
@@ -3195,7 +3247,8 @@ statement. This is (partially) a counterpart to `f90-ts-break-line'.
 If previous line has comments (at end, next line etc.) joining is not
 done."
   (interactive)
-  (let* ((first-node (f90-ts--first-node-on-line (point)))
+  (let* ((first-node (or (f90-ts--first-node-on-line (point))
+                         (treesit-node-at (point))))
          (amp-node (and (f90-ts--node-type-p first-node "&")
                         first-node))
          (prev-node (and amp-node
@@ -3206,8 +3259,9 @@ done."
     ;; if amp-node is non-nil it is the first node on line and thus the second
     ;; (possibly virtual) ampersand of a continued statement, comments might be
     ;; in between those two ampersands
-    (cl-assert (and amp-node
-                    (f90-ts--node-type-p prev-node '("&" "comment")))
+    (cl-assert (or (null first-node)
+                   (and amp-node
+                        (f90-ts--node-type-p prev-node '("&" "comment"))))
                nil "internal error: prev node is not an ampersand or comment?")
     (if (and amp-node
              prev-node
@@ -3245,8 +3299,9 @@ done."
     ;; thus next node is either (possibly virtual) ampersand of a continued
     ;; statement, or a comment (which are allowed to be in between those two
     ;; ampersands)
-    (cl-assert (and amp-node
-                    (f90-ts--node-type-p next-node '("&" "comment")))
+    (cl-assert (or (null last-node)
+                   (and amp-node
+                        (f90-ts--node-type-p next-node '("&" "comment"))))
                nil "internal error: next node is not an ampersand or comment?")
     (if (and amp-node
              next-node
