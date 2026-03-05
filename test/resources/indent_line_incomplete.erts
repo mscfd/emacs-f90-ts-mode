@@ -140,3 +140,21 @@ function eval() result(w)
               w))
 end function eval
 =-=-=
+
+Name: expression 2
+=-=
+! node=nil, parent=call_expression (at "y") due to muddled parse tree
+subroutine expr1()
+     val = (x + y &
+|
+     f = (flag) .eqv. .false.
+end subroutine sub8
+=-=
+! node=nil, parent=call_expression (at "y") due to muddled parse tree
+subroutine expr1()
+     val = (x + y &
+            |
+     f = (flag) .eqv. .false.
+end subroutine sub8
+=-=-=
+

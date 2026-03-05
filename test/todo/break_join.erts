@@ -43,6 +43,23 @@ module mod
 end module
 =-=
 
+Name: join next statement 5 [fails]
+=-=
+real function test_fun()
+     test_fun = &
+
+
+     |       
+     5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &
+
+
+     |5
+end function test_fun
+=-=-=
 
 Code:
   (lambda ()

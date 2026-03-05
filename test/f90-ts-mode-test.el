@@ -603,7 +603,9 @@ or f90-ts-mode-extra."
 ;; incomplete code with ERROR nodes
 (f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
- '("indent_line_incomplete.erts")
+ '("indent_line_incomplete.erts"
+   "indent_line_empty.erts"
+   )
  '(nil ; no modification
    )
  '(f90-ts-indent-and-complete-line)
