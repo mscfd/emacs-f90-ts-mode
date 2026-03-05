@@ -695,72 +695,24 @@ require extra work. If the line is empty, return nil."
     (goto-char pos)
     (back-to-indentation)
     (let* ((line (line-number-at-pos))
-           (indent-node (treesit-node-at (point)))
-           (prev-node (and (< 1 (point)) (treesit-node-at (1- (point)))))
-           (next-node (and prev-node
-                           (treesit-node-next-sibling prev-node))))
+           (on-node (treesit-node-on (point) (point)))
+           (at-node (treesit-node-at (point))))
       (cond
-       ((and (= (f90-ts--node-line indent-node) line)
-             (treesit-node-eq prev-node indent-node))
-        ;; first exclude the default case: not at bolp, no virtual ampersand,
-        ;; indent-node and prev-node are identical and on the same line as pos
-        indent-node)
+       ((and on-node
+             (= (point) (treesit-node-start on-node)))
+        ;; in some cases, there might be other virtual nodes,
+        ;; or treesit-node-on returns a proper node starting at (point),
+        ;; walk back as long as start of node does not change
+        (cl-loop for node = on-node
+                 then (treesit-node-prev-sibling node)
+                 while (and node
+                            (= (treesit-node-start node) (point)))
+                 for last = node ; updates only if while condition is true
+                 finally return last))
 
-       ((and prev-node
-             (= (f90-ts--node-line prev-node) line))
-        ;; prev-node is on the same line, but was not returned by treesit-node-at
-        ;; it must be a virtual node
-        (cl-assert (and (= (treesit-node-start prev-node)
-                           (treesit-node-end prev-node))
-                        (= (treesit-node-start prev-node)
-                           (treesit-node-start indent-node))
-                        (f90-ts--node-type-p prev-node "&"))
-                   nil "expected ampersand, but got %s" prev-node)
-        prev-node)
-
-       ((and prev-node
-             next-node
-             (< (f90-ts--node-line prev-node) line)
-             (= (f90-ts--node-line next-node) line))
-        (cl-assert (= (treesit-node-start indent-node)
-                      (treesit-node-start next-node))
-                   nil "expected same start of indent-node and next-node, but at %d got %s and %s "
-                   (point) indent-node next-node)
-        (if (< (treesit-node-end next-node)
-               (treesit-node-end indent-node))
-            (progn
-              ;; prev-node is on a previous line, (point) must be at bolp
-              (cl-assert (bolp)
-                         nil "expected bolp, but are at %d with node %s"
-                         (point) indent-node)
-              (cl-assert (f90-ts--node-type-p next-node "&")
-                         nil "expected next-node to be ampersand, but at %d got node %s"
-                         (point) next-node)
-              next-node)
-          indent-node))
-
-       ((and indent-node
-             (= line (f90-ts--node-line indent-node)))
-        ;; this happens at bolp and prev-node is on previous line belonging to a different
-        ;; statement without a next sibling;
-        ;; but it also might happen if a previous statement includes the newline and ends at
-        ;; start of line (which should not happen? Example:
-        ;; subroutine sub()
-        ;; contains
-        ;;    function fun()
-        ;;    end function fun
-        ;; end subroutine sub
-        ;; The function node ends at start of "end subroutine sub" line!
-        ;; TODO: resolve at grammar level, the EOS must be consumed elsewhere
-        (cl-assert (or (bolp)
-                       (and (< (f90-ts--node-line prev-node) line)
-                            (= (line-number-at-pos (treesit-node-end prev-node)) line)))
-                   nil "expected bolp or grammar EOS glitch, but at %d got %s and %s"
-                   (point) indent-node prev-node)
-        indent-node)
-
-       (t
-        nil)))))
+       ((and at-node
+             (= line (f90-ts--node-line at-node)))
+        at-node)))))
 
 
 (defun f90-ts--last-node-on-line (pos)
