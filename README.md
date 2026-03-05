@@ -12,6 +12,7 @@ The mode is under **development**, features might only be partially implemented.
   - [Tree-sitter grammar](#tree-sitter-grammar)
   - [Tree-sitter based mode](#tree-sitter-based-mode)
   - [Setup](#setup)
+  - [Keybindings](#keybindings)
 - [Features](#features)
   - [Syntax highlight](#syntax-highlight)
   - [Indentation](#indentation)
@@ -41,6 +42,11 @@ Currently it relies on a recent tree-sitter grammar version of fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
 There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
+
+**NOTE**:
+In some cases, if official branch has not yet merged some PR, the current master branch of mscfd/tree-sitter-fortran
+is mandatory.
+For releases, mscfd/tree-sitter-fortran contains a tag corresponding to compatible f90-ts-mode release version.
 
 **NOTE**: The fortran grammar should be compiled with treesitter version 0.25.x, as emacs (including 30.2) does not yet support the 0.26 branch.
 For example, queries are not translated as expected by the 0.26 branch.
@@ -136,6 +142,24 @@ placed somewhere in `init.el` (or elsewhere).
   )
 ```
 
+
+### Keybindings
+
+The mode sets the following default mode local keybindings:
+```elisp
+(define-key f90-ts-mode-map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+(define-key f90-ts-mode-map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
+(define-key f90-ts-mode-map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
+(define-key f90-ts-mode-map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+
+(define-key f90-ts-mode-map (kbd "A-<return>") 'f90-ts-break-line)
+(define-key f90-ts-mode-map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
+(define-key f90-ts-mode-map (kbd "A-<delete>") #'f90-ts-join-line-next)
+(define-key f90-ts-mode-map (kbd "A-\\") #'f90-ts-enlarge-region)
+(define-key f90-ts-mode-map (kbd "A-0") #'f90-ts-child0-region)
+(define-key f90-ts-mode-map (kbd "A-[") #'f90-ts-prev-region)
+(define-key f90-ts-mode-map (kbd "A-]") #'f90-ts-next-region)
+```
 
 
 ## Features
@@ -235,14 +259,21 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argz)
 ```
 Five options are currently implemented: `continued-line`, `rotate`, `keep-or-primary`,
-`keep-or-rotate` and `always-primary`.
+`keep-or-next` and `primary`.
 Moreover, `f90-ts-indent-list-always-include-default` controls whether simple indentation for
 continued lines should always be added (for example even in an argument context as above).
-Remark: currently options and variants are intended to experiment with and see what might work
-and is worth keeping.
 
 Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-list-region`
 and `f90-ts-indent-list-line`, respectively.
+There are also variants `f90-ts-indent-list-line-2` and `f90-ts-indent-list-line-3`, which are
+used by functions bound to Shift+TAB and Control+Shift+TAB by default.
+
+Also check out [Continued statements and blocks](#indentation-of-continued-statements-and-blocks).
+
+Remark: currently options and variants are intended to experiment with and see what might work
+and is worth keeping. The additional keybinds for variant 2 and 3 also help with testing various
+variants.
+
 
 TODO:
 * implement further list like structures, refine existing once

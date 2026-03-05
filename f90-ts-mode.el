@@ -70,7 +70,7 @@ subroutine bodies, control statements (do, if, associate ...)."
 (defconst f90-ts-indent-list-options
   '(("keep if aligned or align to primary column" . keep-or-primary)
     ("keep if aligned or rotate to next column" . keep-or-rotate)
-    ("always align with primary column" . always-primary)
+    ("always align with primary column" . primary)
     ("indent to first line of statement with offset `f90-ts-indent-continued'" . continued-line)
     ("rotate columns" . rotate))
   "Options for indentation of list like structures on continued lines.")
@@ -90,8 +90,24 @@ and similar operations."
 
 (defcustom f90-ts-indent-list-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
-context on continued lines. Used as default setting in
+context on continued lines. Primary choice used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
+  :type f90-ts--indent-list-radio
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-indent-list-line-2 'continued-line
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as secondary setting in
+'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
+A-<tab>, C-S-<tab>, etc."
+  :type f90-ts--indent-list-radio
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-indent-list-line-3 'primary
+  "Algorithm for how to select the column for indentation in a list like
+context on continued lines. Used as ternary setting in
+'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
+A-<tab>, C-S-<tab>, etc."
   :type f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
@@ -172,6 +188,11 @@ jumping and nil turns of smart end completion."
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
     (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+    ; <tab> is bound to indent-for-tab-command by default
+    (define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
+    (define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
+    (define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+
     (define-key map (kbd "A-<return>") 'f90-ts-break-line)
     (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
     (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
@@ -1253,6 +1274,11 @@ associates and others."
 ;;------------------------------------------------------------------------------
 ;; Indentation
 
+(defvar-local f90-ts--align-continued-variant-tab nil
+  "Current variant for indentation, if nil use region variant,
+otherwise use some tab variant.")
+
+
 (defvar-local f90-ts--indent-cache nil
   "Current indent cache vector:
 [node parent child0 psibp pstmt-1 pstmt-k].
@@ -1261,8 +1287,10 @@ Value 'unset means not yet computed.
 Value nil means that this node does not exist. For example, on empty
 lines, the node itself is nil.")
 
+
 (defconst f90-ts--indent-cache-size 8
   "Fixed size for f90-ts--indent-cache.")
+
 
 ;; slot indices of indent cache
 ;; nodes
@@ -2057,9 +2085,9 @@ The selected column is return as (anchor offset)."
             (cdar col-pos))))
 
      ;; cases: (not-aligned, keep-or-primary),
-     ;;        (aligned-always-primary), (not-aligned, always-primary)
+     ;;        (aligned, primary), (not-aligned, primary)
      ((or (not aligned-at)
-          (eq variant 'always-primary))
+          (eq variant 'primary))
       (cdr primary-col-pos))
 
      ;; cases: (aligned, keep-or-primary)
@@ -2125,7 +2153,7 @@ Finally use VARIANT to select one pair."
          ;; if selected, add default continued offset position as anchor
          (anoff-extra (and f90-ts-indent-list-always-include-default
                            (f90-ts--align-list-pstmt1-anoff)))
-         ;; anoff-primary is used as 'primary' in keep-or-primary, always-primary etc.
+         ;; anoff-primary is used as 'primary' in keep-or-primary, primary etc.
          (anoff-primary (car anoff-other))
          ;; final list of anchors (which are nodes or pairs (position offset))
          (anoff-final (append (and anoff-extra (list anoff-extra))
@@ -2281,9 +2309,8 @@ Exact behaviour is determined by custom variables
 Note that due to the matcher, we already know that we are on a
 continued line of a continued statement. The statement line itself
 is not catched by the continued line matcher."
-  (let* ((variant (if f90-ts--align-continued-variant-tab
-                      f90-ts-indent-list-line
-                    f90-ts-indent-list-region))
+  (let* ((variant (or f90-ts--align-continued-variant-tab
+                      f90-ts-indent-list-region))
          (pstmt-1 (f90-ts--indent-prev-stmt-first))
          (default-anchor-offset (if pstmt-1
                                     (list (treesit-node-start pstmt-1)
@@ -2822,7 +2849,8 @@ invoked after smart end completion to indent the whole block.
 If indentation changes something, the tree is updated and node-block
 becomes stale. In this case, the function return the node-block-new,
 otherwise nil."
-  (let (beg-marker
+  (let ((variant-saved f90-ts--align-continued-variant-tab)
+        beg-marker
         end-marker
         node-block-new)
     (unwind-protect
@@ -2836,8 +2864,8 @@ otherwise nil."
           (when (treesit-node-check node-block 'outdated)
             (setq node-block-new (treesit-node-on (marker-position beg-marker)
                                                   (marker-position end-marker))))
-      ;; revert to tab variant
-      (setq f90-ts--align-continued-variant-tab t)
+      ;; revert to saved tab variant
+      (setq f90-ts--align-continued-variant-tab variant-saved)
       (when beg-marker (set-marker beg-marker nil))
       (when end-marker (set-marker end-marker nil))))
     node-block-new))
@@ -2931,29 +2959,21 @@ changed)."
 
 ;; line indentation for <tab>, C-<tab> etc.
 ;;  * f90-ts-indent-and-complete-stmt
-;;  * f90-ts-indent-and-complete-line
-;;  * f90-ts-indent-line
+;;  * f90-ts-indent-and-complete-line{-[2,3]}
+;;  * f90-ts-indent-line{-[2,3]}
 ;;
 ;; region indentation:
 ;;  * f90-ts-indent-and-complete-region
 
-(defvar-local f90-ts--align-continued-variant-tab nil
-  "Current variant for indentation, if nil use region variant,
-otherwise use tab variant.")
-
-
-(defun f90-ts--indent-and-complete-line-aux (indent-block)
-  "Auxiliary wrapper for indent-and-complete-line function. It takes
-an additional argument INDENT-BLOCK, which indents a whole block if
-point is at line containing its end statement."
-  (unwind-protect
-      (progn
-        (setq f90-ts--align-continued-variant-tab t)
-        (treesit-indent)
-        (f90-ts--complete-smart-tab indent-block)
-        )
-    (setq f90-ts--align-continued-variant-tab nil)
-    ))
+(defun f90-ts--indent-and-complete-line-aux (variant indent-block)
+  "Auxiliary wrapper for indent-and-complete-line function.
+VARIANT is the tab variant to be used.
+If INDENT-BLOCK is true, and point is at some end statement, then
+indent the whole block closed by the end statement after smart end
+completion."
+  (let ((f90-ts--align-continued-variant-tab variant))
+    (treesit-indent)
+    (f90-ts--complete-smart-tab indent-block)))
 
 
 (defun f90-ts-indent-and-complete-line ()
@@ -2961,19 +2981,18 @@ point is at line containing its end statement."
 to <tab. More advanced indentations of involved continued lines and
 block structures is done by `f90-ts--indent-and-complete-stmt'"
   (interactive)
-  (f90-ts--indent-and-complete-line-aux nil))
+  (f90-ts--indent-and-complete-line-aux
+   f90-ts-indent-list-line
+   nil))
 
 
-(defun f90-ts-indent-line ()
+(defun f90-ts-indent-line (&optional variant)
   "Default function for indentation of a single line. Smart end
 completion or other extra stuff is not executed."
   (interactive)
-  (unwind-protect
-      (progn
-        (setq f90-ts--align-continued-variant-tab t)
-        (treesit-indent))
-    (setq f90-ts--align-continued-variant-tab nil)
-    ))
+  (let ((f90-ts--align-continued-variant-tab
+         (or variant f90-ts-indent-list-line)))
+    (treesit-indent)))
 
 
 (defun f90-ts-indent-and-complete-stmt ()
@@ -2994,7 +3013,9 @@ Otherwise default indent with line choice."
 
    ((not (f90-ts--pos-within-continued-stmt-p (point)))
     ;; just do indent-and-complete plus block indentation if applicable
-    (f90-ts--indent-and-complete-line-aux t))
+    (f90-ts--indent-and-complete-line-aux
+     f90-ts-indent-list-line ; use default line variant
+     t))
 
    (t
     ;; multi-line statement
@@ -3095,6 +3116,22 @@ subsequent tree."
           (treesit-indent-region beg-marker end-marker)
       (when beg-marker (set-marker beg-marker nil))
       (when end-marker (set-marker end-marker nil)))))
+
+
+(defun f90-ts-indent-for-tab-command-2 ()
+  "Variant 2 function for `indent-for-tab-command'. Use custom
+variant `f90-ts-indent-list-line-2' for execution."
+  (interactive)
+  (let ((f90-ts-indent-list-line f90-ts-indent-list-line-2))
+    (indent-for-tab-command)))
+
+
+(defun f90-ts-indent-for-tab-command-3 ()
+  "Variant 3 function for `indent-for-tab-command'. Use custom
+variant `f90-ts-indent-list-line-3' for execution."
+  (interactive)
+  (let ((f90-ts-indent-list-line f90-ts-indent-list-line-3))
+    (indent-for-tab-command)))
 
 
 ;;------------------------------------------------------------------------------
