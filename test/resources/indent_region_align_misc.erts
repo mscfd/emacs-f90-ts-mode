@@ -105,7 +105,7 @@ subroutine sub()
                                   => self%points_active, &
                             q &
                                   => self%points_inactive &
-                           )
+                              )
           end associate points
      end associate
 end subroutine sub
@@ -157,7 +157,7 @@ Name: align argument lists 6
 =-=
 function eval() result(w)
      call algorithm(fun1(a, b), fun2(x, y, &
-              z, &
+              z &
                                    ), &
                             fun3(u, &
             v, &
@@ -166,8 +166,8 @@ end
 =-=
 function eval() result(w)
      call algorithm(fun1(a, b), fun2(x, y, &
-                                     z, &
-                                    ), &
+                                     z &
+                                       ), &
                     fun3(u, &
                          v, &
                          w))

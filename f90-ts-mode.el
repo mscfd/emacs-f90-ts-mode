@@ -85,14 +85,14 @@ subroutine bodies, control statements (do, if, associate ...)."
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in 'indent-region'
 and similar operations."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Primary choice used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-line-2 'continued-line
@@ -100,7 +100,7 @@ context on continued lines. Primary choice used as default setting in
 context on continued lines. Used as secondary setting in
 'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
 A-<tab>, C-S-<tab>, etc."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-line-3 'primary
@@ -108,7 +108,7 @@ A-<tab>, C-S-<tab>, etc."
 context on continued lines. Used as ternary setting in
 'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
 A-<tab>, C-S-<tab>, etc."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-always-include-default t
@@ -116,9 +116,64 @@ A-<tab>, C-S-<tab>, etc."
 columns for alignment.
 This column is the column of the first line of the continued statement
 plus the value of 'f90-ts-indent-continued'."
-  :type 'boolean
+  :type  'boolean
   :safe  'booleanp
   :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-paren-default 1
+  "Additional offset applied for alignment of non-parenthesis under opening
+parenthesis. Example:
+call sub(      arg1, &
+         .not. arg2)
+Primary alignment column for the second line column of parenthesis plus
+`f90-ts-mode-indent-expr-paren'."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-paren-close 0
+  "Additional offset applied for alignment for closing parenthesis,
+under corresponding closing parenthesis.
+
+Example:
+x = x + (y + &
+         z &
+        )
+
+Primary alignment column for the closing parenthesis is column of
+opening parenthesis plus `f90-ts-mode-indent-expr-assign'."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-expr-assign-default 2
+  "Additional offset applied for alignment at assignment symbol \"=\",
+except for association operators.
+
+Example:
+x =      & ! some comment
+    some_expression
+
+Primary alignment column for the second line column of assignment plus
+`f90-ts-mode-indent-expr-assign-default' for non-operators."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-expr-assign-assoc-op 0
+  "Additional offset applied for alignment at assignment symbol \"=\"
+for associative operators (logical_expression, math_expression)
+
+Example:
+x = value1 &
+  + some_expression
+
+Primary alignment column for the second line column of assignment plus
+`f90-ts-mode-indent-expr-assign-assoc-op' for associative operators."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
 
 ;;------------------------------------------------------------------------------
 
@@ -250,8 +305,8 @@ jumping and nil turns of smart end completion."
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching names of special variables like
 self or this. Used for applying a special font lock face."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
@@ -260,8 +315,8 @@ self or this. Used for applying a special font lock face."
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments.
 This is used for applying the same comment starter, see `f90-ts-break-line'."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
@@ -269,28 +324,28 @@ This is used for applying the same comment starter, see `f90-ts-break-line'."
   "Regular expression for matching comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
 (defcustom f90-ts-separator-comment-regexp ""
   "Regular expression for matching separator comments (e.g. for structuring code).
 Used for applying a separator font lock face and alignment with parent node."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
 (defcustom f90-ts-comment-region-prefix "!!$"
   "Comment prefix."
-  :type 'string
+  :type  'string
   :group 'f90-ts)
 
 
 (defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
   "List of additional comment prefixes for interactive selection."
-  :type '(repeat string)
+  :type  '(repeat string)
   :group 'f90-ts)
 
 
@@ -455,22 +510,23 @@ find relevant nodes."
        (> (treesit-node-end node)   start)))
 
 
-(defconst f90-ts--node-expression-types
+(defconst f90-ts--node-op-expr-types
   '("logical_expression"
     "math_expression"
     "relational_expression"
     "concatenation_expression"
     "unary_expression")
-  "Expression types for alignment purposes. These are required to have
-a field named operator. Note that logical and math expression overlap,
-as use defined operators are always interpreted as math expression,
-even if operating on bools (like some .imply. operator, for example).")
+  "Operator expression types for alignment purposes. These are required
+to have a field named operator. Note that logical and math expression
+overlap, as use defined operators are always interpreted as math
+expression, even if operating on bools (like some .imply. operator, for
+example).")
 
 
-(defun f90-ts--node-is-expression-p (node)
+(defun f90-ts--node-is-op-expr-p (node)
   "Return true if NODE is of some expression type."
   (member (treesit-node-type node)
-          f90-ts--node-expression-types))
+          f90-ts--node-op-expr-types))
 
 
 ;;------------------------------------------------------------------------------
@@ -688,30 +744,31 @@ PREDICATE. Take the last of all children satisfying this condition."
 
 
 (defun f90-ts--first-node-on-line (pos)
-  "Return the first node on the line at POS."
+  "Return the first node on the line at POS. Take virtual ampersand
+nodes into account, these are not returned by treesit-node-at and
+require extra work. If the line is empty, return nil."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
-    (let* ((node-indent (treesit-node-at (point)))
-           (node-amp1 (and (< 1 (point)) (treesit-node-at (1- (point)))))
-           (node-amp2 (and (bolp) node-amp1 (treesit-node-next-sibling node-amp1))))
-      ;; this is a bit tricky: for a continuation line, there are two unnamed nodes "&"
-      ;; one at the back-to-indentation position, and one on the previous line,
-      ;; but treesit-node-at does not return the ampersand at back-to-indentation, but
-      ;; the next leaf node with same start position;
-      ;; using (1- (point)) gives the proper ampersand, except if (point) is at
-      ;; beginning of line position, in this case:
-      ;;   if previous line closes with an ampersand, then amp2 contains that one
-      ;;   if previous line is empty, then amp1 contains the ampersand at beginning of line
-      ;;   if previous line is a comment (no ampersand required), then amp1 has the comment
-      ;;      and amp2 has the desired ampersand
+    (let* ((line (line-number-at-pos))
+           (on-node (treesit-node-on (point) (point)))
+           (at-node (treesit-node-at (point))))
       (cond
-       ((f90-ts--node-type-p node-amp2 "&")
-        node-amp2)
-       ((f90-ts--node-type-p node-amp1 "&")
-        node-amp1)
-       (t
-        node-indent)))))
+       ((and on-node
+             (= (point) (treesit-node-start on-node)))
+        ;; in some cases, there might be other virtual nodes,
+        ;; or treesit-node-on returns a proper node starting at (point),
+        ;; walk back as long as start of node does not change
+        (cl-loop for node = on-node
+                 then (treesit-node-prev-sibling node)
+                 while (and node
+                            (= (treesit-node-start node) (point)))
+                 for last = node ; updates only if while condition is true
+                 finally return last))
+
+       ((and at-node
+             (= line (f90-ts--node-line at-node)))
+        at-node)))))
 
 
 (defun f90-ts--last-node-on-line (pos)
@@ -761,12 +818,15 @@ not the first line of such a statement.
 Either at start line there is an &. Or it is a comment, and going
 backwards by prev-sibling after a sequence of comments (and only
 comments), we find an &."
-  ;; if line is empty, first gives the next node on some subsequent
+  ;; if line is empty, n-first is nil and n-next is on some subsequent
   ;; line; if the line is after some continuation ampersand
-  ;; then next node is either a comment or the second ampersand,
+  ;; then n-start is either a comment or the second ampersand,
   ;; from which we can go backwards
-  (let* ((first (f90-ts--first-node-on-line pos)))
-    (f90-ts--find-first-ampersand first)))
+  (let* ((first-node (f90-ts--first-node-on-line pos))
+         (next-node (treesit-node-at pos))
+         (start-node (or first-node next-node)))
+    (when start-node
+      (f90-ts--find-first-ampersand start-node))))
 
 
 (defun f90-ts--line-continued-at-end-p (last pos)
@@ -1628,19 +1688,19 @@ If NODE is nil return nil."
       ;; is this the right approach and symbol?
       ;; (not that of unary expressions, node is not the operator
       ;; but the unary_expression node itself)
-      'operator_unary)
+      'operator-unary)
 
      ((string= (treesit-node-field-name node) "operator")
       (let* ((parent (treesit-node-parent node))
              (type (and parent (treesit-node-type parent))))
       (pcase type
-        ("logical_expression"        'operator_logical)
-        ("math_expression"           'operator_math)
-        ("relational_expression"     'operator_relation)
+        ("logical_expression"        'operator-logical)
+        ("math_expression"           'operator-math)
+        ("relational_expression"     'operator-relation)
         ;; map concatenation to math_expression, as user defined
         ;; operators are also handled by that way
-        ("concatentation_expression" 'operator_math)
-        ;("unary_expression"          'operator_unary) ; can this happen here
+        ("concatentation_expression" 'operator-math)
+        ;("unary_expression"          'operator-unary) ; can this happen here
         (_                           'operator) ; anything still missing?
         )))
 
@@ -1688,7 +1748,7 @@ and 'nsym."
 
 (defun f90-ts--node-chain-root (node)
   "Return the topmost ancestor of NODE in a chain of nodes of some
-expression type `f90-ts--node-expression-types'.
+operator expression type `f90-ts--node-op-expr-types'.
 
 Intended for associative expressions represented as binarized trees,
 where repeated nesting of the same node type encodes a chain.  For
@@ -1710,7 +1770,7 @@ example, for a logical/math/relational etc. expression chain like
 the function returns the outermost expression node."
   (treesit-parent-while
    node
-   #'f90-ts--node-is-expression-p))
+   #'f90-ts--node-is-op-expr-p))
 
 
 ;;++++++++++++++
@@ -1743,33 +1803,34 @@ part currently. Skip continuation symbols, which might be between
 
 
 ;;++++++++++++++
-;; list context: expressions
+;; list context: operator expressions
 
-(defun f90-ts--align-list-expand-expression (node)
+(defun f90-ts--align-list-expand-op-expr (node)
   "Recursively compute relevant children of a nested logical expression
 tree. An expression like A .and. B .and. C is roughly represented as
 logical_expression(logical_expression(A .and. B), .and. C).
 The routine returns the five children A, .and., B, and., C.
 It does not descend into parenthesized_expressions."
-  (if (f90-ts--node-is-expression-p node)
-      (mapcan #'f90-ts--align-list-expand-expression
+  (if (f90-ts--node-is-op-expr-p node)
+      (mapcan #'f90-ts--align-list-expand-op-expr
               (treesit-node-children node))
     (list node)))
 
 
-(defun f90-ts--align-list-items-expression (list-context _loc)
-  "Determine relevant childrens of LIST-CONTEXT = 'logical_expression'."
-  (cl-assert (f90-ts--node-is-expression-p list-context)
+(defun f90-ts--align-list-items-op-expr (list-context _loc)
+  "Determine relevant childrens of LIST-CONTEXT being some
+operator expression."
+  (cl-assert (f90-ts--node-is-op-expr-p list-context)
              nil
              "expected list context: some expression node, got list-context '%s'"
              list-context)
-  ;; assert that we are already at the root of an expression chain
+  ;; assert that we are already at the root of an op-expr chain
   (cl-assert (eq list-context
                  (f90-ts--node-chain-root list-context))
              nil
-             "list context not root of chain of expression, list-context is '%s'"
+             "list context not root of chain of op-expr, list-context is '%s'"
              list-context)
-  (f90-ts--align-list-expand-expression list-context))
+  (f90-ts--align-list-expand-op-expr list-context))
 
 
 ;;++++++++++++++
@@ -1893,9 +1954,9 @@ used as primary anchor/fallback position."
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 
-For argument lists (call sub(...)) and parameters (subroutine sub (...)),
-a default and fallback position is to align one column position to the
-right of the initial opening parenthesis. This primary position is
+For argument lists (call sub(...)) and parameters
+(subroutine sub (...)), a default and fallback position is to align to
+with initial opening parenthesis plus offset. This primary position is
 returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
@@ -1908,7 +1969,9 @@ returned as first element of the list."
    ;; for closing parenthesis, align to opening parenthesis,
    ;; for other node types, align one position to the right of it
    (collect (treesit-node-start list-context)
-            (if (eq (alist-get 'nsym loc) 'parenthesis) 0 1))
+            (if (eq (alist-get 'nsym loc) 'parenthesis)
+                f90-ts-mode-indent-paren-close
+              f90-ts-mode-indent-paren-default))
 
    ;; add default continued line indentation if items is empty
    (unless items
@@ -1916,7 +1979,7 @@ returned as first element of the list."
    ))
 
 
-(defun f90-ts--align-list-other-expression (list-context items loc)
+(defun f90-ts--align-list-other-op-expr (list-context items loc)
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 
@@ -1924,7 +1987,7 @@ For logical expressions a default and fallback position is to align
 with the start of the expression. This primary position is returned
 as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
-  (cl-assert (f90-ts--node-is-expression-p list-context)
+  (cl-assert (f90-ts--node-is-op-expr-p list-context)
              nil
              "expected list context: some expression, got '%s'"
              list-context)
@@ -1941,10 +2004,21 @@ as first element of the list."
    ;; use as primary anchor if no items of compatible type are available
    (when-let* ((psib-context (f90-ts--prev-sibling-proper list-context))
                (psib-type (treesit-node-type psib-context)))
-     (when (member psib-type '("(" "="))
+     (pcase psib-type
        ;; "(": parent is parenthesized_expression or argument_list
        ;; "=": parent is assignment_statement
-       (collect (treesit-node-start psib-context) 1)))
+       ("(" (let* ((node-sym (alist-get 'nsym loc))
+                   (offset (if (eq node-sym 'parenthesis)
+                               f90-ts-mode-indent-paren-close
+                             f90-ts-mode-indent-paren-default)))
+              (collect (treesit-node-start psib-context) offset)))
+       ("=" (let* ((node-sym (alist-get 'nsym loc))
+                   (offset (if (member node-sym '(operator-logical
+                                                  operator-math))
+                               f90-ts-mode-indent-expr-assign-assoc-op
+                             f90-ts-mode-indent-expr-assign-default)))
+              (collect (treesit-node-start psib-context) offset)))
+       ))
 
    ;; add default continued line indentation if items list is empty
    (unless items
@@ -1980,9 +2054,9 @@ parenthesis. This primary position is returned as first element of the
                 child-paren)
      (collect (treesit-node-start child-paren)
               (pcase nsym
-                ('associate   f90-ts-indent-continued) ; indents "=>"
-                ('parenthesis 0) ; indents ")"
-                (_            1) ; all other kind of nodes
+                ('associate   f90-ts-indent-continued)          ; indents "=>"
+                ('parenthesis f90-ts-mode-indent-paren-close)   ; indents ")"
+                (_            f90-ts-mode-indent-paren-default) ; all other kind of nodes
                 )))
 
    ;; add default continued line indentation if items is empty
@@ -1998,8 +2072,9 @@ parenthesis. This primary position is returned as first element of the
   "From a list ITEMS of node items select compatible nodes.
 Currently these are nodes with the same NODE-SYM."
   (when node-sym
-    (let ((pred-node-sym (lambda (n) (eq (f90-ts--align-node-symbol n)
-                                         node-sym))))
+    (let ((pred-node-sym
+           (lambda (n) (eq (f90-ts--align-node-symbol n)
+                           node-sym))))
       (seq-filter pred-node-sym
                   items))))
 
@@ -2112,17 +2187,21 @@ The selected column is return as (anchor offset)."
 alignment anchors for node. LOC is an alist which provides the node
 and further location data.
 Note: for these anchor-offset pairs, the offset is 0 in general."
-  (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
-         (items-all (funcall get-items list-context loc))
-         ;; filter by line number, use only items on some previous line
-         (cur-line (alist-get 'line loc))
-         (items-prev (seq-filter
-                      (lambda (n) (< (f90-ts--node-line n)
-                                     cur-line))
-                      items-all)))
-    ;; further filter by symbol type node-sym of current node at point
-    (f90-ts--align-list-filter-items items-prev
-                                     (alist-get 'nsym loc))))
+  ;; parenthesis are handled by anoff-other, as we want to
+  ;; add a custom offset and use it as primary anchor
+  (unless (eq (alist-get 'nsym loc)
+              'parenthesis)
+    (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
+           (items-all (funcall get-items list-context loc))
+           ;; filter by line number, use only items on some previous line
+           (cur-line (alist-get 'line loc))
+           (items-prev (seq-filter
+                        (lambda (n) (< (f90-ts--node-line n)
+                                       cur-line))
+                        items-all)))
+      ;; further filter by symbol type node-sym of current node at point
+      (f90-ts--align-list-filter-items items-prev
+                                       (alist-get 'nsym loc)))))
 
 
 (defun f90-ts--align-list-anoff-other (loc anchors-context list-context)
@@ -2176,8 +2255,8 @@ Finally use VARIANT to select one pair."
 ;;            in the list is used as primary/fallback position (for example
 ;;            in keep-or-primary option)
 (defconst f90-ts--align-list-context-config
-  (let ((expr-options '(:get-items-fn f90-ts--align-list-items-expression
-                        :get-other-fn f90-ts--align-list-other-expression))
+  (let ((expr-options '(:get-items-fn f90-ts--align-list-items-op-expr
+                        :get-other-fn f90-ts--align-list-other-op-expr))
         (bind-options '(:get-items-fn f90-ts--align-list-items-binding)))
      (list
       (cons "logical_expression"       expr-options)
@@ -2233,9 +2312,9 @@ searches."
                    f90-ts--align-list-context-config))))))
 
 
-(defun f90-ts--align-list-context-expr (loc parent)
-  "Determine, whether LOC is in an expression list context.
-For expression, we need to check node in LOC or PARENT (node might be
+(defun f90-ts--align-list-context-op-expr (loc parent)
+  "Determine, whether LOC is in an operator expression list context.
+For expressions, we need to check node in LOC or PARENT (node might be
 nil). But we do not need to ascend further."
   ;; always looking at PARENT fails for expressions like in
   ;; x = &
@@ -2247,9 +2326,9 @@ nil). But we do not need to ascend further."
   (let* ((node (alist-get 'node loc))
          (line (alist-get 'line loc))
          (stmt-min
-          (or (and (f90-ts--node-is-expression-p node)
+          (or (and (f90-ts--node-is-op-expr-p node)
                    node)
-              (and (f90-ts--node-is-expression-p parent)
+              (and (f90-ts--node-is-op-expr-p parent)
                    parent)))
          ;; find root of expression
          (expr-root (and stmt-min (f90-ts--node-chain-root stmt-min)))
@@ -2270,17 +2349,24 @@ nil). But we do not need to ascend further."
 (defun f90-ts--align-list-context-other (loc parent)
   "Determine, whether LOC is in a list-context, other than expressions.
 For these we might need to ascend a few steps."
-  (let ((node (or (alist-get 'node loc)
-                  parent))
-        (line (alist-get 'line loc)))
-    (treesit-parent-until
-     node
-     (lambda (n)
-       (and (< (f90-ts--node-line n) line)
-            (assoc (treesit-node-type n)
-                   f90-ts--align-list-context-config)))
-     t ; include node in search
-     )))
+  (let* ((node (or (alist-get 'node loc)
+                   parent))
+         (line (alist-get 'line loc))
+         (list-context (treesit-parent-until
+                        node
+                        (lambda (n)
+                          (and (< (f90-ts--node-line n) line)
+                               (assoc (treesit-node-type n)
+                                      f90-ts--align-list-context-config)))
+                        t ; include node in search
+                        )))
+    ;; list-context might be of some operator expression type, but
+    ;; neither node nor parent are (already excluded), so we are at
+    ;; some other kind of node like a call_expression or
+    ;; parenthesized_expression, which are allowed within expressions,
+    ;; but this is another context
+    (unless (f90-ts--node-is-op-expr-p list-context)
+      list-context)))
 
 
 (defun f90-ts--align-list-context (loc parent)
@@ -2292,7 +2378,7 @@ The smallest such context, starting on a previous line is returned.
 Return value nil signals that this is not a list context."
   (let ((stmt-max (f90-ts--align-list-context-max loc)))
     (when stmt-max
-      (or (f90-ts--align-list-context-expr loc parent)
+      (or (f90-ts--align-list-context-op-expr loc parent)
           (f90-ts--align-list-context-other loc parent)))))
 
 
@@ -2423,7 +2509,7 @@ which start with !$ or !$omp")
 (defvar f90-ts-indent-rules-continued
   `(;; handle continued lines
     ;; special case, first node is closing parenthesis means this is a continued line
-    ((n-p-gp ")" "parenthesized_expression" nil) parent 0)
+    ((n-p-gp ")" "parenthesized_expression" nil) parent f90-ts-mode-indent-paren-close)
     ;; it is easy to see whether we are on a continued line (not the first line
     ;; of a multiline statement, only subsequent lines), but handling specific
     ;; cases is not possible with just some simple n-p-gp like matches,
@@ -2878,10 +2964,10 @@ Currently it handles end statements.
 
 If INDENT-BLOCK is true, then indent the whole block with indent-region."
   (when f90-ts-smart-end
-    (when-let* ((node-indent (f90-ts--node-at-indent-pos (point)))
-                (start (treesit-node-start node-indent))
+    (when-let* ((indent-node (f90-ts--node-at-indent-pos (point)))
+                (start (treesit-node-start indent-node))
                 (node (treesit-parent-while
-                       node-indent
+                       indent-node
                        (lambda (n) (= start (treesit-node-start n)))))
                 (end (treesit-node-end node)))
       (when (= (line-number-at-pos)
@@ -3195,7 +3281,8 @@ statement. This is (partially) a counterpart to `f90-ts-break-line'.
 If previous line has comments (at end, next line etc.) joining is not
 done."
   (interactive)
-  (let* ((first-node (f90-ts--first-node-on-line (point)))
+  (let* ((first-node (or (f90-ts--first-node-on-line (point))
+                         (treesit-node-at (point))))
          (amp-node (and (f90-ts--node-type-p first-node "&")
                         first-node))
          (prev-node (and amp-node
@@ -3206,8 +3293,9 @@ done."
     ;; if amp-node is non-nil it is the first node on line and thus the second
     ;; (possibly virtual) ampersand of a continued statement, comments might be
     ;; in between those two ampersands
-    (cl-assert (and amp-node
-                    (f90-ts--node-type-p prev-node '("&" "comment")))
+    (cl-assert (or (null first-node)
+                   (and amp-node
+                        (f90-ts--node-type-p prev-node '("&" "comment"))))
                nil "internal error: prev node is not an ampersand or comment?")
     (if (and amp-node
              prev-node
@@ -3245,8 +3333,9 @@ done."
     ;; thus next node is either (possibly virtual) ampersand of a continued
     ;; statement, or a comment (which are allowed to be in between those two
     ;; ampersands)
-    (cl-assert (and amp-node
-                    (f90-ts--node-type-p next-node '("&" "comment")))
+    (cl-assert (or (null last-node)
+                   (and amp-node
+                        (f90-ts--node-type-p next-node '("&" "comment"))))
                nil "internal error: next node is not an ampersand or comment?")
     (if (and amp-node
              next-node

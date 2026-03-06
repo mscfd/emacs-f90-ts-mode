@@ -1,0 +1,45 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Name: within call_expression 1
+=-=
+! node=nil, parent=call_expression (at "fun")
+subroutine empty1()
+     val_multi = (x + fun &
+|
+     (arg1, arg2) + arg3)
+end subroutine empty1
+=-=
+! node=nil, parent=call_expression (at "fun")
+subroutine empty1()
+     val_multi = (x + fun &
+            |
+     (arg1, arg2) + arg3)
+end subroutine empty1
+=-=-=
+
+Name: within call_expression 2
+=-=
+! node=nil, parent=call_expression (at "fun")
+subroutine empty2()
+     val_multi = (x + fun &
+|     ! comment
+     (arg1, arg2) + arg3)
+end subroutine empty2
+=-=
+! node=nil, parent=call_expression (at "fun")
+subroutine empty2()
+     val_multi = (x + fun &
+            |! comment
+     (arg1, arg2) + arg3)
+end subroutine empty2
+=-=-=
