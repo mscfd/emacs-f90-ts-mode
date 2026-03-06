@@ -165,7 +165,7 @@ contains
       do i = 1, self%n_max
            call self%results(i)%compute(i, &
                                         seq &
-                                       )
+                                          )
 
            self%results(i)%max_value = maxval(seq(1:self%results(i)%sequence_length))
 

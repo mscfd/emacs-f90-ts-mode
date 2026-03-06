@@ -1954,9 +1954,9 @@ used as primary anchor/fallback position."
   "Return a list of default positions (anchors offset) depending on
 LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
 
-For argument lists (call sub(...)) and parameters (subroutine sub (...)),
-a default and fallback position is to align one column position to the
-right of the initial opening parenthesis. This primary position is
+For argument lists (call sub(...)) and parameters
+(subroutine sub (...)), a default and fallback position is to align to
+with initial opening parenthesis plus offset. This primary position is
 returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
@@ -1969,7 +1969,9 @@ returned as first element of the list."
    ;; for closing parenthesis, align to opening parenthesis,
    ;; for other node types, align one position to the right of it
    (collect (treesit-node-start list-context)
-            (if (eq (alist-get 'nsym loc) 'parenthesis) 0 1))
+            (if (eq (alist-get 'nsym loc) 'parenthesis)
+                f90-ts-mode-indent-paren-close
+              f90-ts-mode-indent-paren-default))
 
    ;; add default continued line indentation if items is empty
    (unless items
@@ -2005,8 +2007,8 @@ as first element of the list."
      (pcase psib-type
        ;; "(": parent is parenthesized_expression or argument_list
        ;; "=": parent is assignment_statement
-       ("(" (let* ((node (alist-get 'node loc))
-                   (offset (if (f90-ts--node-type-p node ")")
+       ("(" (let* ((node-sym (alist-get 'nsym loc))
+                   (offset (if (eq node-sym 'parenthesis)
                                f90-ts-mode-indent-paren-close
                              f90-ts-mode-indent-paren-default)))
               (collect (treesit-node-start psib-context) offset)))
@@ -2052,9 +2054,9 @@ parenthesis. This primary position is returned as first element of the
                 child-paren)
      (collect (treesit-node-start child-paren)
               (pcase nsym
-                ('associate   f90-ts-indent-continued) ; indents "=>"
-                ('parenthesis 0) ; indents ")"
-                (_            1) ; all other kind of nodes
+                ('associate   f90-ts-indent-continued)          ; indents "=>"
+                ('parenthesis f90-ts-mode-indent-paren-close)   ; indents ")"
+                (_            f90-ts-mode-indent-paren-default) ; all other kind of nodes
                 )))
 
    ;; add default continued line indentation if items is empty
@@ -2070,8 +2072,9 @@ parenthesis. This primary position is returned as first element of the
   "From a list ITEMS of node items select compatible nodes.
 Currently these are nodes with the same NODE-SYM."
   (when node-sym
-    (let ((pred-node-sym (lambda (n) (eq (f90-ts--align-node-symbol n)
-                                         node-sym))))
+    (let ((pred-node-sym
+           (lambda (n) (eq (f90-ts--align-node-symbol n)
+                           node-sym))))
       (seq-filter pred-node-sym
                   items))))
 
@@ -2184,17 +2187,21 @@ The selected column is return as (anchor offset)."
 alignment anchors for node. LOC is an alist which provides the node
 and further location data.
 Note: for these anchor-offset pairs, the offset is 0 in general."
-  (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
-         (items-all (funcall get-items list-context loc))
-         ;; filter by line number, use only items on some previous line
-         (cur-line (alist-get 'line loc))
-         (items-prev (seq-filter
-                      (lambda (n) (< (f90-ts--node-line n)
-                                     cur-line))
-                      items-all)))
-    ;; further filter by symbol type node-sym of current node at point
-    (f90-ts--align-list-filter-items items-prev
-                                     (alist-get 'nsym loc))))
+  ;; parenthesis are handled by anoff-other, as we want to
+  ;; add a custom offset and use it as primary anchor
+  (unless (eq (alist-get 'nsym loc)
+              'parenthesis)
+    (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn list-context))
+           (items-all (funcall get-items list-context loc))
+           ;; filter by line number, use only items on some previous line
+           (cur-line (alist-get 'line loc))
+           (items-prev (seq-filter
+                        (lambda (n) (< (f90-ts--node-line n)
+                                       cur-line))
+                        items-all)))
+      ;; further filter by symbol type node-sym of current node at point
+      (f90-ts--align-list-filter-items items-prev
+                                       (alist-get 'nsym loc)))))
 
 
 (defun f90-ts--align-list-anoff-other (loc anchors-context list-context)

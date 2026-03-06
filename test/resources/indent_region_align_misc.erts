@@ -105,7 +105,7 @@ subroutine sub()
                                   => self%points_active, &
                             q &
                                   => self%points_inactive &
-                           )
+                              )
           end associate points
      end associate
 end subroutine sub
@@ -167,7 +167,7 @@ end
 function eval() result(w)
      call algorithm(fun1(a, b), fun2(x, y, &
                                      z &
-                                    ), &
+                                       ), &
                     fun3(u, &
                          v, &
                          w))

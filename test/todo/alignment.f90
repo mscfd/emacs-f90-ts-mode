@@ -19,16 +19,3 @@ x = 5 + 6 &
 - 8 + &
 y
 end subroutine f
-
-
-
-! line at closing ")" is not indented according to
-! offset f90-ts-mode-indent-paren-close
-! reason: handle parenthesis (in argument_list) by other with offset,
-! filter from regular items (which always have zero offset)
-subroutine args()
-     x = my_fun(&
-                arg1, &
-                arg2 &
-               )
-end subroutine args
