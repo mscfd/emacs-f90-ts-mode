@@ -7,7 +7,7 @@
 (defcustom f90-ts-mode-test-diff-command "kompare"
   "External diff tool to use for test comparisons.
 Can be 'kompare', 'meld', 'kdiff3', 'diffuse', etc."
-  :type 'string
+  :type  'string
   :group 'f90-ts-mode)
 
 
@@ -43,6 +43,8 @@ final newline."
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
 
+;; values are chosen for testing purposes (like different indentation levels
+;; to distinguish different rules and discover if the wrong rule is applied)
 (defconst f90-ts-mode-test-custom-settings
   '((f90-ts-indent-toplevel . 1)
     (f90-ts-indent-contain . 3)
@@ -51,6 +53,10 @@ final newline."
     (f90-ts-indent-list-region . keep-or-primary)
     (f90-ts-indent-list-line . keep-or-primary)
     (f90-ts-indent-list-always-include-default . nil)
+    (f90-ts-mode-indent-paren-default . 1)
+    (f90-ts-mode-indent-paren-close . 3)
+    (f90-ts-mode-indent-expr-assign-default . 2)
+    (f90-ts-mode-indent-expr-assign-assoc-op . 4)
     (f90-ts-beginning-ampersand . nil)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")

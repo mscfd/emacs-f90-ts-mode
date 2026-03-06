@@ -85,14 +85,14 @@ subroutine bodies, control statements (do, if, associate ...)."
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as default setting in 'indent-region'
 and similar operations."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Primary choice used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-line-2 'continued-line
@@ -100,7 +100,7 @@ context on continued lines. Primary choice used as default setting in
 context on continued lines. Used as secondary setting in
 'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
 A-<tab>, C-S-<tab>, etc."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-line-3 'primary
@@ -108,7 +108,7 @@ A-<tab>, C-S-<tab>, etc."
 context on continued lines. Used as ternary setting in
 'indent-for-tab-command'. Intended to be bound by <backtab>=S-<tab>,
 A-<tab>, C-S-<tab>, etc."
-  :type f90-ts--indent-list-radio
+  :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 (defcustom f90-ts-indent-list-always-include-default t
@@ -116,9 +116,64 @@ A-<tab>, C-S-<tab>, etc."
 columns for alignment.
 This column is the column of the first line of the continued statement
 plus the value of 'f90-ts-indent-continued'."
-  :type 'boolean
+  :type  'boolean
   :safe  'booleanp
   :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-paren-default 1
+  "Additional offset applied for alignment of non-parenthesis under opening
+parenthesis. Example:
+call sub(      arg1, &
+         .not. arg2)
+Primary alignment column for the second line column of parenthesis plus
+`f90-ts-mode-indent-expr-paren'."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-paren-close 0
+  "Additional offset applied for alignment for closing parenthesis,
+under corresponding closing parenthesis.
+
+Example:
+x = x + (y + &
+         z &
+        )
+
+Primary alignment column for the closing parenthesis is column of
+opening parenthesis plus `f90-ts-mode-indent-expr-assign'."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-expr-assign-default 2
+  "Additional offset applied for alignment at assignment symbol \"=\",
+except for association operators.
+
+Example:
+x =      & ! some comment
+    some_expression
+
+Primary alignment column for the second line column of assignment plus
+`f90-ts-mode-indent-expr-assign-default' for non-operators."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+(defcustom f90-ts-mode-indent-expr-assign-assoc-op 0
+  "Additional offset applied for alignment at assignment symbol \"=\"
+for associative operators (logical_expression, math_expression)
+
+Example:
+x = value1 &
+  + some_expression
+
+Primary alignment column for the second line column of assignment plus
+`f90-ts-mode-indent-expr-assign-assoc-op' for associative operators."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
 
 ;;------------------------------------------------------------------------------
 
@@ -250,8 +305,8 @@ jumping and nil turns of smart end completion."
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching names of special variables like
 self or this. Used for applying a special font lock face."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
@@ -260,8 +315,8 @@ self or this. Used for applying a special font lock face."
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments.
 This is used for applying the same comment starter, see `f90-ts-break-line'."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
@@ -269,28 +324,28 @@ This is used for applying the same comment starter, see `f90-ts-break-line'."
   "Regular expression for matching comment starts (excluding openmp).
 For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
 Also add trailing whitespace characters to preserve indentation within comments."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
 (defcustom f90-ts-separator-comment-regexp ""
   "Regular expression for matching separator comments (e.g. for structuring code).
 Used for applying a separator font lock face and alignment with parent node."
-  :type 'regexp
-  :safe #'stringp
+  :type  'regexp
+  :safe  'stringp
   :group 'f90-ts)
 
 
 (defcustom f90-ts-comment-region-prefix "!!$"
   "Comment prefix."
-  :type 'string
+  :type  'string
   :group 'f90-ts)
 
 
 (defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
   "List of additional comment prefixes for interactive selection."
-  :type '(repeat string)
+  :type  '(repeat string)
   :group 'f90-ts)
 
 
@@ -1947,10 +2002,21 @@ as first element of the list."
    ;; use as primary anchor if no items of compatible type are available
    (when-let* ((psib-context (f90-ts--prev-sibling-proper list-context))
                (psib-type (treesit-node-type psib-context)))
-     (when (member psib-type '("(" "="))
+     (pcase psib-type
        ;; "(": parent is parenthesized_expression or argument_list
        ;; "=": parent is assignment_statement
-       (collect (treesit-node-start psib-context) 1)))
+       ("(" (let* ((node (alist-get 'node loc))
+                   (offset (if (f90-ts--node-type-p node ")")
+                               f90-ts-mode-indent-paren-close
+                             f90-ts-mode-indent-paren-default)))
+              (collect (treesit-node-start psib-context) offset)))
+       ("=" (let* ((node-sym (alist-get 'nsym loc))
+                   (offset (if (member node-sym '(operator-logical
+                                                  operator-math))
+                               f90-ts-mode-indent-expr-assign-assoc-op
+                             f90-ts-mode-indent-expr-assign-default)))
+              (collect (treesit-node-start psib-context) offset)))
+       ))
 
    ;; add default continued line indentation if items list is empty
    (unless items
@@ -2436,7 +2502,7 @@ which start with !$ or !$omp")
 (defvar f90-ts-indent-rules-continued
   `(;; handle continued lines
     ;; special case, first node is closing parenthesis means this is a continued line
-    ((n-p-gp ")" "parenthesized_expression" nil) parent 0)
+    ((n-p-gp ")" "parenthesized_expression" nil) parent f90-ts-mode-indent-paren-close)
     ;; it is easy to see whether we are on a continued line (not the first line
     ;; of a multiline statement, only subsequent lines), but handling specific
     ;; cases is not possible with just some simple n-p-gp like matches,
