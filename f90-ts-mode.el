@@ -1508,13 +1508,13 @@ executed."
   nil)
 
 
-(defun f90-ts--continued-line-is (node parent _bol &rest _)
-  "A matcher which check whether we are on some continued line of a
+(defun f90-ts--continued-line-is (node parent bol &rest _)
+  "A matcher which checks whether we are on some continued line of a
 continued statement. The first statement line itself is not matched."
   (cond
    (node
-    (let ((pos (treesit-node-start node)))
-      (f90-ts--pos-is-continued-p pos)))
+    ;; if node is not nil, then there are nodes on the line
+    (f90-ts--pos-is-continued-p bol))
 
    (parent
     ;; node=nil but parent is a proper node, then we are probably on an empty line
