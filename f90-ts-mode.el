@@ -820,7 +820,7 @@ on its line!"
                                  node))))
 
 
-(defun f90-ts--pos-is-continued-p (pos)
+(defun f90-ts--pos-is-continued-subsequent-p (pos)
   "Check whether line at POS belongs to a continued statement, but is
 not the first line of such a statement.
 Either at start line there is an &. Or it is a comment, and going
@@ -839,11 +839,10 @@ comments), we find an &."
 
 (defun f90-ts--line-continued-at-end-p (last pos)
   "Check whether line at POS is continued. It usually ends in &, but
-might be followed by a comment. We first check that there is a next line
+might be followed by a comment. First check that there is a next line
 after current line.
-LAST is expected to be the last node on the line. Instead of obtaining
-LAST itself using POS, it is expected as an argument (the only user of
-this function requires LAST for further work)."
+LAST is expected to be the last node on the line, and can be obtained
+by `f90-ts--last-node-line'"
   ;; if there is an ampersand (or ampersand (comment)) at end of line but
   ;; no other sibling follows, we are probably at end of file
   (when (treesit-node-next-sibling last)
@@ -869,7 +868,7 @@ this function requires LAST for further work)."
   "Check whether POS is on some line of a continued statement.
 This needs to check forward or backward, as first and last line
 must also match."
-  (or (f90-ts--pos-is-continued-p pos)
+  (or (f90-ts--pos-is-continued-subsequent-p pos)
       (when-let ((last (f90-ts--last-node-on-line pos)))
         (f90-ts--line-continued-at-end-p last pos))))
 
@@ -1508,13 +1507,13 @@ executed."
   nil)
 
 
-(defun f90-ts--continued-line-is (node parent bol &rest _)
+(defun f90-ts--continued-subsequent-line-is (node parent bol &rest _)
   "A matcher which checks whether we are on some continued line of a
 continued statement. The first statement line itself is not matched."
   (cond
    (node
     ;; if node is not nil, then there are nodes on the line
-    (f90-ts--pos-is-continued-p bol))
+    (f90-ts--pos-is-continued-subsequent-p bol))
 
    (parent
     ;; node=nil but parent is a proper node, then we are probably on an empty line
@@ -2531,7 +2530,7 @@ which start with !$ or !$omp")
     ;;                  x3, x4, x5) &
     ;;      result(val)
     ;; by how much should result be indented? x3 is not a good anchor!
-    (f90-ts--continued-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
+    (f90-ts--continued-subsequent-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
     )
   "Indentation rules for continued lines. Argument lists and similar
 continued lines must have been dealt with before.")
