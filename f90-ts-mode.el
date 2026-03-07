@@ -820,23 +820,6 @@ on its line!"
                                  node))))
 
 
-(defun f90-ts--pos-is-continued-subsequent-p (pos)
-  "Check whether line at POS belongs to a continued statement, but is
-not the first line of such a statement.
-Either at start line there is an &. Or it is a comment, and going
-backwards by prev-sibling after a sequence of comments (and only
-comments), we find an &."
-  ;; if line is empty, n-first is nil and n-next is on some subsequent
-  ;; line; if the line is after some continuation ampersand
-  ;; then n-start is either a comment or the second ampersand,
-  ;; from which we can go backwards
-  (let* ((first-node (f90-ts--first-node-on-line pos))
-         (next-node (treesit-node-at pos))
-         (start-node (or first-node next-node)))
-    (when start-node
-      (f90-ts--find-first-ampersand start-node))))
-
-
 (defun f90-ts--line-continued-at-end-p (last pos)
   "Check whether line at POS is continued. It usually ends in &, but
 might be followed by a comment. First check that there is a next line
@@ -864,11 +847,38 @@ by `f90-ts--last-node-line'"
       nil))))
 
 
+(defun f90-ts--first-line-of-continued-stmt-p (pos)
+  "Check whether POS is on the first line of a continued statement.
+To this end, check that it does not start with and ampersand, but
+is continued at end."
+  (when-let ((first-node (f90-ts--first-node-on-line pos))
+             (last-node (f90-ts--last-node-on-line pos)))
+    (and (not (f90-ts--node-type-p first-node "&"))
+         (f90-ts--line-continued-at-end-p last-node pos))))
+
+
+(defun f90-ts--subsequent-line-of-continued-stmt-p (pos)
+  "Check whether line at POS belongs to a continued statement, but is
+not the first line of such a statement.
+Either at start line there is an &. Or it is a comment, and going
+backwards by prev-sibling after a sequence of comments (and only
+comments), we find an &."
+  ;; if line is empty, n-first is nil and n-next is on some subsequent
+  ;; line; if the line is after some continuation ampersand
+  ;; then n-start is either a comment or the second ampersand,
+  ;; from which we can go backwards
+  (let* ((first-node (f90-ts--first-node-on-line pos))
+         (next-node (treesit-node-at pos))
+         (start-node (or first-node next-node)))
+    (when start-node
+      (f90-ts--find-first-ampersand start-node))))
+
+
 (defun f90-ts--pos-within-continued-stmt-p (pos)
   "Check whether POS is on some line of a continued statement.
 This needs to check forward or backward, as first and last line
 must also match."
-  (or (f90-ts--pos-is-continued-subsequent-p pos)
+  (or (f90-ts--subsequent-line-of-continued-stmt-p pos)
       (when-let ((last (f90-ts--last-node-on-line pos)))
         (f90-ts--line-continued-at-end-p last pos))))
 
@@ -1507,13 +1517,21 @@ executed."
   nil)
 
 
+(defun f90-ts--continued-first-line-is (node _parent bol &rest _)
+  "A matcher which check whether we are on some continued line of a
+continued statement. The first statement line itself is not matched."
+  ;; if node is nil, we are propably on an empty line
+  (and node
+       (f90-ts--first-line-of-continued-stmt-p bol)))
+
+
 (defun f90-ts--continued-subsequent-line-is (node parent bol &rest _)
   "A matcher which checks whether we are on some continued line of a
 continued statement. The first statement line itself is not matched."
   (cond
    (node
     ;; if node is not nil, then there are nodes on the line
-    (f90-ts--pos-is-continued-subsequent-p bol))
+    (f90-ts--subsequent-line-of-continued-stmt-p bol))
 
    (parent
     ;; node=nil but parent is a proper node, then we are probably on an empty line
