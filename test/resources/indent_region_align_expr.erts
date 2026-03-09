@@ -239,7 +239,7 @@ end subroutine sub
 Name: align mixed expression 1
 =-=
 subroutine sub()
-some_long_name =   very_long_expr1 &
+some_long_name =    very_long_expr1 &
 <  very_long_expr2 .or. &
 very_long_expr3 + &
 very_long_expr4 &
@@ -248,12 +248,12 @@ very_long_expr6
 end subroutine sub
 =-=
 subroutine sub()
-     some_long_name =   very_long_expr1 &
-                     <  very_long_expr2 .or. &
-                        very_long_expr3 + &
-                        very_long_expr4 &
-                     >= very_long_expr5 + &
-                        very_long_expr6
+     some_long_name =    very_long_expr1 &
+                      <  very_long_expr2 .or. &
+                         very_long_expr3 + &
+                         very_long_expr4 &
+                      >= very_long_expr5 + &
+                         very_long_expr6
 end subroutine sub
 =-=-=
 
@@ -274,7 +274,7 @@ subroutine sub()
                              (a+b)+c) / &
                   -7 * &
                   -value2 &
-                 )
+                    )
 end subroutine sub
 =-=-=
 
@@ -292,7 +292,7 @@ subroutine sub()
      associate(x => y, &
                z => long_name_1 * &
                     long_name_2&
-              )
+                 )
      end associate
 end subroutine sub
 =-=-=
@@ -320,12 +320,12 @@ subroutine sub()
                   3.14159265/180.0 * (&
                                       phi_1 + &
                                       phi_2) &
-                 ), &
+                    ), &
                            cos_psi &
             = cos(&
                   3.14159265/180.0 * (&
                                       -psi_1 - &
                                        psi_2) &
-                 )
+                    )
 end subroutine sub
 =-=-=
