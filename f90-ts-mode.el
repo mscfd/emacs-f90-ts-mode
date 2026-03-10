@@ -3479,31 +3479,41 @@ smallest of these grandchildren."
 
 
 (defun f90-ts-prev-region ()
-  "Find smallest node covering region. Then reduce region to its first
-child."
+  "Find smallest node covering current marked region. If the node spans
+the current region, then mark its previous sibling. Otherwise mark the region
+spanned by the node itself (like enlarge-region)."
   (interactive)
   (if (use-region-p)
       (if-let* ((beg (region-beginning))
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
-                (prev-sib (treesit-node-prev-sibling node t)))
-          (f90-ts--mark-region-node prev-sib f90-ts-mark-region-reversed)
+                (node-mark (if (and (= beg (treesit-node-start node))
+                                    (= end (treesit-node-end node)))
+                               (treesit-node-prev-sibling node t)
+                             node)))
+          (f90-ts--mark-region-node node-mark
+                                    f90-ts-mark-region-reversed)
         (message "no tree-sitter previous sibling found for current region"))
     (message "no active region")))
 
 
 (defun f90-ts-next-region ()
-  "Find smallest node covering region. Then reduce region to its first
-child."
+  "Find smallest node covering current marked region. If the node spans
+the current region, then mark its next sibling. Otherwise mark the region
+spanned by the node itself (like enlarge-region)."
   (interactive)
   (if (use-region-p)
       (if-let* ((beg (region-beginning))
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
-                (next-sib (treesit-node-next-sibling node t)))
-          (f90-ts--mark-region-node next-sib f90-ts-mark-region-reversed)
+                (node-mark (if (and (= beg (treesit-node-start node))
+                                    (= end (treesit-node-end node)))
+                               (treesit-node-next-sibling node t)
+                             node)))
+          (f90-ts--mark-region-node node-mark
+                                    f90-ts-mark-region-reversed)
         (message "no tree-sitter next sibling found for current region"))
     (message "no active region")))
 
