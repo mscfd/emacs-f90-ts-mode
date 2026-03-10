@@ -3390,6 +3390,34 @@ The node must be strictly larger than the region (BEG END)."
     (f90-ts--largest-node-same-span cover)))
 
 
+(defun f90-ts--node-on-pos (pos)
+  "Function treesit-node-on returns a node spanning the half-open
+region [beg, end). If pos is at end position of node, then the region
+[pos,pos) is empty and treesit-node-on returns a larger node, which is
+not expected in this context. This function queries at POS and at
+POS-1, and selects the smallest node containing pos in the closed
+interval logic.
+Example
+subroutine sub()
+   if (cond) then
+   end if|
+end subroutine sub
+If point is at |, then the smallest named no is the end_statement node
+for \"end if\". However, treesit-node-on returns the subroutine node.
+Querying at POS-1 gives the expected answer."
+  (let* ((nodes (list (treesit-node-on pos      pos      nil 'named)
+                      (treesit-node-on (1- pos) (1- pos) nil 'named)))
+         (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
+                                                (<= pos (treesit-node-end n))))
+                               nodes))
+         (sorted (seq-sort (lambda (n1 n2) (< (- (treesit-node-end n1)
+                                                 (treesit-node-start n1))
+                                              (- (treesit-node-end n2)
+                                                 (treesit-node-start n2))))
+                           filtered)))
+    (car sorted)))
+
+
 (defun f90-ts-enlarge-region ()
   "Expand region to next larger node.
 If no region is active, select the smallest named node at point.
@@ -3406,7 +3434,7 @@ than current region."
               (goto-char (treesit-node-end node)))
           (message "no tree-sitter node found enlarging current region")))
     ;; no active region, select smallest named node at point
-    (if-let* ((node-on (treesit-node-on (point) (point)))
+    (if-let* ((node-on (f90-ts--node-on-pos (point)))
               (node (f90-ts--largest-node-same-span node-on)))
         (progn
           (set-mark (treesit-node-start node))
