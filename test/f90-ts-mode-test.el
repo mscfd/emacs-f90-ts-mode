@@ -64,10 +64,12 @@ final newline."
     (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (f90-ts-comment-region-prefix . "!!$")
     (f90-ts-extra-comment-prefixes . '("!%%!" "!>"))
+    (f90-ts-mark-region-reversed . nil)
     (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
                                         ; also needs treesit-font-lock-recompute-features
     (indent-tabs-mode . nil)
     (require-final-newline . nil)
+    (transient-mark-mode . t)
     )
   "Alist of custom variable values for testing purposes.")
 
@@ -364,7 +366,7 @@ PREFIX is the test name prefix, usual f90-ts-mode or f90-ts-mode-extra"
                     (string-remove-suffix
                      "/"
                      (replace-regexp-in-string
-                      "^\\(indent_region\\|\\(indent\\|break\\|join\\)_line\\)_?"
+                      "^\\(indent_region\\|mark_region\\|\\(indent\\|break\\|join\\)_line\\)_?"
                       "\\1/"
                       (file-name-sans-extension file))))
    for test-name = (intern
@@ -577,6 +579,44 @@ or f90-ts-mode-extra."
 
 
 ;;------------------------------------------------------------------------------
+;; mark region helpers
+
+(defun f90-ts-test--mark-region (command)
+  "Test function for mark region with no prior region selected.
+Execute COMMAND, which marks some region and insert markers @..| for
+result region."
+  (funcall command)
+  (f90-ts-test--insert-region-markers))
+
+
+(defun f90-ts-test--modify-region (command)
+  "Test function for modifying some pre-marked region, like enlarge
+operation. Set up region from @ to | markers, then call COMMAND and
+reinsert @..| markers for modified region."
+  (let ((pos (point)))
+    (goto-char (point-min))
+    (search-forward "@")
+    (delete-char -1)
+    (push-mark (point) t t)
+    (if (< (point) pos)
+        (goto-char (1- pos))
+      (goto-char pos))
+    (funcall command))
+  (f90-ts-test--insert-region-markers))
+
+
+(defun f90-ts-test--insert-region-markers ()
+  "Insert @ at region-beginning and leave point at region-end.
+Note that inserting @ at beginning of region requires to place
+point at 1+end of region."
+  (let ((beg (region-beginning))
+        (end (region-end)))
+    (goto-char beg)
+    (insert "@")
+    (goto-char (1+ end))))
+
+
+;;------------------------------------------------------------------------------
 ;; register tests
 
 
@@ -637,6 +677,7 @@ or f90-ts-mode-extra."
  '("indent_region_partial.erts"
    "break_line.erts"
    "join_line.erts"
+   "mark_region.erts"
    "comment_region.erts")
  )
 
