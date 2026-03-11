@@ -1,0 +1,102 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-test--mark-region #'f90-ts-enlarge-region))
+
+Name: mark initial enlarge region 1
+=-=
+subroutine sub_init_1()
+  print| *,'hello'
+end subroutine sub_init_1
+=-=
+subroutine sub_init_1()
+  @print *,'hello'|
+end subroutine sub_init_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-test--modify-region #'f90-ts-enlarge-region))
+
+Name: mark extend enlarge region 1
+=-=
+subroutine sub_ext_1()
+  @print *,'hello'|
+end subroutine sub_ext_1
+
+=-=
+@subroutine sub_ext_1()
+  print *,'hello'
+end subroutine sub_ext_1
+|
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-test--modify-region #'f90-ts-child0-region))
+
+Name: mark child0 region 1
+=-=
+subroutine sub_child0_1()
+   |if (cond) then
+      do i = 1,10
+      end do
+   end if@
+end subroutine sub_child0_1
+=-=
+subroutine sub_child0_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_child0_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-test--modify-region #'f90-ts-prev-region))
+
+Name: mark prev region 1
+=-=
+subroutine sub_prev_1()
+   if (cond) then
+      do i = 1,10
+      end do
+   @end if|
+end subroutine sub_prev_1
+=-=
+subroutine sub_prev_1()
+   if (cond) then
+      @do i = 1,10
+      end do|
+   end if
+end subroutine sub_prev_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-test--modify-region #'f90-ts-next-region))
+
+Name: mark next region 1
+=-=
+subroutine sub_next_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_next_1
+=-=
+subroutine sub_next_1()
+   if (cond) then
+      @do i = 1,10
+      end do|
+   end if
+end subroutine sub_next_1
+=-=-=
+

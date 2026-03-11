@@ -349,6 +349,14 @@ Used for applying a separator font lock face and alignment with parent node."
   :group 'f90-ts)
 
 
+(defcustom f90-ts-mark-region-reversed nil
+  "Mark region operations place point at end of region. If this option
+is set, then point is placed at start of region."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90-ts)
+
+
 ;;------------------------------------------------------------------------------
 ;; auxiliary predicates
 
@@ -3351,6 +3359,19 @@ done."
 ;;------------------------------------------------------------------------------
 ;; treesitter based region functions
 
+(defun f90-ts--mark-region-node (node &optional reversed)
+  "Mark the region spanned by NODE. If REVERSED is non-nil, then put
+point at start of region, otherwise point is at end of region."
+  (let ((beg (treesit-node-start node))
+        (end (treesit-node-end node)))
+    (if reversed
+        (progn
+          (goto-char beg)
+          (push-mark end t t))
+      (push-mark beg t t)
+      (goto-char end))))
+
+
 (defun f90-ts--smallest-child0-same-span (node)
   "Find the smallest child0 of node which spans the same region."
   (cl-loop for current = node then child
@@ -3390,6 +3411,34 @@ The node must be strictly larger than the region (BEG END)."
     (f90-ts--largest-node-same-span cover)))
 
 
+(defun f90-ts--node-on-pos (pos)
+  "Function treesit-node-on returns a node spanning the half-open
+region [beg, end). If pos is at end position of node, then the region
+[pos,pos) is empty and treesit-node-on returns a larger node, which is
+not expected in this context. This function queries at POS and at
+POS-1, and selects the smallest node containing pos in the closed
+interval logic.
+Example
+subroutine sub()
+   if (cond) then
+   end if|
+end subroutine sub
+If point is at |, then the smallest named no is the end_statement node
+for \"end if\". However, treesit-node-on returns the subroutine node.
+Querying at POS-1 gives the expected answer."
+  (let* ((nodes (list (treesit-node-on pos      pos      nil 'named)
+                      (treesit-node-on (1- pos) (1- pos) nil 'named)))
+         (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
+                                                (<= pos (treesit-node-end n))))
+                               nodes))
+         (sorted (seq-sort (lambda (n1 n2) (< (- (treesit-node-end n1)
+                                                 (treesit-node-start n1))
+                                              (- (treesit-node-end n2)
+                                                 (treesit-node-start n2))))
+                           filtered)))
+    (car sorted)))
+
+
 (defun f90-ts-enlarge-region ()
   "Expand region to next larger node.
 If no region is active, select the smallest named node at point.
@@ -3401,16 +3450,14 @@ than current region."
              (end (region-end))
              (node (f90-ts--smallest-named-node-containing-region beg end)))
         (if node
-            (progn
-              (set-mark (treesit-node-start node))
-              (goto-char (treesit-node-end node)))
+            (f90-ts--mark-region-node node
+                                      f90-ts-mark-region-reversed)
           (message "no tree-sitter node found enlarging current region")))
     ;; no active region, select smallest named node at point
-    (if-let* ((node-on (treesit-node-on (point) (point)))
+    (if-let* ((node-on (f90-ts--node-on-pos (point)))
               (node (f90-ts--largest-node-same-span node-on)))
-        (progn
-          (set-mark (treesit-node-start node))
-          (goto-char (treesit-node-end node)))
+        (f90-ts--mark-region-node node
+                                  f90-ts-mark-region-reversed)
       (message "no tree-sitter node found at point"))))
 
 
@@ -3425,43 +3472,48 @@ smallest of these grandchildren."
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--smallest-child0-same-span node-on))
                 (child0 (treesit-node-child node 0 t)))
-          (progn
-            (set-mark (treesit-node-start child0))
-            (goto-char (treesit-node-end child0)))
+          (f90-ts--mark-region-node child0
+                                    f90-ts-mark-region-reversed)
         (message "no tree-sitter child0 found for current region"))
     (message "no active region")))
 
 
 (defun f90-ts-prev-region ()
-  "Find smallest node covering region. Then reduce region to its first
-child."
+  "Find smallest node covering current marked region. If the node spans
+the current region, then mark its previous sibling. Otherwise mark the region
+spanned by the node itself (like enlarge-region)."
   (interactive)
   (if (use-region-p)
       (if-let* ((beg (region-beginning))
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
-                (prev-sib (treesit-node-prev-sibling node t)))
-          (progn
-            (set-mark (treesit-node-start prev-sib))
-            (goto-char (treesit-node-end prev-sib)))
+                (node-mark (if (and (= beg (treesit-node-start node))
+                                    (= end (treesit-node-end node)))
+                               (treesit-node-prev-sibling node t)
+                             node)))
+          (f90-ts--mark-region-node node-mark
+                                    f90-ts-mark-region-reversed)
         (message "no tree-sitter previous sibling found for current region"))
     (message "no active region")))
 
 
 (defun f90-ts-next-region ()
-  "Find smallest node covering region. Then reduce region to its first
-child."
+  "Find smallest node covering current marked region. If the node spans
+the current region, then mark its next sibling. Otherwise mark the region
+spanned by the node itself (like enlarge-region)."
   (interactive)
   (if (use-region-p)
       (if-let* ((beg (region-beginning))
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
-                (next-sib (treesit-node-next-sibling node t)))
-          (progn
-            (set-mark (treesit-node-start next-sib))
-            (goto-char (treesit-node-end next-sib)))
+                (node-mark (if (and (= beg (treesit-node-start node))
+                                    (= end (treesit-node-end node)))
+                               (treesit-node-next-sibling node t)
+                             node)))
+          (f90-ts--mark-region-node node-mark
+                                    f90-ts-mark-region-reversed)
         (message "no tree-sitter next sibling found for current region"))
     (message "no active region")))
 
