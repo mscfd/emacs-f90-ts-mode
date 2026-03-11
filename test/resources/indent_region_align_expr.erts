@@ -177,6 +177,9 @@ end subroutine sub
 
 Name: align math expression 1
 =-=
+! this checks the continued-line-cache, which is required
+! to select to proper primary column for the two last lines
+! of the continued statement
 subroutine sub()
 x = 5 + 6 &
 * 7 &
@@ -184,11 +187,14 @@ x = 5 + 6 &
 y
 end subroutine sub
 =-=
+! this checks the continued-line-cache, which is required
+! to select to proper primary column for the two last lines
+! of the continued statement
 subroutine sub()
      x = 5 + 6 &
            * 7 &
            - 8 + &
-             y
+         y
 end subroutine sub
 =-=-=
 
