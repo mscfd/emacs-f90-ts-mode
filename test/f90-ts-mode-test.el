@@ -632,7 +632,8 @@ point at 1+end of region."
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
+   "indent_region_preproc.erts"
+   "indent_region_openmp.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)
