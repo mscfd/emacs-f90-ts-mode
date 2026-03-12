@@ -611,9 +611,14 @@ Note that inserting @ at beginning of region requires to place
 point at 1+end of region."
   (let ((beg (region-beginning))
         (end (region-end)))
-    (goto-char beg)
-    (insert "@")
-    (goto-char (1+ end))))
+    (if (= (point) beg)
+        (progn
+          (goto-char end)
+          (insert "@")
+          (goto-char beg))
+      (goto-char beg)
+      (insert "@")
+      (goto-char (1+ end)))))
 
 
 ;;------------------------------------------------------------------------------

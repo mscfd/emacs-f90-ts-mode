@@ -16,6 +16,57 @@ subroutine sub_init_1()
 end subroutine sub_init_1
 =-=-=
 
+Name: mark initial enlarge region 2
+=-=
+subroutine sub_init_2()
+|   if (cond(x,y)) then
+      call other()
+   end if
+end subroutine sub_init_2
+=-=
+subroutine sub_init_2()
+   @if (cond(x,y)) then
+      call other()
+   end if|
+end subroutine sub_init_2
+=-=-=
+
+Name: mark initial enlarge region 3
+=-=
+subroutine sub_init_3()
+   if (cond(x,y)) then
+      call other()
+   end if  |
+end subroutine sub_init_3
+=-=
+subroutine sub_init_3()
+   if (cond(x,y)) then
+      call other()
+   @end if|  
+end subroutine sub_init_3
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-reversed t))
+      (f90-ts-test--mark-region #'f90-ts-enlarge-region)))
+
+Name: mark initial enlarge region 4
+=-=
+module mod_init_4()
+|   type, public :: t
+      integer :: i
+   end type t
+end module mod_init_4
+=-=
+module mod_init_4()
+   |type, public :: t
+@      integer :: i
+   end type t
+end module mod_init_4
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)

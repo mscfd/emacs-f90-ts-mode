@@ -372,7 +372,7 @@ Default prefix `f90-ts-comment-region-prefix` and extra prefixes
 Standard prefixes like `!$omp`, `!>` and some others are predefined.
 
 
-### Mark regions based on tree-sitter nodes
+### Mark region based on tree-sitter nodes
 
 Regions can be selected, enlarged, shrunk or moved based on tree-sitter nodes:
 Available functions are:
