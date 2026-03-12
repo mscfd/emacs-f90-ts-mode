@@ -57,6 +57,7 @@ final newline."
     (f90-ts-indent-paren-close . 3)
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
+    (f90-ts-indent-openmp-style . column-0)
     (f90-ts-beginning-ampersand . nil)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
