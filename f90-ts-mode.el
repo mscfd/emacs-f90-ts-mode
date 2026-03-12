@@ -1845,17 +1845,28 @@ with the previous relevant line."
         (f90-ts--indent-pos-at-node node-sel)
       bol)))
 
-(defun f90-ts--anchor-openmp (node parent _bol)
+
+(defun f90-ts--anchor-openmp (node parent bol)
   "Anchor function for OpenMP directives.
 Returns buffer start (0) if `f90-ts-indent-openmp-style` is 'column-0.
 Otherwise, aligns with the previous statement."
   ;; Note. 'indented is not implemented yet.
-  (if (eq f90-ts-indent-openmp-style 'column-0)
-      (point-min)
-    ;; Align with the previous statement
-    (if-let ((prev (f90-ts--previous-stmt-first node parent)))
-        (treesit-node-start prev)
-      (treesit-node-start parent))))
+  (cond
+   ((eq f90-ts-indent-openmp-style 'column-0)
+    (;; Align with the previous statement
+     (f90-ts--indent-offset-cache 0)
+     (if-let ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
+         (treesit-node-start pstmt-1)
+       (treesit-node-start parent))))
+
+   (t ;(eq f90-ts-indent-openmp-style 'column-0)
+    ;; implemention taken from treesit.el for column-0 symbol
+    (f90-ts--indent-offset-cache 0)
+    (save-excursion
+      (goto-char bol)
+      (line-beginning-position)))
+   ))
+
 
 (defun f90-ts--cached-anchor (_node _parent _bol)
   "Return cached anchor. This function requires that the used matcher
@@ -2711,7 +2722,7 @@ indentation cache for the new run.")
 (defvar f90-ts-indent-rules-openmp
   `(;; indent a sequence of openmp statements, these are comments starting
     ;; with !$, so this needs to be done before comments are processed
-    (f90-ts--openmp-comment-is f90-ts--anchor-openmp 0)
+    (f90-ts--openmp-comment-is f90-ts--anchor-openmp f90-ts--cached-offset)
     )
   "Indentation rules for openmp. Currently openmp are comment nodes,
 which start with !$ or !$omp")
