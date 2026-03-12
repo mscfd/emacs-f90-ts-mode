@@ -820,30 +820,12 @@ on its line!"
                                  node))))
 
 
-(defun f90-ts--pos-is-continued-p (pos)
-  "Check whether line at POS belongs to a continued statement, but is
-not the first line of such a statement.
-Either at start line there is an &. Or it is a comment, and going
-backwards by prev-sibling after a sequence of comments (and only
-comments), we find an &."
-  ;; if line is empty, n-first is nil and n-next is on some subsequent
-  ;; line; if the line is after some continuation ampersand
-  ;; then n-start is either a comment or the second ampersand,
-  ;; from which we can go backwards
-  (let* ((first-node (f90-ts--first-node-on-line pos))
-         (next-node (treesit-node-at pos))
-         (start-node (or first-node next-node)))
-    (when start-node
-      (f90-ts--find-first-ampersand start-node))))
-
-
 (defun f90-ts--line-continued-at-end-p (last pos)
   "Check whether line at POS is continued. It usually ends in &, but
-might be followed by a comment. We first check that there is a next line
+might be followed by a comment. First check that there is a next line
 after current line.
-LAST is expected to be the last node on the line. Instead of obtaining
-LAST itself using POS, it is expected as an argument (the only user of
-this function requires LAST for further work)."
+LAST is expected to be the last node on the line, and can be obtained
+by `f90-ts--last-node-line'"
   ;; if there is an ampersand (or ampersand (comment)) at end of line but
   ;; no other sibling follows, we are probably at end of file
   (when (treesit-node-next-sibling last)
@@ -865,11 +847,38 @@ this function requires LAST for further work)."
       nil))))
 
 
+(defun f90-ts--first-line-of-continued-stmt-p (pos)
+  "Check whether POS is on the first line of a continued statement.
+To this end, check that it does not start with and ampersand, but
+is continued at end."
+  (when-let ((first-node (f90-ts--first-node-on-line pos))
+             (last-node (f90-ts--last-node-on-line pos)))
+    (and (not (f90-ts--node-type-p first-node "&"))
+         (f90-ts--line-continued-at-end-p last-node pos))))
+
+
+(defun f90-ts--subsequent-line-of-continued-stmt-p (pos)
+  "Check whether line at POS belongs to a continued statement, but is
+not the first line of such a statement.
+Either at start line there is an &. Or it is a comment, and going
+backwards by prev-sibling after a sequence of comments (and only
+comments), we find an &."
+  ;; if line is empty, n-first is nil and n-next is on some subsequent
+  ;; line; if the line is after some continuation ampersand
+  ;; then n-start is either a comment or the second ampersand,
+  ;; from which we can go backwards
+  (let* ((first-node (f90-ts--first-node-on-line pos))
+         (next-node (treesit-node-at pos))
+         (start-node (or first-node next-node)))
+    (when start-node
+      (f90-ts--find-first-ampersand start-node))))
+
+
 (defun f90-ts--pos-within-continued-stmt-p (pos)
   "Check whether POS is on some line of a continued statement.
 This needs to check forward or backward, as first and last line
 must also match."
-  (or (f90-ts--pos-is-continued-p pos)
+  (or (f90-ts--subsequent-line-of-continued-stmt-p pos)
       (when-let ((last (f90-ts--last-node-on-line pos)))
         (f90-ts--line-continued-at-end-p last pos))))
 
@@ -953,6 +962,13 @@ those are not present in the tree."
   (save-excursion
     (goto-char pos)
     (current-column)))
+
+
+(defun f90-ts--indentation-at-pos (pos)
+  "Compute column by position."
+  (save-excursion
+    (goto-char pos)
+    (current-indentation)))
 
 
 (defun f90-ts--line-number-at-node-or-pos (node)
@@ -1344,7 +1360,10 @@ associates and others."
 
 (defvar-local f90-ts--align-continued-variant-tab nil
   "Current variant for indentation, if nil use region variant,
-otherwise use some tab variant.")
+otherwise use stored tab variant.
+This is also used for deciding whether treesit-indent-region is at
+work, and computed indent needs to be cached for continued lines,
+see `f90-ts--continued-line-cache'.")
 
 
 (defvar-local f90-ts--indent-cache nil
@@ -1497,6 +1516,157 @@ or compute."
              f90-ts--indent-slot-offset)))
 
 
+
+;;++++++++++++++
+
+(defvar-local f90-ts--continued-line-cache nil
+  "Cache for continued-line anchor indentation.
+The cache is an alist with entries (LINE . (BOL-COL DELTA))
+for already indented lines of a continued statement.
+
+For alignment operations, we need node column numbers of nodes on
+previously (already indented) lines to select the proper one.
+The cache is required for indent-region operations, which work in a
+batch mode. If a previous line has not already been flushed, which is
+the default case, we need to compute the column number ourselves after
+not-yet-applied indentation. To this end, we store the computed delta
+in the cache.
+Moreover, we also store BOL-COL to detect, whether internal indentation
+buffer of treesit-indent-region has already been flushed for a line.
+Except for the first line, we can compute the indentation delta and
+cache it. For the first line, the delta is not known and initially
+stored as DELTA=0. Once we detect a flush using cached column at bol,
+we can compute the delta and add to all cached lines. This is necessary
+to have consistent indentation across all previous lines
+
+As mentioned above, the cache is an alist (LINE . (BOL-COL DELTA)),
+mapping buffer LINE numbers to BOL-COL and DELTA, where:
+  BOL-COL: indentation column at cache time, used as flush detector:
+           if current-indentation at line == BOL-COL, line is not yet
+           flushed
+  DELTA:   delta of original to new indentation, if line is not
+           flushed, then the column after applying indentation is
+           column number of node + DELTA,
+           and if the line has been flushed, it is just current node
+           column
+
+The first line of the statement initially is stored with DELTA=0 and
+current BOL-COL. For each new line, the current indentation of the
+first line is checked and if a buffer flush is detected, the applied
+delta is computed and added to the delta of all subsequent cached
+lines.
+
+The state of `f90-ts--align-continued-variant-tab' is used to decide
+whether indent-region or a line variant is in use. The cache is
+required only if indent-region with buffering is done.")
+
+
+(defun f90-ts--continued-line-cache-reset ()
+  "Reset the continued-line indentation cache."
+  (setq f90-ts--continued-line-cache nil))
+
+
+(defun f90-ts--continued-line-cache-put-first (bol)
+  "Store a cache entry for the first line of a continued statement.
+BOL is the beginning of that line. Always store DELTA=0.
+If a flush is detected (actual BOL is different from cached BOL),
+the DELTA is computed and added to all other cached line."
+  (f90-ts--continued-line-cache-reset)
+  (unless f90-ts--align-continued-variant-tab
+    (let* ((bol-col (save-excursion
+                      (goto-char bol)
+                      (current-indentation)))
+           (line (line-number-at-pos bol)))
+      (setq f90-ts--continued-line-cache
+            (list (cons line (list bol-col 0)))))))
+
+
+(defun f90-ts--continued-line-cache-put-subsequent (bol anchor offset)
+  "Compute and store the indent delta for a subsequent line at BOL.
+ANCHOR is the anchor position returned by the anchor function.
+OFFSET is the offset from that anchor.
+Resolves delta via the anchor's cache entry:
+  delta = delta-at-anchor-line + OFFSET"
+  (unless f90-ts--align-continued-variant-tab
+    (let* ((anchor-line (line-number-at-pos anchor))
+           (anchor-entry (cdr (assq anchor-line f90-ts--continued-line-cache)))
+           (anchor-delta (if anchor-entry (cadr anchor-entry) 0))
+           (bol-current  (f90-ts--indentation-at-pos bol))
+           (bol-new (f90-ts--column-number-at-pos (+ anchor anchor-delta offset)))
+           (delta (- bol-new bol-current))
+           (line (line-number-at-pos bol)))
+      (push (cons line (list bol-current delta))
+            f90-ts--continued-line-cache))
+    ))
+
+
+
+(defun f90-ts--continued-line-cache-get-first ()
+  "Find the first line (smallest line number) in the cache
+and return the whole entry. We assume that the cache is small and just
+search the whole cache."
+  ;; cache is constructed by push, the last entry is the first line
+  (car (last f90-ts--continued-line-cache)))
+  ;; (cl-loop for line-entry in f90-ts--continued-line-cache
+  ;;          for line-min = line-entry then (if (< (car line-entry) (car line-min))
+  ;;                                             line-entry
+  ;;                                           line-min)
+  ;;        finally return line-min)
+
+
+(defun f90-ts--continued-line-cache-update (first-pos)
+  "Check whether first line at FIRST-POS has been flush (current bol
+and cached bol are different). If it has, update the entry and apply
+delta to all other cached lines.
+(Argument FIRST-POS is used to jump to this line efficiently. Jumping
+to a line is more expensive.)"
+  (unless f90-ts--align-continued-variant-tab
+    (let* ((first (f90-ts--continued-line-cache-get-first))
+           (first-line (car first))
+           (first-bol-col (cadr first))
+           (first-bol-current (f90-ts--indentation-at-pos first-pos))
+           (first-delta (- first-bol-current first-bol-col)))
+      ;; indentation of first line has been flushed, add delta to all
+      ;; other lines
+      (when (/= first-bol-col first-bol-current)
+        (setq f90-ts--continued-line-cache
+              (seq-map (lambda (entry)
+                         (let ((line (car entry))
+                               (bol-col (cadr entry))
+                               (delta (caddr entry)))
+                           (cons line
+                                 (if (= line first-line)
+                                     (list first-bol-current 0)
+                                   (list bol-col (+ delta first-delta))))))
+                       f90-ts--continued-line-cache)
+              )))
+    ))
+
+
+
+(defun f90-ts--continued-line-cache-get-col (node)
+  "Return the final column of NODE in a continued statement.
+NODE is a potential anchor on some previous line, for which indentation
+has already been computed.
+Lookup the cache for the line node is placed on. If current and cached
+indentation is equal, then apply cached delta to current column,
+otherwise return column as is."
+  (let* ((pos (treesit-node-start node))
+         (col (f90-ts--column-number-at-pos pos)))
+    (if f90-ts--align-continued-variant-tab
+        ;; line based indentation, no caching
+        col
+      (let* ((line (f90-ts--node-line node))
+             (entry (cdr (assq line f90-ts--continued-line-cache)))
+             (delta (cadr entry))
+             (bol-col (car entry))
+             (bol-current (f90-ts--indentation-at-pos pos)))
+        (if (= bol-col bol-current)
+            ;; not yet flushed
+            (+ col delta)
+          col)))))
+
+
 ;;++++++++++++++
 ;; matchers
 
@@ -1508,13 +1678,24 @@ executed."
   nil)
 
 
-(defun f90-ts--continued-line-is (node parent _bol &rest _)
-  "A matcher which check whether we are on some continued line of a
+(defun f90-ts--continued-line-cache-start (node _parent bol &rest _)
+  "A dummy matcher which always fails, but initialises the offset cache
+for indentation of statements on continued lines, taking buffering in
+indent-region into account."
+  (when (and node
+             (f90-ts--first-line-of-continued-stmt-p bol))
+    (f90-ts--continued-line-cache-put-first bol))
+  ;; always fail
+  nil)
+
+
+(defun f90-ts--continued-subsequent-line-is (node parent bol &rest _)
+  "A matcher which checks whether we are on some continued line of a
 continued statement. The first statement line itself is not matched."
   (cond
    (node
-    (let ((pos (treesit-node-start node)))
-      (f90-ts--pos-is-continued-p pos)))
+    ;; if node is not nil, then there are nodes on the line
+    (f90-ts--subsequent-line-of-continued-stmt-p bol))
 
    (parent
     ;; node=nil but parent is a proper node, then we are probably on an empty line
@@ -1937,7 +2118,7 @@ start position of pstmt-1 as anchor and the indent-continued offset."
 which is not sorted in general. An item is a pair (anchor offset).
 For this routine we assume that anchor is a node (in general it is a
 node or a buffer position)."
-  (car (seq-sort-by #'f90-ts--node-column
+  (car (seq-sort-by #'f90-ts--continued-line-cache-get-col
                     #'<
                     items)))
 
@@ -2094,7 +2275,7 @@ For a node, position is start of node and offset is zero."
   (if (treesit-node-p anchor)
       (list
        ;; some node, compute column number and buffer position, offset=0
-       (f90-ts--node-column anchor)
+       (f90-ts--continued-line-cache-get-col anchor)
        (treesit-node-start anchor)
        0)
     ;; a pair (buffer position, offset) add column
@@ -2402,31 +2583,41 @@ Exact behaviour is determined by custom variables
 
 Note that due to the matcher, we already know that we are on a
 continued line of a continued statement. The statement line itself
-is not catched by the continued line matcher."
-  (let* ((variant (or f90-ts--align-continued-variant-tab
-                      f90-ts-indent-list-region))
-         (pstmt-1 (f90-ts--indent-prev-stmt-first))
-         (default-anchor-offset (if pstmt-1
-                                    (list (treesit-node-start pstmt-1)
-                                          f90-ts-indent-continued)
-                                  (list bol 0))))
-    (let ((anchor-offset
-           (if (or (eq variant 'continued-line)
-                   (not pstmt-1))
-               default-anchor-offset
-             (let* ((loc (f90-ts--align-list-location node))
-                    (list-context (f90-ts--align-list-context loc parent)))
-               (if list-context
-                   (f90-ts--align-list-anchor-offset variant
-                                                     loc
-                                                     list-context)
-                 ;; default continued line indentation
-                 default-anchor-offset)))))
-      ;; cache anchor and offset for offset function, return anchor
-      ;; (strictly, anchor does not need to be cached)
-      (f90-ts--indent-anchor-cache (car anchor-offset))
-      (f90-ts--indent-offset-cache (cadr anchor-offset))
-      (car anchor-offset)
+(the first line) is not catched by the continued line matcher."
+  (let ((variant (or f90-ts--align-continued-variant-tab
+                     f90-ts-indent-list-region))
+        (pstmt-1 (f90-ts--indent-prev-stmt-first)))
+    (cl-assert pstmt-1 nil "continued subsequent line must have a pstmt-1 node")
+    (f90-ts--continued-line-cache-update
+     (treesit-node-start pstmt-1))
+    (let* ((loc (f90-ts--align-list-location node))
+           (default-anchor-offset (if pstmt-1
+                                     (list (treesit-node-start pstmt-1)
+                                           f90-ts-indent-continued)
+                                   (list bol 0)))
+           (anchor-offset
+            (if (or (eq variant 'continued-line)
+                    (not pstmt-1))
+                default-anchor-offset
+              (let ((list-context (f90-ts--align-list-context loc parent)))
+                (if list-context
+                    (f90-ts--align-list-anchor-offset variant
+                                                      loc
+                                                      list-context)
+                  ;; default continued line indentation
+                  default-anchor-offset)))))
+      ;; there are two caches:
+      ;;  * cache anchor and offset for offset function for the
+      ;;    current line
+      ;;  * cache computed offset for indentation of subsequent lines
+      (let ((line (alist-get 'line loc))
+            (anchor (car anchor-offset))
+            (offset (cadr anchor-offset)))
+        ;; (strictly, anchor does not need to be cached)
+        (f90-ts--indent-anchor-cache anchor)
+        (f90-ts--indent-offset-cache offset)
+        (f90-ts--continued-line-cache-put-subsequent bol anchor offset)
+        anchor)
       )))
 
 
@@ -2516,6 +2707,11 @@ which start with !$ or !$omp")
 
 (defvar f90-ts-indent-rules-continued
   `(;; handle continued lines
+    ;; if on first line of a continued statement, reset the continued-line cache
+    ;; but always fail;
+    ;; (the cache stores offsets on previous lines, this is necessary in
+    ;; indent-region operations with buffering)
+    (f90-ts--continued-line-cache-start parent 0)
     ;; special case, first node is closing parenthesis means this is a continued line
     ((n-p-gp ")" "parenthesized_expression" nil) parent f90-ts-mode-indent-paren-close)
     ;; it is easy to see whether we are on a continued line (not the first line
@@ -2531,7 +2727,7 @@ which start with !$ or !$omp")
     ;;                  x3, x4, x5) &
     ;;      result(val)
     ;; by how much should result be indented? x3 is not a good anchor!
-    (f90-ts--continued-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
+    (f90-ts--continued-subsequent-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
     )
   "Indentation rules for continued lines. Argument lists and similar
 continued lines must have been dealt with before.")
@@ -3038,13 +3234,6 @@ changed)."
     (let ((old-text (buffer-substring-no-properties beg-reg end-reg)))
       (treesit-indent-region beg-reg end-reg)
       (string= old-text (buffer-substring-no-properties beg-reg end-reg)))
-
-    ;; this is fast, but is indent-region implemented in such a way that tick
-    ;; increases only if indentation on some line really has changed?
-    ;; maybe this variant is not worth the risk
-    ;;(let ((old-tick (buffer-chars-modified-tick)))
-    ;;  (treesit-indent-region beg-reg end-reg)
-    ;;  (= old-tick (buffer-chars-modified-tick)))))
     ))
 
 
