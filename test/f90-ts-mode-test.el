@@ -63,6 +63,26 @@ final newline."
   "Test rules for special comment node indentation.")
 
 
+;; these cannot by pasted into erts-Code blocks, as the erts parsers
+;; seems to mangle the plist data, it becomes corrupted
+(defconst f90-ts-test--special-comment-rules-omp-context
+  '((:name "openmp simd rule"
+     :match "^!\\$omp declare\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)
+   (:name "openmp context rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent context
+     :face f90-ts-font-lock-openmp-face)))
+
+
+(defconst f90-ts-test--special-comment-rules-omp-indented
+  '((:name "general indented rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)))
+
+
 ;; values are chosen for testing purposes (like different indentation levels
 ;; to distinguish different rules and discover if the wrong rule is applied)
 (defconst f90-ts-mode-test-custom-settings
@@ -82,7 +102,6 @@ final newline."
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
-    (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (f90-ts-comment-region-prefix . "!!$")
     (f90-ts-extra-comment-prefixes . ("!%%!" "!>"))
     (f90-ts-mark-region-reversed . nil)

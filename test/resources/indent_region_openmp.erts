@@ -10,8 +10,10 @@ Point-Char: |
 Name: openmp column-0 1
 =-=
 subroutine sub_1()
+!$   integer(kind=omp_lock_kind), dimension(:), pointer :: entity_lock
      associate(fmt => '(a10,i6)', &
                msg => 'thread: ')
+!$        allocate((entity_lock, 1,num_ent)
 !$omp parallel
 !$omp critical(print)
           print fmt, msg, omp_get_thread_num()
@@ -44,12 +46,15 @@ subroutine sub_3()
           integer :: i
           integer, parameter :: n = 1000
           real, dimension(1:n) :: a, b, c
+!$        integer(kind=omp_lock_kind) :: local_lock
+!$        call omp_init_lock(local_lock)
 !$omp parallel private(i, a, b, c)
           !$omp simd
           do i = 1, n
                c(i) = a(i) + b(i)
           end do
 !$omp end parallel
+!$        call omp_destroy_lock(local_lock)
      end block
 end subroutine sub_3
 =-=-=
@@ -65,3 +70,148 @@ function add1(a,b,fact) result(c)
 end function add1
 =-=-=
 
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-special-comment-rules f90-ts-test--special-comment-rules-omp-context))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Point-Char: |
+
+Name: openmp context 1
+=-=
+subroutine sub_1()
+!$   integer(kind=omp_lock_kind), dimension(:), pointer :: entity_lock
+     associate(fmt => '(a10,i6)', &
+               msg => 'thread: ')
+     !$   allocate((entity_lock, 1,num_ent)
+     !$omp parallel
+     !$omp critical(print)
+          print fmt, msg, omp_get_thread_num()
+     !$omp end critical(print)
+     !$omp end parallel
+     end associate
+end subroutine sub_1
+=-=-=
+
+Name: openmp context 2
+=-=
+subroutine sub_2()
+     if (condition) then
+     !$omp parallel do schedule(dynamic) &
+     !$omp             private(i) &
+     !$omp             shared(arr) &
+     !$omp             default(none)
+          do i = 1,100
+               print *, omp_get_thread_num(), i, arr(i)
+          end do
+     !$omp end parallel do
+     end if
+end subroutine sub_2
+=-=-=
+
+Name: openmp context 3
+=-=
+subroutine sub_3()
+     block
+          integer :: i
+          integer, parameter :: n = 1000
+          real, dimension(1:n) :: a, b, c
+     !$   integer(kind=omp_lock_kind) :: local_lock
+     !$   call omp_init_lock(local_lock)
+     !$omp parallel private(i, a, b, c)
+     !$omp simd
+          do i = 1, n
+               c(i) = a(i) + b(i)
+          end do
+     !$omp end parallel
+     !$   call omp_destroy_lock(local_lock)
+     end block
+end subroutine sub_3
+=-=-=
+
+Name: openmp context 4
+=-=
+! from the openmp standards document
+function add1(a,b,fact) result(c)
+     implicit none
+     !$omp declare simd(add1) uniform(fact)
+     double precision :: a,b,fact, c
+     c = a + b + fact
+end function add1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-special-comment-rules f90-ts-test--special-comment-rules-omp-indented))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Point-Char: |
+
+Name: openmp indented 1
+=-=
+subroutine sub_1()
+     !$ integer(kind=omp_lock_kind), dimension(:), pointer :: entity_lock
+     associate(fmt => '(a10,i6)', &
+               msg => 'thread: ')
+          !$ allocate((entity_lock, 1,num_ent)
+          !$omp parallel
+          !$omp critical(print)
+          print fmt, msg, omp_get_thread_num()
+          !$omp end critical(print)
+          !$omp end parallel
+     end associate
+end subroutine sub_1
+=-=-=
+
+Name: openmp indented 2
+=-=
+subroutine sub_2()
+     if (condition) then
+          !$omp parallel do schedule(dynamic) &
+          !$omp             private(i) &
+          !$omp             shared(arr) &
+          !$omp             default(none)
+          do i = 1,100
+               print *, omp_get_thread_num(), i, arr(i)
+          end do
+          !$omp end parallel do
+     end if
+end subroutine sub_2
+=-=-=
+
+Name: openmp indented 3
+=-=
+subroutine sub_3()
+     block
+          integer :: i
+          integer, parameter :: n = 1000
+          real, dimension(1:n) :: a, b, c
+          !$ integer(kind=omp_lock_kind) :: local_lock
+          !$ call omp_init_lock(local_lock)
+          !$omp parallel private(i, a, b, c)
+          !$omp simd
+          do i = 1, n
+               c(i) = a(i) + b(i)
+          end do
+          !$omp end parallel
+          !$ call omp_destroy_lock(local_lock)
+     end block
+end subroutine sub_3
+=-=-=
+
+Name: openmp indented 4
+=-=
+! from the openmp standards document
+function add1(a,b,fact) result(c)
+     implicit none
+     !$omp declare simd(add1) uniform(fact)
+     double precision :: a,b,fact, c
+     c = a + b + fact
+end function add1
+=-=-=
