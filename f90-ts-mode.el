@@ -120,18 +120,18 @@ plus the value of 'f90-ts-indent-continued'."
   :safe  'booleanp
   :group 'f90-ts-indent)
 
-(defcustom f90-ts-mode-indent-paren-default 1
+(defcustom f90-ts-indent-paren-default 1
   "Additional offset applied for alignment of non-parenthesis under opening
 parenthesis. Example:
 call sub(      arg1, &
          .not. arg2)
 Primary alignment column for the second line column of parenthesis plus
-`f90-ts-mode-indent-expr-paren'."
+`f90-ts-indent-expr-paren'."
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
 
-(defcustom f90-ts-mode-indent-paren-close 0
+(defcustom f90-ts-indent-paren-close 0
   "Additional offset applied for alignment for closing parenthesis,
 under corresponding closing parenthesis.
 
@@ -141,12 +141,12 @@ x = x + (y + &
         )
 
 Primary alignment column for the closing parenthesis is column of
-opening parenthesis plus `f90-ts-mode-indent-expr-assign'."
+opening parenthesis plus `f90-ts-indent-expr-assign'."
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
 
-(defcustom f90-ts-mode-indent-expr-assign-default 2
+(defcustom f90-ts-indent-expr-assign-default 2
   "Additional offset applied for alignment at assignment symbol \"=\",
 except for association operators.
 
@@ -155,12 +155,12 @@ x =      & ! some comment
     some_expression
 
 Primary alignment column for the second line column of assignment plus
-`f90-ts-mode-indent-expr-assign-default' for non-operators."
+`f90-ts-indent-expr-assign-default' for non-operators."
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
 
-(defcustom f90-ts-mode-indent-expr-assign-assoc-op 0
+(defcustom f90-ts-indent-expr-assign-assoc-op 0
   "Additional offset applied for alignment at assignment symbol \"=\"
 for associative operators (logical_expression, math_expression)
 
@@ -169,7 +169,7 @@ x = value1 &
   + some_expression
 
 Primary alignment column for the second line column of assignment plus
-`f90-ts-mode-indent-expr-assign-assoc-op' for associative operators."
+`f90-ts-indent-expr-assign-assoc-op' for associative operators."
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
@@ -2159,8 +2159,8 @@ returned as first element of the list."
    ;; for other node types, align one position to the right of it
    (collect (treesit-node-start list-context)
             (if (eq (alist-get 'nsym loc) 'parenthesis)
-                f90-ts-mode-indent-paren-close
-              f90-ts-mode-indent-paren-default))
+                f90-ts-indent-paren-close
+              f90-ts-indent-paren-default))
 
    ;; add default continued line indentation if items is empty
    (unless items
@@ -2198,14 +2198,14 @@ as first element of the list."
        ;; "=": parent is assignment_statement
        ("(" (let* ((node-sym (alist-get 'nsym loc))
                    (offset (if (eq node-sym 'parenthesis)
-                               f90-ts-mode-indent-paren-close
-                             f90-ts-mode-indent-paren-default)))
+                               f90-ts-indent-paren-close
+                             f90-ts-indent-paren-default)))
               (collect (treesit-node-start psib-context) offset)))
        ("=" (let* ((node-sym (alist-get 'nsym loc))
                    (offset (if (member node-sym '(operator-logical
                                                   operator-math))
-                               f90-ts-mode-indent-expr-assign-assoc-op
-                             f90-ts-mode-indent-expr-assign-default)))
+                               f90-ts-indent-expr-assign-assoc-op
+                             f90-ts-indent-expr-assign-default)))
               (collect (treesit-node-start psib-context) offset)))
        ))
 
@@ -2244,8 +2244,8 @@ parenthesis. This primary position is returned as first element of the
      (collect (treesit-node-start child-paren)
               (pcase nsym
                 ('associate   f90-ts-indent-continued)          ; indents "=>"
-                ('parenthesis f90-ts-mode-indent-paren-close)   ; indents ")"
-                (_            f90-ts-mode-indent-paren-default) ; all other kind of nodes
+                ('parenthesis f90-ts-indent-paren-close)   ; indents ")"
+                (_            f90-ts-indent-paren-default) ; all other kind of nodes
                 )))
 
    ;; add default continued line indentation if items is empty
@@ -2713,7 +2713,7 @@ which start with !$ or !$omp")
     ;; indent-region operations with buffering)
     (f90-ts--continued-line-cache-start parent 0)
     ;; special case, first node is closing parenthesis means this is a continued line
-    ((n-p-gp ")" "parenthesized_expression" nil) parent f90-ts-mode-indent-paren-close)
+    ((n-p-gp ")" "parenthesized_expression" nil) parent f90-ts-indent-paren-close)
     ;; it is easy to see whether we are on a continued line (not the first line
     ;; of a multiline statement, only subsequent lines), but handling specific
     ;; cases is not possible with just some simple n-p-gp like matches,
