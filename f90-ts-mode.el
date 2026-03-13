@@ -3548,6 +3548,37 @@ done."
 ;;------------------------------------------------------------------------------
 ;; treesitter based region functions
 
+(defun f90-ts--pos-first-nonspace (pos)
+  "Determine position of first non-space character of line at pos."
+  (save-excursion
+    (goto-char pos)
+    (beginning-of-line)
+    (skip-chars-forward " \t")
+    (point)))
+
+
+(defun f90-ts--pos-last-nonspace (pos)
+  "Determine position right after last non-space character of line at
+pos."
+  (save-excursion
+    (goto-char pos)
+    (end-of-line)
+    (skip-chars-backward " \t")
+    (point)))
+
+
+(defun f90-ts--pos-nonspace (pos)
+  "Move point to first or last non-space character on current line.
+If point is before the first non-space character, move to it.
+If point is after the last non-space character, move to just after it."
+  (let ((first (f90-ts--pos-first-nonspace pos))
+        (last (f90-ts--pos-last-nonspace pos)))
+    (cond
+     ((< pos first) first)
+     ((> pos last)  last)
+     (t             pos))))
+
+
 (defun f90-ts--mark-region-node (node &optional reversed)
   "Mark the region spanned by NODE. If REVERSED is non-nil, then put
 point at start of region, otherwise point is at end of region."
@@ -3643,7 +3674,9 @@ than current region."
                                       f90-ts-mark-region-reversed)
           (message "no tree-sitter node found enlarging current region")))
     ;; no active region, select smallest named node at point
-    (if-let* ((node-on (f90-ts--node-on-pos (point)))
+    ;; (but move point to nonspace part first)
+    (if-let* ((pos (f90-ts--pos-nonspace (point)))
+              (node-on (f90-ts--node-on-pos pos))
               (node (f90-ts--largest-node-same-span node-on)))
         (f90-ts--mark-region-node node
                                   f90-ts-mark-region-reversed)
