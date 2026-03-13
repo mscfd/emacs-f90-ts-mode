@@ -57,6 +57,7 @@ final newline."
     (f90-ts-indent-paren-close . 3)
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
+    (f90-ts-indent-openmp-style . column-0)
     (f90-ts-beginning-ampersand . nil)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
@@ -632,7 +633,8 @@ point at 1+end of region."
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
+   "indent_region_preproc.erts"
+   "indent_region_openmp.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)
