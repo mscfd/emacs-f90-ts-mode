@@ -311,27 +311,14 @@ self or this. Used for applying a special font lock face."
 
 
 (defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
-  "Regular expression for matching and capturing comment starts (excluding openmp).
-For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments.
-This is used for applying the same comment starter, see `f90-ts-break-line'."
-  :type  'regexp
-  :safe  'stringp
-  :group 'f90-ts)
+  "Regular expression for matching and capturing comment starts (for
+operations like line break and others). Openmp is captured separately.
 
-
-(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
-  "Regular expression for matching comment starts (excluding openmp).
-For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments."
-  :type  'regexp
-  :safe  'stringp
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-separator-comment-regexp ""
-  "Regular expression for matching separator comments (e.g. for structuring code).
-Used for applying a separator font lock face and alignment with parent node."
+For example \"![<>]?\" optionally adds symbols < and > used by
+documentation tools.
+The defcustom should also add trailing whitespace characters to
+preserve indentation within comments. This is used for applying the
+same comment starter, see `f90-ts-break-line'."
   :type  'regexp
   :safe  'stringp
   :group 'f90-ts)
@@ -354,6 +341,90 @@ Used for applying a separator font lock face and alignment with parent node."
 is set, then point is placed at start of region."
   :type  'boolean
   :safe  'booleanp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
+  "Regular expression for matching openmp starts. This is used for
+line break operations, as openmp statements require continuation
+symbols.
+The defcustom should also add trailing whitespace characters to
+preserve indentation within openmp statements."
+  :type  'regexp
+  :safe  'stringp
+  :group 'f90-ts)
+
+(defcustom f90-ts-separator-comment-regexp ""
+  "Regular expression for matching separator comments (e.g. for structuring code).
+Used for applying a separator font lock face and alignment with parent node."
+  :type  'regexp
+  :safe  'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-special-comment-rules
+  '((:name "openmp simd rule"
+     :match "^!\\$omp simd\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)
+    (:name "general openmp rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent column-0
+     :face f90-ts-font-lock-openmp-face)
+    (:name "separator comment rule"
+     :match "^!={40,}"
+     :indent context
+     :face f90-ts-font-lock-separator-comment-face)
+    (:name "ford documentation"
+     :match "^![<>]"
+     :indent indented
+     :face font-lock-doc-face))
+  "Rules for special comment node indentation in `f90-ts-mode'.
+
+Each element is a plist with the following keys:
+
+  :name    A string naming the rule for documentation.
+
+  :match   Either a regexp string matched against the comment line text,
+           or a predicate function called with one argument (the comment
+           node) that returns non-nil for a match.
+
+  :indent  One of the following symbols:
+           `column-0'  — always indent to column 0,
+           `context'   — indent aligned to enclosing construct,
+           `indented'  — indent like normal code and comments.
+
+  :face    face symbol used to highlight matching comments.
+
+Rules are tested in order; the first match determines indentation
+and font lock face.
+If no rule matches, the comment is indented normally."
+  :type '(repeat
+          (list :tag "Rule"
+                (const :format "" :value :name)
+                (string :tag "Name")
+                (const :format "" :value :match)
+                (choice :tag "Match"
+                        (regexp   :tag "Regexp")
+                        (function :tag "Predicate"))
+                (const :format "" :value :indent)
+                (choice :tag "Indentation"
+                        (const :tag "Column 0"                          column-0)
+                        (const :tag "Context (parent block)"            context)
+                        (const :tag "Indented (like code and comments)" indented))
+
+                (const :format "" :value :face)
+                (choice :tag "Face"
+                        (const :tag "font-lock-comment-face"
+                               font-lock-comment-face)
+                        (const :tag "font-lock-doc-face"
+                               font-lock-doc-face)
+                        (const :tag "f90-ts-font-lock-separator-comment-face"
+                               f90-ts-font-lock-separator-comment-face)
+                        (const :tag "f90-ts-font-lock-openmp-face"
+                               f90-ts-font-lock-openmp-face)
+                        (face :tag "other face"))
+                ))
   :group 'f90-ts)
 
 
@@ -979,29 +1050,40 @@ located, otherwise return line number of current point position."
 
 
 ;;------------------------------------------------------------------------------
-;; Font-locking
+;; Font-locking: auxiliary
 
-(defun f90-ts--font-lock-rules-openmp ()
-  "Font-lock rules for openmp statements, which are currently stored as
-comments in the tree. Must be parsed before plain comments."
-  (treesit-font-lock-rules
-   :language 'fortran
-   :feature 'comment
-   '(;; capture comments starting with !$, which are openmp statements
-     ((comment) @f90-ts-font-lock-openmp-face
-      (:pred f90-ts-openmp-node-p @f90-ts-font-lock-openmp-face))
-     )))
+(defun f90-ts--fontify-comment (node override _start _end &rest _)
+  "Check whether NODE satisfies a special comment rule, and if it does,
+use the face provided by the first matching rule.
+Argument OVERRIDE is passend to treesit-fontify-with-override."
+  (cl-assert (f90-ts--node-type-p node "comment")
+             nil "fontify-comment: comment node expected")
+  (let* ((text (treesit-node-text node t))
+         (rule (seq-find
+                (lambda (rule)
+                  (let ((match (plist-get rule :match)))
+                    (cond
+                     ((stringp match)   (string-match-p match text))
+                     ((functionp match) (funcall match node)))))
+                f90-ts-special-comment-rules))
+         (face (or (and rule (plist-get rule :face))
+                   'font-lock-comment-face)))
+    (treesit-fontify-with-override
+     (treesit-node-start node) (treesit-node-end node)
+     face override)))
 
+
+;;------------------------------------------------------------------------------
+;; Font-locking: treesitter rules
 
 (defun f90-ts--font-lock-rules-comment ()
   "Font-lock rules for comments."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'comment
-   '(
-     ((comment) @f90-ts-font-lock-separator-comment-face
-      (:pred f90-ts-separator-comment-node-p @f90-ts-font-lock-separator-comment-face))
-     ((comment) @font-lock-comment-face)
+   '(;; default comments as well as special comments and openmp
+     ;; statements, declared by `f90-ts-special-comment-rules'
+     ((comment) @f90-ts--fontify-comment)
      )))
 
 
@@ -1338,7 +1420,6 @@ associates and others."
 
 (defvar f90-ts-font-lock-rules
   (list
-   (f90-ts--font-lock-rules-openmp)
    (f90-ts--font-lock-rules-comment)
    (f90-ts--font-lock-rules-intrinsic)
    (f90-ts--font-lock-rules-keyword)
