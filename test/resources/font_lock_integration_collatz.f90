@@ -45,7 +45,7 @@
 !                                   ^ font-lock-number-face
 
        !> number of 3n+1 applications
-!      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
+!      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-doc-face
        integer :: n_odd_steps = 0
 !      ^^^^^^^ font-lock-type-face
 !              ^^ f90-ts-font-lock-delimiter-face
@@ -829,8 +829,8 @@
                                          seq &
 !                                        ^^^ nil
 !                                            ^ f90-ts-font-lock-delimiter-face
-                                        )
-!                                       ^ f90-ts-font-lock-bracket-face
+                                           )
+!                                          ^ f90-ts-font-lock-bracket-face
 
             self%results(i)%max_value = maxval(seq(1:self%results(i)%sequence_length))
 !           ^^^^ f90-ts-font-lock-special-var-face

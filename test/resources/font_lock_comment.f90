@@ -12,12 +12,21 @@
 !^^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
   ! after seperator
 ! ^^^^^^^^^^^^^^^^^ font-lock-comment-face
-  subroutine sub()
+  !> documentation before declaration
+! ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-doc-face
+  subroutine sub(arg)
 ! ^^^^^^^^^^ font-lock-keyword-face
 !            ^^^ font-lock-function-name-face
-!               ^^ f90-ts-font-lock-bracket-face
+!               ^ f90-ts-font-lock-bracket-face
+!                ^^^ nil
+!                   ^ f90-ts-font-lock-bracket-face
   ! arguments
 ! ^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
+       integer :: arg !< documentation after declaration
+!      ^^^^^^^ font-lock-type-face
+!              ^^ f90-ts-font-lock-delimiter-face
+!                 ^^^ nil
+!                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-doc-face
   ! ==========
 ! ^^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
        ! comment sub

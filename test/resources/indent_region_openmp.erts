@@ -45,7 +45,7 @@ subroutine sub_3()
           integer, parameter :: n = 1000
           real, dimension(1:n) :: a, b, c
 !$omp parallel private(i, a, b, c)
-!$omp simd
+          !$omp simd
           do i = 1, n
                c(i) = a(i) + b(i)
           end do
