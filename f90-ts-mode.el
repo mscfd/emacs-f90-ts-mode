@@ -395,9 +395,9 @@ Each element is a plist with the following keys:
 
   :name    A string naming the rule for documentation.
 
-  :match   Either a regexp string matched against the comment line text,
-           or a predicate function called with one argument (the comment
-           node) that returns non-nil for a match.
+  :match   Either a regexp string matched against the comment line
+           text, or a predicate function called with one argument
+           (the comment node) that returns non-nil for a match.
 
   :indent  One of the following symbols:
            `column-0'  — always indent to column 0,
@@ -408,7 +408,11 @@ Each element is a plist with the following keys:
 
 Rules are tested in order; the first match determines indentation
 and font lock face.
-If no rule matches, the comment is indented normally."
+If no rule matches, the comment is indented normally.
+
+Indentation hints of special comment rules are ignored within continued
+lines, except for the column-0 option. The other two options does not
+seem to make much sense."
   :type '(repeat
           (list :tag "Rule"
                 (const :format "" :value :name)
@@ -1732,7 +1736,6 @@ to a line is more expensive.)"
     ))
 
 
-
 (defun f90-ts--continued-line-cache-get-col (node)
   "Return the final column of NODE in a continued statement.
 NODE is a potential anchor on some previous line, for which indentation
@@ -1750,6 +1753,7 @@ otherwise return column as is."
              (delta (cadr entry))
              (bol-col (car entry))
              (bol-current (f90-ts--indentation-at-pos pos)))
+        (cl-assert entry nil "cache-get-col: no entry for line in cache")
         (if (= bol-col bol-current)
             ;; not yet flushed
             (+ col delta)
@@ -1823,6 +1827,18 @@ non-preprocessor ancestor is a toplevel node (program, module, etc.)."
                               (treesit-node-type ancestor))))))
 
 
+(defun f90-ts--cache-anchor-offset (node parent bol anchor offset)
+  "Always cache ANCHOR and OFFSET in the indent cache. If the line
+is also within a continued statement, then cache the anchor-offset
+pair in the continued line cache as well."
+  (f90-ts--indent-anchor-cache anchor)
+  (f90-ts--indent-offset-cache offset)
+  ;; when within continued line statement, then cache anchor offset
+  (when (f90-ts--continued-subsequent-line-is node parent bol)
+    (f90-ts--continued-line-cache-put-subsequent
+     bol anchor offset)))
+
+
 (defun f90-ts--special-comment-is (node parent bol &rest _)
   "Matcher for special comment indentation.
 If NODE matches a rule in `f90-ts-special-comment-rules' with a
@@ -1832,28 +1848,45 @@ If indent style is column-0, use BOL to determine column-0 anchor.
 If indent style is context, use PARENT as anchor.
 If indent styoe is indented, indent like code. Do not match here,
 but instead let other rules handle it."
+
+  ;; Note: if this matcher signals match and is within a continued
+  ;; line, then indentation (anchor offset) needs to be cached in the
+  ;; continued line cache as well, using:
+  ;;
+  ;;(when (f90-ts--continued-subsequent-line-is node parent bol)
+  ;;  (f90-ts--continued-line-cache-put-subsequent
+  ;;   bol anchor 0))
+
   (when (f90-ts--node-type-p node "comment")
     (when-let* ((rule (f90-ts--comment-matching-rule node))
-                (indent (plist-get rule :indent))
-                (_ (not (eq indent 'indented))))
+                (indent (plist-get rule :indent)))
+      ;; indented variant is handled like normal code
       (pcase indent
         ('column-0
          (let ((anchor (save-excursion
                          (goto-char bol)
                          (line-beginning-position))))
-           (f90-ts--indent-anchor-cache anchor))
-         (f90-ts--indent-offset-cache 0))
+           (f90-ts--cache-anchor-offset node parent bol anchor 0)
+           ;; signal match
+           t))
 
         ('context
-         (f90-ts--indent-anchor-cache
-          (treesit-node-start parent))
-         (f90-ts--indent-offset-cache 0)))
-      ;; if pcase does not match, nil is returned,
-      ;; otherwise signal a match
-      t)))
+         ;; special comment indentation within continued lines does not seem
+         ;; to make much sense except for column-0
+         (unless (f90-ts--continued-subsequent-line-is node parent bol)
+           (let ((anchor (treesit-node-start parent)))
+             (f90-ts--indent-anchor-cache anchor)
+             (f90-ts--indent-offset-cache 0))
+           ;; signal match
+           t))
+
+        (_
+         ;; signal no match
+         nil)
+        ))))
 
 
-(defun f90-ts--comment-region-is (node _parent _bol &rest _)
+(defun f90-ts--comment-region-is (node parent bol &rest _)
   "Matcher that checks whether NODE and comment on the previous
 line are matched by the same rule in `f90-ts-special-comment-rules'
 (including both matching none=default comment)."
@@ -1861,9 +1894,13 @@ line are matched by the same rule in `f90-ts-special-comment-rules'
     (when-let* ((prev-sib (treesit-node-prev-sibling node))
                 (prev-line (f90-ts--first-node-on-line
                             (treesit-node-start prev-sib))))
-      (and (f90-ts--node-type-p prev-line "comment")
-           (eq (f90-ts--comment-matching-rule node)
-               (f90-ts--comment-matching-rule prev-line))))))
+      (when (and (f90-ts--node-type-p prev-line "comment")
+                 (eq (f90-ts--comment-matching-rule node)
+                     (f90-ts--comment-matching-rule prev-line)))
+        (let ((anchor (treesit-node-start prev-line)))
+          (f90-ts--cache-anchor-offset node parent bol anchor 0)
+          ;; signal match
+          t)))))
 
 
 (defun n-p-pstmtk (type-n type-p type-pstmtk)
@@ -2792,8 +2829,9 @@ indentation cache for the new run.")
     ;;
     ;; if a comment follows another comment of the same kind (same
     ;; special rule), then alignment is with respect to the previous
-    ;; comment in this comment region
-    (f90-ts--comment-region-is prev-sibling 0)
+    ;; comment in this comment region, the values are determined by the
+    ;; matcher and saved in the cache
+    (f90-ts--comment-region-is f90-ts--cached-anchor f90-ts--cached-offset)
     ;; indent separator comments like their parent nodes
     ;; this check is after the region check, hence previous sibling
     ;; is not a comment of same kind
