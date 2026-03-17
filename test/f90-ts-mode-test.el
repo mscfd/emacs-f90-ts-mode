@@ -672,6 +672,7 @@ point at 1+end of region."
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
+   "indent_region_select.erts"
    "indent_region_preproc.erts"
    "indent_region_openmp.erts")
  '(nil ; no modification
@@ -749,6 +750,7 @@ point at 1+end of region."
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
+   "indent_region_select.erts"
    "indent_region_preproc.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
@@ -772,6 +774,7 @@ point at 1+end of region."
  "f90-ts-mode"
  '("font_lock_basic.f90"
    "font_lock_builtin.f90"
+   "font_lock_select.f90"
    "font_lock_comment.f90"
    "font_lock_openmp.f90"
    "font_lock_operator.f90"
