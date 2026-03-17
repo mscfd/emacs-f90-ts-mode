@@ -63,3 +63,42 @@ contains
 
 end submodule subm
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: comments 1
+=-=
+subroutine compute(arg1, &
+                   ! comment1
+                   ! comment2
+                   arg2, &
+                   ! comment3
+                   ! comment4
+                   arg3, &
+                   ! ==========
+                   ! ==========
+                   arg4, &
+                   ! ==========
+                   ! comment5
+                   arg5, &
+
+                   ! comment6
+
+
+                   ! comment7
+
+                   arg6)
+     associate( &
+!$             lock1 => evaluator%lock1, &
+!$             lock2 => evaluator%lock2, &
+               x => arg1)
+     end associate
+end subroutine compute
+=-=-=

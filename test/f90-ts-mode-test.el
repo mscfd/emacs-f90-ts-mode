@@ -43,10 +43,50 @@ final newline."
 ;;------------------------------------------------------------------------------
 ;; custom variable handling for testing
 
+(defconst f90-ts-test--special-comment-rules
+  '((:name "openmp simd rule"
+     :match "^!\\$omp simd\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)
+    (:name "general openmp rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent column-0
+     :face f90-ts-font-lock-openmp-face)
+    (:name "separator comment rule"
+     :match "^! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$"
+     :indent context
+     :face f90-ts-font-lock-separator-comment-face)
+    (:name "ford documentation"
+     :match "^![<>]"
+     :indent indented
+     :face font-lock-doc-face))
+  "Test rules for special comment node indentation.")
+
+
+;; these cannot by pasted into erts-Code blocks, as the erts parsers
+;; seems to mangle the plist data, it becomes corrupted
+(defconst f90-ts-test--special-comment-rules-omp-context
+  '((:name "openmp simd rule"
+     :match "^!\\$omp declare\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)
+   (:name "openmp context rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent context
+     :face f90-ts-font-lock-openmp-face)))
+
+
+(defconst f90-ts-test--special-comment-rules-omp-indented
+  '((:name "general indented rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)))
+
+
 ;; values are chosen for testing purposes (like different indentation levels
 ;; to distinguish different rules and discover if the wrong rule is applied)
 (defconst f90-ts-mode-test-custom-settings
-  '((f90-ts-indent-toplevel . 1)
+  `((f90-ts-indent-toplevel . 1)
     (f90-ts-indent-contain . 3)
     (f90-ts-indent-block . 5)
     (f90-ts-indent-continued . 7)
@@ -58,12 +98,12 @@ final newline."
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
     (f90-ts-beginning-ampersand . nil)
+    (f90-ts-special-comment-rules . ,f90-ts-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
-    (f90-ts-separator-comment-regexp . "! \\(result\\|=\\{10\\}\\|arguments\\|local\\)$")
     (f90-ts-comment-region-prefix . "!!$")
-    (f90-ts-extra-comment-prefixes . '("!%%!" "!>"))
+    (f90-ts-extra-comment-prefixes . ("!%%!" "!>"))
     (f90-ts-mark-region-reversed . nil)
     (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
                                         ; also needs treesit-font-lock-recompute-features
@@ -632,7 +672,8 @@ point at 1+end of region."
  '("indent_region_basic.erts"
    "indent_region_comments.erts"
    "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
+   "indent_region_preproc.erts"
+   "indent_region_openmp.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)

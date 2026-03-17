@@ -37,10 +37,12 @@
   "Fortran (F90+) major mode using Tree-sitter."
   :group 'languages)
 
+
 (defgroup f90-ts-indent nil
   "Indentation in free format Fortran for treesitter f90-ts mode."
   :prefix "f90-ts-"
   :group  'f90-ts)
+
 
 (defcustom f90-ts-indent-toplevel 0
   "Extra indentation applied to contain sections at toplevel."
@@ -48,11 +50,13 @@
   :safe  'integerp
   :group 'f90-ts-indent)
 
+
 (defcustom f90-ts-indent-contain 3
   "Extra indentation applied to contain sections."
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
+
 
 (defcustom f90-ts-indent-block 3
   "Extra indentation applied to most blocks like function and
@@ -61,11 +65,13 @@ subroutine bodies, control statements (do, if, associate ...)."
   :safe  'integerp
   :group 'f90-ts-indent)
 
+
 (defcustom f90-ts-indent-continued 5
   "Extra indentation applied to continued lines."
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
+
 
 (defconst f90-ts-indent-list-options
   '(("keep if aligned or align to primary column" . keep-or-primary)
@@ -75,11 +81,13 @@ subroutine bodies, control statements (do, if, associate ...)."
     ("rotate columns" . rotate))
   "Options for indentation of list like structures on continued lines.")
 
+
 (defconst f90-ts--indent-list-radio
   `(radio ,@(mapcar (lambda (x)
                       `(const :tag ,(car x) ,(cdr x)))
                     f90-ts-indent-list-options))
   "Prepared options list for defcustoms.")
+
 
 (defcustom f90-ts-indent-list-region 'keep-or-primary
   "Algorithm for how to select the column for indentation in a list like
@@ -88,12 +96,14 @@ and similar operations."
   :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
+
 (defcustom f90-ts-indent-list-line 'rotate
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Primary choice used as default setting in
 'indent-for-tab-command' and similar operations (TAB on a single line)."
   :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
+
 
 (defcustom f90-ts-indent-list-line-2 'continued-line
   "Algorithm for how to select the column for indentation in a list like
@@ -103,6 +113,7 @@ A-<tab>, C-S-<tab>, etc."
   :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
+
 (defcustom f90-ts-indent-list-line-3 'primary
   "Algorithm for how to select the column for indentation in a list like
 context on continued lines. Used as ternary setting in
@@ -110,6 +121,7 @@ context on continued lines. Used as ternary setting in
 A-<tab>, C-S-<tab>, etc."
   :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
+
 
 (defcustom f90-ts-indent-list-always-include-default t
   "Always include the default continued line column in list of selected
@@ -119,6 +131,7 @@ plus the value of 'f90-ts-indent-continued'."
   :type  'boolean
   :safe  'booleanp
   :group 'f90-ts-indent)
+
 
 (defcustom f90-ts-indent-paren-default 1
   "Additional offset applied for alignment of non-parenthesis under opening
@@ -130,6 +143,7 @@ Primary alignment column for the second line column of parenthesis plus
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
+
 
 (defcustom f90-ts-indent-paren-close 0
   "Additional offset applied for alignment for closing parenthesis,
@@ -146,6 +160,7 @@ opening parenthesis plus `f90-ts-indent-expr-assign'."
   :safe  'integerp
   :group 'f90-ts-indent)
 
+
 (defcustom f90-ts-indent-expr-assign-default 2
   "Additional offset applied for alignment at assignment symbol \"=\",
 except for association operators.
@@ -159,6 +174,7 @@ Primary alignment column for the second line column of assignment plus
   :type  'integer
   :safe  'integerp
   :group 'f90-ts-indent)
+
 
 (defcustom f90-ts-indent-expr-assign-assoc-op 0
   "Additional offset applied for alignment at assignment symbol \"=\"
@@ -201,6 +217,7 @@ jumping and nil turns of smart end completion."
        :weight medium))
   "Face for custom font-lock highlighting."
   :group 'f90-ts-font-lock)
+
 
 (defface f90-ts-font-lock-bracket-face
   '((t :foreground "BlueViolet"
@@ -311,27 +328,14 @@ self or this. Used for applying a special font lock face."
 
 
 (defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
-  "Regular expression for matching and capturing comment starts (excluding openmp).
-For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments.
-This is used for applying the same comment starter, see `f90-ts-break-line'."
-  :type  'regexp
-  :safe  'stringp
-  :group 'f90-ts)
+  "Regular expression for matching and capturing comment starts (for
+operations like line break and others). Openmp is captured separately.
 
-
-(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
-  "Regular expression for matching comment starts (excluding openmp).
-For example \"![<>]?\" optionally adds symbols < and > used by documentation tools.
-Also add trailing whitespace characters to preserve indentation within comments."
-  :type  'regexp
-  :safe  'stringp
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-separator-comment-regexp ""
-  "Regular expression for matching separator comments (e.g. for structuring code).
-Used for applying a separator font lock face and alignment with parent node."
+For example \"![<>]?\" optionally adds symbols < and > used by
+documentation tools.
+The defcustom should also add trailing whitespace characters to
+preserve indentation within comments. This is used for applying the
+same comment starter, see `f90-ts-break-line'."
   :type  'regexp
   :safe  'stringp
   :group 'f90-ts)
@@ -354,6 +358,87 @@ Used for applying a separator font lock face and alignment with parent node."
 is set, then point is placed at start of region."
   :type  'boolean
   :safe  'booleanp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
+  "Regular expression for matching openmp starts. This is used for
+line break operations, as openmp statements require continuation
+symbols.
+The defcustom should also add trailing whitespace characters to
+preserve indentation within openmp statements."
+  :type  'regexp
+  :safe  'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-special-comment-rules
+  '((:name "openmp simd rule"
+     :match "^!\\$omp simd\\b"
+     :indent indented
+     :face f90-ts-font-lock-openmp-face)
+    (:name "general openmp rule"
+     :match "^!\\$\\(?:omp\\)?\\b"
+     :indent column-0
+     :face f90-ts-font-lock-openmp-face)
+    (:name "separator comment rule"
+     :match "^!={40,}"
+     :indent context
+     :face f90-ts-font-lock-separator-comment-face)
+    (:name "ford documentation"
+     :match "^![<>]"
+     :indent indented
+     :face font-lock-doc-face))
+  "Rules for special comment node indentation in `f90-ts-mode'.
+
+Each element is a plist with the following keys:
+
+  :name    A string naming the rule for documentation.
+
+  :match   Either a regexp string matched against the comment line
+           text, or a predicate function called with one argument
+           (the comment node) that returns non-nil for a match.
+
+  :indent  One of the following symbols:
+           `column-0'  — always indent to column 0,
+           `context'   — indent aligned to enclosing construct,
+           `indented'  — indent like normal code and comments.
+
+  :face    face symbol used to highlight matching comments.
+
+Rules are tested in order; the first match determines indentation
+and font lock face.
+If no rule matches, the comment is indented normally.
+
+Indentation hints of special comment rules are ignored within continued
+lines, except for the column-0 option. The other two options does not
+seem to make much sense."
+  :type '(repeat
+          (list :tag "Rule"
+                (const :format "" :value :name)
+                (string :tag "Name")
+                (const :format "" :value :match)
+                (choice :tag "Match"
+                        (regexp   :tag "Regexp")
+                        (function :tag "Predicate"))
+                (const :format "" :value :indent)
+                (choice :tag "Indentation"
+                        (const :tag "Column 0"                          column-0)
+                        (const :tag "Context (parent block)"            context)
+                        (const :tag "Indented (like code and comments)" indented))
+
+                (const :format "" :value :face)
+                (choice :tag "Face"
+                        (const :tag "font-lock-comment-face"
+                               font-lock-comment-face)
+                        (const :tag "font-lock-doc-face"
+                               font-lock-doc-face)
+                        (const :tag "f90-ts-font-lock-separator-comment-face"
+                               f90-ts-font-lock-separator-comment-face)
+                        (const :tag "f90-ts-font-lock-openmp-face"
+                               f90-ts-font-lock-openmp-face)
+                        (face :tag "other face"))
+                ))
   :group 'f90-ts)
 
 
@@ -409,14 +494,6 @@ Note that the parse uses identifier not just for variables, but for types etc."
     (let ((type (treesit-node-type node)))
       (or (string-match "^preproc_" type)
           (string-prefix-p "#" type))))
-
-
-(defun f90-ts-separator-comment-node-p (node)
-  "Check if NODE is a comment node and satisfies the separator comment regexp."
-  (when (and (not (string-empty-p f90-ts-separator-comment-regexp))
-             (f90-ts--node-type-p node "comment"))
-    (string-match-p (concat "^" f90-ts-separator-comment-regexp)
-                    (treesit-node-text node))))
 
 
 ;; the regexp engine is lacking a case insensitive switch, so we need to
@@ -539,6 +616,20 @@ example).")
 
 ;;------------------------------------------------------------------------------
 ;; auxiliary walk and query functions
+
+(defun f90-ts--comment-matching-rule (node)
+  "Return the first rule in `f90-ts-special-comment-rules' matching
+NODE, or nil if none matches."
+  (cl-assert (f90-ts--node-type-p node "comment")
+             nil "comment-matching-rule: comment node expected")
+  (let ((text (treesit-node-text node t)))
+    (seq-find
+     (lambda (rule)
+       (let ((match (plist-get rule :match)))
+         (cond
+          ((stringp match)   (string-match-p match text))
+          ((functionp match) (funcall match node)))))
+     f90-ts-special-comment-rules)))
 
 
 ;; currently not used, but might be useful
@@ -979,29 +1070,33 @@ located, otherwise return line number of current point position."
 
 
 ;;------------------------------------------------------------------------------
-;; Font-locking
+;; Font-locking: auxiliary
 
-(defun f90-ts--font-lock-rules-openmp ()
-  "Font-lock rules for openmp statements, which are currently stored as
-comments in the tree. Must be parsed before plain comments."
-  (treesit-font-lock-rules
-   :language 'fortran
-   :feature 'comment
-   '(;; capture comments starting with !$, which are openmp statements
-     ((comment) @f90-ts-font-lock-openmp-face
-      (:pred f90-ts-openmp-node-p @f90-ts-font-lock-openmp-face))
-     )))
+(defun f90-ts--fontify-comment (node override _start _end &rest _)
+  "Check whether NODE satisfies a special comment rule, and if it does,
+use the face provided by the first matching rule.
+Argument OVERRIDE is passend to treesit-fontify-with-override."
+  (cl-assert (f90-ts--node-type-p node "comment")
+             nil "fontify-comment: comment node expected")
+  (let* ((rule (f90-ts--comment-matching-rule node))
+         (face (or (and rule (plist-get rule :face))
+                   'font-lock-comment-face)))
+    (treesit-fontify-with-override
+     (treesit-node-start node) (treesit-node-end node)
+     face override)))
 
+
+;;------------------------------------------------------------------------------
+;; Font-locking: treesitter rules
 
 (defun f90-ts--font-lock-rules-comment ()
   "Font-lock rules for comments."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'comment
-   '(
-     ((comment) @f90-ts-font-lock-separator-comment-face
-      (:pred f90-ts-separator-comment-node-p @f90-ts-font-lock-separator-comment-face))
-     ((comment) @font-lock-comment-face)
+   '(;; default comments as well as special comments and openmp
+     ;; statements, declared by `f90-ts-special-comment-rules'
+     ((comment) @f90-ts--fontify-comment)
      )))
 
 
@@ -1338,7 +1433,6 @@ associates and others."
 
 (defvar f90-ts-font-lock-rules
   (list
-   (f90-ts--font-lock-rules-openmp)
    (f90-ts--font-lock-rules-comment)
    (f90-ts--font-lock-rules-intrinsic)
    (f90-ts--font-lock-rules-keyword)
@@ -1516,7 +1610,6 @@ or compute."
              f90-ts--indent-slot-offset)))
 
 
-
 ;;++++++++++++++
 
 (defvar-local f90-ts--continued-line-cache nil
@@ -1643,7 +1736,6 @@ to a line is more expensive.)"
     ))
 
 
-
 (defun f90-ts--continued-line-cache-get-col (node)
   "Return the final column of NODE in a continued statement.
 NODE is a potential anchor on some previous line, for which indentation
@@ -1661,6 +1753,7 @@ otherwise return column as is."
              (delta (cadr entry))
              (bol-col (car entry))
              (bol-current (f90-ts--indentation-at-pos pos)))
+        (cl-assert entry nil "cache-get-col: no entry for line in cache")
         (if (= bol-col bol-current)
             ;; not yet flushed
             (+ col delta)
@@ -1734,26 +1827,80 @@ non-preprocessor ancestor is a toplevel node (program, module, etc.)."
                               (treesit-node-type ancestor))))))
 
 
-(defun f90-ts--separator-comment-is (node _parent _bol &rest _)
-  "Matcher that checks whether node is a separator comment.
-These are aligned to their parents."
-  (and (f90-ts--node-type-p node "comment")
-       (f90-ts-separator-comment-node-p node)))
+(defun f90-ts--cache-anchor-offset (node parent bol anchor offset)
+  "Always cache ANCHOR and OFFSET in the indent cache. If the line
+is also within a continued statement, then cache the anchor-offset
+pair in the continued line cache as well."
+  (f90-ts--indent-anchor-cache anchor)
+  (f90-ts--indent-offset-cache offset)
+  ;; when within continued line statement, then cache anchor offset
+  (when (f90-ts--continued-subsequent-line-is node parent bol)
+    (f90-ts--continued-line-cache-put-subsequent
+     bol anchor offset)))
 
 
-(defun f90-ts--comment-region-is (node _parent _bol &rest _)
-  "Matcher that checks whether node and previous node are comments
-and are of same type (both separator or both other).
-Use first node of previous line (skipping empty lines) to avoid
-trailing comments."
+(defun f90-ts--special-comment-is (node parent bol &rest _)
+  "Matcher for special comment indentation.
+If NODE matches a rule in `f90-ts-special-comment-rules' with a
+non-indented indent style, cache the anchor and offset and return
+non-nil to signal a match.
+If indent style is column-0, use BOL to determine column-0 anchor.
+If indent style is context, use PARENT as anchor.
+If indent styoe is indented, indent like code. Do not match here,
+but instead let other rules handle it."
+
+  ;; Note: if this matcher signals match and is within a continued
+  ;; line, then indentation (anchor offset) needs to be cached in the
+  ;; continued line cache as well, using:
+  ;;
+  ;;(when (f90-ts--continued-subsequent-line-is node parent bol)
+  ;;  (f90-ts--continued-line-cache-put-subsequent
+  ;;   bol anchor 0))
+
+  (when (f90-ts--node-type-p node "comment")
+    (when-let* ((rule (f90-ts--comment-matching-rule node))
+                (indent (plist-get rule :indent)))
+      ;; indented variant is handled like normal code
+      (pcase indent
+        ('column-0
+         (let ((anchor (save-excursion
+                         (goto-char bol)
+                         (line-beginning-position))))
+           (f90-ts--cache-anchor-offset node parent bol anchor 0)
+           ;; signal match
+           t))
+
+        ('context
+         ;; special comment indentation within continued lines does not seem
+         ;; to make much sense except for column-0
+         (unless (f90-ts--continued-subsequent-line-is node parent bol)
+           (let ((anchor (treesit-node-start parent)))
+             (f90-ts--indent-anchor-cache anchor)
+             (f90-ts--indent-offset-cache 0))
+           ;; signal match
+           t))
+
+        (_
+         ;; signal no match
+         nil)
+        ))))
+
+
+(defun f90-ts--comment-region-is (node parent bol &rest _)
+  "Matcher that checks whether NODE and comment on the previous
+line are matched by the same rule in `f90-ts-special-comment-rules'
+(including both matching none=default comment)."
   (when (f90-ts--node-type-p node "comment")
     (when-let* ((prev-sib (treesit-node-prev-sibling node))
                 (prev-line (f90-ts--first-node-on-line
                             (treesit-node-start prev-sib))))
-      (and (f90-ts--node-type-p prev-line "comment")
-           (eq (not (f90-ts-separator-comment-node-p node))
-               (not (f90-ts-separator-comment-node-p prev-line))))
-      )))
+      (when (and (f90-ts--node-type-p prev-line "comment")
+                 (eq (f90-ts--comment-matching-rule node)
+                     (f90-ts--comment-matching-rule prev-line)))
+        (let ((anchor (treesit-node-start prev-line)))
+          (f90-ts--cache-anchor-offset node parent bol anchor 0)
+          ;; signal match
+          t)))))
 
 
 (defun n-p-pstmtk (type-n type-p type-pstmtk)
@@ -1782,14 +1929,14 @@ to position, which also works for node=nil)."
 ;;++++++++++++++
 ;; anchors
 
-(defun previous-stmt-anchor (node parent bol)
+(defun previous-stmt-anchor (node parent bol &rest _rest)
   "Anchor at previous statements indentation."
   (if-let ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
       (f90-ts--indent-pos-at-node pstmt-1)
     bol))
 
 
-(defun previous-line-anchor (node parent bol)
+(defun previous-line-anchor (node parent bol &rest _rest)
   "Anchor at previous line with a statement on it. Used for continued
 lines, where the previous sibling or parent is not the right anchor."
   (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
@@ -1800,7 +1947,7 @@ lines, where the previous sibling or parent is not the right anchor."
       bol)))
 
 
-(defun catch-all-anchor (node parent bol)
+(defun f90-ts--catch-all-anchor (node parent bol &rest _rest)
   "Anchor function to provide a fallback anchor in the catch-all case. This
 applies if some rule is missing, but also if we just want to indent
 with the previous relevant line."
@@ -1817,7 +1964,7 @@ with the previous relevant line."
       bol)))
 
 
-(defun f90-ts--cached-anchor (_node _parent _bol)
+(defun f90-ts--cached-anchor (_node _parent _bol &rest _rest)
   "Return cached anchor. This function requires that the used matcher
 has computed and stored the anchor (and possibly offset).
 Currently not used."
@@ -1831,12 +1978,12 @@ Currently not used."
 ;; and use it in indent rules with the desired offset value like
 ;; f90-ts-indent-block, as this bakes the current value into the rule,
 ;; and makes it immune to later changes
-(defun f90-ts--minus-block-offset (_node _parent _bol &rest _)
+(defun f90-ts--minus-block-offset (_node _parent _bol &rest _rest)
   "Returns offset -f90-ts-indent-block uncondionally."
   (- f90-ts-indent-block))
 
 
-(defun f90-ts--indent-toplevel-offset (node parent _bol)
+(defun f90-ts--toplevel-offset (node parent _bol &rest _rest)
   "Indent stuff right below top level nodes: f90-ts-indent-toplevel when
 inside module, submodule or program, otherwise use f90-ts-indent-contain."
   (let* ((grandparent (treesit-node-parent parent))
@@ -1850,7 +1997,7 @@ inside module, submodule or program, otherwise use f90-ts-indent-contain."
       f90-ts-indent-contain)))
 
 
-(defun f90-ts--cached-offset (_node _parent _bol)
+(defun f90-ts--cached-offset (_node _parent _bol &rest _rest)
   "Return cached offset. This function requires that the matcher or
 the anchor have computed and stored the offset.
 Currently this is used by continued lines matcher/anchor."
@@ -2669,27 +2816,26 @@ some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
 indentation cache for the new run.")
 
 
-(defvar f90-ts-indent-rules-openmp
-  `(;; indent a sequence of openmp statements, these are comments starting
-    ;; with !$, so this needs to be done before comments are processed
-    (f90-ts--openmp-comment-is column-0 0)
-    )
-  "Indentation rules for openmp. Currently openmp are comment nodes,
-which start with !$ or !$omp")
-
-
 (defvar f90-ts-indent-rules-comments
-  `(;; comments are ignored if checking previous statements, first comment
-    ;; in a sequence of comments can be aligned like a normal statement,
-    ;; but if a comment follows another comment, then we need an extra rule
-    ;; to align to previous comment
-    ;; indent a sequence of comments of same kind (separator or other)
-    ;; with respect to previous comment
-    (f90-ts--comment-region-is prev-sibling 0)
+  `(;; there are special comments in `f90-ts-special-comment-rules',
+    ;; distinguish between default and these special comments
+    ;; (including openmp lines as well)
+    ;;
+    ;; default comments as well as special comments with property
+    ;; `indented' are indented like code, these are not handled here
+    ;; other comments are matched and anchor and offset caches are
+    ;; loaded, according the the rule properties in
+    ;; `f90-ts-special-comment-rules'
+    ;;
+    ;; if a comment follows another comment of the same kind (same
+    ;; special rule), then alignment is with respect to the previous
+    ;; comment in this comment region, the values are determined by the
+    ;; matcher and saved in the cache
+    (f90-ts--comment-region-is f90-ts--cached-anchor f90-ts--cached-offset)
     ;; indent separator comments like their parent nodes
     ;; this check is after the region check, hence previous sibling
     ;; is not a comment of same kind
-    (f90-ts--separator-comment-is parent 0)
+    (f90-ts--special-comment-is f90-ts--cached-anchor f90-ts--cached-offset)
     )
   "Indentation rules for comments (excluding openmp statements).")
 
@@ -2737,8 +2883,8 @@ continued lines must have been dealt with before.")
   `(;; contains statements in modules, programs, subroutines or functions,
     ;; no indentation for contains
     ((node-is    "internal_procedures")         parent 0)
-    ((parent-is  "internal_procedures")         parent f90-ts--indent-toplevel-offset)
-    ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--indent-toplevel-offset)
+    ((parent-is  "internal_procedures")         parent f90-ts--toplevel-offset)
+    ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--toplevel-offset)
     )
   "Indentation rules for internal_proc node, which occurs in conjunction
 with contain statements.")
@@ -2750,18 +2896,18 @@ with contain statements.")
     ;; whether parent is xyz, as parent is xyz in both cases
 
     ((node-is    "end_program_statement") parent 0)
-    ((parent-is      "program")           parent f90-ts--indent-toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "program")   parent f90-ts--indent-toplevel-offset)
+    ((parent-is      "program")           parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "program")   parent f90-ts--toplevel-offset)
 
     ;; parent-is uses regexp matching, thus use "^module" to avoid that it
     ;; matches "submodule"
     ((node-is        "end_module_statement") parent 0)
-    ((parent-is      "^module")              parent f90-ts--indent-toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "module")       parent f90-ts--indent-toplevel-offset)
+    ((parent-is      "^module")              parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "module")       parent f90-ts--toplevel-offset)
 
     ((node-is        "end_submodule_statement") parent 0)
-    ((parent-is      "submodule")            parent f90-ts--indent-toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "submodule")    parent f90-ts--indent-toplevel-offset)
+    ((parent-is      "submodule")            parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "submodule")    parent f90-ts--toplevel-offset)
     )
   "Indentation rules for program and module nodes.")
 
@@ -2825,17 +2971,17 @@ not within a contains section (or hiding behind some ERROR node).")
 
     ((n-p-pstmtk "elseif_clause"    "ERROR" "if") previous-stmt-anchor 0)
     ((n-p-pstmtk "elseif"           "ERROR" "if") previous-stmt-anchor 0)
-    ((n-p-gp     "elseif_clause"    "ERROR" nil)  previous-stmt-anchor f90-ts--minus-block-offset) ;; at elseif line, incomplete
+    ((n-p-gp     "elseif_clause"    "ERROR" nil)  previous-stmt-anchor f90-ts--minus-block-offset) ; at elseif line, incomplete
 
     ((n-p-pstmtk "else_clause"      "ERROR" "if")     previous-stmt-anchor 0)
     ((n-p-pstmtk "else_clause"      "ERROR" "elseif") previous-stmt-anchor 0)
-    ((n-p-gp     "else_clause"      "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset) ;; at else line, incomplete
+    ((n-p-gp     "else_clause"      "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset) ; at else line, incomplete
     ((n-p-pstmtk "else"             "ERROR" "if")     previous-stmt-anchor 0)
     ((n-p-gp     "else"             "ERROR" nil)      previous-stmt-anchor f90-ts--minus-block-offset)
 
-    ((n-p-pstmtk nil                "ERROR" "if")     previous-stmt-anchor f90-ts-indent-block) ;; empty line after if
-    ((n-p-pstmtk nil                "ERROR" "elseif") previous-stmt-anchor f90-ts-indent-block) ;; empty line after elseif
-    ((n-p-pstmtk nil                "ERROR" "else")   previous-stmt-anchor f90-ts-indent-block) ;; empty line after else
+    ((n-p-pstmtk nil                "ERROR" "if")     previous-stmt-anchor f90-ts-indent-block) ; empty line after if
+    ((n-p-pstmtk nil                "ERROR" "elseif") previous-stmt-anchor f90-ts-indent-block) ; empty line after elseif
+    ((n-p-pstmtk nil                "ERROR" "else")   previous-stmt-anchor f90-ts-indent-block) ; empty line after else
     )
   "Indentation rules for if-then-else statements.")
 
@@ -2885,7 +3031,7 @@ associate and block statements.")
 (defvar f90-ts-indent-rules-catch-all
   `(;; final catch-all rule
     ;;,@(f90-ts-indent-rules-info "catch all")
-    (catch-all catch-all-anchor 0)
+    (catch-all f90-ts--catch-all-anchor 0)
     )
   "Final indentation rule to handle unmatched cases.")
 
@@ -2894,7 +3040,6 @@ associate and block statements.")
   `((fortran
      ,@f90-ts-indent-rules-start
      ,@f90-ts-indent-rules-preproc
-     ,@f90-ts-indent-rules-openmp
      ,@f90-ts-indent-rules-comments
      ,@f90-ts-indent-rules-continued
      ,@f90-ts-indent-rules-internal-proc
@@ -3436,7 +3581,8 @@ variant `f90-ts-indent-list-line-3' for execution."
     (insert "&\n&"))
 
    ((f90-ts-in-openmp-p)
-    ;; looks like a comment, but starting with special "!$" sequence
+    ;; looks like a comment, but starting with special "!$" sequence,
+    ;; breaking openmp lines requires a continuation symbol
     (let* ((node (treesit-node-at (point)))
            (prefix (f90-ts--comment-prefix node)))
       (delete-horizontal-space)

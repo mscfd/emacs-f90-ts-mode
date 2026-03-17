@@ -17,7 +17,7 @@ The mode is under **development**, features might only be partially implemented.
   - [Syntax highlight](#syntax-highlight)
   - [Indentation](#indentation)
     - [Indentation of multiline statement](#indentation-of-multiline-statement)
-    - [Separator comments](#separator-comments)
+    - [OpenMP and other special comments](#openmp-and-other-special-comments)
   - [Smart end completion](#smart-end-completion)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
   - [Breaking and joining lines](#breaking-and-joining-lines)
@@ -197,9 +197,7 @@ Additionally to the usual faces, there are some extra custom faces:
 | `f90-ts-font-lock-separator-comment-face` | separator comments (e.g. `!---------`, `! arguments`) |
 
 Special variables are recognised by regexp matching with customizable variable `f90-ts-special-var-regexp`.
-Separator comments are recognised by regexp matching with customizable variable `f90-ts-separator-comment-regexp`.
-
-*Note*: Executing `M-x describe-face` can be used to find out which face is applied and to customize it if necessary.
+Openmp and separator comments are matched by rules in `f90-ts-special-comment-rules'.
 
 
 ### Indentation
@@ -229,22 +227,21 @@ Customizable variables for indentations are:
 
 Currently implemented rules are:
 
-| Rule Set                | Description                                                                              |
-|-------------------------|------------------------------------------------------------------------------------------|
-| openmp                  | openmp directives stored as comments starting with `!$` or `!$omp`                       |
-| preproc                 | indentation of and at preprocessor directives                                            |
-| comments                | for sequences of regular and separator comments                                          |
+| Rule Set                | Description                                                                                     |
+|-------------------------|-------------------------------------------------------------------------------------------------|
+| preproc                 | indentation of and at preprocessor directives                                                   |
+| comments                | for sequences of regular comment and for special comments (openmp, separator, documentation     |
 | continued lines         | multi-line statements, column alignment for lists (like variable declarations, arguments, etc.) |
 | internal procedures     | `contains` sections and internal procedures in `programs`, `(sub)modules`, `functions` and `subroutines` |
-| program / module        | `program`, `module`, and `submodule` bodies                                              |
-| functions               | `function` and `subroutine` bodies, including `end function` / `end subroutine`          |
-| translation unit        | some rules concerning toplevel translation unit and related ERROR cases                  |
-| interfaces              | (abstract) interface blocks                                                              |
-| derived types           | derived-type definitions                                                                 |
-| if / then / else        | `if`, `elseif`, and `else` constructs                                                    |
-| single block statements | `do`, `block`, and `associate` constructs                                                |
-| select statements       | `select case` and `select type` statements                                               |
-| catch-all               | final fallback rule for unmatched cases                                                  |
+| program / module        | `program`, `module`, and `submodule` bodies                                                     |
+| functions               | `function` and `subroutine` bodies, including `end function` / `end subroutine`                 |
+| translation unit        | some rules concerning toplevel translation unit and related ERROR cases                         |
+| interfaces              | (abstract) interface blocks                                                                     |
+| derived types           | derived-type definitions                                                                        |
+| if / then / else        | `if`, `elseif`, and `else` constructs                                                           |
+| single block statements | `do`, `block`, and `associate` constructs                                                       |
+| select statements       | `select case` and `select type` statements                                                      |
+| catch-all               | final fallback rule for unmatched cases                                                         |
 
 
 #### Indentation of multiline statement
@@ -280,15 +277,33 @@ TODO:
 * handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
 
 
-#### Separator comments
+#### OpenMP and other special comments
 
-Separator comments are recognised by regexp `f90-ts-separator-comment-regexp`.
-Highlighting is done with `f90-ts-font-lock-separator-comment-face`.
-Additionally these special comments are also aligned differently.
-Normal comments are indented like statements. Separator comments are aligned to their parent node.
-For example, if the regexp for separator comments is `\\(!\\( arguments\|===\\)$\\)`,
+For special comments such as openmp statements, separator comments and documentation (like ford
+and doxygen documentatio with comment starters like `!>` and `!<` or similar)
+the customizable list `f90-ts-special-comment-rules` can be used to specify indentation
+and faces for such comments.
+A list entry looks like
+```
+(:name "openmp rule"
+ :match "^!\\$\\(?:omp\\)?\\b"
+ :indent indented
+ :face f90-ts-font-lock-openmp-face)
+```
+providing a name (as documentation), a regexp or predicate function, and indentation type
+and a face for synatx highlighting. Indentation types are `column-0`, `context` and `indented`.
+With `column-0`, the matched comment is aligned to column 0. For `context`, the enclosing
+statement is used for indentation. Option `indented` indents comments like code. If no special
+rule matches, then comments are indented with `indented` and highlighted with `font-lock-comment-face`.
+
+For example, if there is an entry
+```
+(:name "openmp rule"
+ :match "\\(!\\( arguments\|===\\)$\\)"
+ :indent context
+ :face font-lock-comment-face)
+```
 indentation looks like:
-
 ```fortran
 subroutine sub(arg1, arg2)
 ! arguments
@@ -299,6 +314,9 @@ subroutine sub(arg1, arg2)
   print *, arg1, arg2
 end subroutine sub
 ```
+
+Remark: Indentation hints `context` and `indented` are ignored if comment is within a continued line.
+Only `column-0` is applied in the continued line context.
 
 
 ### Smart end completion
