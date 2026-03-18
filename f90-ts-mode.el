@@ -1175,7 +1175,8 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       "pure" "impure" "elemental" "recursive"
       "dimension" "contiguous" "volatile"
       "associate" "block" "critical"
-      "where" "forall" "concurrent"] @font-lock-keyword-face))
+      "where" "elsewhere" "forall" "concurrent"]
+      @font-lock-keyword-face))
    ))
 
 
@@ -2993,6 +2994,26 @@ not within a contains section (or hiding behind some ERROR node).")
   "Indentation rules for if-then-else statements.")
 
 
+(defvar f90-ts-indent-rules-where
+  `(;; where-elsewhere statements
+    ((n-p-gp     "end_where_statement" "where_statement"  nil)         parent 0)
+    ((n-p-gp     "elsewhere_clause"    "where_statement"  nil)         parent 0)
+    ((n-p-gp     "else_clause"         "where_statement"  nil)         parent 0)
+    ((n-p-pstmtk nil                   "where_statement"  "where")     parent f90-ts-indent-block) ; line right after where
+    ((n-p-pstmtk nil                   "where_statement"  "elsewhere") parent f90-ts-indent-block) ; line right after elsewhere
+    ((n-p-pstmtk nil                   "elsewhere_clause" "elsewhere") parent f90-ts-indent-block) ; line after else, with non-empty else block
+
+    ((n-p-pstmtk "elsewhere_clause"    "ERROR" "where") previous-stmt-anchor 0)
+    ((n-p-pstmtk "elsewhere"           "ERROR" "where") previous-stmt-anchor 0)
+    ((n-p-gp     "elsewhere_clause"    "ERROR" nil)     previous-stmt-anchor f90-ts--minus-block-offset) ; at elsewhere line, incomplete
+    ((n-p-gp     "elsewhere"           "ERROR" nil)     previous-stmt-anchor f90-ts--minus-block-offset)
+
+    ((n-p-pstmtk nil                "ERROR" "where")     previous-stmt-anchor f90-ts-indent-block) ; empty line after where
+    ((n-p-pstmtk nil                "ERROR" "elsewhere") previous-stmt-anchor f90-ts-indent-block) ; empty line after elsewhere
+    )
+  "Indentation rules for else-elsewhere statements.")
+
+
 (defvar f90-ts-indent-rules-single-region
   `(;; structures with a single region block and linear execution
     ((n-p-gp     "end_do_loop" "do_loop" nil)  parent 0)
@@ -3064,6 +3085,7 @@ associate and block statements.")
      ,@f90-ts-indent-rules-interface
      ,@f90-ts-indent-rules-derived-type
      ,@f90-ts-indent-rules-if
+     ,@f90-ts-indent-rules-where
      ,@f90-ts-indent-rules-single-region
      ,@f90-ts-indent-rules-select
      ,@f90-ts-indent-rules-catch-all
@@ -3087,7 +3109,7 @@ associate and block statements.")
     ;"end_do_label_loop_statement"
     "end_do_loop_statement"
     "end_if_statement"
-    ;"end_where_statement"
+    "end_where_statement"
     ;"end_forall_statement"
     "end_select_statement"
     "end_block_construct_statement"
@@ -3132,6 +3154,7 @@ different. Return true if something was changed."
                                           ))
     ("derived_type_definition" . "(derived_type_definition (derived_type_statement \"type\" @construct (_) * (type_name) @name))")
     ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
+    ("where_statement"         . "(where_statement (block_label_start_expression _ @name \":\")? \"where\" @construct)")
     ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct))")
     ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
     ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
@@ -3270,6 +3293,7 @@ option or statement indentation."
     (when (and (= (line-number-at-pos beg) (line-number-at-pos end))
                (and text (string-match-p "^end" text))
                (member type f90-ts--complete-end-structs))
+
       (let ((node-block (treesit-node-parent node))
             node-block-new)
         (when-let ((completion (f90-ts--complete-smart-end-compose node-block)))

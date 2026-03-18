@@ -218,3 +218,19 @@ subroutine matrix_op(this)
      end associate components
 end subroutine matrix_op
 =-=-=
+
+Name: where-elsewhere construct 1
+=-=
+subroutine sub()
+     log_a: where (a > 0.0)
+          b = log(a)
+     elsewhere (a == 0.0) log_a
+          b = 0.0
+          is_zero = .true.
+     elsewhere log_a
+          ! negative
+          b = -1.0
+          is_negative = .true.
+     end where log_a
+end subroutine sub
+=-=-=

@@ -22,22 +22,6 @@ subroutine select_case()
 end subroutine select_case
 
 
-! alignment and fontlocking issues
-subroutine sub()
-     map_a: where (a > 0.0)
-     b = sqrt(a)
-     c = log(a)
-     elsewhere (a == 0.0) map_a
-     b = 0.0
-     c = 0.0
-     elsewhere map_a
-     b = -1.0
-     c = -1.0
-     end where map_a
-end subroutine sub
-
-
-
 subroutine sub()
      forall (i = 1:n, j = 1:n, a(i,j) /= 0.0)
      b(i,j) = 1.0 / a(i,j)
