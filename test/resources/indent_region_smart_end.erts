@@ -173,6 +173,7 @@ contains
 logical function  lower_case()
      call some_thing()
 end function lower_case
+end module upper_mod
 =-=
 MODULE UPPER_MOD
  type :: lower_t
@@ -185,6 +186,7 @@ contains
  logical function  lower_case()
       call some_thing()
  end function lower_case
+END MODULE UPPER_MOD
 =-=-=
 
 Name: smart end with lower-upper-title-camel-case 6

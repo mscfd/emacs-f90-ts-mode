@@ -459,6 +459,17 @@ type is among the elements of TYPE."
                (member type-n type))))))
 
 
+(defun f90-ts--node-type-match-p (node type-rx)
+  "If TYPE_RX is nil, return non-nil and ignore NODE.
+If NODE is nil and TYPE_RX is non-nil, return nil.
+If TYPE-RX and NODE are both non-nil return non-nil if the type of NODE
+is matched by TYPE-RX."
+  (or (not type-rx)
+      (and node
+           (let ((type-n (treesit-node-type node)))
+             (string-match-p type-rx type-n)))))
+
+
 (defun f90-ts--comment-prefix (node)
   "Extract the starting character sequence from NODE, which is assumed
 to be of type comment. It uses 'f90-ts-openmp-prefix-regexp' and
@@ -1282,6 +1293,8 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       name: (name)                 @font-lock-function-name-face)
      (function_statement
       name: (name)                 @font-lock-function-name-face)
+     (module_procedure_statement
+      name: (name)                 @font-lock-function-name-face)
      (function_result
       (identifier)                 @default)
      (subroutine_call
@@ -1364,6 +1377,11 @@ associates and others."
      (end_subroutine_statement
       "end"
       "subroutine"
+      (name)       @font-lock-function-name-face)
+
+     (end_module_procedure_statement
+      "end"
+      "procedure"
       (name)       @font-lock-function-name-face)
 
      (end_interface_statement
@@ -1916,9 +1934,9 @@ line are matched by the same rule in `f90-ts-special-comment-rules'
 statement keyword."
   (lambda (node parent bol &rest _)
     (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword)))
-      (and (f90-ts--node-type-p node type-n)
-           (f90-ts--node-type-p parent type-p)
-           (f90-ts--node-type-p pstmt-k type-pstmtk)))))
+      (and (f90-ts--node-type-match-p node type-n)
+           (f90-ts--node-type-match-p parent type-p)
+           (f90-ts--node-type-match-p pstmt-k type-pstmtk)))))
 
 
 (defun n-p-ch-psibp (type-n type-p type-ch type-psibp)
@@ -1928,10 +1946,10 @@ to position, which also works for node=nil)."
   (lambda (node parent bol &rest _)
     (let ((child0 (f90-ts--indent-child0))
           (psibp (f90-ts--indent-prev-sib-by-parent)))
-      (and (f90-ts--node-type-p node type-n)
-           (f90-ts--node-type-p parent type-p)
-           (f90-ts--node-type-p child0 type-ch)
-           (f90-ts--node-type-p psibp type-psibp)))))
+      (and (f90-ts--node-type-match-p node type-n)
+           (f90-ts--node-type-match-p parent type-p)
+           (f90-ts--node-type-match-p child0 type-ch)
+           (f90-ts--node-type-match-p psibp type-psibp)))))
 
 
 ;;++++++++++++++
@@ -2792,7 +2810,7 @@ additionally some node and parent info if MSG=first."
 
         (f90-ts-log :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
                     (point) bol (line-beginning-position) (line-number-at-pos))
-        (let ((tttttt (format "types n-p-gp-psibp-ps-ch = %s, %s, %s, %s, %s, %s"
+        (let ((tttttt (format "types n-p-gp-psibp-pstmtk-ch = %s, %s, %s, %s, %s, %s"
                               (and node (treesit-node-type node))
                               (and parent (treesit-node-type parent))
                               (and grandparent (treesit-node-type grandparent))
@@ -2818,6 +2836,7 @@ some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
 (defvar f90-ts-indent-rules-start
   `(;; populate cache and then always fail
     (f90-ts--populate-cache parent 0)
+    ;; info rules needs populated cache
     ;;,@(f90-ts-indent-rules-info "start")
     )
   "Indentation rules executed at start. The main purpose is to fill the
@@ -2902,32 +2921,37 @@ with contain statements.")
   `(;; program or module interface part (before contains) and end statement
     ;; in all cases: first match node with end_xyz_statement, and then only
     ;; whether parent is xyz, as parent is xyz in both cases
-
-    ((node-is    "end_program_statement") parent 0)
-    ((parent-is      "program")           parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "program")   parent f90-ts--toplevel-offset)
+    ((node-is    "end_program_statement")        parent 0)
+    ((parent-is      "program\\(_statement\\)?") parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "program")          parent f90-ts--toplevel-offset)
 
     ;; parent-is uses regexp matching, thus use "^module" to avoid that it
     ;; matches "submodule"
-    ((node-is        "end_module_statement") parent 0)
-    ((parent-is      "^module")              parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "module")       parent f90-ts--toplevel-offset)
+    ((node-is        "end_module_statement")      parent 0)
+    ((parent-is      "^module\\(_statement\\)?$") parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "^module$")          parent f90-ts--toplevel-offset)
 
-    ((node-is        "end_submodule_statement") parent 0)
-    ((parent-is      "submodule")            parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "submodule")    parent f90-ts--toplevel-offset)
+    ((node-is        "end_submodule_statement")      parent 0)
+    ((parent-is      "^submodule\\(_statement\\)?$") parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "^submodule$")          parent f90-ts--toplevel-offset)
     )
   "Indentation rules for program and module nodes.")
 
 
 (defvar f90-ts-indent-rules-function
   `(;; functions and subroutine bodies
-    ((node-is    "end_subroutine_statement") parent 0)
-    ((node-is    "end_function_statement")   parent 0)
-    ((parent-is  "subroutine")               parent f90-ts-indent-block)
-    ((parent-is  "function")                 parent f90-ts-indent-block)
-    ((n-p-pstmtk nil nil "subroutine")           parent f90-ts-indent-block)
-    ((n-p-pstmtk nil nil "function")             parent f90-ts-indent-block)
+    ,@(f90-ts-indent-rules-info "fun1")
+    ((node-is    "end_subroutine_statement")       parent 0)
+    ((node-is    "end_function_statement")         parent 0)
+    ((node-is    "end_module_procedure_statement") parent 0)
+    ,@(f90-ts-indent-rules-info "fun2")
+    ((parent-is  "subroutine")                     parent f90-ts-indent-block)
+    ((parent-is  "function")                       parent f90-ts-indent-block)
+    ((parent-is  "module_procedure")               parent f90-ts-indent-block)
+    ((n-p-pstmtk nil nil "subroutine")             parent f90-ts-indent-block)
+    ((n-p-pstmtk nil nil "function")               parent f90-ts-indent-block)
+    ((n-p-pstmtk nil nil "module_procedure")       parent f90-ts-indent-block)
+    ,@(f90-ts-indent-rules-info "fun3")
     )
   "Indentation rules for functions and subroutines.")
 
@@ -2939,6 +2963,9 @@ with contain statements.")
     ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
+    ;; rule for translation_unit and module_procedure_statement does not seem possible,
+    ;; as module procedure statements are only allowed within contains section
+    ((n-p-ch-psibp nil "ERROR"            nil "module_procedure_statement") parent f90-ts-indent-block)
     ((parent-is "translation_unit") column-0 0))
   "Indentation rules for translation_unit and functions and subroutines
 not within a contains section (or hiding behind some ERROR node).")
@@ -3103,7 +3130,7 @@ associate and block statements.")
     ;"end_block_data_statement"
     "end_subroutine_statement"
     "end_function_statement"
-    ;"end_module_procedure_statement"
+    "end_module_procedure_statement"
     "end_type_statement"
     "end_interface_statement"
     ;"end_do_label_loop_statement"
@@ -3145,6 +3172,7 @@ different. Return true if something was changed."
     ("submodule"               . "(submodule (submodule_statement \"submodule\" @construct (_) * (name) @name))")
     ("subroutine"              . "(subroutine (subroutine_statement \"subroutine\" @construct name: (_) @name))")
     ("function"                . "(function (function_statement \"function\" @construct name: (_) @name))")
+    ("module_procedure"        . "(module_procedure (module_procedure_statement \"procedure\" @construct name: (_) @name))")
     ("interface"               . ,(concat "(interface (interface_statement (abstract_specifier)?"
                                           "\"interface\" @construct"
                                           "[((name) @name)"

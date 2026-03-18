@@ -1,0 +1,110 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: program 1
+=-=
+program program1
+ write(*,'(a)') 'hello'
+end program program1
+=-=-=
+
+Name: program 2
+=-=
+program program2
+ implicit none
+ integer :: i
+ do i = 1,10
+      print *,'i = ', i
+ end do
+end program program2
+=-=-=
+
+Name: program 3
+=-=
+program program3
+ implicit none (type, external)
+ integer :: i
+ do i = 1,10
+      call sub(i)
+ end do
+contains
+ subroutine sub(k)
+      integer, intent(in) :: k
+      print *,k
+ end subroutine sub
+end program program3
+=-=-=
+
+Name: module procedure in module 1
+=-=
+module square
+ implicit none (type, &
+        external)
+ private
+ public :: get_square
+
+ interface get_square
+      module function get_square_impl(x)
+           real, intent(in) :: x
+           real :: get_square_impl
+      end function get_square_impl
+ end interface get_square
+
+contains
+
+ module procedure get_square_impl
+      get_square_impl = x**2
+ end procedure get_square_impl
+
+end module square
+=-=-=
+
+Name: module procedure in submodule 1
+=-=
+submodule (do_mod) do_sub
+contains
+ module Procedure do_fun
+      do_fun = 0
+      sum_do_: do
+           if (do_fun > 1000) exit
+           i = i + 1
+           do_fun = do_fun + i**2
+      end do sum_do_
+ End Procedure do_fun
+end submodule do_sub
+=-=-=
+
+Name: module subroutine in submodule 1
+=-=
+submodule (do_mod) do_sub
+contains
+ module recursive subroutine rec(n)
+      integer, intent(in) :: n
+      check: if (n > 0) then
+           call rec(n-1)
+           print '(10a,i4)', 'done ', n
+      end if check
+ end subroutine rec
+end submodule do_sub
+=-=-=
+
+Name: module function in submodule 1
+=-=
+submodule (do_mod) do_sub
+contains
+ module impure function do_fun(N)
+      integer, intent(in) :: N
+      integer :: i
+      i = 0
+      while_loop:do while (i < n)
+           print *, i
+      end do while_loop
+ end function do_fun
+end submodule do_sub
+=-=-=
