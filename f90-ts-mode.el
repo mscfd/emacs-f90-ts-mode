@@ -516,8 +516,8 @@ text of the node."
                "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
                "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
                "null" "pack" "precision" "present" "product" "radix"
-               "random_number" "random_seed" "range" "real" "repeat" "reshape"
-               "rrspacing" "scale" "scan" "selected_int_kind"
+               "random_number" "random_seed" "range" "rank" "real" "repeat"
+               "reshape" "rrspacing" "scale" "scan" "selected_int_kind"
                "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
                "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
                "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
@@ -1144,6 +1144,13 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
 
    :language 'fortran
    :feature 'keyword
+   ;; match keywords in select ranl statements
+   ;; (which are not covered by simple keywords below
+   '((rank_statement
+      (default) @font-lock-keyword-face))
+
+   :language 'fortran
+   :feature 'keyword
    ;; match keywords exposed by the grammar
    ;; note that this matches anonymous nodes representing the keyword,
    ;; not the keyword text itself, and these nodes are always stored lower-case
@@ -1158,7 +1165,7 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       "extends" "abstract"
       "pass" "nopass" "deferred"
       "operator" "assignment" "generic" "final"
-      "select" "case" "default"
+      "select" "case" "rank" "default"
       "use" "only" "implicit" "none"
       "interface" "contains" "return"
       "public" "private" "protected"
@@ -3007,6 +3014,14 @@ associate and block statements.")
 
 (defvar f90-ts-indent-rules-select
   `(;; control statements
+    ((n-p-gp     "end_select_statement" "select_case_statement" nil)              parent 0)
+    ((n-p-pstmtk "case_statement"       "select_case_statement" nil)              parent 0)
+    ((n-p-pstmtk nil                    "select_case_statement" "case")           parent f90-ts-indent-block)
+    ((n-p-pstmtk nil                    "case_statement"        "case")           parent f90-ts-indent-block)
+    ((n-p-gp     "ERROR"                "select_case_statement" nil)              parent f90-ts-indent-block)
+    ((n-p-gp     nil                    "ERROR"                 "case_statement") grand-parent f90-ts-indent-block)
+    ((parent-is                         "select_case_statement")                  parent 0)
+
     ((n-p-gp     "end_select_statement" "select_type_statement" nil)              parent 0)
     ((n-p-pstmtk "type_statement"       "select_type_statement" nil)              parent 0)
     ((n-p-pstmtk nil                    "select_type_statement" "type")           parent f90-ts-indent-block)
@@ -3017,13 +3032,13 @@ associate and block statements.")
     ((n-p-gp     nil                    "ERROR"                 "type_statement") grand-parent f90-ts-indent-block)
     ((parent-is                         "select_type_statement")                  parent 0)
 
-    ((n-p-gp     "end_select_statement" "select_case_statement" nil)              parent 0)
-    ((n-p-pstmtk "case_statement"       "select_case_statement" nil)              parent 0)
-    ((n-p-pstmtk nil                    "select_case_statement" "case")           parent f90-ts-indent-block)
-    ((n-p-pstmtk nil                    "case_statement"        "case")           parent f90-ts-indent-block)
-    ((n-p-gp     "ERROR"                "select_case_statement" nil)              parent f90-ts-indent-block)
-    ((n-p-gp     nil                    "ERROR"                 "case_statement") grand-parent f90-ts-indent-block)
-    ((parent-is                         "select_case_statement")                  parent 0)
+    ((n-p-gp     "end_select_statement" "select_rank_statement" nil)              parent 0)
+    ((n-p-pstmtk "rank_statement"       "select_rank_statement" nil)              parent 0)
+    ((n-p-pstmtk nil                    "select_rank_statement" "rank")           parent f90-ts-indent-block)
+    ((n-p-pstmtk nil                    "rank_statement"        "rank")           parent f90-ts-indent-block)
+    ((n-p-gp     "ERROR"                "select_rank_statement" nil)              parent f90-ts-indent-block)
+    ((n-p-gp     nil                    "ERROR"                 "rank_statement") grand-parent f90-ts-indent-block)
+    ((parent-is                         "select_rank_statement")                  parent 0)
     )
   "Indentation rules for select statements (case and type).")
 
@@ -3122,6 +3137,7 @@ different. Return true if something was changed."
     ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
     ("select_case_statement"   . "(select_case_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     ("select_type_statement"   . "(select_type_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
+    ("select_rank_statement"   . "(select_rank_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     )
   "Treesitter queries to extract relevant nodes for smart end completion.")
 

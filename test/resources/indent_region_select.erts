@@ -1,0 +1,90 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: select case 1
+=-=
+subroutine select_case()
+     select_variant: select case (variant)
+     case ('version1')
+          print *, 'version1'
+     case ('version2', &
+            'extra')
+          call xyz()
+     case default select_variant
+          call uvw()
+     end select select_variant
+end subroutine select_case
+=-=-=
+
+Name: select type 1
+=-=
+subroutine select_type()
+     select_arg: select type (arg)
+     type is (integer) select_arg
+          arg = 1
+     type is (string_t) select_arg
+          arg = '1'
+     class is (tuple_t) select_arg
+          call arg%set(1, 1, 1)
+     class default
+          error stop 'not supported'
+     end select select_arg
+end subroutine select_type
+=-=-=
+
+Name: select rank 1
+=-=
+impure real function product_ab(a, b)
+     real, dimension(..), intent(in) :: a, b
+
+     select rank (b)
+     rank (*)
+          error stop 'assumed-size input not supported (b)'
+     end select
+
+     if (rank(a) < rank(b)) then
+          print *, 'rank(a), rank(b) = ', rank(a), rank(b)
+          error stop 'rank size combination of a and b not supported'
+     end if
+
+     rank_a: select rank (a)
+     rank(0) rank_a
+          rank_b: select rank (b)
+          rank (0) rank_b
+               product_ab = a*b
+          rank default rank_b
+               call assert_false()
+          end select rank_b
+
+     rank(1) rank_a
+          rank_b: select rank (b)
+          rank (0) rank_b
+               product_ab = sum(a*b)
+          rank (1) rank_b
+               product_ab = dot_product(a, b)
+          rank default rank_b
+               call assert_false()
+          end select rank_b
+
+     rank(2) rank_a
+          rank_b: select rank (b)
+          rank (0) rank_b
+               product_ab = sum(a*b)
+          rank (2) rank_b
+               product_ab = colon_product(a, b)
+          rank default rank_b
+               print *, 'rank combination not yet implemented'
+          end select rank_b
+
+     rank (*) rank_a
+          error stop 'assumed-size input not supported (a)'
+     end select rank_a
+
+end function product_ab
+=-=-=
