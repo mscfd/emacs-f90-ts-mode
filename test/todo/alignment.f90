@@ -20,3 +20,54 @@ subroutine select_case()
           call uvw()
      end select select_variant
 end subroutine select_case
+
+! align use-only statements
+module foo
+ use mod1
+ use mod2, only: sub1, &
+        sub2
+ use mod3, &
+        mod4
+ ! another
+ mod5, only: baz1,&
+           baz2
+
+contains
+ subroutine sub_bar()
+      use mod3, only: fun1 => mod3_fun1, &
+             fun2 => mod3_fun2, &
+             ! one more
+             fun3 => mod3_fun3
+ end subroutine sub_bar
+end module foo
+
+
+! align public items statements
+module foo
+ public sub1, sub2
+ public :: sub3, &
+        sub4, &
+        ! comment
+        ! comment
+        sub5
+ public    fun1, &
+        fun2, &
+        ! comment
+        ! comment
+        fun3
+end module foo
+
+! align private items statements
+module foo
+ private sub1, sub2
+ private :: sub3, &
+        sub4, &
+        ! comment
+        ! comment
+        sub5
+ private    fun1, &
+        fun2, &
+        ! comment
+        ! comment
+        fun3
+end module foo

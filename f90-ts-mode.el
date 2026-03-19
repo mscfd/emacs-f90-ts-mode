@@ -1267,8 +1267,8 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
    ;; match type keywords
    '(((type_name)                @font-lock-type-face)
      ((derived_type_statement
-      base: (base_type_specifier
-             (identifier)        @font-lock-type-face)))
+       base: (base_type_specifier
+              (identifier)       @font-lock-type-face)))
      (end_type_statement
       (name)                     @font-lock-type-face)
      )
@@ -1298,7 +1298,14 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
      (function_result
       (identifier)                 @default)
      (subroutine_call
-      subroutine: (identifier)     @font-lock-function-name-face)
+      subroutine: [
+                   ((identifier)     @font-lock-function-name-face)
+                   ((derived_type_member_expression
+                    [(identifier)
+                     (derived_type_member_expression)]
+                    "%"
+                    (type_member) @font-lock-function-name-face))
+                   ])
 
      ;; within derived type declarations
      (variable_declaration

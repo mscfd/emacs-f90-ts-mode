@@ -96,7 +96,7 @@
 !          ^^^^ font-lock-keyword-face
 !               ^^^ nil
 !                  ^ f90-ts-font-lock-operator-face
-!                   ^^^ nil
+!                   ^^^ font-lock-function-name-face
 !                      ^ f90-ts-font-lock-bracket-face
 !                       ^ font-lock-number-face
 !                        ^ f90-ts-font-lock-delimiter-face
