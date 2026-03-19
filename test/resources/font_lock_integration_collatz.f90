@@ -1477,13 +1477,13 @@
 ! ^^^^ font-lock-keyword-face
 !      ^^^^^^^^^ nil
 !               ^ f90-ts-font-lock-operator-face
-!                ^^^^^^^ nil
+!                ^^^^^^^ font-lock-function-name-face
 !                       ^^ f90-ts-font-lock-bracket-face
   call processor%print_summary()
 ! ^^^^ font-lock-keyword-face
 !      ^^^^^^^^^ nil
 !               ^ f90-ts-font-lock-operator-face
-!                ^^^^^^^^^^^^^ nil
+!                ^^^^^^^^^^^^^ font-lock-function-name-face
 !                             ^^ f90-ts-font-lock-bracket-face
 
  end program collatz

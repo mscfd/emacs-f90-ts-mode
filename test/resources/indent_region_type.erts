@@ -1,0 +1,34 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: derived type declaration 1
+=-=
+module mytype
+ use mod, only: sub_ifc, &
+        other
+ implicit none (type, external)
+ private
+
+ type, abstract, public :: base_t
+      ! comment 1
+      integer, dimension(1:10) :: values
+      class(base_t), pointer :: next => null()
+ ! ==========
+      !> comment 2
+      procedure(sub_ifc), nopass, pointer :: sub => null()
+ contains
+      procedure(fun_ifc), deferred :: fun
+ end type base_t
+
+ type, extends(base_t), public :: ext_t
+ contains
+      procedure :: fun => fun_ext
+ end type ext_t
+end module mytype
+=-=-=

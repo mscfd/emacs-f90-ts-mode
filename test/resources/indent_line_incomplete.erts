@@ -158,3 +158,35 @@ subroutine expr1()
 end subroutine sub8
 =-=-=
 
+Name: module 1
+=-=
+module incomplete
+|type :: some_t
+=-=
+module incomplete
+ |type :: some_t
+=-=-=
+
+Name: module 2
+=-=
+module incomplete
+|type :: some_t
+end
+=-=
+module incomplete
+ |type :: some_t
+end
+=-=-=
+
+Name: module 3
+=-=
+module incomplete
+|type :: some_t
+end
+contains
+=-=
+module incomplete
+ |type :: some_t
+end
+contains
+=-=-=

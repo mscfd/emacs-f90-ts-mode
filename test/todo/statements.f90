@@ -1,11 +1,9 @@
-! procedure statements in submodule
+! statement: forall
+subroutine sub()
+     forall (i = 1:n, j = 1:n, a(i,j) /= 0.0)
+     b(i,j) = 1.0 / a(i,j)
+     c(i,j) = b(i,j) * 2.0
+     end forall
 
-submodule (do_mod) do_sub
-contains
- module procedure do_fun
-      with_exit_: do
-           if (i > 10) exit
-           i = i + 1
-      end do with_exit_
- end procedure
-end submodule do_sub
+     forall (i = 1:n)  a(i,i) = 1.0
+end subroutine sub

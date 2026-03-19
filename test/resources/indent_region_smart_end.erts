@@ -173,6 +173,7 @@ contains
 logical function  lower_case()
      call some_thing()
 end function lower_case
+end module upper_mod
 =-=
 MODULE UPPER_MOD
  type :: lower_t
@@ -185,6 +186,7 @@ contains
  logical function  lower_case()
       call some_thing()
  end function lower_case
+END MODULE UPPER_MOD
 =-=-=
 
 Name: smart end with lower-upper-title-camel-case 6
@@ -534,4 +536,17 @@ Program TitleProg
  END SELECT BIG
 
 End Program TitleProg
+=-=-=
+
+Name: where-elsewhere title-case 1
+=-=
+subroutine Where_Elsewhere()
+     map_AB: Where (mat_A >= 1.0)
+          mat_B = mat_A**2
+     Elsewhere (mat_A >= 0.0)
+          mat_B = mat_A
+     Elsewhere log_a
+          mat_B = -mat_A
+     End Where map_AB
+end subroutine Where_Elsewhere
 =-=-=

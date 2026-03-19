@@ -80,7 +80,7 @@
 !     ^^^^ font-lock-keyword-face
 !          ^^^^ f90-ts-font-lock-special-var-face
 !              ^ f90-ts-font-lock-operator-face
-!               ^^^^^^^ nil
+!               ^^^^^^^ font-lock-function-name-face
 !                      ^ f90-ts-font-lock-bracket-face
 !                       ^ nil
 !                        ^ f90-ts-font-lock-bracket-face

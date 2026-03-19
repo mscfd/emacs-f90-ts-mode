@@ -459,6 +459,17 @@ type is among the elements of TYPE."
                (member type-n type))))))
 
 
+(defun f90-ts--node-type-match-p (node type-rx)
+  "If TYPE_RX is nil, return non-nil and ignore NODE.
+If NODE is nil and TYPE_RX is non-nil, return nil.
+If TYPE-RX and NODE are both non-nil return non-nil if the type of NODE
+is matched by TYPE-RX."
+  (or (not type-rx)
+      (and node
+           (let ((type-n (treesit-node-type node)))
+             (string-match-p type-rx type-n)))))
+
+
 (defun f90-ts--comment-prefix (node)
   "Extract the starting character sequence from NODE, which is assumed
 to be of type comment. It uses 'f90-ts-openmp-prefix-regexp' and
@@ -1175,7 +1186,8 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       "pure" "impure" "elemental" "recursive"
       "dimension" "contiguous" "volatile"
       "associate" "block" "critical"
-      "where" "forall" "concurrent"] @font-lock-keyword-face))
+      "where" "elsewhere" "forall" "concurrent"]
+      @font-lock-keyword-face))
    ))
 
 
@@ -1255,8 +1267,8 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
    ;; match type keywords
    '(((type_name)                @font-lock-type-face)
      ((derived_type_statement
-      base: (base_type_specifier
-             (identifier)        @font-lock-type-face)))
+       base: (base_type_specifier
+              (identifier)       @font-lock-type-face)))
      (end_type_statement
       (name)                     @font-lock-type-face)
      )
@@ -1281,10 +1293,19 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       name: (name)                 @font-lock-function-name-face)
      (function_statement
       name: (name)                 @font-lock-function-name-face)
+     (module_procedure_statement
+      name: (name)                 @font-lock-function-name-face)
      (function_result
       (identifier)                 @default)
      (subroutine_call
-      subroutine: (identifier)     @font-lock-function-name-face)
+      subroutine: [
+                   ((identifier)     @font-lock-function-name-face)
+                   ((derived_type_member_expression
+                    [(identifier)
+                     (derived_type_member_expression)]
+                    "%"
+                    (type_member) @font-lock-function-name-face))
+                   ])
 
      ;; within derived type declarations
      (variable_declaration
@@ -1363,6 +1384,11 @@ associates and others."
      (end_subroutine_statement
       "end"
       "subroutine"
+      (name)       @font-lock-function-name-face)
+
+     (end_module_procedure_statement
+      "end"
+      "procedure"
       (name)       @font-lock-function-name-face)
 
      (end_interface_statement
@@ -1915,9 +1941,9 @@ line are matched by the same rule in `f90-ts-special-comment-rules'
 statement keyword."
   (lambda (node parent bol &rest _)
     (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword)))
-      (and (f90-ts--node-type-p node type-n)
-           (f90-ts--node-type-p parent type-p)
-           (f90-ts--node-type-p pstmt-k type-pstmtk)))))
+      (and (f90-ts--node-type-match-p node type-n)
+           (f90-ts--node-type-match-p parent type-p)
+           (f90-ts--node-type-match-p pstmt-k type-pstmtk)))))
 
 
 (defun n-p-ch-psibp (type-n type-p type-ch type-psibp)
@@ -1927,10 +1953,10 @@ to position, which also works for node=nil)."
   (lambda (node parent bol &rest _)
     (let ((child0 (f90-ts--indent-child0))
           (psibp (f90-ts--indent-prev-sib-by-parent)))
-      (and (f90-ts--node-type-p node type-n)
-           (f90-ts--node-type-p parent type-p)
-           (f90-ts--node-type-p child0 type-ch)
-           (f90-ts--node-type-p psibp type-psibp)))))
+      (and (f90-ts--node-type-match-p node type-n)
+           (f90-ts--node-type-match-p parent type-p)
+           (f90-ts--node-type-match-p child0 type-ch)
+           (f90-ts--node-type-match-p psibp type-psibp)))))
 
 
 ;;++++++++++++++
@@ -2791,7 +2817,7 @@ additionally some node and parent info if MSG=first."
 
         (f90-ts-log :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
                     (point) bol (line-beginning-position) (line-number-at-pos))
-        (let ((tttttt (format "types n-p-gp-psibp-ps-ch = %s, %s, %s, %s, %s, %s"
+        (let ((tttttt (format "types n-p-gp-psibp-pstmtk-ch = %s, %s, %s, %s, %s, %s"
                               (and node (treesit-node-type node))
                               (and parent (treesit-node-type parent))
                               (and grandparent (treesit-node-type grandparent))
@@ -2817,6 +2843,7 @@ some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
 (defvar f90-ts-indent-rules-start
   `(;; populate cache and then always fail
     (f90-ts--populate-cache parent 0)
+    ;; info rules needs populated cache
     ;;,@(f90-ts-indent-rules-info "start")
     )
   "Indentation rules executed at start. The main purpose is to fill the
@@ -2901,32 +2928,37 @@ with contain statements.")
   `(;; program or module interface part (before contains) and end statement
     ;; in all cases: first match node with end_xyz_statement, and then only
     ;; whether parent is xyz, as parent is xyz in both cases
-
-    ((node-is    "end_program_statement") parent 0)
-    ((parent-is      "program")           parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "program")   parent f90-ts--toplevel-offset)
+    ((node-is    "end_program_statement")        parent 0)
+    ((parent-is      "program\\(_statement\\)?") parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "program")          parent f90-ts--toplevel-offset)
 
     ;; parent-is uses regexp matching, thus use "^module" to avoid that it
     ;; matches "submodule"
-    ((node-is        "end_module_statement") parent 0)
-    ((parent-is      "^module")              parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "module")       parent f90-ts--toplevel-offset)
+    ((node-is        "end_module_statement")      parent 0)
+    ((parent-is      "^module\\(_statement\\)?$") parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "^module$")          parent f90-ts--toplevel-offset)
 
-    ((node-is        "end_submodule_statement") parent 0)
-    ((parent-is      "submodule")            parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "submodule")    parent f90-ts--toplevel-offset)
+    ((node-is        "end_submodule_statement")      parent 0)
+    ((parent-is      "^submodule\\(_statement\\)?$") parent f90-ts--toplevel-offset)
+    ((n-p-pstmtk nil "ERROR" "^submodule$")          parent f90-ts--toplevel-offset)
     )
   "Indentation rules for program and module nodes.")
 
 
 (defvar f90-ts-indent-rules-function
   `(;; functions and subroutine bodies
-    ((node-is    "end_subroutine_statement") parent 0)
-    ((node-is    "end_function_statement")   parent 0)
-    ((parent-is  "subroutine")               parent f90-ts-indent-block)
-    ((parent-is  "function")                 parent f90-ts-indent-block)
-    ((n-p-pstmtk nil nil "subroutine")           parent f90-ts-indent-block)
-    ((n-p-pstmtk nil nil "function")             parent f90-ts-indent-block)
+    ,@(f90-ts-indent-rules-info "fun1")
+    ((node-is    "end_subroutine_statement")       parent 0)
+    ((node-is    "end_function_statement")         parent 0)
+    ((node-is    "end_module_procedure_statement") parent 0)
+    ,@(f90-ts-indent-rules-info "fun2")
+    ((parent-is  "subroutine")                     parent f90-ts-indent-block)
+    ((parent-is  "function")                       parent f90-ts-indent-block)
+    ((parent-is  "module_procedure")               parent f90-ts-indent-block)
+    ((n-p-pstmtk nil nil "subroutine")             parent f90-ts-indent-block)
+    ((n-p-pstmtk nil nil "function")               parent f90-ts-indent-block)
+    ((n-p-pstmtk nil nil "module_procedure")       parent f90-ts-indent-block)
+    ,@(f90-ts-indent-rules-info "fun3")
     )
   "Indentation rules for functions and subroutines.")
 
@@ -2938,6 +2970,9 @@ with contain statements.")
     ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
     ((n-p-ch-psibp nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
+    ;; rule for translation_unit and module_procedure_statement does not seem possible,
+    ;; as module procedure statements are only allowed within contains section
+    ((n-p-ch-psibp nil "ERROR"            nil "module_procedure_statement") parent f90-ts-indent-block)
     ((parent-is "translation_unit") column-0 0))
   "Indentation rules for translation_unit and functions and subroutines
 not within a contains section (or hiding behind some ERROR node).")
@@ -2991,6 +3026,26 @@ not within a contains section (or hiding behind some ERROR node).")
     ((n-p-pstmtk nil                "ERROR" "else")   previous-stmt-anchor f90-ts-indent-block) ; empty line after else
     )
   "Indentation rules for if-then-else statements.")
+
+
+(defvar f90-ts-indent-rules-where
+  `(;; where-elsewhere statements
+    ((n-p-gp     "end_where_statement" "where_statement"  nil)         parent 0)
+    ((n-p-gp     "elsewhere_clause"    "where_statement"  nil)         parent 0)
+    ((n-p-gp     "else_clause"         "where_statement"  nil)         parent 0)
+    ((n-p-pstmtk nil                   "where_statement"  "where")     parent f90-ts-indent-block) ; line right after where
+    ((n-p-pstmtk nil                   "where_statement"  "elsewhere") parent f90-ts-indent-block) ; line right after elsewhere
+    ((n-p-pstmtk nil                   "elsewhere_clause" "elsewhere") parent f90-ts-indent-block) ; line after else, with non-empty else block
+
+    ((n-p-pstmtk "elsewhere_clause"    "ERROR" "where") previous-stmt-anchor 0)
+    ((n-p-pstmtk "elsewhere"           "ERROR" "where") previous-stmt-anchor 0)
+    ((n-p-gp     "elsewhere_clause"    "ERROR" nil)     previous-stmt-anchor f90-ts--minus-block-offset) ; at elsewhere line, incomplete
+    ((n-p-gp     "elsewhere"           "ERROR" nil)     previous-stmt-anchor f90-ts--minus-block-offset)
+
+    ((n-p-pstmtk nil                "ERROR" "where")     previous-stmt-anchor f90-ts-indent-block) ; empty line after where
+    ((n-p-pstmtk nil                "ERROR" "elsewhere") previous-stmt-anchor f90-ts-indent-block) ; empty line after elsewhere
+    )
+  "Indentation rules for else-elsewhere statements.")
 
 
 (defvar f90-ts-indent-rules-single-region
@@ -3064,6 +3119,7 @@ associate and block statements.")
      ,@f90-ts-indent-rules-interface
      ,@f90-ts-indent-rules-derived-type
      ,@f90-ts-indent-rules-if
+     ,@f90-ts-indent-rules-where
      ,@f90-ts-indent-rules-single-region
      ,@f90-ts-indent-rules-select
      ,@f90-ts-indent-rules-catch-all
@@ -3081,13 +3137,13 @@ associate and block statements.")
     ;"end_block_data_statement"
     "end_subroutine_statement"
     "end_function_statement"
-    ;"end_module_procedure_statement"
+    "end_module_procedure_statement"
     "end_type_statement"
     "end_interface_statement"
     ;"end_do_label_loop_statement"
     "end_do_loop_statement"
     "end_if_statement"
-    ;"end_where_statement"
+    "end_where_statement"
     ;"end_forall_statement"
     "end_select_statement"
     "end_block_construct_statement"
@@ -3123,6 +3179,7 @@ different. Return true if something was changed."
     ("submodule"               . "(submodule (submodule_statement \"submodule\" @construct (_) * (name) @name))")
     ("subroutine"              . "(subroutine (subroutine_statement \"subroutine\" @construct name: (_) @name))")
     ("function"                . "(function (function_statement \"function\" @construct name: (_) @name))")
+    ("module_procedure"        . "(module_procedure (module_procedure_statement \"procedure\" @construct name: (_) @name))")
     ("interface"               . ,(concat "(interface (interface_statement (abstract_specifier)?"
                                           "\"interface\" @construct"
                                           "[((name) @name)"
@@ -3132,6 +3189,7 @@ different. Return true if something was changed."
                                           ))
     ("derived_type_definition" . "(derived_type_definition (derived_type_statement \"type\" @construct (_) * (type_name) @name))")
     ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
+    ("where_statement"         . "(where_statement (block_label_start_expression _ @name \":\")? \"where\" @construct)")
     ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct))")
     ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
     ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
@@ -3270,6 +3328,7 @@ option or statement indentation."
     (when (and (= (line-number-at-pos beg) (line-number-at-pos end))
                (and text (string-match-p "^end" text))
                (member type f90-ts--complete-end-structs))
+
       (let ((node-block (treesit-node-parent node))
             node-block-new)
         (when-let ((completion (f90-ts--complete-smart-end-compose node-block)))

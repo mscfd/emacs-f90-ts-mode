@@ -21,28 +21,53 @@ subroutine select_case()
      end select select_variant
 end subroutine select_case
 
+! align use-only statements
+module foo
+ use mod1
+ use mod2, only: sub1, &
+        sub2
+ use mod3, &
+        mod4
+ ! another
+ mod5, only: baz1,&
+           baz2
 
-! alignment and fontlocking issues
-subroutine sub()
-     map_a: where (a > 0.0)
-     b = sqrt(a)
-     c = log(a)
-     elsewhere (a == 0.0) map_a
-     b = 0.0
-     c = 0.0
-     elsewhere map_a
-     b = -1.0
-     c = -1.0
-     end where map_a
-end subroutine sub
+contains
+ subroutine sub_bar()
+      use mod3, only: fun1 => mod3_fun1, &
+             fun2 => mod3_fun2, &
+             ! one more
+             fun3 => mod3_fun3
+ end subroutine sub_bar
+end module foo
 
 
+! align public items statements
+module foo
+ public sub1, sub2
+ public :: sub3, &
+        sub4, &
+        ! comment
+        ! comment
+        sub5
+ public    fun1, &
+        fun2, &
+        ! comment
+        ! comment
+        fun3
+end module foo
 
-subroutine sub()
-     forall (i = 1:n, j = 1:n, a(i,j) /= 0.0)
-     b(i,j) = 1.0 / a(i,j)
-     c(i,j) = b(i,j) * 2.0
-     end forall
-
-     forall (i = 1:n)  a(i,i) = 1.0
-end subroutine sub
+! align private items statements
+module foo
+ private sub1, sub2
+ private :: sub3, &
+        sub4, &
+        ! comment
+        ! comment
+        sub5
+ private    fun1, &
+        fun2, &
+        ! comment
+        ! comment
+        fun3
+end module foo

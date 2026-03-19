@@ -669,8 +669,10 @@ point at 1+end of region."
 ;; (with three different prep functions to vary initial indentation)
 (f90-ts-mode-test-prep-act-register
  "f90-ts-mode"
- '("indent_region_basic.erts"
+ '("indent_region_progmod.erts"
    "indent_region_comments.erts"
+   "indent_region_interface.erts"
+   "indent_region_type.erts"
    "indent_region_constructs.erts"
    "indent_region_select.erts"
    "indent_region_preproc.erts"
@@ -747,8 +749,9 @@ point at 1+end of region."
 ;; after each line, which is very expensive
 (f90-ts-mode-test-prep-act-register
  "f90-ts-mode-extra"
- '("indent_region_basic.erts"
+ '("indent_region_progmod.erts"
    "indent_region_comments.erts"
+   "indent_region_interface.erts"
    "indent_region_constructs.erts"
    "indent_region_select.erts"
    "indent_region_preproc.erts")
@@ -772,10 +775,13 @@ point at 1+end of region."
 ;; register font lock tests
 (f90-ts-mode-test-font-lock-register
  "f90-ts-mode"
- '("font_lock_basic.f90"
-   "font_lock_builtin.f90"
-   "font_lock_select.f90"
+ '("font_lock_progmod.f90"
    "font_lock_comment.f90"
+   "font_lock_builtin.f90"
+   "font_lock_interface.f90"
+   "font_lock_type.f90"
+   "font_lock_select.f90"
+   "font_lock_where.f90"
    "font_lock_openmp.f90"
    "font_lock_operator.f90"
    "font_lock_special_var.f90"))
