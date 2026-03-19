@@ -3062,6 +3062,10 @@ not within a contains section (or hiding behind some ERROR node).")
     ((n-p-pstmtk nil                       "association"         "associate") parent f90-ts-indent-block)
     ((n-p-pstmtk nil                       "associate_statement" "associate") parent f90-ts-indent-block)
     ((n-p-pstmtk nil                       "ERROR"               "associate") previous-stmt-anchor f90-ts-indent-block)
+
+    ((n-p-gp "end_forall_statement"        "forall_statement" nil)      parent               0)
+    ((n-p-pstmtk nil                       "forall_statement" "forall") parent               f90-ts-indent-block)
+    ((n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block)
     )
   "Indentation rules for single region structures like do loops,
 associate and block statements.")
@@ -3144,7 +3148,7 @@ associate and block statements.")
     "end_do_loop_statement"
     "end_if_statement"
     "end_where_statement"
-    ;"end_forall_statement"
+    "end_forall_statement"
     "end_select_statement"
     "end_block_construct_statement"
     "end_associate_statement"
@@ -3191,8 +3195,9 @@ different. Return true if something was changed."
     ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
     ("where_statement"         . "(where_statement (block_label_start_expression _ @name \":\")? \"where\" @construct)")
     ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct))")
-    ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
     ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
+    ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
+    ("forall_statement"        . "(forall_statement (block_label_start_expression _ @name \":\")? \"forall\" @construct)")
     ("select_case_statement"   . "(select_case_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     ("select_type_statement"   . "(select_type_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     ("select_rank_statement"   . "(select_rank_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")

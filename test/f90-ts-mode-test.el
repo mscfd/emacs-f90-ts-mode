@@ -782,6 +782,7 @@ point at 1+end of region."
    "font_lock_type.f90"
    "font_lock_select.f90"
    "font_lock_where.f90"
+   "font_lock_forall.f90"
    "font_lock_openmp.f90"
    "font_lock_operator.f90"
    "font_lock_special_var.f90"))
