@@ -32,3 +32,44 @@ module mytype
  end type ext_t
 end module mytype
 =-=-=
+
+Name: enum declaration 1
+=-=
+module test_enum_1
+ ENUM, BIND(C)
+      ENUMERATOR :: MON = 1
+      ! use auto-incremented
+      ENUMERATOR :: TUE
+      ENUMERATOR :: WED
+      ENUMERATOR :: THU
+      ENUMERATOR :: FRI
+      ENUMERATOR :: SAT, SUN    ! = 6, 7
+ END ENUM   ! note: no name for enum statements
+end module test_enum_1
+=-=-=
+
+Name: enumeration declaration 1
+=-=
+module test_enumeration_1
+ Enumeration Type, Public :: method_e
+      Enumerator :: BDF1 = 1
+      Enumerator :: BDF2
+      Enumerator :: RK1  = 10
+      Enumerator :: RK2, RK4, &
+             ESDIRK2
+ End Enumeration Type method_e
+end module test_enumeration_1
+=-=-=
+
+Name: enumeration declaration 2
+=-=
+module test_enumeration_2
+ enumeration type :: boundary_condition
+      enumerator bc_inflow, bc_outflow, &
+             bc_dirichlet, bc_neumann, bc_robin
+
+      enumerator bc_heatflux, bc_radiation
+      enumerator bc_symmetry = 1000
+ end enumeration type boundary_condition
+end module test_enumeration_2
+=-=-=
