@@ -1140,25 +1140,26 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
 
    :language 'fortran
    :feature 'keyword
-   ;; match keywords in select case statements
-   ;; (which are not covered by simple keywords below
-   '((case_statement
+   '(;; match keywords in select case statements
+     ;; (which are not covered by simple keywords below
+     (case_statement
       "case"    @font-lock-keyword-face
+      (default) @font-lock-keyword-face)
+     ;; match keywords in select type statements
+     ;; (which are not covered by simple keywords below
+     (type_statement
+      (default) @font-lock-keyword-face)
+     ;; match keywords in select rank statements
+     ;; (which are not covered by simple keywords below
+     (rank_statement
       (default) @font-lock-keyword-face))
 
    :language 'fortran
    :feature 'keyword
-   ;; match keywords in select type statements
-   ;; (which are not covered by simple keywords below
-   '((type_statement
-      (default) @font-lock-keyword-face))
-
-   :language 'fortran
-   :feature 'keyword
-   ;; match keywords in select ranl statements
-   ;; (which are not covered by simple keywords below
-   '((rank_statement
-      (default) @font-lock-keyword-face))
+   ;; "none" is a named node in "implicit none", but an anonymous node
+   ;; in "do concurrent(...) default(none)"
+   '((implicit_statement
+      (none) @font-lock-keyword-face))
 
    :language 'fortran
    :feature 'keyword
@@ -1171,13 +1172,15 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       "end" "call"
       "if" "then" "else" "elseif" "endif"
       "do" "while"
+      "where" "elsewhere" "forall" "concurrent"
+      "shared" "local" "local_init" "reduce"
       "cycle" "exit"
       "type" "class" "is" "typeof" "classof"
       "extends" "abstract"
       "pass" "nopass" "deferred"
       "operator" "assignment" "generic" "final"
       "select" "case" "rank" "default"
-      "use" "only" "implicit" "none"
+      "use" "only" "implicit" "none" "external"
       "interface" "contains" "return"
       "public" "private" "protected"
       "allocate" "deallocate" "allocatable"
@@ -1185,8 +1188,7 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
       "parameter" "save" "target" "pointer" "optional"
       "pure" "impure" "elemental" "recursive"
       "dimension" "contiguous" "volatile"
-      "associate" "block" "critical"
-      "where" "elsewhere" "forall" "concurrent"]
+      "associate" "block" "critical"]
       @font-lock-keyword-face))
    ))
 

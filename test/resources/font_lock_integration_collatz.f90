@@ -8,9 +8,14 @@
 !                      ^^^^ font-lock-keyword-face
 !                          ^ f90-ts-font-lock-delimiter-face
 !                            ^^^^^^^^^^^ nil
-  implicit none
+  implicit none(type, external)
 ! ^^^^^^^^ font-lock-keyword-face
-!          ^^^^ nil
+!          ^^^^ font-lock-keyword-face
+!              ^ f90-ts-font-lock-bracket-face
+!               ^^^^ font-lock-keyword-face
+!                   ^ f90-ts-font-lock-delimiter-face
+!                     ^^^^^^^^ font-lock-keyword-face
+!                             ^ f90-ts-font-lock-bracket-face
   private
 ! ^^^^^^^ font-lock-keyword-face
 
@@ -1432,9 +1437,14 @@
   use collatz_mod
 ! ^^^ font-lock-keyword-face
 !     ^^^^^^^^^^^ nil
-  implicit none
+  implicit none(type, external)
 ! ^^^^^^^^ font-lock-keyword-face
-!          ^^^^ nil
+!          ^^^^ font-lock-keyword-face
+!              ^ f90-ts-font-lock-bracket-face
+!               ^^^^ font-lock-keyword-face
+!                   ^ f90-ts-font-lock-delimiter-face
+!                     ^^^^^^^^ font-lock-keyword-face
+!                             ^ f90-ts-font-lock-bracket-face
 
   type(collatz_processor_t) :: processor
 ! ^^^^ font-lock-keyword-face
