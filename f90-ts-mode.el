@@ -3425,40 +3425,15 @@ If INDENT-BLOCK is true, then indent the whole block with indent-region."
 
 
 ;;------------------------------------------------------------------------------
-;; Indentation: auxiliary functions for continued lines
+;; Indentation and smart end completion
 
-(defun f90-ts--indent-stmt-first (first)
-  "Indent first line with FIRST being first node on that line, the first
-node of the statement. Compute and return the applied offset."
-  (save-excursion
-    (goto-char (treesit-node-start first))
-    ;; indent first line of statement and compute applied offset
-    (beginning-of-line)
-    (let ((before-indent (current-indentation)))
-      (treesit-indent)
-      (- (current-indentation) before-indent))))
-
-
-(defun f90-ts--indent-stmt-rest (start offset)
-  "Indent remaining lines after first line of a multi line statement.
-First line can be found at position START.
-The same OFFSET computed for the first line is applied to all lines.
-Instead of walking lines, the loop goes from last node on line to
-next node, which must be on next relevant line. This automatically
-skips empty lines."
-  (save-excursion
-    (goto-char start)
-    (cl-loop
-     for last = (f90-ts--last-node-on-line (point))
-     for next = (and last (treesit-node-next-sibling last))
-     while (or (f90-ts--node-type-p last "comment")
-               (f90-ts--line-continued-at-end-p last (line-end-position)))
-     do (progn
-          (goto-char (treesit-node-start next))
-          (indent-line-to
-           (max 0 (+ (current-indentation) offset))))
-     )))
-
+;; line indentation for <tab>, C-<tab> etc.
+;;  * f90-ts-indent-and-complete-stmt
+;;  * f90-ts-indent-and-complete-line{-[2,3]}
+;;  * f90-ts-indent-line{-[2,3]}
+;;
+;; region indentation:
+;;  * f90-ts-indent-and-complete-region
 
 (defun f90-ts--indent-stmt-region (beg end)
   "Apply indent region from begin of line at BEG to end of line at END.
@@ -3476,17 +3451,6 @@ changed)."
       (string= old-text (buffer-substring-no-properties beg-reg end-reg)))
     ))
 
-
-;;------------------------------------------------------------------------------
-;; Indentation and smart end completion
-
-;; line indentation for <tab>, C-<tab> etc.
-;;  * f90-ts-indent-and-complete-stmt
-;;  * f90-ts-indent-and-complete-line{-[2,3]}
-;;  * f90-ts-indent-line{-[2,3]}
-;;
-;; region indentation:
-;;  * f90-ts-indent-and-complete-region
 
 (defun f90-ts--indent-and-complete-line-aux (variant indent-block)
   "Auxiliary wrapper for indent-and-complete-line function.
@@ -4090,9 +4054,10 @@ and `f90-ts-comment-region-prefix'."
         (current-buffer))))
 
 
-(defun f90-ts--log-insert (category fmt &rest args)
-  "Insert a message given by FMT and ARGS and prefixed by CATEGORY
-into the log buffer."
+(defun f90-ts-log (category fmt &rest args)
+  "Insert a message into the dedicated *f90-ts-log* log buffer.
+The message is computed from FMT and ARGS (using `format') and prefixed
+by CATEGORY and a time stamp."
   (let ((buf (f90-ts--log-get-buffer)))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
@@ -4120,15 +4085,6 @@ into the log buffer."
     (when-let ((win (get-buffer-window buf t))) ; visible in any frame
       (with-selected-window win
         (end-of-buffer)))))
-
-
-(defun f90-ts-log (category fmt &rest args)
-  "Log a message in CATEGORY, which is used as a colour prefix to the
-message. Usual arguments for categories are `:indent', `:complete',
-`:auxiliary' etc.
-FMT + ARGS are passed to `format' to determine the log message."
-  ;; use apply to properly forwards optional list of arguments args
-  (apply #'f90-ts--log-insert category fmt args))
 
 
 (defun f90-ts-log-clear ()
