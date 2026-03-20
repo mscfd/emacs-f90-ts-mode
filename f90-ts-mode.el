@@ -4054,9 +4054,10 @@ and `f90-ts-comment-region-prefix'."
         (current-buffer))))
 
 
-(defun f90-ts--log-insert (category fmt &rest args)
-  "Insert a message given by FMT and ARGS and prefixed by CATEGORY
-into the log buffer."
+(defun f90-ts-log (category fmt &rest args)
+  "Insert a message into the dedicated *f90-ts-log* log buffer.
+The message is computed from FMT and ARGS (using `format') and prefixed
+by CATEGORY and a time stamp."
   (let ((buf (f90-ts--log-get-buffer)))
     (with-current-buffer buf
       (let ((inhibit-read-only t))
@@ -4084,15 +4085,6 @@ into the log buffer."
     (when-let ((win (get-buffer-window buf t))) ; visible in any frame
       (with-selected-window win
         (end-of-buffer)))))
-
-
-(defun f90-ts-log (category fmt &rest args)
-  "Log a message in CATEGORY, which is used as a colour prefix to the
-message. Usual arguments for categories are `:indent', `:complete',
-`:auxiliary' etc.
-FMT + ARGS are passed to `format' to determine the log message."
-  ;; use apply to properly forwards optional list of arguments args
-  (apply #'f90-ts--log-insert category fmt args))
 
 
 (defun f90-ts-log-clear ()
