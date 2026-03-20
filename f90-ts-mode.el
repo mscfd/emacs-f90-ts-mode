@@ -11,21 +11,45 @@
 ;; files using the Tree-sitter parsing engine.
 
 ;;; Commentary:
+
+;; f90-ts-mode is a major mode for editing Fortran 90/2003 (and newer) source
+;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30,
+;; might run with Emacs 29)).
 ;;
-;; This mode is a tree-sitter based alternative to the classic
-;; `f90-mode'.  It incorporates some logic and code snippets adapted
-;; from the original f90.el by Glenn Morris and others.
-
-;; INSTALLATION:
-;; for a simple setup:
-;; 1. Save this file as ~/.emacs.d/lisp/f90-ts-mode.el
-;; 2. Add (add-to-list 'load-path "/home/you/.emacs.d/lisp")
-;;    and (require 'f90-ts-mode) or use use-package
-;; 3. Ensure your treesitter grammar is available, for example:
-;;    (add-to-list 'treesit-language-source-alist
-;;                 '(fortran "/home/you/treesitter/f90"))
-;;    Then run: M-x treesit-install-language-grammar RET fortran RET
-
+;; Features:
+;;   - Syntax highlighting
+;;   - Indentation
+;;   - Alignment for multiline statements where applicable
+;;   - Smart end completion
+;;   - Break and join continued lines
+;;   - Comment region (un)commenting with configurable prefixes
+;;   - OpenMP and preprocessor directive handling
+;;   - Region selection based on tree-sitter nodes
+;;
+;; Note: feature might only be partially implemented.
+;;
+;; Installation requires the tree-sitter Fortran grammar.  It might be
+;; necessary to use the master branch at
+;;   https://github.com/mscfd/tree-sitter-fortran
+;; instead of official tree-sitter repository at
+;;   https://github.com/stadelmanma/tree-sitter-fortran
+;;
+;; Note: compile the grammar against tree-sitter 0.25.x; Emacs does not yet
+;; support 0.26.
+;;
+;; To verify the setup:
+;;   M-: (treesit-library-abi-version)           ; should return 15
+;;   M-: (treesit-language-abi-version 'fortran) ; should return 15
+;;   ldd bin_path_to_emacs/emacs | grep libtree-sitter
+;;                                               ; should show libtree-sitter.so.0.25
+;;
+;; Basic setup with use-package:
+;;
+;;   (use-package f90-ts-mode
+;;     :mode ("\\.f90\\'" . f90-ts-mode))
+;;
+;; See the README at https://github.com/mscfd/emacs-f90-ts-mode for full
+;; documentation on indentation options, keybindings, and testing.
 
 (require 'cl-lib)
 (require 'treesit)
