@@ -19,7 +19,7 @@
 !        ^^^^^^^^ font-lock-function-name-face
   implicit none
 ! ^^^^^^^^ font-lock-keyword-face
-!          ^^^^ nil
+!          ^^^^ font-lock-keyword-face
   integer :: i
 ! ^^^^^^^ font-lock-type-face
 !         ^^ f90-ts-font-lock-delimiter-face
@@ -51,11 +51,11 @@
 !        ^^^^^^^^ font-lock-function-name-face
   implicit none (type, external)
 ! ^^^^^^^^ font-lock-keyword-face
-!          ^^^^ nil
+!          ^^^^ font-lock-keyword-face
 !               ^ f90-ts-font-lock-bracket-face
 !                ^^^^ font-lock-keyword-face
 !                    ^ f90-ts-font-lock-delimiter-face
-!                      ^^^^^^^^ nil
+!                      ^^^^^^^^ font-lock-keyword-face
 !                              ^ f90-ts-font-lock-bracket-face
   integer :: i
 ! ^^^^^^^ font-lock-type-face
@@ -110,13 +110,13 @@
 !       ^^^^^^ font-lock-function-name-face
   implicit none (type, &
 ! ^^^^^^^^ font-lock-keyword-face
-!          ^^^^ nil
+!          ^^^^ font-lock-keyword-face
 !               ^ f90-ts-font-lock-bracket-face
 !                ^^^^ font-lock-keyword-face
 !                    ^ f90-ts-font-lock-delimiter-face
 !                      ^ f90-ts-font-lock-delimiter-face
          external)
-!        ^^^^^^^^ nil
+!        ^^^^^^^^ font-lock-keyword-face
 !                ^ f90-ts-font-lock-bracket-face
   private
 ! ^^^^^^^ font-lock-keyword-face

@@ -1140,25 +1140,26 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
 
    :language 'fortran
    :feature 'keyword
-   ;; match keywords in select case statements
-   ;; (which are not covered by simple keywords below
-   '((case_statement
+   '(;; match keywords in select case statements
+     ;; (which are not covered by simple keywords below
+     (case_statement
       "case"    @font-lock-keyword-face
+      (default) @font-lock-keyword-face)
+     ;; match keywords in select type statements
+     ;; (which are not covered by simple keywords below
+     (type_statement
+      (default) @font-lock-keyword-face)
+     ;; match keywords in select rank statements
+     ;; (which are not covered by simple keywords below
+     (rank_statement
       (default) @font-lock-keyword-face))
 
    :language 'fortran
    :feature 'keyword
-   ;; match keywords in select type statements
-   ;; (which are not covered by simple keywords below
-   '((type_statement
-      (default) @font-lock-keyword-face))
-
-   :language 'fortran
-   :feature 'keyword
-   ;; match keywords in select ranl statements
-   ;; (which are not covered by simple keywords below
-   '((rank_statement
-      (default) @font-lock-keyword-face))
+   ;; "none" is a named node in "implicit none", but an anonymous node
+   ;; in "do concurrent(...) default(none)"
+   '((implicit_statement
+      (none) @font-lock-keyword-face))
 
    :language 'fortran
    :feature 'keyword
@@ -1167,26 +1168,28 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
    ;; not the keyword text itself, and these nodes are always stored lower-case
    ;; (hence no need to match case insensitive as is necessary with builtins)
    '((["program" "module" "submodule"
-      "function" "subroutine" "procedure" "result"
-      "end" "call"
+      "function" "subroutine" "procedure"
+      "bind" "result" "end" "call"
+      "public" "private" "protected" "contains"
+      "use" "only" "implicit" "none" "external"
+      "pure" "impure" "elemental" "recursive"
+      "type" "class" "is" "typeof" "classof"
       "if" "then" "else" "elseif" "endif"
       "do" "while"
       "cycle" "exit"
-      "type" "class" "is" "typeof" "classof"
+      "associate" "block" "critical"
+      "enum" "enumeration" "enumerator"
+      "where" "elsewhere" "forall" "concurrent"
+      "select" "case" "rank" "default"
+      "shared" "local" "local_init" "reduce"
       "extends" "abstract"
       "pass" "nopass" "deferred"
       "operator" "assignment" "generic" "final"
-      "select" "case" "rank" "default"
-      "use" "only" "implicit" "none"
-      "interface" "contains" "return"
-      "public" "private" "protected"
+      "interface" "return"
       "allocate" "deallocate" "allocatable"
       "intent" "in" "out" "inout"
       "parameter" "save" "target" "pointer" "optional"
-      "pure" "impure" "elemental" "recursive"
-      "dimension" "contiguous" "volatile"
-      "associate" "block" "critical"
-      "where" "elsewhere" "forall" "concurrent"]
+      "dimension" "contiguous" "volatile"]
       @font-lock-keyword-face))
    ))
 
@@ -2947,18 +2950,15 @@ with contain statements.")
 
 (defvar f90-ts-indent-rules-function
   `(;; functions and subroutine bodies
-    ,@(f90-ts-indent-rules-info "fun1")
     ((node-is    "end_subroutine_statement")       parent 0)
     ((node-is    "end_function_statement")         parent 0)
     ((node-is    "end_module_procedure_statement") parent 0)
-    ,@(f90-ts-indent-rules-info "fun2")
     ((parent-is  "subroutine")                     parent f90-ts-indent-block)
     ((parent-is  "function")                       parent f90-ts-indent-block)
     ((parent-is  "module_procedure")               parent f90-ts-indent-block)
     ((n-p-pstmtk nil nil "subroutine")             parent f90-ts-indent-block)
     ((n-p-pstmtk nil nil "function")               parent f90-ts-indent-block)
     ((n-p-pstmtk nil nil "module_procedure")       parent f90-ts-indent-block)
-    ,@(f90-ts-indent-rules-info "fun3")
     )
   "Indentation rules for functions and subroutines.")
 
@@ -2987,15 +2987,21 @@ not within a contains section (or hiding behind some ERROR node).")
   "Indentation rules for interface blocks.")
 
 
-(defvar f90-ts-indent-rules-derived-type
-  `(;; type definitions
+(defvar f90-ts-indent-rules-dtype-enum
+  `(;; derived type definitions
     ((n-p-gp       "end_type_statement"      "derived_type_definition" nil)                      parent 0)
     ((n-p-ch-psibp "derived_type_procedures" "derived_type_definition" "contains_statement" nil) parent 0)
     ((n-p-ch-psibp "ERROR"                   "derived_type_definition" "contains_statement" nil) parent 0)
     ((parent-is    "derived_type_procedures") parent f90-ts-indent-block)
     ((parent-is    "derived_type_definition") parent f90-ts-indent-block)
+
+    ;; enumeration types: enum and enumeration
+    ((node-is    "end_enum_statement")                    parent 0)
+    ((node-is    "end_enumeration_type_statement")        parent 0)
+    ((parent-is  "^enum\\(eration_type\\)?$")             parent f90-ts-indent-block)
+    ((n-p-pstmtk nil "ERROR" "^enum\\(eration_type\\)?$") parent f90-ts-indent-block)
     )
-  "Indentation rules for derived-type statements.")
+  "Indentation rules for derived type and enumeration type statements.")
 
 
 (defvar f90-ts-indent-rules-if
@@ -3062,6 +3068,10 @@ not within a contains section (or hiding behind some ERROR node).")
     ((n-p-pstmtk nil                       "association"         "associate") parent f90-ts-indent-block)
     ((n-p-pstmtk nil                       "associate_statement" "associate") parent f90-ts-indent-block)
     ((n-p-pstmtk nil                       "ERROR"               "associate") previous-stmt-anchor f90-ts-indent-block)
+
+    ((n-p-gp "end_forall_statement"        "forall_statement" nil)      parent               0)
+    ((n-p-pstmtk nil                       "forall_statement" "forall") parent               f90-ts-indent-block)
+    ((n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block)
     )
   "Indentation rules for single region structures like do loops,
 associate and block statements.")
@@ -3100,7 +3110,7 @@ associate and block statements.")
 
 (defvar f90-ts-indent-rules-catch-all
   `(;; final catch-all rule
-    ;;,@(f90-ts-indent-rules-info "catch all")
+    ,@(f90-ts-indent-rules-info "catch all")
     (catch-all f90-ts--catch-all-anchor 0)
     )
   "Final indentation rule to handle unmatched cases.")
@@ -3117,7 +3127,7 @@ associate and block statements.")
      ,@f90-ts-indent-rules-function
      ,@f90-ts-indent-rules-translation-unit
      ,@f90-ts-indent-rules-interface
-     ,@f90-ts-indent-rules-derived-type
+     ,@f90-ts-indent-rules-dtype-enum
      ,@f90-ts-indent-rules-if
      ,@f90-ts-indent-rules-where
      ,@f90-ts-indent-rules-single-region
@@ -3134,24 +3144,24 @@ associate and block statements.")
   '("end_program_statement"
     "end_module_statement"
     "end_submodule_statement"
-    ;"end_block_data_statement"
+    ;;"end_block_data_statement"
     "end_subroutine_statement"
     "end_function_statement"
     "end_module_procedure_statement"
     "end_type_statement"
     "end_interface_statement"
-    ;"end_do_label_loop_statement"
+    ;;"end_do_label_loop_statement"
     "end_do_loop_statement"
     "end_if_statement"
     "end_where_statement"
-    ;"end_forall_statement"
+    "end_forall_statement"
     "end_select_statement"
     "end_block_construct_statement"
     "end_associate_statement"
-    ;"end_enum_statement"
-    ;"end_enumeration_statement"
-    ;"end_coarray_team_statement"
-    ;"end_coarray_critical_statement"
+    "end_enum_statement"
+    "end_enumeration_type_statement"
+    ;;"end_coarray_team_statement"
+    ;;"end_coarray_critical_statement"
     )
     "List of type name used to represent end struct statements for
 smart end completion. Statements not yet supported are commented out.")
@@ -3181,8 +3191,8 @@ different. Return true if something was changed."
     ("function"                . "(function (function_statement \"function\" @construct name: (_) @name))")
     ("module_procedure"        . "(module_procedure (module_procedure_statement \"procedure\" @construct name: (_) @name))")
     ("interface"               . ,(concat "(interface (interface_statement (abstract_specifier)?"
-                                          "\"interface\" @construct"
-                                          "[((name) @name)"
+                                          " \"interface\" @construct"
+                                          " [((name) @name)"
                                           " ((operator) @name)"
                                           " ((assignment) @name)]?"
                                           "))"
@@ -3191,11 +3201,19 @@ different. Return true if something was changed."
     ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
     ("where_statement"         . "(where_statement (block_label_start_expression _ @name \":\")? \"where\" @construct)")
     ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct))")
-    ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
     ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
+    ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
+    ("forall_statement"        . "(forall_statement (block_label_start_expression _ @name \":\")? \"forall\" @construct)")
     ("select_case_statement"   . "(select_case_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     ("select_type_statement"   . "(select_type_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
     ("select_rank_statement"   . "(select_rank_statement (block_label_start_expression _ @name \":\")? \"select\" @construct)")
+    ("enum"                    . "(enum (enum_statement \"enum\" @construct))")
+    ("enumeration_type"        . ,(concat "(enumeration_type (enumeration_type_statement"
+                                          " \"enumeration\" @construct \"type\" @construct2"
+                                          " (_) *"
+                                          " (type_name) @name"
+                                          "))"
+                                          ))
     )
   "Treesitter queries to extract relevant nodes for smart end completion.")
 
@@ -3238,13 +3256,16 @@ to match usage in opening and end statement."
     ;; (where the inner loop, if etc. also matches),
     ;; this could be done with the :anchor pattern, but it is rejected... syntax not valid?
     (let* ((construct-node (alist-get 'construct capture))
+           (construct2-node (alist-get 'construct2 capture))
            (name-node (alist-get 'name capture)))
       (cl-assert construct-node
                  nil
                  "complete-smart-end: no construct node found")
+      ;; in general there is no second construct name, exception: "enumeration type"
       (list
+       (and name-node (treesit-node-text name-node t))
        (and construct-node (treesit-node-text construct-node t))
-       (and name-node (treesit-node-text name-node t)))
+       (and construct2-node (treesit-node-text construct2-node t)))
       )))
 
 
@@ -3258,8 +3279,9 @@ structured block statement. In this case, return nil."
     (cl-assert construct-name
                nil
                "complete-smart-end: structure query failed")
-    (let* ((construct (car construct-name))
-           (name (cadr construct-name))
+    (let* ((name (car construct-name))
+           (construct (cadr construct-name))
+           (construct2 (caddr construct-name))
            (c0 (substring construct 0 1))
            (end
             (cond
@@ -3269,10 +3291,8 @@ structured block statement. In this case, return nil."
               "End")
              (t
               "end"))))
-      (if name
-          (format "%s %s %s" end construct name)
-        ;; fallback if no name found
-        (format "%s %s" end construct)))))
+    (string-join (delq nil (list end construct construct2 name))
+                 " "))))
 
 
 (defun f90-ts--complete-smart-end-show (node-block)

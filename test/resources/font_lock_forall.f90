@@ -1,0 +1,90 @@
+ subroutine sub()
+!^^^^^^^^^^ font-lock-keyword-face
+!           ^^^ font-lock-function-name-face
+!              ^^ f90-ts-font-lock-bracket-face
+      set_bc: forall (i = 1:n, j = 1:n, a(i,j) /= 0.0)
+!     ^^^^^^ nil
+!           ^ f90-ts-font-lock-delimiter-face
+!             ^^^^^^ font-lock-keyword-face
+!                    ^ f90-ts-font-lock-bracket-face
+!                     ^ nil
+!                       ^ f90-ts-font-lock-operator-face
+!                         ^ font-lock-number-face
+!                          ^ f90-ts-font-lock-delimiter-face
+!                           ^ nil
+!                            ^ f90-ts-font-lock-delimiter-face
+!                              ^ nil
+!                                ^ f90-ts-font-lock-operator-face
+!                                  ^ font-lock-number-face
+!                                   ^ f90-ts-font-lock-delimiter-face
+!                                    ^ nil
+!                                     ^ f90-ts-font-lock-delimiter-face
+!                                       ^ nil
+!                                        ^ f90-ts-font-lock-bracket-face
+!                                         ^ nil
+!                                          ^ f90-ts-font-lock-delimiter-face
+!                                           ^ nil
+!                                            ^ f90-ts-font-lock-bracket-face
+!                                              ^^ f90-ts-font-lock-operator-face
+!                                                 ^^^ font-lock-number-face
+!                                                    ^ f90-ts-font-lock-bracket-face
+           b(i,j) = 1.0 / a(i,j)
+!          ^ nil
+!           ^ f90-ts-font-lock-bracket-face
+!            ^ nil
+!             ^ f90-ts-font-lock-delimiter-face
+!              ^ nil
+!               ^ f90-ts-font-lock-bracket-face
+!                 ^ f90-ts-font-lock-operator-face
+!                   ^^^ font-lock-number-face
+!                       ^ f90-ts-font-lock-operator-face
+!                         ^ nil
+!                          ^ f90-ts-font-lock-bracket-face
+!                           ^ nil
+!                            ^ f90-ts-font-lock-delimiter-face
+!                             ^ nil
+!                              ^ f90-ts-font-lock-bracket-face
+           c(i,j) = b(i,j) * 2.0
+!          ^ nil
+!           ^ f90-ts-font-lock-bracket-face
+!            ^ nil
+!             ^ f90-ts-font-lock-delimiter-face
+!              ^ nil
+!               ^ f90-ts-font-lock-bracket-face
+!                 ^ f90-ts-font-lock-operator-face
+!                   ^ nil
+!                    ^ f90-ts-font-lock-bracket-face
+!                     ^ nil
+!                      ^ f90-ts-font-lock-delimiter-face
+!                       ^ nil
+!                        ^ f90-ts-font-lock-bracket-face
+!                          ^ f90-ts-font-lock-operator-face
+!                            ^^^ font-lock-number-face
+      end forall set_bc
+!     ^^^ font-lock-keyword-face
+!         ^^^^^^ font-lock-keyword-face
+!                ^^^^^^ nil
+
+      forall (i = 1:n) &
+!     ^^^^^^ font-lock-keyword-face
+!            ^ f90-ts-font-lock-bracket-face
+!             ^ nil
+!               ^ f90-ts-font-lock-operator-face
+!                 ^ font-lock-number-face
+!                  ^ f90-ts-font-lock-delimiter-face
+!                   ^ nil
+!                    ^ f90-ts-font-lock-bracket-face
+!                      ^ f90-ts-font-lock-delimiter-face
+             a(i,i) = 1.0
+!            ^ nil
+!             ^ f90-ts-font-lock-bracket-face
+!              ^ nil
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^ nil
+!                 ^ f90-ts-font-lock-bracket-face
+!                   ^ f90-ts-font-lock-operator-face
+!                     ^^^ font-lock-number-face
+ end subroutine sub
+!^^^ font-lock-keyword-face
+!    ^^^^^^^^^^ font-lock-keyword-face
+!               ^^^ font-lock-function-name-face

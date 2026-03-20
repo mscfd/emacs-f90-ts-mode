@@ -14,11 +14,11 @@
 !        ^^^^^ nil
   implicit none (type, external)
 ! ^^^^^^^^ font-lock-keyword-face
-!          ^^^^ nil
+!          ^^^^ font-lock-keyword-face
 !               ^ f90-ts-font-lock-bracket-face
 !                ^^^^ font-lock-keyword-face
 !                    ^ f90-ts-font-lock-delimiter-face
-!                      ^^^^^^^^ nil
+!                      ^^^^^^^^ font-lock-keyword-face
 !                              ^ f90-ts-font-lock-bracket-face
   private
 ! ^^^^^^^ font-lock-keyword-face
