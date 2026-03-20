@@ -377,7 +377,7 @@ preserve indentation within comments with `f90-ts-break-line'."
   :group 'f90-ts)
 
 
-(defcustom f90-ts-extra-comment-prefixes '("!$omp" "!$acc" "!!!" "!>" "!<")
+(defcustom f90-ts-extra-comment-prefixes '("!" "!$omp" "!$acc" "!!!" "!>" "!<")
   "List of additional comment prefixes for interactive selection."
   :type  '(repeat string)
   :group 'f90-ts)

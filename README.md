@@ -202,9 +202,9 @@ Openmp and separator comments are matched by rules in `f90-ts-special-comment-ru
 
 ### Indentation
 
-Indentation is still missing quite a number of statements. But it covers most commonly used statements,
-including some error cases which frequently happen during typing. Lines within incomplete and unfinished
-blocks are mostly correctly inlined, but sometimes, the treesitter AST is just not usable.
+Indentation supports most fortran statements. Coarrays are still missing. It also covers some error cases which
+frequently happen during typing. Lines within incomplete and unfinished blocks are mostly correctly inlined,
+but sometimes, the treesitter AST is just not usable.
 
 Customizable variables for indentations are:
 
@@ -237,9 +237,10 @@ Currently implemented rules are:
 | functions               | `function` and `subroutine` bodies, including `end function` / `end subroutine`                 |
 | translation unit        | some rules concerning toplevel translation unit and related ERROR cases                         |
 | interfaces              | (abstract) interface blocks                                                                     |
-| derived types           | derived-type definitions                                                                        |
+| derived types, enums    | derived `type`, `enum` and `enumeration type` definitions                                       |
 | if / then / else        | `if`, `elseif`, and `else` constructs                                                           |
-| single block statements | `do`, `block`, and `associate` constructs                                                       |
+| where                   | `where`-´elsewhere` statements                                                                  |
+| single block statements | `do`, `block`, `associate` and `forall` constructs                                              |
 | select statements       | `select case` and `select type` statements                                                      |
 | catch-all               | final fallback rule for unmatched cases                                                         |
 
@@ -248,7 +249,7 @@ Currently implemented rules are:
 
 Indentation of multiline statements is complex. Indentation for region works a bit differently than
 indentation of a single line. The reason is that indentation of a single line can rotate through
-eligible column given by similar items on previous lines:
+eligible columns given by similar items on previous lines:
 ```fortran
 call sub_with_many_arguments(argx, another, one_more, &
                                    another2, one_more2, &
