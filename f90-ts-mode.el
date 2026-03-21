@@ -1990,7 +1990,7 @@ TYPE-N is matched against type of (cached) node,
 TYPE-P is matched against type of (cached) parent and
 TYPE-PSTMTK is matched against type of (cached) pstmtk, which is
 the previous statement keyword node."
-  (lambda (node parent bol &rest _)
+  (lambda (node parent _bol &rest _)
     (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword)))
       (and (f90-ts--node-type-match-p node type-n)
            (f90-ts--node-type-match-p parent type-p)
@@ -2006,7 +2006,7 @@ TYPE-N is matched against type of (cached) node,
 TYPE-P is matched against type of (cached) parent,
 TYPE-CH is matched against type of (cached) first child of node and
 TYPE-PSIBP is matched against type of (cached) previous sibling by parent."
-  (lambda (node parent bol &rest _)
+  (lambda (node parent _bol &rest _)
     (let ((child0 (f90-ts--indent-child0))
           (psibp (f90-ts--indent-prev-sib-by-parent)))
       (and (f90-ts--node-type-match-p node type-n)
@@ -2034,8 +2034,7 @@ on a previous line.  If not such before-child exists, use BOL as fallback.
 Used for continued lines, where the previous sibling or parent is not the
 right anchor."
   (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
-         (predicate (lambda (n) t))
-         (psib (f90-ts--before-child parent cur-line predicate)))
+         (psib (f90-ts--before-child parent cur-line #'always)))
     (if psib
         (f90-ts--indent-pos-at-node psib)
       bol)))
@@ -2857,8 +2856,7 @@ continued line of a continued statement. The statement line itself
       ;;  * cache anchor and offset for offset function for the
       ;;    current line
       ;;  * cache computed offset for indentation of subsequent lines
-      (let ((line (alist-get 'line loc))
-            (anchor (car anchor-offset))
+      (let ((anchor (car anchor-offset))
             (offset (cadr anchor-offset)))
         ;; (strictly, anchor does not need to be cached)
         (f90-ts--indent-anchor-cache anchor)
