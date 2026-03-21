@@ -3458,11 +3458,11 @@ otherwise nil."
           (treesit-indent-region beg-marker end-marker)
           (when (treesit-node-check node-block 'outdated)
             (setq node-block-new (treesit-node-on (marker-position beg-marker)
-                                                  (marker-position end-marker))))
+                                                  (marker-position end-marker)))))
       ;; revert to saved tab variant
       (setq f90-ts--align-continued-variant-tab variant-saved)
       (when beg-marker (set-marker beg-marker nil))
-      (when end-marker (set-marker end-marker nil))))
+      (when end-marker (set-marker end-marker nil)))
     node-block-new))
 
 
