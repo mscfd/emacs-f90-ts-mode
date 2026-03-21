@@ -4155,7 +4155,7 @@ by CATEGORY and a time stamp."
     ;; scroll window if buffer is displayed
     (when-let ((win (get-buffer-window buf t))) ; visible in any frame
       (with-selected-window win
-        (end-of-buffer)))))
+        (goto-char (point-max))))))
 
 
 (defun f90-ts-log-clear ()
