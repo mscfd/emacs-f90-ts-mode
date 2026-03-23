@@ -18,7 +18,7 @@
 
 (defcustom f90-ts-mode-test-diff-command "kompare"
   "External diff tool to use for test comparisons.
-Can be 'kompare', 'meld', 'kdiff3', 'diffuse', etc."
+Can be \"kompare\", \"meld\", \"kdiff3\", \"diffuse\", etc."
   :type  'string
   :group 'f90-ts-mode)
 
@@ -149,7 +149,7 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
            do (progn
                 (when (local-variable-p var)
                   ;; if current buffer has a local copy, set it as well
-                  (setq-local var val))
+                  (set var val))
                 (set-default var val)))
   ;; treesit-font-lock-level requires a recompute
   (treesit-font-lock-recompute-features nil nil 'fortran))
@@ -164,9 +164,8 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
            do (progn
                 (when (local-variable-p var)
                   ;; if current buffer has a local copy, set it as well
-                  (setq-local var val))
+                  (set var val))
                 (set-default var val)))
-  ;; treesit-font-lock-level requires a recompute
   (treesit-font-lock-recompute-features nil nil 'fortran)
   (setq f90-ts-mode-test-custom-saved nil))
 
@@ -187,7 +186,7 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
        ;; also set buffer-local values where needed
        (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
                 when (local-variable-p var)
-                do (setq-local var val))
+                do (set var val))
        (unwind-protect
            (progn
              ;; treesit-font-lock-level requires a recompute
@@ -195,7 +194,7 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
              (progn ,@body))
          ;; restore buffer-local values on exit
          (cl-loop for (var . val) in saved-locals
-                  do (setq-local var val))
+                  do (set var val))
          ;; treesit-font-lock-level requires a recompute
          (treesit-font-lock-recompute-features nil nil 'fortran)))))
 
@@ -260,7 +259,9 @@ mark region functions etc. are possible as well.")
             (insert actual))
           (with-temp-file expected-file
             (insert expected))
-          (call-process diff nil 0 nil actual-file expected-file)))
+          (call-process diff nil 0 nil actual-file expected-file))
+      (delete-file actual-file)
+      (delete-file expected-file))
     ))
 
 
@@ -308,7 +309,7 @@ as string, launch the diff to compare actual and expected results."
 
 
 (defun f90-ts-mode-test--shorten-to-end ()
-  "Shorten end statements to just 'end'.
+  "Shorten end statements to just \"end\".
 This is intended for testing smart end completion."
   (goto-char (point-min))
   (while (not (eobp))
@@ -341,7 +342,7 @@ can be observed and checked."
    (let* ((update-fn-choices '(("indent-region" . nil)
                                ("remove indentation" . f90-ts-mode-test--remove-indent)
                                ("add some indentation" . f90-ts-mode-test--add-indent)
-                               ("shorten end statements to 'end'" . f90-ts-mode-test--shorten-to-end)))
+                               ("shorten end statements to \"end\"" . f90-ts-mode-test--shorten-to-end)))
           (chosen-update-fn (cdr (assoc
                                   (completing-read "preparation function to apply: "
                                                    update-fn-choices nil t)
@@ -362,14 +363,14 @@ can be observed and checked."
                      (unless (re-search-backward "^=-=\\(-=\\)?$" nil t)
                        (user-error "Start marker =-= not found"))
                      (if (match-string 1)
-                         (user-error "Wrong start marker: outside of 'after' code block")
+                         (user-error "Wrong start marker: outside of \"after\" code block")
                        (forward-line 1)
                        (point))))
               (end (progn
                      (unless (re-search-forward "^=-=\\(-=\\)?$" nil t)
                        (user-error "End marker =-=-= not found"))
                      (if (not (match-string 1))
-                         (user-error "Wrong end marker: inside of 'before' code block")
+                         (user-error "Wrong end marker: inside of \"before\" code block")
                        (beginning-of-line)
                        (point)))))
 

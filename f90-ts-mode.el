@@ -132,16 +132,16 @@ operations (indentation of a single line)."
 
 (defcustom f90-ts-indent-list-line-2 'continued-line
   "Select indentation column for continued lines in list-like context.
-Used as secondary setting in 'indent-for-tab-command'.  Can be be bound
-to <backtab>=S-<tab>, A-<tab>, C-S-<tab> or other."
+Used as secondary setting in `indent-for-tab-command'.  Can be be bound
+to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
   :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
 
 (defcustom f90-ts-indent-list-line-3 'primary
   "Select indentation column for continued lines in list-like context.
-Used as ternary setting in 'indent-for-tab-command'.  Can be be bound
-to <backtab>=S-<tab>, A-<tab>, C-S-<tab> or other."
+Used as ternary setting in `indent-for-tab-command'.  Can be be bound
+to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
   :type  f90-ts--indent-list-radio
   :group 'f90-ts-indent)
 
@@ -502,8 +502,8 @@ is matched by TYPE-RX."
 
 (defun f90-ts--comment-prefix (node)
   "Extract the starting character sequence from a comment NODE.
-NODE is assumed to be of type comment.  It uses 'f90-ts-openmp-prefix-regexp'
-and 'f90-ts-comment-prefix-regexp' to identify the prefix to extract."
+NODE is assumed to be of type comment.  It uses `f90-ts-openmp-prefix-regexp'
+and `f90-ts-comment-prefix-regexp' to identify the prefix to extract."
   (cl-assert (f90-ts--node-type-p node "comment")
              nil "comment-prefix: comment node expected")
   ;; first match openmp as comment prefix would just take the initial ! and ignoring
@@ -742,7 +742,9 @@ Nodes of type comments and ampersand are not considered \"proper\"."
 
 
 (defun f90-ts--previous-stmt-keyword-by-first (first)
-  "Auxiliary function for `f90-ts--previous-stmt-keyword' or when
+  "Return keyword of previous statement.
+Use node FIRST which provides the very first leaf node of previous statement.
+Auxiliary function for `f90-ts--previous-stmt-keyword' or when
 first statement is known."
   ;; block structure statements like if, do, associate etc. can start
   ;; with a label, if a (optional) label is present, skip it and extract
@@ -799,10 +801,13 @@ first statement is known."
 
 
 (defun f90-ts--previous-stmt-keyword (node parent)
-  "Return the statement leaf node (usually some keyword like if,
-elseif, do, etc.) for `f90-ts-prev-stmt-first'. In case of a block label
-The first leaf node is the label, not the keyword. For use as anchor,
-the label is required. For use as matcher, we need the keyword.
+  "Return the previous statement leaf node.
+Use NODE and PARENT to deteremine previous statement or start of
+statement in a multiline statement.
+Usually some keyword like if, elseif, do, etc. for `f90-ts-prev-stmt-first'.
+In case of a block label the first leaf node is the label, not the keyword.
+For use as anchor, the label is required.  For use as matcher, we need the
+keyword.
 Keyword nodes become relevant for incomplete code with ERROR nodes."
   ;; if the statement starts with a block label, then first is unnamed
   ;; node label, and its parent is block_label_start_expression. Its
@@ -812,27 +817,27 @@ Keyword nodes become relevant for incomplete code with ERROR nodes."
 
 
 (defun f90-ts--previous-stmt-first (node parent)
-  "Return most previous statement.
+  "Return previous statement determined by NODE and PARENT.
 First search for any reasonable (leaf) node, which is before current
-line, and then go to start of line. If on a continued line, follow it
+line, and then go to start of line.  If on a continued line, follow it
 to the start of the statement.
 If current point is within a continued line, then previous leaf node
 belongs to the continued line as well, and previous-stmt return the
 node at the start of the continued line.
 
 In order to find the most previous leaf node start at node and ascend
-the tree until a previous sibling on a previous line can be found. Just
+the tree until a previous sibling on a previous line can be found.  Just
 taking a sibling of node is not possible, as node might be nil (empty
 line), or node is part of an expression tree with deep nesting or
-similar. We really want to go to previous line with a proper node on
-it. Once we have a proper node, descend the previous sibling to further
+similar.  We really want to go to previous line with a proper node on
+it.  Once we have a proper node, descend the previous sibling to further
 narrow it down among its children.
-Finally return the leaf node at the start of the line. Follow continued
+Finally return the leaf node at the start of the line.  Follow continued
 lines to first line of continued statement.
 
 Ignore nodes which do not satisfy the predicate
-`f90-ts--node-not-comment-or-error-p' during ascend or descend
-(for example comment nodes)."
+`f90-ts--node-not-comment-or-error-p' during ascend or descend,
+for example comment nodes."
   (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
          (predicate #'f90-ts--node-not-comment-or-error-p)
          ;; ascend until a previous ancestor is found
@@ -858,11 +863,11 @@ Ignore nodes which do not satisfy the predicate
 
 
 (defun f90-ts--prev-sib-by-parent (parent)
-  "Previous sibling based on position of point. Especially for empty
-line, it often happens that node=nil, but parent is some relevant node,
-whose children, which are kind of siblings to nil-node-position, can be
-used to determine things like indentation.
-For the first sibling itself, we do not exclude ERROR nodes. Then the
+  "Previous sibling based on position of point and PARENT.
+Especially for empty line, it often happens that node=nil, but parent is some
+relevant node, whose children, which are kind of siblings to nil-node-position,
+can be used to determine things like indentation.
+For the first sibling itself, we do not exclude ERROR nodes.  Then the
 ERROR node is descended (usually just one step) to find a node with relevant
 structure type, like subroutine_statement or similar."
   (let* ((cur-line (line-number-at-pos))
@@ -879,17 +884,17 @@ structure type, like subroutine_statement or similar."
 
 
 (defun f90-ts--before-child (node line predicate)
-  "Return child of NODE, which is on a previous line and satisfies
-PREDICATE. Take the last of all children satisfying this condition."
+  "Return child of NODE, which is on a previous LINE and satisfies PREDICATE.
+Take the last of all children satisfying this condition."
   (when-let* ((children (treesit-node-children node))
               (children-prev (f90-ts--nodes-on-prev-lines children line predicate)))
     (car (last children-prev))))
 
 
 (defun f90-ts--first-node-on-line (pos)
-  "Return the first node on the line at POS. Take virtual ampersand
-nodes into account, these are not returned by treesit-node-at and
-require extra work. If the line is empty, return nil."
+  "Return the first node on the line at POS.
+Take virtual ampersand nodes into account, these are not returned by
+`treesit-node-at' and require extra work.  If the line is empty, return nil."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
@@ -928,10 +933,11 @@ require extra work. If the line is empty, return nil."
 
 
 (defun f90-ts--find-first-ampersand (first)
-  "In continued lines, continuation symbol ampersands appears in
-sequences like &, (comment)*, &. This routines checks whether node
+  "Find the first ampersand if at a ampersand-comment*-ampersand sequence.
+In continued lines, continuation symbol ampersands appears in
+sequences like &, (comment)*, &.  This routines checks whether node
 FIRST is any of those ampersand or comment nodes, and returns the first
-ampersand node of this sequence. FIRST is assumed to be the first node
+ampersand node of this sequence.  FIRST is assumed to be the first node
 on its line!"
   (when-let ((nprev
               (cond
@@ -956,9 +962,9 @@ on its line!"
 
 
 (defun f90-ts--line-continued-at-end-p (last pos)
-  "Check whether line at POS is continued. It usually ends in &, but
-might be followed by a comment. First check that there is a next line
-after current line.
+  "Check whether line at POS is continued.
+It usually ends in &, but might be followed by a comment.  First check that
+there is a next line after current line.
 LAST is expected to be the last node on the line, and can be obtained
 by `f90-ts--last-node-line'"
   ;; if there is an ampersand (or ampersand (comment)) at end of line but
@@ -993,11 +999,12 @@ is continued at end."
 
 
 (defun f90-ts--subsequent-line-of-continued-stmt-p (pos)
-  "Check whether line at POS belongs to a continued statement, but is
-not the first line of such a statement.
-Either at start line there is an &. Or it is a comment, and going
-backwards by prev-sibling after a sequence of comments (and only
-comments), we find an &."
+  "Check whether line at POS is within a subsequent continued line.
+Return nil for the first line of a continued statement or if the
+statement is not continued.
+Such a subsequent line either has a node \"&\" at start of line, is a comment,
+or an empty line. If it is an empty line, it is necessary to look backwards and
+forwards and check, whether an ampersand can be found."
   ;; if line is empty, n-first is nil and n-next is on some subsequent
   ;; line; if the line is after some continuation ampersand
   ;; then n-start is either a comment or the second ampersand,
@@ -1020,7 +1027,7 @@ must also match."
 
 (defun f90-ts--first-node-of-stmt (node)
   "Return the first node of the statement at which NODE is placed.
-Use f90-ts--first-node-on-line, check for continuation symbol and
+Use `f90-ts--first-node-on-line', check for continuation symbol and
 if present, further go back, skipping comments and empty lines until
 beginning of statement is found."
   (cl-loop
@@ -1034,9 +1041,10 @@ beginning of statement is found."
 
 
 (defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
-  "Return all NODES on any previous line.
-For empty NODES, return an empty list.
-If PREDICATE is provided, additionally filter by predicate."
+  "Filter NODES by PREDICATE and line number.
+Accept only NODES which are on a line prior to CUR-LINE.
+If PREDICATE is provided, additionally filter by predicate.
+For empty NODES, return an empty list."
   (seq-filter
    (lambda (node)
      (and (or (not predicate)
@@ -1047,10 +1055,9 @@ If PREDICATE is provided, additionally filter by predicate."
 
 
 (defun f90-ts--after-stmt-line1-p (node pos)
-  "Check whether position POS is on the next line after the line where
-NODE is located (NODE assumed to being part of a statement possibly
-spread over several lines). Empty lines are automatically skipped as
-those are not present in the tree."
+  "Check whether position POS is on the next line after NODE.
+NODE is assumed to being part of a statement possibly spread over several lines.
+Empty lines are automatically skipped as those are not present in the tree."
   ;; strategy: get last node on the same line as NODE, check whether it is &,
   ;; goto next node, which is & on next line and compare with line number at pos;
   ;; note that if "&" is at end of line, then there is always a second "&"
@@ -1083,31 +1090,32 @@ those are not present in the tree."
 
 
 (defun f90-ts--node-line (node)
-  "Determine line number of start position of node."
+  "Determine line number of start position of NODE."
   (line-number-at-pos (treesit-node-start node)))
 
 
 (defun f90-ts--node-column (node)
-  "Determine column number of start position of node."
+  "Determine column number of start position of NODE."
   (f90-ts--column-number-at-pos (treesit-node-start node)))
 
 
 (defun f90-ts--column-number-at-pos (pos)
-  "Compute column by position."
+  "Compute column at position POS."
   (save-excursion
     (goto-char pos)
     (current-column)))
 
 
 (defun f90-ts--indentation-at-pos (pos)
-  "Compute column by position."
+  "Compute indentation of line at POS."
   (save-excursion
     (goto-char pos)
     (current-indentation)))
 
 
 (defun f90-ts--line-number-at-node-or-pos (node)
-  "If NODE is non-nil, return line number at which start position is
+  "Return line number of NODE or point.
+If NODE is non-nil, return line number at which start position is
 located, otherwise return line number of current point position."
   (or (and node (f90-ts--node-line node))
       (line-number-at-pos)))
@@ -1117,9 +1125,11 @@ located, otherwise return line number of current point position."
 ;;; Font-locking: auxiliary
 
 (defun f90-ts--fontify-comment (node override _start _end &rest _)
-  "Check whether NODE satisfies a special comment rule, and if it does,
+  "Fontify NODE assumed to be a comment.
+Check whether NODE satisfies a special comment rule, and if it does,
 use the face provided by the first matching rule.
-Argument OVERRIDE is passend to treesit-fontify-with-override."
+If not rule matches, use `font-lock-comment-face'.
+Argument OVERRIDE is passend to `treesit-fontify-with-override'."
   (cl-assert (f90-ts--node-type-p node "comment")
              nil "fontify-comment: comment node expected")
   (let* ((rule (f90-ts--comment-matching-rule node))
@@ -1392,8 +1402,7 @@ Argument OVERRIDE is passend to treesit-fontify-with-override."
 
 
 (defun f90-ts--font-lock-rules-end ()
-  "Font-lock rules for end statement of functions, subroutines,
-associates and others."
+  "Apply font-lock rules for end statements of structures."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'function
@@ -1533,7 +1542,7 @@ lines, see `f90-ts--continued-line-cache'.")
   "Current indent cache vector:
 [node parent child0 psibp pstmt-1 pstmt-k].
 Slots 2+ are lazily filled.
-Value 'unset means not yet computed.
+Value `unset' means not yet computed.
 Value nil means that this node does not exist.  For example, on empty
 lines, the node itself is nil.")
 
@@ -1990,7 +1999,7 @@ TYPE-N is matched against type of (cached) node,
 TYPE-P is matched against type of (cached) parent and
 TYPE-PSTMTK is matched against type of (cached) pstmtk, which is
 the previous statement keyword node."
-  (lambda (node parent bol &rest _)
+  (lambda (node parent _bol &rest _)
     (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword)))
       (and (f90-ts--node-type-match-p node type-n)
            (f90-ts--node-type-match-p parent type-p)
@@ -2006,7 +2015,7 @@ TYPE-N is matched against type of (cached) node,
 TYPE-P is matched against type of (cached) parent,
 TYPE-CH is matched against type of (cached) first child of node and
 TYPE-PSIBP is matched against type of (cached) previous sibling by parent."
-  (lambda (node parent bol &rest _)
+  (lambda (node parent _bol &rest _)
     (let ((child0 (f90-ts--indent-child0))
           (psibp (f90-ts--indent-prev-sib-by-parent)))
       (and (f90-ts--node-type-match-p node type-n)
@@ -2034,8 +2043,7 @@ on a previous line.  If not such before-child exists, use BOL as fallback.
 Used for continued lines, where the previous sibling or parent is not the
 right anchor."
   (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
-         (predicate (lambda (n) t))
-         (psib (f90-ts--before-child parent cur-line predicate)))
+         (psib (f90-ts--before-child parent cur-line #'always)))
     (if psib
         (f90-ts--indent-pos-at-node psib)
       bol)))
@@ -2163,8 +2171,8 @@ These are position (start of node or point), column at position, line number
 and symbol type at point (for deciding where to align).  If NODE is nil,
 then no relevant node is at point and point position is used instead.
 This is important for handling empty lines.
-The data is returned as an alist with keys 'node, 'pos, 'col, 'line
-and 'nsym."
+The data is returned as an alist with keys `node', `pos', `col', `line'
+and `nsym'."
   (if node
       (list (cons 'node node)
             (cons 'pos  (treesit-node-start node))
@@ -2213,9 +2221,9 @@ the function returns the outermost expression node."
 
 (defun f90-ts--align-list-expand-assoc (nodes)
   "Replace association nodes in list NODES by their first two children.
-These are field 'name' and '=>'.  There is no handling of the selector
+These are field \"name\" and \"=>\".  There is no handling of the selector
 part currently.  Skip continuation symbols, which might be between
-'name' and arrow '=>'."
+\"name\" and arrow \"=>\"."
   (seq-mapcat
    (lambda (node)
      (if (f90-ts--node-type-p node "association")
@@ -2229,7 +2237,7 @@ part currently.  Skip continuation symbols, which might be between
 
 
 (defun f90-ts--align-list-items-assocation (list-context _loc)
-  "Determine relevant childrens of LIST-CONTEXT = 'association_list'."
+  "Determine relevant childrens of LIST-CONTEXT = \"association_list\"."
   (cl-assert (f90-ts--node-type-p list-context "association_list")
              nil "expected list context: association_list, got '%s'" list-context)
   ;; expand it, as the it contains a list of nodes, whose children are required
@@ -2271,7 +2279,7 @@ It does not descend into parenthesized_expressions."
 ;; list context: parameters
 
 (defun f90-ts--align-list-items-parameters (list-context _loc)
-  "Determine relevant childrens of LIST-CONTEXT = 'parameters'."
+  "Determine relevant childrens of LIST-CONTEXT = \"parameters\"."
   (cl-assert (f90-ts--node-type-p list-context "parameters")
              nil "expected list context: parameters, got '%s'" list-context)
   ;; this also includes the opening and closing parenthesis
@@ -2283,8 +2291,8 @@ It does not descend into parenthesized_expressions."
 
 (defun f90-ts--align-list-items-binding (list-context _loc)
   "Determine relevant children of LIST-CONTEXT of binding type.
-These are nodes of type 'binding_list' or 'final_statement'.  Both occur in the
-contains part of a derived type definition."
+These are nodes of type \"binding_list\" or \"final_statement\".  Both occur
+in the contains part of a derived type definition."
   (cl-assert (or (f90-ts--node-type-p list-context "binding_list")
                  (f90-ts--node-type-p list-context "final_statement"))
              nil "expected list context: binding_list or final_statement, got '%s'" list-context)
@@ -2297,7 +2305,7 @@ contains part of a derived type definition."
 ;; list context: variable_declarations
 
 (defun f90-ts--align-list-items-var-decl (list-context loc)
-  "Determine relevant children of LIST-CONTEXT = 'variable_declaration'.
+  "Determine relevant children of LIST-CONTEXT = \"variable_declaration\".
 Use LOC to determine whether attribute or declarator items are relevant (those
 before and after \"::\")."
   (cl-assert (f90-ts--node-type-p list-context "variable_declaration")
@@ -2325,7 +2333,7 @@ before and after \"::\")."
 ;; list context: arguments
 
 (defun f90-ts--align-list-items-arguments (list-context _loc)
-  "Determine relevant children of LIST-CONTEXT = 'argument_list'."
+  "Determine relevant children of LIST-CONTEXT = \"argument_list\"."
   (cl-assert (f90-ts--node-type-p list-context "argument_list")
              nil "expected list context: argument_list, got '%s'" list-context)
   (treesit-node-children list-context))
@@ -2335,11 +2343,11 @@ before and after \"::\")."
 ;; additional anchor for aligned lists:
 
 (defmacro f90-ts-mode--collecting-anoff (&rest body)
-  "Execute BODY with `collect' available to accumulate (anchor offset)
-pairs. Pairs can be collected either as (collect anchor offset) or
-(collect anoff-pair).
+  "Execute BODY with `collect' available to accumulate (anchor offset) pairs.
+Pairs can be collected either by executing \"(collect anchor offset)\"
+ or \"(collect anoff-pair)\".
 The macro deals with nil as pair input as well, so using it like
-(collect (pair-or-nil ...)) is valid."
+\"(collect (pair-or-nil ...))\" is valid."
   (let ((acc (gensym "acc")))
     `(let ((,acc nil))
        (cl-flet ((collect (arg1 &optional arg2)
@@ -2353,17 +2361,18 @@ The macro deals with nil as pair input as well, so using it like
 
 
 (defun f90-ts--align-list-pstmt1-anoff ()
-  "Return the standard continued line indentation, which is a pair of
-start position of pstmt-1 as anchor and the indent-continued offset."
+  "Return the standard continued line indentation.
+This is start position of pstmt-1 as anchor and `f90-ts-indent-continued'
+as offset."
   (let ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
     (list (treesit-node-start pstmt-1)
           f90-ts-indent-continued)))
 
 
 (defun f90-ts--align-list-smallest-anoff (items)
-  "Return the item with the smallest column number in a list of ITEMS,
-which is not sorted in general. An item is a pair (anchor offset).
-For this routine we assume that anchor is a node (in general it is a
+  "Return the item with the smallest column number in a list of ITEMS.
+ITEMS is not asssumed to be sorted.  An item is a pair (anchor offset).
+For this routine it is assumed that anchor is a node (in general it is a
 node or a buffer position)."
   (car (seq-sort-by #'f90-ts--continued-line-cache-get-col
                     #'<
@@ -2371,14 +2380,12 @@ node or a buffer position)."
 
 
 (defun f90-ts--align-list-other-default (_list-context items _loc)
-  "Return a list of default positions (anchors offset) depending on
-LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
-
-The default list consists of one single pair which is standard
-continued line indentation (pos-of-pstmt-1 f90-ts-indent-continued).
-
-The returned list must contain at least one item. The first entry is
-used as primary anchor/fallback position."
+  "Return a list of default/fallback alignment positions (anchors offset).
+These depend on LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
+The first entry of the \"other\" list is used as primary anchor.
+If ITEMS has entries, than return the entry with the smallest column.
+If ITEMS is empty, return (pos-of-pstmt-1 f90-ts-indent-continued) for default
+continued line indentation ."
   (f90-ts-mode--collecting-anoff
    (if items
         ;; find item with smallest column number (used as primary one)
@@ -2387,13 +2394,13 @@ used as primary anchor/fallback position."
 
 
 (defun f90-ts--align-list-other-tuple (list-context items loc)
-  "Return a list of default positions (anchors offset) depending on
-LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
+  "Return a list of default alignmnet positions (anchors offset) for tuples.
+These anchros depend on LIST-CONTEXT, node-sym (nsym in LOC) and whether
+ITEMS has any nodes.
 
-For argument lists (call sub(...)) and parameters
-(subroutine sub (...)), a default and fallback position is to align to
-with initial opening parenthesis plus offset. This primary position is
-returned as first element of the list."
+For argument lists (call sub(...)) and parameters (subroutine sub (...)),
+a default and fallback position is to align with initial opening parenthesis
+plus offset.  This primary position is returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
                  (f90-ts--node-type-p list-context "parameters"))
@@ -2416,12 +2423,13 @@ returned as first element of the list."
 
 
 (defun f90-ts--align-list-other-op-expr (list-context items loc)
-  "Return a list of default positions (anchors offset) depending on
-LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
+  "Return a list of default positions (anchors offset) for expressions.
+These depend on LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has
+any nodes.
 
-For logical expressions a default and fallback position is to align
-with the start of the expression. This primary position is returned
-as first element of the list."
+For logical expressions a default and fallback position is to align with the
+start of the expression.  This primary position is returned as first element
+of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (f90-ts--node-is-op-expr-p list-context)
              nil
@@ -2463,15 +2471,15 @@ as first element of the list."
 
 
 (defun f90-ts--align-list-other-association (list-context items loc)
-  "Return a list of default positions (anchors offset) depending on
-LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has any nodes.
+  "Return a list of default positions (anchors offset) for association nodes.
+These depend on LIST-CONTEXT, node-sym (nsym in LOC) and whether ITEMS has
+any nodes.
 
 For association lists (associate(x => y, ...)), a default and fallback
-position is to align one column position to the right of the initial
-opening parenthesis. However, if node is the =>, then apply indent with
-f90-ts-indent-continued relative to opening
-parenthesis. This primary position is returned as first element of the
- list."
+position is to align with the initial opening parenthesis plus some offset.
+However, if node is the =>, then apply indent with
+`f90-ts-indent-continued' relative to opening parenthesis.
+This primary position is returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (f90-ts--node-type-p list-context "association_list")
              nil
@@ -2490,7 +2498,7 @@ parenthesis. This primary position is returned as first element of the
                 child-paren)
      (collect (treesit-node-start child-paren)
               (pcase nsym
-                ('associate   f90-ts-indent-continued)          ; indents "=>"
+                ('associate   f90-ts-indent-continued)     ; indents "=>"
                 ('parenthesis f90-ts-indent-paren-close)   ; indents ")"
                 (_            f90-ts-indent-paren-default) ; all other kind of nodes
                 )))
@@ -2516,8 +2524,8 @@ Currently these are nodes with the same NODE-SYM."
 
 
 (defun f90-ts--align-list-map-col-pos (anchor)
-  "Map an ANCHOR, which is either a node or an otherwise obtained
-pair (positions offset), to a triple (column, position, offset).
+  "Map an ANCHOR to a triple (column position offset).
+ANCHOR is either a node or an otherwise obtained pair (position offset), .
 For a node, position is start of node and offset is zero."
   (if (treesit-node-p anchor)
       (list
@@ -2534,9 +2542,9 @@ For a node, position is start of node and offset is zero."
 
 
 (defun f90-ts--align-list-cp-sort (cp-alist)
-  "Make list CP-LIST of (column position offset) triples unique by
-column position. For several entries with same column number,
-take the element with the largest buffer position."
+  "Make CP-ALIST of (column position offset) triples unique by column position.
+For several entries with same column number, take the element with the largest
+buffer position."
   (let ((cp-alist-unique
          (seq-map (lambda (group)
                     ;; elements produced by seq-group-by are:
@@ -2550,15 +2558,13 @@ take the element with the largest buffer position."
 
 
 (defun f90-ts--align-list-select (variant cur-col primary items)
-  "From a list ITEMS of nodes or otherwise selected column positions,
-determine relevant column positions and select column depending on
-VARIANT and CUR-COL which is the current column.
+  "Select (anchor offset) from PRIMARY and ITEMS.
+Depending on VARIANT and current column CUR-COL, select the relevant
+anchor and offset.
 
-PRIMARY is a default/fallback anchor (position offset). Depending on
+PRIMARY is a default/fallback anchor (position offset).  Depending on
 VARIANT (like keep-or-primary) and current alignment, PRIMARY is
-selected.
-
-The selected column is return as (anchor offset)."
+selected."
   ;; note that entries in col-pos are triples
   ;; cp = (column, buffer position, offset),
   ;; where buffer position must be start of a previous node to ensure
@@ -2619,10 +2625,10 @@ The selected column is return as (anchor offset)."
 
 
 (defun f90-ts--align-list-anoff-items (loc list-context)
-  "Filter relevant items from LIST-CONTEXT, which are possible
-alignment anchors for node. LOC is an alist which provides the node
-and further location data.
-Note: for these anchor-offset pairs, the offset is 0 in general."
+  "Filter relevant alignment anchors from LIST-CONTEXT.
+LOC is an alist which provides the node and further location data.
+Note: for anchor-offset pairs extracted from LIST-CONTEXT, the offset is 0 in
+general."
   ;; parenthesis are handled by anoff-other, as we want to
   ;; add a custom offset and use it as primary anchor
   (unless (eq (alist-get 'nsym loc)
@@ -2641,9 +2647,11 @@ Note: for these anchor-offset pairs, the offset is 0 in general."
 
 
 (defun f90-ts--align-list-anoff-other (loc anchors-context list-context)
-  "Get other relevant anchor-offset pairs, depending on LIST-CONTEXT
-and already obtained list of ANCHORS-CONTEXT. LOC provides node and
-location data."
+  "Return other relevant anchor-offset pairs for alignment in LIST-CONTEXT.
+ANCHORS-CONTEXT are anchor-offset items already obtained by
+`f90-ts--align-list-anoff-items'.  These might determine which alternative
+alignment positions to select.
+LOC provides node and location data."
   (let ((get-other (or (f90-ts--get-list-context-prop :get-other-fn list-context)
                        #'f90-ts--align-list-other-default)))
     (funcall get-other
@@ -2653,13 +2661,13 @@ location data."
 
 
 (defun f90-ts--align-list-anchor-offset (variant loc list-context)
-  "Determine a pair (anchor offset) for alignment of a node given as
-an alist LOC containing node, column, line number and node symbol.
-To this end determine items on continued lines in the provided
-LIST-CONTEXT. Additionally consider further anchors (like the first
-node of previous statement by pstmt-1), or other default positions
-like one column to the right of an opening parenthesis.
-Finally use VARIANT to select one pair."
+  "Determine a pair (anchor offset) for alignment of a node in a list context.
+Location data is given as an alist LOC containing node, column, line number and
+node symbol.
+To this end items on continued lines in the provided LIST-CONTEXT are
+determined.  Additionally further anchors (like the first node of previous
+statement by pstmt-1) are considered.
+Finally use VARIANT to select one pair to align with."
   (let* ((anoff-items (f90-ts--align-list-anoff-items loc
                                                       list-context))
          (anoff-other (f90-ts--align-list-anoff-other loc
@@ -2714,14 +2722,16 @@ Finally use VARIANT to select one pair."
       (cons "variable_declaration"
             '(:get-items-fn f90-ts--align-list-items-var-decl))
     ))
-  "List of tree-sitter node types presenting some kind of list context
-which is suitable for alignment indentation.
-And the associated function to extract relevant children for alignemnt.")
+  "List of tree-sitter node types presenting some kind of list context.
+A list context is a node with children which are suitable for alignment if
+spread over several lines in a continued line statement.
+The value of the alist provides properties to deal with such list contexts,
+in particular for how to extract relevant alignment positions.")
 
 
 (defun f90-ts--get-list-context-prop (pkey list-context)
-  "Lookup LIST-CONTEXT and return the property value for PKEY
-from `f90-ts--align-list-context-config' alist."
+  "Lookup LIST-CONTEXT and return the property value for PKEY.
+Lookup is done in alist `f90-ts--align-list-context-config'."
   (let ((properties (alist-get (treesit-node-type list-context)
                                f90-ts--align-list-context-config
                                 nil
@@ -2731,9 +2741,9 @@ from `f90-ts--align-list-context-config' alist."
 
 
 (defun f90-ts--align-list-context-max (loc)
-  "Determine, whether the continued statement at LOC contains any
-list-context subtree. This is the maximal node for any subtree
-searches."
+  "Determine maximal subtree related to node representing a list-context.
+Node location data is given by LOC.
+This is the maximal node for any further subtree searches."
   (let* ((pos (alist-get 'pos loc))
          (line (alist-get 'line loc))
          (ps-key (f90-ts--indent-prev-stmt-keyword))
@@ -2751,7 +2761,7 @@ searches."
 (defun f90-ts--align-list-context-op-expr (loc parent)
   "Determine, whether LOC is in an operator expression list context.
 For expressions, we need to check node in LOC or PARENT (node might be
-nil). But we do not need to ascend further."
+nil).  But we do not need to ascend further."
   ;; always looking at PARENT fails for expressions like in
   ;; x = &
   ;;     y
@@ -2784,7 +2794,8 @@ nil). But we do not need to ascend further."
 
 (defun f90-ts--align-list-context-other (loc parent)
   "Determine, whether LOC is in a list-context, other than expressions.
-For these we might need to ascend a few steps."
+Use node from LOC or PARENT to start the search, which might require to
+ascend a few steps."
   (let* ((node (or (alist-get 'node loc)
                    parent))
          (line (alist-get 'line loc))
@@ -2806,12 +2817,11 @@ For these we might need to ascend a few steps."
 
 
 (defun f90-ts--align-list-context (loc parent)
-  "In case some list alignment option is active, determine whether LOC
-contains a location within a list type context and the relevant context
-node. Often this is PARENT, but sometimes a related node like
+  "Check whether LOC and PARENT are within a list context and return the node.
+Often the list context is PARENT, but sometimes a related node like
 grandparent, etc.
 The smallest such context, starting on a previous line is returned.
-Return value nil signals that this is not a list context."
+Return value nil signals that position is not within a list context."
   (let ((stmt-max (f90-ts--align-list-context-max loc)))
     (when stmt-max
       (or (f90-ts--align-list-context-op-expr loc parent)
@@ -2819,18 +2829,18 @@ Return value nil signals that this is not a list context."
 
 
 (defun f90-ts--continued-line-anchor (node parent bol &rest _)
-  "For a continued line, determine the kind of continuation and
-return a suitable anchor.
-If the current position is within a list like context, try to align
-list items (like arguments in a procedure call). Otherwise determine
-standard indentation for continued lines.
+  "Determine anchor for a continued line given by NODE, PARENT and BOL.
+If the current position is within a list like context, try to align with
+list items like arguments in a procedure call or other related columns like
+those of parenthesis.  Otherwise determine standard indentation for
+continued lines.
 
 Exact behaviour is determined by custom variables
 `f90-ts-indent-list-line' and `f90-ts-indent-list-region'.
 
-Note that due to the matcher, we already know that we are on a
-continued line of a continued statement. The statement line itself
-(the first line) is not catched by the continued line matcher."
+This anchor requires a matcher which succeeds only if on a subsequent continued
+line.  The first statement line where the statement starts must not catched by
+the continued line matcher."
   (let ((variant (or f90-ts--align-continued-variant-tab
                      f90-ts-indent-list-region))
         (pstmt-1 (f90-ts--indent-prev-stmt-first)))
@@ -2857,8 +2867,7 @@ continued line of a continued statement. The statement line itself
       ;;  * cache anchor and offset for offset function for the
       ;;    current line
       ;;  * cache computed offset for indentation of subsequent lines
-      (let ((line (alist-get 'line loc))
-            (anchor (car anchor-offset))
+      (let ((anchor (car anchor-offset))
             (offset (cadr anchor-offset)))
         ;; (strictly, anchor does not need to be cached)
         (f90-ts--indent-anchor-cache anchor)
@@ -2872,8 +2881,9 @@ continued line of a continued statement. The statement line itself
 ;; debug stuff
 
 (defun fail-info-is (msg)
-  "Matcher that always fails, but prints a separator line and
-additionally some node and parent info if MSG=first."
+  "Always fail as indentation matcher, but print a separator line.
+Additionally if MSG=\"start\" or \"catch all\" print detailed data of position
+and nodes for debugging purposes into the exclusive log buffer."
   (lambda (node parent bol &rest _)
     (f90-ts-log :indent "---------info %s--------------" msg)
     (when (or (string= msg "start") (string= msg "catch all"))
@@ -2898,8 +2908,10 @@ additionally some node and parent info if MSG=first."
 
 
 (defun f90-ts-indent-rules-info (msg)
-  "Create a debug indentation rule, which never matches, but prints
-some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
+  "Create an indentation rule, which never matches, but prints a MSG header.
+If MSG is \"start\" or \"catch all\" print additional position and node info.
+
+Used as \",@(f90-ts-indent-rules-info message\"') in indentation rules."
   `(;; for testing purposes
     ((fail-info-is ,msg) parent 0)))
 
@@ -2913,8 +2925,8 @@ some debug info. Used as ',@(f90-ts-indent-rules-info \"msg\"')"
     ;; info rules needs populated cache
     ;;,@(f90-ts-indent-rules-info "start")
     )
-  "Indentation rules executed at start. The main purpose is to fill the
-indentation cache for the new run.")
+  "Indentation rules executed at start.
+The main purpose is to fill the indentation cache for a new run.")
 
 
 (defvar f90-ts-indent-rules-comments
@@ -2976,8 +2988,7 @@ indentation cache for the new run.")
     ;; by how much should result be indented? x3 is not a good anchor!
     (f90-ts--continued-subsequent-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
     )
-  "Indentation rules for continued lines. Argument lists and similar
-continued lines must have been dealt with before.")
+  "Indentation rules for continued lines.")
 
 
 (defvar f90-ts-indent-rules-internal-proc
@@ -2987,8 +2998,8 @@ continued lines must have been dealt with before.")
     ((parent-is  "internal_procedures")         parent f90-ts--toplevel-offset)
     ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--toplevel-offset)
     )
-  "Indentation rules for internal_proc node, which occurs in conjunction
-with contain statements.")
+  "Indentation rules for internal_proc node.
+This node occurs in conjunction with \"contain\" statements.")
 
 
 (defvar f90-ts-indent-rules-prog-mod
@@ -3038,8 +3049,9 @@ with contain statements.")
     ;; as module procedure statements are only allowed within contains section
     ((n-p-ch-psibp nil "ERROR"            nil "module_procedure_statement") parent f90-ts-indent-block)
     ((parent-is "translation_unit") column-0 0))
-  "Indentation rules for translation_unit and functions and subroutines
-not within a contains section (or hiding behind some ERROR node).")
+  "Indentation rules related to root node translation_unit.
+These occur for functions and subroutines not within a \"contains\" section,
+and in case of ERROR nodes with incomplete code.")
 
 
 (defvar f90-ts-indent-rules-interface
@@ -3137,8 +3149,8 @@ not within a contains section (or hiding behind some ERROR node).")
     ((n-p-pstmtk nil                       "forall_statement" "forall") parent               f90-ts-indent-block)
     ((n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block)
     )
-  "Indentation rules for single region structures like do loops,
-associate and block statements.")
+  "Indentation rules for single region structures.
+These are do loops, block statements, associate construct and forall statements.")
 
 
 (defvar f90-ts-indent-rules-select
@@ -3227,13 +3239,16 @@ associate and block statements.")
     ;;"end_coarray_team_statement"
     ;;"end_coarray_critical_statement"
     )
-    "List of type name used to represent end struct statements for
-smart end completion. Statements not yet supported are commented out.")
+    "List of type names used for end struct statements.
+The parent of such a node represents the structure itself.
+This list is used to find nodes elligible for smart end completion.
+Statements not yet supported are commented out.")
 
 
 (defun f90-ts--complete-replace-if-changed (beg end completion)
-  "Replace text in region BEG...END with COMPLETION, but only if
-different. Return true if something was changed."
+  "Replace text in region BEG...END with COMPLETION.
+Replace only if completion is different than current text.
+Return non-nil if something was changed and text actually replaced."
   (let* ((original (buffer-substring-no-properties beg end))
          (is-equal (string= original completion)))
     (if is-equal
@@ -3283,10 +3298,11 @@ different. Return true if something was changed."
 
 
 (defun f90-ts--complete-smart-end-extract (node capture)
-  "Extract relevant nodes from CAPTURES. Somehow anchoring at NODE does
-not work. First search for root=NODE. Then extract subsequent matches,
-some of which are optional and possibly not present or in different
-order."
+  "Extract relevant nodes from CAPTURE obtain by a treesitter query.
+
+Somehow documented anchoring at NODE does not work, and it needs to be done by
+hand.  First search for root=NODE.  Then extract subsequent matches, some of
+which are optional and possibly not present or in different order."
   (cl-loop
    for (cap_sym . n) in capture
    with collecting = nil
@@ -3300,10 +3316,13 @@ order."
 
 
 (defun f90-ts--complete-smart-end-name (node)
-  "Extract construct type and name from NODE. Depending on NODE type,
-extraction is different, as subtrees are built differently.
-The construct type is fixed, but we want to query the lower/upper case
-to match usage in opening and end statement."
+  "Extract construct type and name from NODE.
+Return a list containing name, construct type and second construct type if
+present or nil.  For example, for \"end enumeration type xyz\", return
+the list (\"xyz\" \"enumeration\" \"type\".
+Depending on type of NODE, extraction is different, as subtrees are built
+differently.  The construct type itself is fixed, but lower/upper/title case
+and the related start of the structure are also required for completion."
   (when-let* ((query (alist-get (treesit-node-type node)
                                 f90-ts--complete-smart-end-query
                                 nil
@@ -3334,11 +3353,12 @@ to match usage in opening and end statement."
 
 
 (defun f90-ts--complete-smart-end-compose (node)
-  "Create an 'end construct name' completion from NODE, where construct
-is a string like 'subroutine', 'function', 'module', etc.
-If no suitable query for recovering the construct name exists, then
-the construct is either not yet supported or not the start of a
-structured block statement. In this case, return nil."
+  "Create an \"end construct name\" completion from NODE if applicable.
+NODE is assumed to be the structure node (parent of the end structure node).
+Construct is a string like \"subroutine\", \"function\", \"module\",
+\"do\", \"block\" etc.
+Return nil if construct name could not be recovered.  In general, this should
+not happen, as `f90-ts--complete-end-structs' lists all supported structures."
   (when-let ((construct-name (f90-ts--complete-smart-end-name node)))
     (cl-assert construct-name
                nil
@@ -3359,15 +3379,17 @@ structured block statement. In this case, return nil."
                  " "))))
 
 
-(defun f90-ts--complete-smart-end-show (node-block)
-  "Show the completion either by jumping to it or printing into the
-message buffer, depending on position and whether 'blink is set."
+(defun f90-ts--complete-smart-end-show (node-struct)
+  "Show the completion for root NODE-STRUCT of a structure statement.
+Either jump to the start of the structure or show opening statement in the
+message buffer.  Which action to perform depends on position and whether
+`blink' is set."
   (let ((top-of-window (window-start))
-        (start-block (treesit-node-start node-block)))
+        (start-struct (treesit-node-start node-struct)))
     (save-excursion
-      (goto-char start-block)
+      (goto-char start-struct)
       (if (or (eq f90-ts-smart-end 'no-blink)
-              (< start-block top-of-window))
+              (< start-struct top-of-window))
           (message "matches %s: %s"
                    (what-line)
                    (buffer-substring
@@ -3377,11 +3399,14 @@ message buffer, depending on position and whether 'blink is set."
     ))
 
 
-(defun f90-ts--complete-smart-end-region (node)
-  "Find the end character to be replaced by end completion for node.
-We want to remove trailing white space characters, but keep comments
-or commands following an semicolon ';'. Moreover, incompletely typed
-text like in 'end subr_out' with point at '_' should be handled as well."
+(defun f90-ts--complete-smart-end-end (node)
+  "Find the end position of the end structure statement of NODE.
+Together with the start position of the end structure statement it marks the
+region to be replaced.
+It should include trailing white space characters, but only if no comments or
+commands (after a \";\") are present, in which case the original spacing should
+be kept.  Moreover, incompletely typed text like in \"end subr_out\" should be
+handled as well."
   (save-excursion
     (goto-char (treesit-node-end node))
     (skip-chars-forward "^;!\n")
@@ -3398,15 +3423,15 @@ text like in 'end subr_out' with point at '_' should be handled as well."
   "If NODE is an end struct statement, construct the completion.
 It looks for structure type and name or label.
 
-Example: complete 'end' closing a subroutine of name mysub by
-'end subroutine mysub'.
+Example: complete \"end\" closing a subroutine of name mysub by
+\"end subroutine mysub\".
 After the changes, NODE will become stale.  The function returns the new
 statement node representing the whole block.  This is used for the blink
 option or statement indentation."
   ;; the region check ensures that end statements on continued lines are left alone
   (let ((type (treesit-node-type node))
         (beg (treesit-node-start node))
-        (end (f90-ts--complete-smart-end-region node))
+        (end (f90-ts--complete-smart-end-end node))
         (text (treesit-node-text node)))
     ;; make sure that we are looking at and end statement, the parser might add
     ;; and end_xyz_statement node in error recovery mode (e.g. at end of file)
@@ -3414,64 +3439,64 @@ option or statement indentation."
                (and text (string-match-p "^end" text))
                (member type f90-ts--complete-end-structs))
 
-      (let ((node-block (treesit-node-parent node))
-            node-block-new)
-        (when-let ((completion (f90-ts--complete-smart-end-compose node-block)))
+      (let ((node-struct (treesit-node-parent node))
+            node-struct-new)
+        (when-let ((completion (f90-ts--complete-smart-end-compose node-struct)))
           (let (beg-marker
                 end-marker)
             (unwind-protect
                 (progn
                   ;; beg marker should move with inserted/deleted text
                   ;; to stay at start of node
-                  (setq beg-marker (copy-marker (treesit-node-start node-block) t))
-                  (setq end-marker (copy-marker (treesit-node-end node-block) t))
+                  (setq beg-marker (copy-marker (treesit-node-start node-struct) t))
+                  (setq end-marker (copy-marker (treesit-node-end node-struct) t))
                   ;; returns true if text was changed
                   (f90-ts--complete-replace-if-changed beg end completion)
-                  (when (treesit-node-check node-block 'outdated)
-                    (setq node-block-new (treesit-node-on (marker-position beg-marker)
+                  (when (treesit-node-check node-struct 'outdated)
+                    (setq node-struct-new (treesit-node-on (marker-position beg-marker)
                                                           (marker-position end-marker))))
                   )
               (when beg-marker (set-marker beg-marker nil))
               (when end-marker (set-marker end-marker nil))))
           )
         ;; if nothing has changed new node is nil, return the original one
-        (or node-block-new node-block)))))
+        (or node-struct-new node-struct)))))
 
 
-(defun f90-ts--complete-smart-end-indent (node-block)
-  "Indent block represented by NODE-BLOCK.
+(defun f90-ts--complete-smart-end-indent (node-struct)
+  "Indent block represented by NODE-STRUCT.
 This can be optionally invoked after smart end completion to indent the whole
-block.  If indentation changes something, the tree is updated and node-block
-becomes stale.  In this case, the function return the node-block-new,
+block.  If indentation changes something, the tree is updated and node-struct
+becomes stale.  In this case, the function return the node-struct-new,
 otherwise nil."
   (let ((variant-saved f90-ts--align-continued-variant-tab)
         beg-marker
         end-marker
-        node-block-new)
+        node-struct-new)
     (unwind-protect
         (progn
           ;; use region variant for indentation (no rotation of list
           ;; items on continued lines)
           (setq f90-ts--align-continued-variant-tab nil)
-          (setq beg-marker (copy-marker (treesit-node-start node-block) t))
-          (setq end-marker (copy-marker (treesit-node-end node-block) t))
+          (setq beg-marker (copy-marker (treesit-node-start node-struct) t))
+          (setq end-marker (copy-marker (treesit-node-end node-struct) t))
           (treesit-indent-region beg-marker end-marker)
-          (when (treesit-node-check node-block 'outdated)
-            (setq node-block-new (treesit-node-on (marker-position beg-marker)
-                                                  (marker-position end-marker))))
+          (when (treesit-node-check node-struct 'outdated)
+            (setq node-struct-new (treesit-node-on (marker-position beg-marker)
+                                                  (marker-position end-marker)))))
       ;; revert to saved tab variant
       (setq f90-ts--align-continued-variant-tab variant-saved)
       (when beg-marker (set-marker beg-marker nil))
-      (when end-marker (set-marker end-marker nil))))
-    node-block-new))
+      (when end-marker (set-marker end-marker nil)))
+    node-struct-new))
 
 
 ;; The idea for smart end completion is taken from the classic f90-mode.
-(defun f90-ts--complete-smart-tab (indent-block)
+(defun f90-ts--complete-smart-tab (indent-struct)
   "Provide context-aware completion using tree-sitter after indentation by tab.
 Currently it handles end statements.
 
-If INDENT-BLOCK is true, then indent the whole block with `indent-region'."
+If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
   (when f90-ts-smart-end
     (when-let* ((indent-node (f90-ts--node-at-indent-pos (point)))
                 (start (treesit-node-start indent-node))
@@ -3481,12 +3506,12 @@ If INDENT-BLOCK is true, then indent the whole block with `indent-region'."
                 (end (treesit-node-end node)))
       (when (= (line-number-at-pos)
                (f90-ts--node-line node))
-        (when-let ((node-block (f90-ts--complete-smart-end-node node)))
-          (when indent-block
-            ;; update node-block, if indent changes anything
-            (setq node-block (or (f90-ts--complete-smart-end-indent node-block)
-                                 node-block)))
-          (f90-ts--complete-smart-end-show node-block))))))
+        (when-let ((node-struct (f90-ts--complete-smart-end-node node)))
+          (when indent-struct
+            ;; update node-struct, if indent changes anything
+            (setq node-struct (or (f90-ts--complete-smart-end-indent node-struct)
+                                 node-struct)))
+          (f90-ts--complete-smart-end-show node-struct))))))
 
 
 ;;;------------------------------------------------------------------------------
@@ -3517,15 +3542,15 @@ changed)."
     ))
 
 
-(defun f90-ts--indent-and-complete-line-aux (variant indent-block)
+(defun f90-ts--indent-and-complete-line-aux (variant indent-struct)
   "Auxiliary wrapper for indent-and-complete-line function.
 VARIANT is the tab variant to be used.
-If INDENT-BLOCK is true, and point is at some end statement, then
+If INDENT-STRUCT is true, and point is at some end statement, then
 indent the whole block closed by the end statement after smart end
 completion."
   (let ((f90-ts--align-continued-variant-tab variant))
     (treesit-indent)
-    (f90-ts--complete-smart-tab indent-block)))
+    (f90-ts--complete-smart-tab indent-struct)))
 
 
 (defun f90-ts-indent-and-complete-line ()
@@ -3554,7 +3579,7 @@ multi-line statements.  Default value is `f90-ts-indent-list-line'."
 (defun f90-ts-indent-and-complete-stmt ()
   "Perform indentation and smart end completion for a whole statement.
 In general, this just calls `f90-ts--indent-and-complete-line-aux'
-with non-nil for indent-block.
+with non-nil for indent-struct.
 However, if within a continued line region, it determines the first line of
 the current statement and performs indent region from this first line up to
 and including the current line.  If indentation of current line has not
@@ -3650,9 +3675,9 @@ contains
  end function do_sub
 end module do_mod
 
-At the end function line, 'end' represents the end subroutine statement,
+At the end function line, \"end\" represents the end subroutine statement,
 hence indentation as well as smart end completetion both work.  However,
-the keyword 'function' after 'end' starts a new function and muddles the
+the keyword \"function\" after \"end\" starts a new function and muddles the
 subsequent tree."
   (interactive
    (if (use-region-p)
@@ -3877,8 +3902,8 @@ is at end of region."
 
 (defun f90-ts--largest-node-same-span (node)
   "Find the largest ancestor of NODE which spans the same region.
-Example: for (contains_statement 'contains') `treesit-node-on' returns
-'contains', but for navigation, we usually want the largest node with
+Example: for (contains_statement \"contains\") `treesit-node-on' returns
+\"contains\", but for navigation, we usually want the largest node with
 same bounds, which is the contains_statement node."
   (treesit-parent-while
    node
@@ -4155,7 +4180,7 @@ by CATEGORY and a time stamp."
     ;; scroll window if buffer is displayed
     (when-let ((win (get-buffer-window buf t))) ; visible in any frame
       (with-selected-window win
-        (end-of-buffer)))))
+        (goto-char (point-max))))))
 
 
 (defun f90-ts-log-clear ()
@@ -4243,7 +4268,7 @@ highlights provided NODE-INSPECT and uses its start position as point."
 
 (defun f90-ts-inspect-node (category node info)
   "Show inspect info of treesitter NODE as a one-liner in the log buffer.
-Prefix the line with CATEGORY and 'inspect<info>' using INFO."
+Prefix the line with CATEGORY and `inspect<info>' using INFO."
   (if node
       (let* ((type  (treesit-node-type node))
              (start (treesit-node-start node))
