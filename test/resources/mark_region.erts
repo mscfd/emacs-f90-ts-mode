@@ -3,7 +3,7 @@ Point-Char: |
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-test--mark-region #'f90-ts-enlarge-region))
+    (f90-ts-mode-test--mark-region #'f90-ts-enlarge-region))
 
 Name: mark initial enlarge region 1
 =-=
@@ -50,7 +50,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-reversed t))
-      (f90-ts-test--mark-region #'f90-ts-enlarge-region)))
+      (f90-ts-mode-test--mark-region #'f90-ts-enlarge-region)))
 
 Name: mark initial enlarge region 4
 =-=
@@ -70,7 +70,7 @@ end module mod_init_4
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-test--modify-region #'f90-ts-enlarge-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-enlarge-region))
 
 Name: mark extend enlarge region 1
 =-=
@@ -88,7 +88,7 @@ end subroutine sub_ext_1
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-test--modify-region #'f90-ts-child0-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-child0-region))
 
 Name: mark child0 region 1
 =-=
@@ -110,7 +110,7 @@ end subroutine sub_child0_1
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-test--modify-region #'f90-ts-prev-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-prev-region))
 
 Name: mark prev region 1
 =-=
@@ -132,7 +132,7 @@ end subroutine sub_prev_1
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-test--modify-region #'f90-ts-next-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-next-region))
 
 Name: mark next region 1
 =-=

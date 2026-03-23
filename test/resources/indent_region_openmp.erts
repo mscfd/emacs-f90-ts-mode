@@ -73,7 +73,7 @@ end function add1
 Code:
   (lambda ()
     (f90-ts-mode)
-    (let ((f90-ts-special-comment-rules f90-ts-test--special-comment-rules-omp-context))
+    (let ((f90-ts-special-comment-rules f90-ts-mode-test--special-comment-rules-omp-context))
       (when f90-ts-mode-test--prepare-fn
         (funcall f90-ts-mode-test--prepare-fn))
       (funcall f90-ts-mode-test--action-fn)))
@@ -146,7 +146,7 @@ end function add1
 Code:
   (lambda ()
     (f90-ts-mode)
-    (let ((f90-ts-special-comment-rules f90-ts-test--special-comment-rules-omp-indented))
+    (let ((f90-ts-special-comment-rules f90-ts-mode-test--special-comment-rules-omp-indented))
       (when f90-ts-mode-test--prepare-fn
         (funcall f90-ts-mode-test--prepare-fn))
       (funcall f90-ts-mode-test--action-fn)))
