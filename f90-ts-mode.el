@@ -4206,7 +4206,7 @@ by CATEGORY and a time stamp."
 
 (defvar f90-ts-log-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-c k") #'f90-ts-log-clear)
+    (define-key map (kbd "C-k") #'f90-ts-log-clear)
     (define-key map (kbd "q") #'quit-window)
     map)
   "Keymap for `f90-ts-log-mode'.")
