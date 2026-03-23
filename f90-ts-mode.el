@@ -2176,8 +2176,8 @@ If NODE is nil return nil."
      (t
       (let ((text (treesit-node-text node)))
         (pcase text
-          ("("  'parenthesis)
-          (")"  'parenthesis)
+          ((or "(" ")" "[" "]" "(/" "/)")
+           'parenthesis)
           (","  'comma)
           ("&"  'ampersand)
           ("=>" 'associate)
@@ -2349,12 +2349,15 @@ before and after \"::\")."
 
 
 ;;++++++++++++++
-;; list context: arguments
+;; list context: arguments, array
 
-(defun f90-ts--align-list-items-arguments (list-context _loc)
-  "Determine relevant children of LIST-CONTEXT = \"argument_list\"."
-  (cl-assert (f90-ts--node-type-p list-context "argument_list")
-             nil "expected list context: argument_list, got '%s'" list-context)
+(defun f90-ts--align-list-items-children (list-context _loc)
+  "Return all children of LIST-CONTEXT.
+This is used for a context where all direct children are relevant,
+which are \"argument_list\" and \"array_literal\"."
+  (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
+                 (f90-ts--node-type-p list-context "array_literal"))
+             nil "align-list-items-children: wrong context, got '%s'" list-context)
   (treesit-node-children list-context))
 
 
@@ -2426,18 +2429,23 @@ a default and fallback position is to align with initial opening parenthesis
 plus offset.  This primary position is returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (or (f90-ts--node-type-p list-context "argument_list")
+                 (f90-ts--node-type-p list-context "array_literal")
                  (f90-ts--node-type-p list-context "parameters"))
              nil
-             "expected list context: argument_list or parameters, got '%s'"
+             "align-list-other-tuple: wrong context, got got '%s'"
              list-context)
 
   (f90-ts--collecting-anoff
    ;; for closing parenthesis, align to opening parenthesis,
    ;; for other node types, align one position to the right of it
    (collect (treesit-node-start list-context)
-            (if (eq (alist-get 'nsym loc) 'parenthesis)
-                f90-ts-indent-paren-close
-              f90-ts-indent-paren-default))
+            (let ((open-paren (treesit-node-at (treesit-node-start list-context))))
+              ;; take length of opening parenthesis into account
+              ;; (like for (/.../) in arrays
+              (+ (1- (length (treesit-node-text open-paren)))
+                 (if (eq (alist-get 'nsym loc) 'parenthesis)
+                     f90-ts-indent-paren-close
+                   f90-ts-indent-paren-default))))
 
    ;; add default continued line indentation if items is empty
    (unless items
@@ -2455,7 +2463,7 @@ of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (f90-ts--node-is-op-expr-p list-context)
              nil
-             "expected list context: some expression, got '%s'"
+             "align-list-other-op-expr: wrong context, got '%s'"
              list-context)
 
   (f90-ts--collecting-anoff
@@ -2503,7 +2511,7 @@ This primary position is returned as first element of the list."
   ;; for argument_list, there should always be the opening parenthesis
   (cl-assert (f90-ts--node-type-p list-context "association_list")
              nil
-             "expected list context: association_list, got '%s'"
+             "align-list-other-association: wrong context, got '%s'"
              list-context)
 
   (f90-ts--collecting-anoff
@@ -2752,7 +2760,10 @@ Finally use VARIANT to select one pair to align with."
       (cons "binding_list"             bind-options)
       (cons "final_statement"          bind-options)
       (cons "argument_list"
-            '(:get-items-fn f90-ts--align-list-items-arguments
+            '(:get-items-fn f90-ts--align-list-items-children
+              :get-other-fn f90-ts--align-list-other-tuple))
+      (cons "array_literal"
+            '(:get-items-fn f90-ts--align-list-items-children
               :get-other-fn f90-ts--align-list-other-tuple))
       (cons "parameters"
             '(:get-items-fn f90-ts--align-list-items-parameters

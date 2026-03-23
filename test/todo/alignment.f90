@@ -1,13 +1,3 @@
-subroutine sub()
-     ! list context alignment of numbers in array
-     integer, dimension(1:3,1:4), parameter:: &
-            facet_ix = reshape([2,3,4, &
-                               1,4,3, &
-                               1,2,4, &
-                               1,3,2], [3,4])
-end subroutine sub
-
-
 ! list context for case range
 subroutine select_case()
      select_variant: select case (variant)
@@ -20,6 +10,23 @@ subroutine select_case()
           call uvw()
      end select select_variant
 end subroutine select_case
+
+
+! read/write lists
+subroutine sub()
+     write(*,format_string_for_testing) val1, &       !comment
+            ! comment
+            val2, val3, &
+                  val4, & ! comment
+
+            ! some more comment
+
+
+            ! comment
+
+            final_val
+end subroutine sub
+
 
 
 ! align use-only statements

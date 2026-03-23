@@ -7,7 +7,7 @@ Code:
 
 Point-Char: |
 
-Name: align various lists
+Name: align various lists 1
 =-=
 subroutine simulate(set, fsim1, &
                          fsim2, out)
@@ -174,12 +174,91 @@ function eval() result(w)
 end function eval
 =-=-=
 
+Name: align array literal 1
+=-=
+subroutine arr1()
+     ! list context alignment of numbers in array
+     integer, dimension(1:3,1:4), parameter:: &
+            facet_ix = reshape(&
+                               [2,3,4, &
+                                1,4,3, &
+                                1,2,4, &
+                                1,3,2 &
+                                  ], [3,4])
+end subroutine arr1
+=-=-=
+
+Name: align array literal 2
+=-=
+subroutine arr2()
+     real, dimension(1:10), parameter :: &
+            bernoulli = (/ 1.0, -0.5, 0.16667, 0.0, &
+                          -0.03333, 0.0, &
+                           0.0238, 0.0 &
+                            /)
+end subroutine arr2
+=-=-=
+
+Name: align array literal 3
+=-=
+subroutine arr3()
+     type(some_t), dimension(1:3) :: &
+            arr = [some_t(val=1, x=5.0), some_t(val=1, x=7.0), &
+                   some_t(), &
+                   some_t(x=-2.0), &
+                                         some_t(val=2, x=7.0) &
+                     ]
+end subroutine arr3
+=-=-=
+
+Name: align array literal 4
+=-=
+subroutine arr4()
+     character(len=5), dimension(1:3) :: rgb = &
+            (/ &
+              'red  ', &
+              'green', &
+              'blue ' /)
+end subroutine arr4
+=-=-=
+
+Name: align array literal 5
+=-=
+subroutine arr5()
+     character(len=5), dimension(1:3) :: & ! comment
+          
+          ! comment
+          
+                                  rgb = &
+                                         (/ &
+              'red  ', &
+              'green', &
+              'blue ' /), &
+           alpha = 'trnsp'
+end
+=-=
+subroutine arr5()
+     character(len=5), dimension(1:3) :: & ! comment
+          
+                                         ! comment
+          
+                                         rgb = &
+                                         (/ &
+                                           'red  ', &
+                                           'green', &
+                                           'blue ' /), &
+                                         alpha = 'trnsp'
+end subroutine arr5
+=-=-=
+
+
 Name: write/read item list
 =-=
 subroutine sub()
-     write(*,format_string_for_testing) &       !comment
+     write(*,format_string_for_testing) val1, &       !comment
             ! comment
-            val1, val2, val3, & ! comment
+            val2, val3, &
+            val4, & ! comment
 
             ! some more comment
 
