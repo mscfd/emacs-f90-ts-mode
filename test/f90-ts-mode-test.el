@@ -124,8 +124,7 @@ without final newline."
                                         ; also needs treesit-font-lock-recompute-features
     (indent-tabs-mode . nil)
     (require-final-newline . nil)
-    (transient-mark-mode . t)
-    )
+    (transient-mark-mode . t))
   "Alist of custom variable values for testing purposes.")
 
 
@@ -183,8 +182,7 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
                         for (var . _ ) in f90-ts-mode-test-custom-settings
                         when (local-variable-p var)
                         collect (cons var
-                                      (buffer-local-value var (current-buffer)))
-                        )))
+                                      (buffer-local-value var (current-buffer))))))
      (cl-progv vars vals
        ;; also set buffer-local values where needed
        (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
@@ -263,8 +261,7 @@ mark region functions etc. are possible as well.")
             (insert expected))
           (call-process diff nil 0 nil actual-file expected-file))
       (delete-file actual-file)
-      (delete-file expected-file))
-    ))
+      (delete-file expected-file))))
 
 
 (defmacro f90-ts-mode-test-erts-with-diff (&rest body)
@@ -400,10 +397,7 @@ can be observed and checked."
               (goto-char beg)
               (insert updated-code)
               (when (called-interactively-p 'interactive)
-                (message "'after' part of code block updated"))
-              )
-            )
-          )
+                (message "'after' part of code block updated")))))
 
       (error
        (message "error: %s" (error-message-string err))))))
@@ -434,8 +428,7 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
           (skip-unless (treesit-ready-p 'fortran))
           (f90-ts-mode-test-with-custom-testing
            (f90-ts-mode-test-erts-with-diff
-            (ert-test-erts-file (ert-resource-file ,file))))))
-   ))
+            (ert-test-erts-file (ert-resource-file ,file))))))))
 
 
 (defun f90-ts-mode-test--prep-act-register (prefix files prep-fns action-fns)
@@ -478,8 +471,7 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
                     (let ((f90-ts-mode-test--prepare-fn ',prep-fn)
                           (f90-ts-mode-test--action-fn ',action-fn))
                       (f90-ts-mode-test-erts-with-diff
-                       (ert-test-erts-file (ert-resource-file ,file))))))))
-               ))))
+                       (ert-test-erts-file (ert-resource-file ,file))))))))))))
 
 
 ;;------------------------------------------------------------------------------
@@ -523,8 +515,7 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
                        collect (list (max 1 (- (point) start))
                                      (- next start)
                                      face)
-                     do (goto-char next)))
-           )
+                     do (goto-char next))))
       (forward-line 1)
       (cl-loop for (beg end face) in span-faces
                do (when (< beg end)
@@ -532,8 +523,7 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
                             (make-string (1- beg) ?\s)
                             (make-string (- end beg) ?^)
                             (format " %s" face)
-                            "\n")))
-      )))
+                            "\n"))))))
 
 
 (defun f90-ts-mode-test--update-face-line (annotate)
@@ -631,8 +621,7 @@ or \"f90-ts-mode-extra\"."
           (f90-ts-mode-test-with-custom-testing
            (ert-font-lock-test-file
             (ert-resource-file ,file)
-            'f90-ts-mode))))
-   ))
+            'f90-ts-mode))))))
 
 
 ;;------------------------------------------------------------------------------
@@ -697,8 +686,7 @@ point at 1+end of region."
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)
- '(f90-ts-mode-test--indent-by-region)
- )
+ '(f90-ts-mode-test--indent-by-region))
 
 
 ;; smart end with specific shorten-to-end preparation
@@ -707,21 +695,17 @@ point at 1+end of region."
  '("indent_region_smart_end.erts")
  '(nil ; no modification
    f90-ts-mode-test--shorten-to-end)
- '(f90-ts-mode-test--indent-by-region
-   )
- )
+ '(f90-ts-mode-test--indent-by-region))
 
 
 ;; incomplete code with ERROR nodes
 (f90-ts-mode-test--prep-act-register
  "f90-ts-mode-test-std"
  '("indent_line_incomplete.erts"
-   "indent_line_empty.erts"
-   )
+   "indent_line_empty.erts")
  '(nil ; no modification
    )
- '(f90-ts-indent-and-complete-line)
- )
+ '(f90-ts-indent-and-complete-line))
 
 
 ;; alignment tests, leave as is, the alignment variant to apply
@@ -729,12 +713,10 @@ point at 1+end of region."
 (f90-ts-mode-test--prep-act-register
  "f90-ts-mode-test-std"
  '("indent_region_align_misc.erts"
-   "indent_region_align_expr.erts"
-   )
+   "indent_region_align_expr.erts")
  '(nil ; no preparation
    )
- '(f90-ts-mode-test--indent-by-region)
- )
+ '(f90-ts-mode-test--indent-by-region))
 
 
 ;; indentation tests with custom erts Code block
@@ -744,8 +726,7 @@ point at 1+end of region."
    "break_line.erts"
    "join_line.erts"
    "mark_region.erts"
-   "comment_region.erts")
- )
+   "comment_region.erts"))
 
 
 ;; expensive tests
@@ -757,8 +738,7 @@ point at 1+end of region."
    f90-ts-mode-test--add-indent
    f90-ts-mode-test--shorten-to-end)
  '(f90-ts-mode-test--indent-by-region
-   f90-ts-mode-test--indent-by-line)
- )
+   f90-ts-mode-test--indent-by-line))
 
 ;; expensive test variant of tests already registered
 ;; with indent-by-region action;
@@ -775,8 +755,7 @@ point at 1+end of region."
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)
- '(f90-ts-mode-test--indent-by-line)
- )
+ '(f90-ts-mode-test--indent-by-line))
 
 
 (f90-ts-mode-test--prep-act-register
@@ -784,9 +763,7 @@ point at 1+end of region."
  '("indent_region_smart_end.erts")
  '(nil ; no modification
    f90-ts-mode-test--shorten-to-end)
- '(f90-ts-mode-test--indent-by-line
-   )
- )
+ '(f90-ts-mode-test--indent-by-line))
 
 
 ;; register font lock tests

@@ -469,8 +469,7 @@ seem to make much sense."
                                f90-ts-font-lock-separator-comment-face)
                         (const :tag "f90-ts-font-lock-openmp-face"
                                f90-ts-font-lock-openmp-face)
-                        (face :tag "other face"))
-                ))
+                        (face :tag "other face"))))
   :group 'f90-ts)
 
 
@@ -739,8 +738,7 @@ Nodes of type comments and ampersand are not considered \"proper\"."
   (f90-ts--prev-sibling-predicate
    node
    (lambda (n)
-     (not (f90-ts--node-type-p n '("comment" "&"))))
-   ))
+     (not (f90-ts--node-type-p n '("comment" "&"))))))
 
 
 (defun f90-ts--previous-stmt-keyword-by-first (first)
@@ -787,8 +785,7 @@ first statement is known."
                              (f90-ts--node-type-p grandparent
                                                   "block_label_start_expression"))
                       grandparent)
-                       (t nil)))
-         )
+                       (t nil))))
     (if block-label
 	    (let ((fp-next (treesit-node-next-sibling block-label)))
           ;; next sibling is a statement label, we descend to find
@@ -857,8 +854,7 @@ for example comment nodes."
                         ;; if there is a next, continue and shift next to sib
                         ;; with for sib=next in the first line
                         while next
-                        finally return sib)))
-         )
+                        finally return sib))))
     ;; take continuation lines into account and go to beginning of statement
     (and prev-descend
          (f90-ts--first-node-of-stmt prev-descend))))
@@ -1152,8 +1148,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
    :feature 'comment
    '(;; default comments as well as special comments and openmp
      ;; statements, declared by `f90-ts-special-comment-rules'
-     ((comment) @f90-ts--fontify-comment)
-     )))
+     ((comment) @f90-ts--fontify-comment))))
 
 
 (defun f90-ts--font-lock-rules-intrinsic ()
@@ -1235,8 +1230,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
       "intent" "in" "out" "inout"
       "parameter" "save" "target" "pointer" "optional"
       "dimension" "contiguous" "volatile"]
-      @font-lock-keyword-face))
-   ))
+      @font-lock-keyword-face))))
 
 
 (defun f90-ts--font-lock-rules-preproc ()
@@ -1276,8 +1270,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
       "#elifdef"           @font-lock-preprocessor-face
       name: (identifier)   @font-lock-constant-face)
      (preproc_else
-      "#else"              @font-lock-preprocessor-face)
-     )))
+      "#else"              @font-lock-preprocessor-face))))
 
 
 (defun f90-ts--font-lock-rules-prog-mod ()
@@ -1295,8 +1288,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
       "submodule"
       ancestor: (module_name
                  (name)       @font-lock-function-name-face)
-      (name)                  @font-lock-function-name-face)
-     )))
+      (name)                  @font-lock-function-name-face))))
 
 
 (defun f90-ts--font-lock-rules-type ()
@@ -1318,8 +1310,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
        base: (base_type_specifier
               (identifier)       @font-lock-type-face)))
      (end_type_statement
-      (name)                     @font-lock-type-face)
-     )
+      (name)                     @font-lock-type-face))
 
    :language 'fortran
    :feature 'type
@@ -1328,8 +1319,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
    '(((allocate_statement
       type: (identifier)        @font-lock-type-face))
      (type_statement
-      type: (identifier)        @font-lock-type-face)
-   )))
+      type: (identifier)        @font-lock-type-face))))
 
 
 (defun f90-ts--font-lock-rules-function ()
@@ -1386,8 +1376,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
                       ])
                     (method_name)        @font-lock-function-name-face))
      (final_statement
-      declarator: (method_name)          @font-lock-function-name-face)
-     )))
+      declarator: (method_name)          @font-lock-function-name-face))))
 
 
 (defun f90-ts--font-lock-rules-interface ()
@@ -1399,8 +1388,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
       "interface"
       (name)                      @font-lock-function-name-face)
      (procedure_statement
-      declarator: (method_name)   @font-lock-function-name-face)
-     )))
+      declarator: (method_name)   @font-lock-function-name-face))))
 
 
 (defun f90-ts--font-lock-rules-end ()
@@ -1441,8 +1429,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
      (end_interface_statement
       "end"
       "interface"
-      (name)       @font-lock-function-name-face)
-     )))
+      (name)       @font-lock-function-name-face))))
 
 
 (defun f90-ts--font-lock-rules-variable ()
@@ -1452,8 +1439,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
    :feature 'variable
    '(
      ((identifier) @f90-ts-font-lock-special-var-face
-      (:pred f90-ts-special-var-p @f90-ts-font-lock-special-var-face))
-   )))
+      (:pred f90-ts-special-var-p @f90-ts-font-lock-special-var-face)))))
 
 
 (defun f90-ts--font-lock-rules-value ()
@@ -1472,8 +1458,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
    :language 'fortran
    :feature 'constant
    '(((boolean_literal) @font-lock-constant-face)
-     ((null_literal) @font-lock-constant-face))
-   ))
+     ((null_literal) @font-lock-constant-face))))
 
 
 (defun f90-ts--font-lock-rules-delimiter ()
@@ -1485,8 +1470,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
 
    :language 'fortran
    :feature 'delimiter
-   '(["," ":" ";" "::" "=>" "&"] @f90-ts-font-lock-delimiter-face)
-   ))
+   '(["," ":" ";" "::" "=>" "&"] @f90-ts-font-lock-delimiter-face)))
 
 
 (defun f90-ts--font-lock-rules-operator ()
@@ -1507,8 +1491,7 @@ Argument OVERRIDE is passend to `treesit-fontify-with-override'."
      ((unary_expression
       operator: _ @f90-ts-font-lock-operator-face
       argument: (_) @_unary_arg
-      (:pred f90-ts--node-not-number-literal-p @_unary_arg)))
-   )))
+      (:pred f90-ts--node-not-number-literal-p @_unary_arg))))))
 
 
 (defvar f90-ts-font-lock-rules
@@ -1771,8 +1754,7 @@ Resolves delta via the anchor's cache entry:
            (delta (- bol-new bol-current))
            (line (line-number-at-pos bol)))
       (push (cons line (list bol-current delta))
-            f90-ts--continued-line-cache))
-    ))
+            f90-ts--continued-line-cache))))
 
 
 
@@ -1812,9 +1794,7 @@ to a line is more expensive)."
                                  (if (= line first-line)
                                      (list first-bol-current 0)
                                    (list bol-col (+ delta first-delta))))))
-                       f90-ts--continued-line-cache)
-              )))
-    ))
+                       f90-ts--continued-line-cache))))))
 
 
 (defun f90-ts--continued-line-cache-get-col (node)
@@ -1970,8 +1950,7 @@ but instead let other rules handle it."
 
         (_
          ;; signal no match
-         nil)
-        ))))
+         nil)))))
 
 
 (defun f90-ts--comment-region-is (node parent bol &rest _)
@@ -2187,8 +2166,7 @@ and `nsym'."
           (cons 'pos  (point))
           (cons 'col  (f90-ts--column-number-at-pos (point)))
           (cons 'line (line-number-at-pos))
-          (cons 'nsym nil))
-    ))
+          (cons 'nsym nil))))
 
 
 (defun f90-ts--node-op-expr-chain-root (node)
@@ -2209,8 +2187,7 @@ example, for a logical/math/relational etc. expression chain like
          right: ...
         )
        right: ...
-      )
-     )
+      ))
     right: ...)
 the function returns the outermost expression node."
   (treesit-parent-while
@@ -2324,8 +2301,7 @@ before and after \"::\")."
            ;;(attr-end (seq-max (seq-map (lambda (child) (treesit-node-end child))
            ;;                            attr-children)))
            (decl-start (seq-min (seq-map (lambda (child) (treesit-node-start child))
-                                         decl-children)))
-           )
+                                         decl-children))))
       (if (< pos decl-start)
           attr-children
         decl-children))))
@@ -2420,8 +2396,7 @@ plus offset.  This primary position is returned as first element of the list."
 
    ;; add default continued line indentation if items is empty
    (unless items
-     (collect (f90-ts--align-list-pstmt1-anoff)))
-   ))
+     (collect (f90-ts--align-list-pstmt1-anoff)))))
 
 
 (defun f90-ts--align-list-other-op-expr (list-context items loc)
@@ -2463,13 +2438,11 @@ of the list."
                                                   operator-math))
                                f90-ts-indent-expr-assign-assoc-op
                              f90-ts-indent-expr-assign-default)))
-              (collect (treesit-node-start psib-context) offset)))
-       ))
+              (collect (treesit-node-start psib-context) offset)))))
 
    ;; add default continued line indentation if items list is empty
    (unless items
-     (collect (f90-ts--align-list-pstmt1-anoff)))
-   ))
+     (collect (f90-ts--align-list-pstmt1-anoff)))))
 
 
 (defun f90-ts--align-list-other-association (list-context items loc)
@@ -2507,8 +2480,7 @@ This primary position is returned as first element of the list."
 
    ;; add default continued line indentation if items is empty
    (unless items
-     (collect (f90-ts--align-list-pstmt1-anoff)))
-   ))
+     (collect (f90-ts--align-list-pstmt1-anoff)))))
 
 
 ;;++++++++++++++
@@ -2622,8 +2594,7 @@ selected."
      (t
       ;; all eight cases plus node before minimal column are covered above
       (cl-assert col-pos nil "cond logic not complete")
-      (cdr primary-col-pos))
-     )))
+      (cdr primary-col-pos)))))
 
 
 (defun f90-ts--align-list-anoff-items (loc list-context)
@@ -2722,8 +2693,7 @@ Finally use VARIANT to select one pair to align with."
             '(:get-items-fn f90-ts--align-list-items-assocation
               :get-other-fn f90-ts--align-list-other-association))
       (cons "variable_declaration"
-            '(:get-items-fn f90-ts--align-list-items-var-decl))
-    ))
+            '(:get-items-fn f90-ts--align-list-items-var-decl))))
   "List of tree-sitter node types presenting some kind of list context.
 A list context is a node with children which are suitable for alignment if
 spread over several lines in a continued line statement.
@@ -2875,8 +2845,7 @@ the continued line matcher."
         (f90-ts--indent-anchor-cache anchor)
         (f90-ts--indent-offset-cache offset)
         (f90-ts--continued-line-cache-put-subsequent bol anchor offset)
-        anchor)
-      )))
+        anchor))))
 
 
 ;;++++++++++++++
@@ -2904,8 +2873,7 @@ and nodes for debugging purposes into the exclusive log buffer."
                               (and pstmt-k (treesit-node-type pstmt-k))
                               (and child0 (treesit-node-type child0)))))
           (f90-ts-log :indent (propertize tttttt 'face '(:foreground "brown2")))
-          (f90-ts--indent-cache-print))
-        ))
+          (f90-ts--indent-cache-print))))
     nil))
 
 
@@ -2950,8 +2918,7 @@ The main purpose is to fill the indentation cache for a new run.")
     ;; indent separator comments like their parent nodes
     ;; this check is after the region check, hence previous sibling
     ;; is not a comment of same kind
-    (f90-ts--special-comment-is f90-ts--cached-anchor f90-ts--cached-offset)
-    )
+    (f90-ts--special-comment-is f90-ts--cached-anchor f90-ts--cached-offset))
   "Indentation rules for comments (excluding OpenMP statements).")
 
 
@@ -2988,8 +2955,7 @@ The main purpose is to fill the indentation cache for a new run.")
     ;;                  x3, x4, x5) &
     ;;      result(val)
     ;; by how much should result be indented? x3 is not a good anchor!
-    (f90-ts--continued-subsequent-line-is f90-ts--continued-line-anchor f90-ts--cached-offset)
-    )
+    (f90-ts--continued-subsequent-line-is f90-ts--continued-line-anchor f90-ts--cached-offset))
   "Indentation rules for continued lines.")
 
 
@@ -2998,8 +2964,7 @@ The main purpose is to fill the indentation cache for a new run.")
     ;; no indentation for contains
     ((node-is    "internal_procedures")         parent 0)
     ((parent-is  "internal_procedures")         parent f90-ts--toplevel-offset)
-    ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--toplevel-offset)
-    )
+    ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--toplevel-offset))
   "Indentation rules for internal_proc node.
 This node occurs in conjunction with \"contain\" statements.")
 
@@ -3020,8 +2985,7 @@ This node occurs in conjunction with \"contain\" statements.")
 
     ((node-is        "end_submodule_statement")      parent 0)
     ((parent-is      "^submodule\\(_statement\\)?$") parent f90-ts--toplevel-offset)
-    ((n-p-pstmtk nil "ERROR" "^submodule$")          parent f90-ts--toplevel-offset)
-    )
+    ((n-p-pstmtk nil "ERROR" "^submodule$")          parent f90-ts--toplevel-offset))
   "Indentation rules for program and module nodes.")
 
 
@@ -3035,8 +2999,7 @@ This node occurs in conjunction with \"contain\" statements.")
     ((parent-is  "module_procedure")               parent f90-ts-indent-block)
     ((n-p-pstmtk nil nil "subroutine")             parent f90-ts-indent-block)
     ((n-p-pstmtk nil nil "function")               parent f90-ts-indent-block)
-    ((n-p-pstmtk nil nil "module_procedure")       parent f90-ts-indent-block)
-    )
+    ((n-p-pstmtk nil nil "module_procedure")       parent f90-ts-indent-block))
   "Indentation rules for functions and subroutines.")
 
 
@@ -3060,8 +3023,7 @@ and in case of ERROR nodes with incomplete code.")
   `(;; (abstract) interface bodies
     ((node-is    "end_interface_statement") parent 0)
     ((parent-is  "interface")               parent f90-ts-indent-block)
-    ((n-p-pstmtk nil "ERROR" "interface")   parent f90-ts-indent-block)
-    )
+    ((n-p-pstmtk nil "ERROR" "interface")   parent f90-ts-indent-block))
   "Indentation rules for interface blocks.")
 
 
@@ -3077,8 +3039,7 @@ and in case of ERROR nodes with incomplete code.")
     ((node-is    "end_enum_statement")                    parent 0)
     ((node-is    "end_enumeration_type_statement")        parent 0)
     ((parent-is  "^enum\\(eration_type\\)?$")             parent f90-ts-indent-block)
-    ((n-p-pstmtk nil "ERROR" "^enum\\(eration_type\\)?$") parent f90-ts-indent-block)
-    )
+    ((n-p-pstmtk nil "ERROR" "^enum\\(eration_type\\)?$") parent f90-ts-indent-block))
   "Indentation rules for derived type and enumeration type statements.")
 
 
@@ -3149,8 +3110,7 @@ and in case of ERROR nodes with incomplete code.")
 
     ((n-p-gp "end_forall_statement"        "forall_statement" nil)      parent               0)
     ((n-p-pstmtk nil                       "forall_statement" "forall") parent               f90-ts-indent-block)
-    ((n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block)
-    )
+    ((n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block))
   "Indentation rules for single region structures.
 These are do loops, block statements, associate construct and forall statements.")
 
@@ -3181,16 +3141,14 @@ These are do loops, block statements, associate construct and forall statements.
     ((n-p-pstmtk nil                    "rank_statement"        "rank")           parent f90-ts-indent-block)
     ((n-p-gp     "ERROR"                "select_rank_statement" nil)              parent f90-ts-indent-block)
     ((n-p-gp     nil                    "ERROR"                 "rank_statement") grand-parent f90-ts-indent-block)
-    ((parent-is                         "select_rank_statement")                  parent 0)
-    )
+    ((parent-is                         "select_rank_statement")                  parent 0))
   "Indentation rules for select statements (case and type).")
 
 
 (defvar f90-ts-indent-rules-catch-all
   `(;; final catch-all rule
     ,@(f90-ts-indent-rules-info "catch all")
-    (catch-all f90-ts--catch-all-anchor 0)
-    )
+    (catch-all f90-ts--catch-all-anchor 0))
   "Final indentation rule to handle unmatched cases.")
 
 
@@ -3210,8 +3168,7 @@ These are do loops, block statements, associate construct and forall statements.
      ,@f90-ts-indent-rules-where
      ,@f90-ts-indent-rules-single-region
      ,@f90-ts-indent-rules-select
-     ,@f90-ts-indent-rules-catch-all
-     ))
+     ,@f90-ts-indent-rules-catch-all))
   "List of all indentation rules in its proper sequence.")
 
 
@@ -3258,8 +3215,7 @@ Return non-nil if something was changed and text actually replaced."
       (progn
         (delete-region beg end)
         (goto-char beg)
-        (insert completion)
-        ))
+        (insert completion)))
     (not is-equal)))
 
 
@@ -3276,8 +3232,7 @@ Return non-nil if something was changed and text actually replaced."
                                           " [((name) @name)"
                                           " ((operator) @name)"
                                           " ((assignment) @name)]?"
-                                          "))"
-                                          ))
+                                          "))"))
     ("derived_type_definition" . "(derived_type_definition (derived_type_statement \"type\" @construct (_) * (type_name) @name))")
     ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
     ("where_statement"         . "(where_statement (block_label_start_expression _ @name \":\")? \"where\" @construct)")
@@ -3293,9 +3248,7 @@ Return non-nil if something was changed and text actually replaced."
                                           " \"enumeration\" @construct \"type\" @construct2"
                                           " (_) *"
                                           " (type_name) @name"
-                                          "))"
-                                          ))
-    )
+                                          "))")))
   "Treesitter queries to extract relevant nodes for smart end completion.")
 
 
@@ -3350,8 +3303,7 @@ and the related start of the structure are also required for completion."
       (list
        (and name-node (treesit-node-text name-node t))
        (and construct-node (treesit-node-text construct-node t))
-       (and construct2-node (treesit-node-text construct2-node t)))
-      )))
+       (and construct2-node (treesit-node-text construct2-node t))))))
 
 
 (defun f90-ts--complete-smart-end-compose (node)
@@ -3397,8 +3349,7 @@ message buffer.  Which action to perform depends on position and whether
                    (buffer-substring
                     (line-beginning-position)
                     (line-end-position)))
-        (sit-for blink-matching-delay)))
-    ))
+        (sit-for blink-matching-delay)))))
 
 
 (defun f90-ts--complete-smart-end-end (node)
@@ -3456,11 +3407,9 @@ option or statement indentation."
                   (f90-ts--complete-replace-if-changed beg end completion)
                   (when (treesit-node-check node-struct 'outdated)
                     (setq node-struct-new (treesit-node-on (marker-position beg-marker)
-                                                          (marker-position end-marker))))
-                  )
+                                                          (marker-position end-marker)))))
               (when beg-marker (set-marker beg-marker nil))
-              (when end-marker (set-marker end-marker nil))))
-          )
+              (when end-marker (set-marker end-marker nil)))))
         ;; if nothing has changed new node is nil, return the original one
         (or node-struct-new node-struct)))))
 
@@ -3540,8 +3489,7 @@ changed)."
     ;; possibly slow if continued lines are very long (but safer)
     (let ((old-text (buffer-substring-no-properties beg-reg end-reg)))
       (treesit-indent-region beg-reg end-reg)
-      (string= old-text (buffer-substring-no-properties beg-reg end-reg)))
-    ))
+      (string= old-text (buffer-substring-no-properties beg-reg end-reg)))))
 
 
 (defun f90-ts--indent-and-complete-line-aux (variant indent-struct)
@@ -3614,8 +3562,7 @@ items.  Otherwise it indents  with default line choice."
           ;; no smart end completion necessary, as there is no end is involved
           (f90-ts-indent-line)
         ;; statement up to current line was changed by indent statement region
-        (back-to-indentation))
-      ))))
+        (back-to-indentation))))))
 
 
 ;; used by f90-ts-indent-and-complete-region
@@ -3656,12 +3603,10 @@ items.  Otherwise it indents  with default line choice."
                  (progn ; or better save-excursion (seems unnecessary?)
                    (goto-char node-start)
                    (forward-line 1)
-                   (setq pos (point))))
-            ))
+                   (setq pos (point))))))
           ;; after finishing move to end of region
           (goto-char end-marker))
-      (set-marker end-marker nil))
-    ))
+      (set-marker end-marker nil))))
 
 
 (defun f90-ts-indent-and-complete-region (beg end)
@@ -3759,8 +3704,7 @@ The variant to be used can be customized.  Intended for use in key bindings."
     (delete-horizontal-space)
     (f90-ts--break-line-insert-amp-at-end)
     (newline 1)
-    (if f90-ts-beginning-ampersand (insert "&"))
-    ))
+    (if f90-ts-beginning-ampersand (insert "&"))))
 
   (indent-according-to-mode))
 
@@ -3911,8 +3855,7 @@ same bounds, which is the contains_statement node."
    node
    (lambda (n)
      (and (= (treesit-node-start n) (treesit-node-start node))
-          (= (treesit-node-end n) (treesit-node-end node))))
-   ))
+          (= (treesit-node-end n) (treesit-node-end node))))))
 
 
 (defun f90-ts--smallest-named-node-containing-region (beg end)
@@ -4176,8 +4119,7 @@ by CATEGORY and a time stamp."
 
         (insert (apply #'format fmt args))
         (insert "\n")
-        (goto-char (point-max))
-        ))
+        (goto-char (point-max))))
 
     ;; scroll window if buffer is displayed
     (when-let ((win (get-buffer-window buf t))) ; visible in any frame
