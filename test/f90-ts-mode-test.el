@@ -2,11 +2,18 @@
 ;; Copyright (C) 2025-2026 Martin Stein
 
 ;; Author: Martin Stein
-;; Version: 0.1.1
+;; Version: 0.1.2 pre
 ;; Keywords: languages, treesitter, fortran
 ;; Package-Name: f90-ts-mode-test
+;; URL: https://github.com/mscfd/emacs-f90-ts-mode
+
+;; Package-Requires: ((emacs "30.1"))
 
 ;; Provides test functions for testing f90-ts-mode.el
+
+;;; Commentary:
+
+;; This package provides functions to run the tests in test/resources.
 
 (require 'cl-lib)
 (require 'ert)
