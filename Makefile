@@ -12,15 +12,15 @@ INDENT_BY_LINE_TESTS := $(shell \
 	$(EMACS) $(EMACSFLAGS) $(LOAD) \
 		--eval '(with-temp-file "/tmp/ert-tests.txt" \
 		          (mapc (lambda (s) (insert (format "%s\n" (ert-test-name s)))) \
-		                (ert-select-tests "^f90-ts-mode-extra/indent-by-line/" t)))' \
+		                (ert-select-tests "^f90-ts-mode-test-extra--indent-by-line--" t)))' \
 		2>/dev/null && cat /tmp/ert-tests.txt)
 
 INDENT_BY_LINE_TARGETS := $(foreach t,$(INDENT_BY_LINE_TESTS),\
-	test-p-ibl-$(subst /,-,$(subst f90-ts-mode-extra/indent-by-line/,,$(t))))
+	test-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(t))))
 
 define make-indent-by-line-target
-.PHONY: test-p-ibl-$(subst /,-,$(subst f90-ts-mode-extra/indent-by-line/,,$(1)))
-test-p-ibl-$(subst /,-,$(subst f90-ts-mode-extra/indent-by-line/,,$(1))):
+.PHONY: test-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1)))
+test-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1))):
 	$$(call run-ert,^$(1)$$)
 endef
 
@@ -28,15 +28,15 @@ $(foreach t,$(INDENT_BY_LINE_TESTS),$(eval $(call make-indent-by-line-target,$(t
 
 .PHONY: test
 test:
-	$(call run-ert,^f90-ts-mode/)
+	$(call run-ert,^f90-ts-mode-test-std--)
 
 .PHONY: test-extra
 test-extra:
-	$(call run-ert,^f90-ts-mode-extra/)
+	$(call run-ert,^f90-ts-mode-test-extra--)
 
 .PHONY: test-all
 test-all:
-	$(call run-ert,^f90-ts-mode)
+	$(call run-ert,^f90-ts-mode-test)
 
 .PHONY: test-parallel
 test-parallel: test-p-main \
@@ -46,12 +46,12 @@ test-parallel: test-p-main \
 
 .PHONY: test-p-main
 test-p-main:
-	$(call run-ert,^f90-ts-mode/)
+	$(call run-ert,^f90-ts-mode--)
 
 .PHONY: test-p-extra-font-lock
 test-p-extra-font-lock:
-	$(call run-ert,^f90-ts-mode-extra/font-lock/)
+	$(call run-ert,^f90-ts-mode-test-extra--font-lock--)
 
 .PHONY: test-p-extra-indent-by-region
 test-p-extra-indent-by-region:
-	$(call run-ert,^f90-ts-mode-extra/indent-by-region/)
+	$(call run-ert,^f90-ts-mode-test-extra--indent-by-region--)

@@ -1,13 +1,12 @@
-;;; f90-ts-mode.el --- Tree-sitter based Fortran 90 mode  -*- lexical-binding: t; -*-
+;;; f90-ts-mode.el --- Tree-sitter based Fortran 90 mode -*- lexical-binding: t; -*-
 
 ;; Copyright (C) 2025-2026 Martin Stein
 
 ;; Author: Martin Stein
-;; Version: 0.1.2 pre
-;; Keywords: languages, treesitter, fortran
-;; Package-Name: f90-ts-mode
+;; Maintainer: Martin Stein
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
-;;
+;; Keywords: languages, treesitter, fortran
+;; Version: 0.1.2pre
 ;; Package-Requires: ((emacs "30.1"))
 
 ;; Provides syntax highlighting and structural navigation for Fortran 90+
@@ -17,7 +16,7 @@
 
 ;; f90-ts-mode is a major mode for editing Fortran 90/2003 (and newer) source
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30,
-;; but might run with Emacs 29 as well)).
+;; but might run with Emacs 29 as well).
 ;;
 ;; Features:
 ;;   - Syntax highlighting

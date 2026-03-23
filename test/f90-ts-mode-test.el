@@ -1,15 +1,11 @@
-;;; f90-ts-mode-test.el --- Test code for f90-ts-mode-el  -*- lexical-binding: t; -*-
+;;; f90-ts-mode-test.el --- Test code for f90-ts-mode-el -*- lexical-binding: t; -*-
 ;; Copyright (C) 2025-2026 Martin Stein
 
 ;; Author: Martin Stein
-;; Version: 0.1.2 pre
-;; Keywords: languages, treesitter, fortran
-;; Package-Name: f90-ts-mode-test
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
-
+;; Keywords: languages, treesitter, fortran
+;; Version: 0.1.2pre
 ;; Package-Requires: ((emacs "30.1"))
-
-;; Provides test functions for testing f90-ts-mode.el
 
 ;;; Commentary:
 
@@ -222,7 +218,7 @@ so that selection of indentation rules is tested properly."
 ;;------------------------------------------------------------------------------
 ;; ERT: basic stuff
 
-(ert-deftest f90-ts-mode/basic/activates ()
+(ert-deftest f90-ts-mode-test-std--activates ()
   "Check whether `f90-ts-mode' properly starts."
   (skip-unless (treesit-ready-p 'fortran))
   (with-temp-buffer
@@ -416,7 +412,7 @@ can be observed and checked."
 (defun f90-ts-mode-test--erts-simple-register (prefix files)
   "Dynamically generate ert-tests for FILES.
 All FILES are assumed to be in erts format.  One ert-test per file is created.
-Necessary preparation and action to test must be given in the Code preamble
+Preparations and actions to test must be given in the Code preamble
 within the erts test.
 PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
   (cl-loop
@@ -424,13 +420,13 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
    for name-base = (string-replace
                     "_" "-"
                     (string-remove-suffix
-                     "/"
+                     "--"
                      (replace-regexp-in-string
                       "^\\(indent_region\\|mark_region\\|\\(indent\\|break\\|join\\)_line\\)_?"
-                      "\\1/"
+                      "\\1--"
                       (file-name-sans-extension file))))
    for test-name = (intern
-                    (format "%s/custom/%s"
+                    (format "%s--custom--%s"
                             prefix
                             name-base))
    do (eval
@@ -466,7 +462,7 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
                               "^f90-ts\\(?:-mode-test--\\|-\\)" ""
                               (symbol-name action-fn))
            for test-name = (intern
-                            (format "%s/%s/%s/%s"
+                            (format "%s--%s--%s--%s"
                                     prefix
                                     action-name
                                     prep-name
@@ -626,7 +622,7 @@ or \"f90-ts-mode-extra\"."
                              "font_lock_"
                              (file-name-sans-extension file)))
    for test-name = (intern
-                    (format "%s/font-lock/%s"
+                    (format "%s--font-lock--%s"
                             prefix
                             name-base))
    do (eval
@@ -689,7 +685,7 @@ point at 1+end of region."
 ;; general indentation with indent-region
 ;; (with three different prep functions to vary initial indentation)
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode"
+ "f90-ts-mode-test-std"
  '("indent_region_progmod.erts"
    "indent_region_comments.erts"
    "indent_region_interface.erts"
@@ -707,7 +703,7 @@ point at 1+end of region."
 
 ;; smart end with specific shorten-to-end preparation
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode"
+ "f90-ts-mode-test-std"
  '("indent_region_smart_end.erts")
  '(nil ; no modification
    f90-ts-mode-test--shorten-to-end)
@@ -718,7 +714,7 @@ point at 1+end of region."
 
 ;; incomplete code with ERROR nodes
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode"
+ "f90-ts-mode-test-std"
  '("indent_line_incomplete.erts"
    "indent_line_empty.erts"
    )
@@ -731,7 +727,7 @@ point at 1+end of region."
 ;; alignment tests, leave as is, the alignment variant to apply
 ;; should be specified for each test header (default: keep-or-primary)
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode"
+ "f90-ts-mode-test-std"
  '("indent_region_align_misc.erts"
    "indent_region_align_expr.erts"
    )
@@ -743,7 +739,7 @@ point at 1+end of region."
 
 ;; indentation tests with custom erts Code block
 (f90-ts-mode-test--erts-simple-register
- "f90-ts-mode"
+ "f90-ts-mode-test-std"
  '("indent_region_partial.erts"
    "break_line.erts"
    "join_line.erts"
@@ -754,7 +750,7 @@ point at 1+end of region."
 
 ;; expensive tests
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode-extra"
+ "f90-ts-mode-test-extra"
  '("indent_integration_collatz.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
@@ -769,7 +765,7 @@ point at 1+end of region."
 ;; note that indent-by-line requires reparsing of the treesitter AST
 ;; after each line, which is very expensive
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode-extra"
+ "f90-ts-mode-test-extra"
  '("indent_region_progmod.erts"
    "indent_region_comments.erts"
    "indent_region_interface.erts"
@@ -784,7 +780,7 @@ point at 1+end of region."
 
 
 (f90-ts-mode-test--prep-act-register
- "f90-ts-mode-extra"
+ "f90-ts-mode-test-extra"
  '("indent_region_smart_end.erts")
  '(nil ; no modification
    f90-ts-mode-test--shorten-to-end)
@@ -795,7 +791,7 @@ point at 1+end of region."
 
 ;; register font lock tests
 (f90-ts-mode-test--font-lock-register
- "f90-ts-mode"
+ "f90-ts-mode-test-std"
  '("font_lock_progmod.f90"
    "font_lock_comment.f90"
    "font_lock_builtin.f90"
@@ -813,7 +809,7 @@ point at 1+end of region."
 
 ;; register extra font lock tests
 (f90-ts-mode-test--font-lock-register
- "f90-ts-mode-extra"
+ "f90-ts-mode-test-extra"
  '("font_lock_integration_collatz.f90"))
 
 
@@ -823,13 +819,13 @@ point at 1+end of region."
 (defun f90-ts-mode-test-run (&optional regexp-test diff-tool)
   "Run all ert-tests matching REGEXP-TEST.
 If DIFF-TOOL is specified, use it in case of failure to show the difference.
-If REGEXP-TEST is nil, then use \"^f90-ts-mode/\" to execute all
-standard tests, extra tests are excluded."
+If REGEXP-TEST is nil, then use \"^f90-ts-mode-test-std--\" to execute all
+standard tests.  Extra tests can be selected by \"^f90-ts-mode-test-extra--\"."
   (interactive
    (let* (;; map from ert tests to ert test name to string
           (regexp-choice
            (completing-read
-            "Additional regexp appended to \"^f90-ts-mode\": "
+            "Additional regexp appended to \"^f90-ts-mode-test-\": "
             nil nil nil nil nil nil))
 
           ;; diff tool selection
@@ -837,7 +833,7 @@ standard tests, extra tests are excluded."
            (completing-read "diff tool (empty for none): "
                          (list "" f90-ts-mode-test-diff-command)
                          nil nil "")))
-     (list (concat "^f90-ts-mode" regexp-choice)
+     (list (concat "^f90-ts-mode-test-" regexp-choice)
            diff-tool-choice)))
 
   (let (;; set defvar to the selected test, we cannot pass diff-tool directly
@@ -847,10 +843,8 @@ standard tests, extra tests are excluded."
               diff-tool)))
     (if regexp-test
         (ert regexp-test)
-      (ert "^f90-ts-mode/"))))
+      (ert "^f90-ts-mode-test-"))))
 
-
-(provide 'f90-ts-mode-test)
 
 (provide 'f90-ts-mode-test)
 
