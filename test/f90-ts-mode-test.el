@@ -134,6 +134,7 @@ without final newline."
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
+    (f90-ts-comment-keyword-regexp . "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>")
     (f90-ts-comment-region-prefix . "!!$")
     (f90-ts-extra-comment-prefixes . ("!%%!" "!>"))
     (f90-ts-mark-region-reversed . nil)
@@ -837,7 +838,7 @@ standard tests.  Extra tests can be selected by \"^f90-ts-mode-test-extra--\"."
               diff-tool)))
     (if regexp-test
         (ert regexp-test)
-      (ert "^f90-ts-mode-test-"))))
+      (ert "^f90-ts-mode-test-std--"))))
 
 
 (provide 'f90-ts-mode-test)

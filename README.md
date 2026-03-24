@@ -15,6 +15,9 @@ The mode is under **development**, features might only be partially implemented.
   - [Keybindings](#keybindings)
 - [Features](#features)
   - [Syntax highlight](#syntax-highlight)
+    - [Special variables](#special-variables)
+    - [Comment keywords and rules](#comment-keywords-and-rules)
+
   - [Indentation](#indentation)
     - [Indentation of multiline statement](#indentation-of-multiline-statement)
     - [OpenMP and other special comments](#openmp-and-other-special-comments)
@@ -196,8 +199,26 @@ Additionally to the usual faces, there are some extra custom faces:
 | `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)               |
 | `f90-ts-font-lock-separator-comment-face` | separator comments (e.g. `!---------`, `! arguments`) |
 
+
+#### Special variables
+
 Special variables are recognised by regexp matching with customizable variable `f90-ts-special-var-regexp`.
-Openmp and separator comments are matched by rules in `f90-ts-special-comment-rules'.
+For matched variables `f90-ts-font-lock-special-var-face` is used.
+
+
+#### Comment keywords and rules
+
+Keywords within comments can be coloured by `font-lock-warning-face` using customizable regexp
+`f90-ts-comment-keyword-regexp`. This is intended to highlight words like `TODO` or `FIXME`.
+
+Openmp, separator comments and other special comments can be customized by rules in `f90-ts-special-comment-rules'.
+Among other things, each such rule has a slot for a face to be applied. For example, an openmp rule could be:
+```
+(:name "general openmp rule" :match "^!\\$\\(?:omp\\)?\\b" :indent
+       column-0 :face f90-ts-font-lock-openmp-face)
+```
+for applying `f90-ts-font-lock-openmp-face` to openmp statements. Note that such statements are currently
+parsed as comments.
 
 
 ### Indentation
