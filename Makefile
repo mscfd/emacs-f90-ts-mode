@@ -46,7 +46,7 @@ test-parallel: test-p-main \
 
 .PHONY: test-p-main
 test-p-main:
-	$(call run-ert,^f90-ts-mode--)
+	$(call run-ert,^f90-ts-mode-test-std)
 
 .PHONY: test-p-extra-font-lock
 test-p-extra-font-lock:

@@ -837,7 +837,7 @@ standard tests.  Extra tests can be selected by \"^f90-ts-mode-test-extra--\"."
               diff-tool)))
     (if regexp-test
         (ert regexp-test)
-      (ert "^f90-ts-mode-test-"))))
+      (ert "^f90-ts-mode-test-std--"))))
 
 
 (provide 'f90-ts-mode-test)
