@@ -134,6 +134,7 @@ without final newline."
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
+    (f90-ts-comment-keyword-regexp . "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>")
     (f90-ts-comment-region-prefix . "!!$")
     (f90-ts-extra-comment-prefixes . ("!%%!" "!>"))
     (f90-ts-mark-region-reversed . nil)

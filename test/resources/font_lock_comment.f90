@@ -14,6 +14,17 @@
 ! ^^^^^^^^^^^^^^^^^ font-lock-comment-face
   !> documentation before declaration
 ! ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-doc-face
+  !> TODO: add remarks
+! ^^^ font-lock-doc-face
+!    ^^^^ font-lock-warning-face
+!        ^^^^^^ font-lock-doc-face
+!              ^^^^^^^ font-lock-warning-face
+  !> Remark1: no warning face
+! ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-doc-face
+  !> Remark 2: with warning face
+! ^^^ font-lock-doc-face
+!    ^^^^^^ font-lock-warning-face
+!          ^^^^^^^^^^^^^^^^^^^^^ font-lock-doc-face
   subroutine sub(arg)
 ! ^^^^^^^^^^ font-lock-keyword-face
 !            ^^^ font-lock-function-name-face
@@ -31,6 +42,10 @@
 ! ^^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
        ! comment sub
 !      ^^^^^^^^^^^^^ font-lock-comment-face
+       ! FIXME there is no code
+!      ^^ font-lock-comment-face
+!        ^^^^^ font-lock-warning-face
+!             ^^^^^^^^^^^^^^^^^ font-lock-comment-face
   contains
 ! ^^^^^^^^ font-lock-keyword-face
        ! comment code

@@ -418,6 +418,15 @@ indentation within OpenMP statements."
   :group 'f90-ts)
 
 
+(defcustom f90-ts-comment-keyword-regexp "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>"
+  "Regexp matching keywords within comments to highlight.
+The matched part of the comment is highlighted with `font-lock-warning-face'.
+Set to nil to disable keyword highlighting in comments."
+  :type '(choice (const :tag "Disabled" nil)
+                 (regexp :tag "Regexp"))
+  :group 'f90-ts)
+
+
 (defcustom f90-ts-special-comment-rules
   '((:name "openmp simd rule"
      :match "^!\\$omp simd\\b"
@@ -1140,16 +1149,32 @@ located, otherwise return line number of current point position."
   "Fontify NODE assumed to be a comment.
 Check whether NODE satisfies a special comment rule, and if it does,
 use the face provided by the first matching rule.
-If not rule matches, use `font-lock-comment-face'.
-Argument OVERRIDE is passend to `treesit-fontify-with-override'."
+If no rule matches, use `font-lock-comment-face'.
+
+Keyword matches from `f90-ts-comment-keyword-regexp' are additionally
+highlighted with `font-lock-warning-face' on top of the base face.
+
+Argument OVERRIDE is passed to `treesit-fontify-with-override' for the comment
+rule but not for matched keywords, which are enforced with override=t."
   (cl-assert (f90-ts--node-type-p node "comment")
              nil "fontify-comment: comment node expected")
   (let* ((rule (f90-ts--comment-matching-rule node))
          (face (or (and rule (plist-get rule :face))
-                   'font-lock-comment-face)))
-    (treesit-fontify-with-override
-     (treesit-node-start node) (treesit-node-end node)
-     face override)))
+                   'font-lock-comment-face))
+         (start (treesit-node-start node))
+         (end   (treesit-node-end node)))
+
+    ;; apply base face to the whole comment node
+    (treesit-fontify-with-override start end face override)
+
+    ;; overlay keyword matches on top
+    (when f90-ts-comment-keyword-regexp
+      (save-excursion
+        (goto-char start)
+        (cl-loop while (re-search-forward f90-ts-comment-keyword-regexp end t)
+                 do (treesit-fontify-with-override
+                       (match-beginning 0) (match-end 0)
+                       'font-lock-warning-face t))))))
 
 
 ;;;-----------------------------------------------------------------------------
