@@ -4102,7 +4102,8 @@ If called interactively, prompt for a prefix from
       (region-beginning))
     (region-end)
     (completing-read "choose comment prefix: "
-                          (cons f90-ts-comment-region-prefix f90-ts-extra-comment-prefixes)
+                          (append f90-ts-extra-comment-prefixes
+                                  (list f90-ts-comment-region-prefix))
                           nil t nil nil f90-ts-comment-region-prefix)))
   (f90-ts-comment-region-with-prefix beg-region
                                      end-region
