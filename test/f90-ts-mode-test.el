@@ -271,15 +271,17 @@ mark region functions etc. are possible as well.")
   "Show diff between ACTUAL and EXPECTED external tool DIFF."
   (let* ((actual-file (make-temp-file "f90-ts-mode-actual-"))
          (expected-file (make-temp-file "f90-ts-mode-expected-")))
-    (unwind-protect
-        (progn
-          (with-temp-file actual-file
-            (insert actual))
-          (with-temp-file expected-file
-            (insert expected))
-          (call-process diff nil 0 nil actual-file expected-file))
-      (delete-file actual-file)
-      (delete-file expected-file))))
+
+    (with-temp-file actual-file
+      (insert actual))
+    (with-temp-file expected-file
+      (insert expected))
+    (let ((proc (start-process "f90-ts-mode-test-diff" nil diff actual-file expected-file)))
+      (set-process-sentinel
+       proc
+       (lambda (_p _e)
+         (delete-file actual-file)
+         (delete-file expected-file))))))
 
 
 (defmacro f90-ts-mode-test-erts-with-diff (&rest body)
