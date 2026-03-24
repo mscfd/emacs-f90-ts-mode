@@ -234,6 +234,21 @@ Primary alignment column for the second line column of assignment plus
   :group 'f90-ts-indent)
 
 
+(defcustom f90-ts-indent-declaration 3
+  "Additional offset applied for alignment with declaration delimiter \"::\".
+This is applied in variable declarations.
+
+Example:
+integer, parameter :: ! some parameter &
+                      param = 0.1234
+
+Primary alignment column for the second line of a declaration plus
+`f90-ts-indent-declaration'."
+  :type  'integer
+  :safe  'integerp
+  :group 'f90-ts-indent)
+
+
 ;;;-----------------------------------------------------------------------------
 
 (defcustom f90-ts-smart-end 'blink
@@ -654,8 +669,7 @@ work with lambda expressions."
 
 
 (defun f90-ts--node-not-comment-or-error-p (node)
-  "Return non-nil if NODE is not of type comment or error.
-This is used to find relevant nodes."
+  "Return non-nil if NODE is not of type comment or error."
   (not (f90-ts--node-type-p node '("comment" "ERROR"))))
 
 
@@ -890,7 +904,8 @@ relevant node, whose children, which are kind of siblings to nil-node-position,
 can be used to determine things like indentation.
 For the first sibling itself, we do not exclude ERROR nodes.  Then the
 ERROR node is descended (usually just one step) to find a node with relevant
-structure type, like subroutine_statement or similar."
+structure type, like subroutine_statement or similar.
+Comment nodes and ampersand are ignored"
   (let* ((cur-line (line-number-at-pos))
          (predicate #'f90-ts--node-not-comment-p)
          (psib (f90-ts--before-child parent cur-line predicate)))
@@ -2350,6 +2365,10 @@ before and after \"::\")."
   "Execute BODY with `collect' available to accumulate (anchor offset) pairs.
 Pairs can be collected either by executing \"(collect anchor offset)\"
  or \"(collect anoff-pair)\".
+
+In this context, anchor must be a buffer position and offset an integer offset.
+Collecting nodes instead of their start position is not supported here.
+
 The macro deals with nil as pair input as well, so using it like
 \"(collect (pair-or-nil ...))\" is valid."
   (let ((acc (gensym "acc")))
@@ -2387,7 +2406,7 @@ node or a buffer position)."
   "Return a list of default/fallback alignment positions (anchors offset).
 These depend on LIST-CONTEXT, NODE-SYM and whether ITEMS has any nodes.
 The first entry of the \"other\" list is used as primary anchor.
-If ITEMS has entries, than return the entry with the smallest column.
+If ITEMS has entries, then return the entry with the smallest column.
 If ITEMS is empty, return (pos-of-pstmt-1 f90-ts-indent-continued) for default
 continued line indentation ."
   (f90-ts--collecting-anoff
@@ -2506,6 +2525,29 @@ This primary position is returned as first element of the list."
 
    ;; add default continued line indentation if items is empty
    (unless items
+     (collect (f90-ts--align-list-pstmt1-anoff)))))
+
+
+(defun f90-ts--align-list-other-var-decl (_list-context items loc)
+  "Return a list of default/fallback alignment positions (anchors offset).
+The list context is a variable_declaration.  For this, the continued line
+position is always added.
+If ITEMS has entries, then return the entry with the smallest column as
+primary anchor.
+Always return (pos-of-pstmt-1 f90-ts-indent-continued) for default continued
+line indentation ."
+  (let* ((smallest-anoff (f90-ts--align-list-smallest-anoff items))
+         (psibp (f90-ts--indent-prev-sib-by-parent))
+         (prev (if (f90-ts--node-type-p psibp "&")
+                   (treesit-node-prev-sibling psibp)
+                 psibp)))
+    (f90-ts--collecting-anoff
+     (collect smallest-anoff)
+     (when (f90-ts--node-type-p prev "::")
+       (collect (treesit-node-start prev)
+                ;; add one because "::" as two and not one character as "="
+                f90-ts-indent-declaration))
+     ;; always add default continued line indentation
      (collect (f90-ts--align-list-pstmt1-anoff)))))
 
 
@@ -2719,7 +2761,8 @@ Finally use VARIANT to select one pair to align with."
             '(:get-items-fn f90-ts--align-list-items-assocation
               :get-other-fn f90-ts--align-list-other-association))
       (cons "variable_declaration"
-            '(:get-items-fn f90-ts--align-list-items-var-decl))))
+            '(:get-items-fn f90-ts--align-list-items-var-decl
+              :get-other-fn f90-ts--align-list-other-var-decl))))
   "List of tree-sitter node types presenting some kind of list context.
 A list context is a node with children which are suitable for alignment if
 spread over several lines in a continued line statement.

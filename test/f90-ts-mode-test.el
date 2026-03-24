@@ -129,6 +129,7 @@ without final newline."
     (f90-ts-indent-paren-close . 3)
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
+    (f90-ts-indent-declaration . 3)
     (f90-ts-beginning-ampersand . nil)
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
@@ -743,6 +744,7 @@ point at 1+end of region."
 (f90-ts-mode-test--erts-simple-register
  "f90-ts-mode-test-std"
  '("indent_region_partial.erts"
+   "indent_line_align.erts"
    "break_line.erts"
    "join_line.erts"
    "mark_region.erts"
