@@ -586,33 +586,41 @@ Note that the parse uses identifier not just for variables, but for types etc."
           (string-prefix-p "#" type))))
 
 
-;; the regexp engine is lacking a case insensitive switch, so we need to
-;; lowercase the identifier by hand
-(defun f90-ts-builtin-p (node)
-  "Return non-nil if NODE represents an builtin function.
+(defconst f90-ts--builtin-functions
+  '("abs" "acos" "aimag" "aint" "allocated" "anint" "any" "asin"
+    "associated" "atan" "atan2" "btest" "ceiling" "char" "cmplx"
+    "conjg" "cos" "cosh" "count" "cshift" "date_and_time" "dble"
+    "dim" "dot_product" "dprod" "eoshift" "epsilon" "exp" "exponent"
+    "floor" "fraction" "huge" "iand" "ibclr" "ibits" "ibset" "ichar"
+    "ieor" "index" "int" "ior" "ishft" "ishftc" "kind" "lbound"
+    "len" "len_trim" "log" "log10" "logical" "matmul" "max"
+    "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
+    "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
+    "null" "pack" "precision" "present" "product" "radix"
+    "random_number" "random_seed" "range" "rank" "real" "repeat"
+    "reshape" "rrspacing" "scale" "scan" "selected_int_kind"
+    "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
+    "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
+    "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
+    "verify")
+  "List of all builtin keywords for font-lock highlighting.
+Used with face `font-lock-builtin-face'.")
+
+
+(defun f90-ts-builtin-function-p (node)
+  "Return non-nil if NODE represents a builtin function.
 The function assumes that NODE is an identifier and only checks the text of the
-node."
+node.
+
+Remark: the regexp engine invoked by tree-sitter query command \":match\" is
+case-sensitive, but the emacs regexp engine itself is case-insensitive.
+So plugging (:match ,(regexp-opt f90-ts--builtin-functions 'symbols) ...)
+into the font lock rule, as was originally done, does not work if the
+function name in the node contains some uppercase letters."
   (cl-assert (f90-ts--node-type-p node "identifier")
-             nil "builtin-p: identifier expected")
-  (let ((text (downcase (treesit-node-text node)))
-        (rx (regexp-opt
-             '("abs" "acos" "aimag" "aint" "allocated" "anint" "any" "asin"
-               "associated" "atan" "atan2" "btest" "ceiling" "char" "cmplx"
-               "conjg" "cos" "cosh" "count" "cshift" "date_and_time" "dble"
-               "dim" "dot_product" "dprod" "eoshift" "epsilon" "exp" "exponent"
-               "floor" "fraction" "huge" "iand" "ibclr" "ibits" "ibset" "ichar"
-               "ieor" "index" "int" "ior" "ishft" "ishftc" "kind" "lbound"
-               "len" "len_trim" "log" "log10" "logical" "matmul" "max"
-               "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
-               "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
-               "null" "pack" "precision" "present" "product" "radix"
-               "random_number" "random_seed" "range" "rank" "real" "repeat"
-               "reshape" "rrspacing" "scale" "scan" "selected_int_kind"
-               "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
-               "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
-               "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
-               "verify")
-             'symbols)))
+             nil "builtin-function-p: identifier expected")
+  (let ((text (treesit-node-text node))
+        (rx (regexp-opt f90-ts--builtin-functions 'symbols)))
     (string-match-p rx text)))
 
 
@@ -1229,7 +1237,7 @@ rule but not for matched keywords, which are enforced with override=t."
    :feature 'builtin
    `((call_expression
       (identifier) @font-lock-builtin-face
-      (:pred f90-ts-builtin-p @font-lock-builtin-face)))))
+      (:pred f90-ts-builtin-function-p @font-lock-builtin-face)))))
 
 
 (defun f90-ts--font-lock-rules-keyword ()
