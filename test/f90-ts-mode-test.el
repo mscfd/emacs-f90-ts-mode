@@ -129,6 +129,7 @@ without final newline."
     (f90-ts-indent-paren-close . 3)
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
+    (f90-ts-indent-declaration . 3)
     (f90-ts-beginning-ampersand . nil)
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
@@ -271,15 +272,17 @@ mark region functions etc. are possible as well.")
   "Show diff between ACTUAL and EXPECTED external tool DIFF."
   (let* ((actual-file (make-temp-file "f90-ts-mode-actual-"))
          (expected-file (make-temp-file "f90-ts-mode-expected-")))
-    (unwind-protect
-        (progn
-          (with-temp-file actual-file
-            (insert actual))
-          (with-temp-file expected-file
-            (insert expected))
-          (call-process diff nil 0 nil actual-file expected-file))
-      (delete-file actual-file)
-      (delete-file expected-file))))
+
+    (with-temp-file actual-file
+      (insert actual))
+    (with-temp-file expected-file
+      (insert expected))
+    (let ((proc (start-process "f90-ts-mode-test-diff" nil diff actual-file expected-file)))
+      (set-process-sentinel
+       proc
+       (lambda (_p _e)
+         (delete-file actual-file)
+         (delete-file expected-file))))))
 
 
 (defmacro f90-ts-mode-test-erts-with-diff (&rest body)
@@ -741,6 +744,7 @@ point at 1+end of region."
 (f90-ts-mode-test--erts-simple-register
  "f90-ts-mode-test-std"
  '("indent_region_partial.erts"
+   "indent_line_align.erts"
    "break_line.erts"
    "join_line.erts"
    "mark_region.erts"

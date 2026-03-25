@@ -1,0 +1,48 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-line 'rotate))
+      (f90-ts-indent-and-complete-line)))
+
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Name: align vardecl rotate 1
+=-=
+subroutine vardecl1()
+     character(len=11), dimension(1:3) :: & ! comment
+          
+          ! comment
+          
+              |                    alpha = 'transparent'
+end subroutine vardecl1
+=-=
+subroutine vardecl1()
+     character(len=11), dimension(1:3) :: & ! comment
+          
+          ! comment
+          
+                                          |alpha = 'transparent'
+end subroutine vardecl1
+=-=-=
+
+Name: align vardecl rotate 2
+=-=
+subroutine vardecl2()
+     character(len=11), dimension(1:3) :: & ! comment
+
+                                          ! comment
+
+                                          |alpha = 'transparent'
+end subroutine vardecl2
+=-=
+subroutine vardecl2()
+     character(len=11), dimension(1:3) :: & ! comment
+
+                                          ! comment
+
+            |alpha = 'transparent'
+end subroutine vardecl2
+=-=-=
