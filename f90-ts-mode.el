@@ -80,7 +80,7 @@
 
 
 (defgroup f90-ts-indent nil
-  "Indentation in free format Fortran for treesitter f90-ts mode."
+  "Indentation in free format Fortran for Tree-sitter f90-ts mode."
   :prefix "f90-ts-"
   :group  'f90-ts)
 
@@ -277,42 +277,47 @@ Copied from prog mode `f90-mode'."
 (defface f90-ts-font-lock-delimiter-face
   '((t :foreground "Sienna4"
        :weight medium))
-  "Face for custom font-lock highlighting."
+  "Font Lock mode face used to highlight delimiter symbols."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-bracket-face
   '((t :foreground "BlueViolet"
        :weight bold))
-  "Face for custom font-lock highlighting."
+  "Font Lock mode face used to highlight brackets and parenthesis."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-operator-face
   '((t :foreground "Brown3"
        :weight bold))
-  "Face for custom font-lock highlighting."
+  "Font Lock mode face used to highlight operators."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-openmp-face
   '((t :foreground "turquoise4"
        :weight medium))
-  "Face for openmp statements."
+  "Font Lock mode face used to highlight openmp statements."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-special-var-face
   '((t :foreground "blue4"
        :weight semi-bold))
-  "Face for special variables like self or this."
+  "Font Lock mode face used to highlight special variables.
+The can be used for variables like \"self\" or \"this\".
+Special variables are determined by regexp custom variable
+`f90-ts-special-var-regexp'."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-separator-comment-face
   '((t :foreground "Sienna4"
        :weight bold))
-  "Face for separator comments."
+  "Font Lock mode face used to highlight separator comments.
+Special comments such as separators are determined by rules in
+`f90-ts-special-comment-rules'."
   :group 'f90-ts-font-lock)
 
 
@@ -479,6 +484,9 @@ Each element is a plist with the following keys:
 Rules are tested in order; the first match determines indentation
 and font lock face.
 If no rule matches, the comment is indented normally.
+
+Matches are only done at start of comment if the regexp starts with \"^\".
+Otherwise matches also succeed if the it matches somewhere within the comment.
 
 Indentation hints of special comment rules are ignored within continued
 lines, except for the column-0 option.  The other two options does not
@@ -2536,14 +2544,14 @@ This primary position is returned as first element of the list."
      (collect (f90-ts--align-list-pstmt1-anoff)))))
 
 
-(defun f90-ts--align-list-other-var-decl (_list-context items loc)
+(defun f90-ts--align-list-other-var-decl (_list-context items _loc)
   "Return a list of default/fallback alignment positions (anchors offset).
 The list context is a variable_declaration.  For this, the continued line
 position is always added.
 If ITEMS has entries, then return the entry with the smallest column as
 primary anchor.
-Always return (pos-of-pstmt-1 f90-ts-indent-continued) for default continued
-line indentation ."
+Always return position of pstmt-1 with offset `f90-ts-indent-continued'
+for default continued line indentation."
   (let* ((smallest-anoff (f90-ts--align-list-smallest-anoff items))
          (psibp (f90-ts--indent-prev-sib-by-parent))
          (prev (if (f90-ts--node-type-p psibp "&")
