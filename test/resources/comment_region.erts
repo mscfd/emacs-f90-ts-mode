@@ -3,18 +3,18 @@ Point-Char: |
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 1 69))
+    (f90-ts-comment-region-default 1 77))
 
 Name: comment region all 1
 =-=
-subroutine sub_1()
+subroutine sub_all_1()
 |     call to_be_commented()
-end subroutine sub_1
+end subroutine sub_all_1
 
 =-=
-!!$subroutine sub_1()
-!!$     call to_be_commented()
-!!$end subroutine sub_1
+!!$ subroutine sub_all_1()
+!!$  call to_be_commented()
+!!$ end subroutine sub_all_1
 |
 =-=-=
 
@@ -25,213 +25,341 @@ Code:
 
 Name: comment region all 2
 =-=
-subroutine sub_1()
+subroutine sub_2()
 |     call to_be_commented()
-end subroutine sub_1
+end subroutine sub_2
 
 =-=
-!!$subroutine sub_1()
-!!$     call to_be_commented()
-!!$end subroutine sub_1
+!!$ subroutine sub_2()
+!!$  call to_be_commented()
+!!$ end subrouti|ne sub_2
+
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-comment-prefix-keep-indent nil))
+      (f90-ts-comment-region-default 1 77)))
+
+Name: comment region all 3
+=-=
+subroutine sub_all_3()
+|     call to_be_commented()
+end subroutine sub_all_3
+
+=-=
+!!$ subroutine sub_all_3()
+!!$      call to_be_commented()
+!!$ end subroutine sub_all_3
 |
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 1 78))
+    (f90-ts-comment-region-default 1 91))
 
 Name: uncomment region all 1
 =-=
-|!!$subroutine sub_1()
-!!$     call to_be_commented()
-!!$end subroutine sub_1
+|!!$ subroutine sub_un_all_1()
+!!$  call to_be_commented()
+!!$ end subroutine sub_un_all_1
 
 =-=
-subroutine sub_1()
+subroutine sub_un_all_1()
      call to_be_commented()
-end subroutine sub_1
+end subroutine sub_un_all_1
 |
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 21 57))
+    (f90-ts-comment-region-default 29 91))
 
 Name: uncomment region all 2
 =-=
-!!$subroutine sub_1()
-!!$     call to_be_commented()
-!!$end subroutine sub_1|
+!!$ subroutine sub_un_all_2()
+!!$  call to_be_commented()
+!!$ end subroutine sub_un_all_2|
 
 =-=
-subroutine sub_1()
+subroutine sub_un_all_2()
      call to_be_commented()
-end subroutine sub_1
+end subroutine sub_un_all_2
 |
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 20 91))
+    (f90-ts-comment-region-default 25 96))
 
 Name: comment region some 1
 =-=
-subroutine sub_1()
+subroutine sub_some_1()
 |     call to_be_commented()
      comment: do i=1,10
      end do comment
-end subroutine sub_1
+end subroutine sub_some_1
 =-=
-subroutine sub_1()
-!!$     call to_be_commented()
-!!$     comment: do i=1,10
-!!$     end do comment
-|end subroutine sub_1
+subroutine sub_some_1()
+!!$  call to_be_commented()
+!!$  comment: do i=1,10
+!!$  end do comment|
+end subroutine sub_some_1
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 20 92))
+    (f90-ts-comment-region-default 25 97))
 
 Name: comment region some 2
 =-=
-subroutine sub_1()
+subroutine sub_some_2()
      call to_be_commented()
      comment: do i=1,10
      end do comment
-|end subroutine sub_1
+|end subroutine sub_some_2
 =-=
-subroutine sub_1()
-!!$     call to_be_commented()
-!!$     comment: do i=1,10
-!!$     end do comment
-|end subroutine sub_1
+subroutine sub_some_2()
+!!$  call to_be_commented()
+!!$  comment: do i=1,10
+!!$  end do comment
+|end subroutine sub_some_2
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 20 91))
+    (f90-ts-comment-region-default 28 108))
 
 Name: uncomment region some 1
 =-=
-subroutine sub_1()
+subroutine sub_un_some_1()
 |!!$     call to_be_commented()
 !!$     comment: do i=1,10
 !!$     end do comment
-end subroutine sub_1
+end subroutine sub_un_some_1
 =-=
-subroutine sub_1()
+subroutine sub_un_some_1()
      call to_be_commented()
      comment: do i=1,10
-     end do comment
-|end subroutine sub_1
+     end do comment|
+end subroutine sub_un_some_1
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-default 20 92))
+    (f90-ts-comment-region-default 28 109))
 
 Name: uncomment region some 2
 =-=
-subroutine sub_1()
+subroutine sub_un_some_2()
 !!$     call to_be_commented()
 !!$     comment: |do i=1,10
 !!$     end do comment
-end subroutine sub_1
+end subroutine sub_un_some_2
 
 =-=
-subroutine sub_1()
+subroutine sub_un_some_2()
      call to_be_commented()
      comment: do i=1,10
      end do comment
-|end subroutine sub_1
+|end subroutine sub_un_some_2
 
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-custom 20 92 "!%%!"))
+    (f90-ts-comment-region-custom 48 135 "!!!"))
 
 Name: comment region custom 1
 =-=
-subroutine sub_1()
-|     call to_be_commented()
-     comment: do i=1,10
-     end do comment
-end subroutine sub_1
+subroutine sub_custom_1()
+     if (x > 1) then
+          call to_be_commented()
+          comment: do i=1,10
+          end do comment
+     end if
+end subroutine sub_custom_1
 =-=
-subroutine sub_1()
-!%%!     call to_be_commented()
-!%%!     comment: do i=1,10
-!%%!     end do comment
-|end subroutine sub_1
+subroutine sub_custom_1()
+     if (x > 1) then
+     !!!  call to_be_commented()
+     !!!  comment: do i=1,10
+     !!!  end do comment
+|     end if
+end subroutine sub_custom_1
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-custom 20 95 "!%%! "))
+    (f90-ts-comment-region-custom 53 115 "! "))
 
 Name: comment region custom 2
 =-=
-subroutine sub_1()
-!     call to_be_commented()
-!     comment: do i=1,10
-!     end do comment
-|end subroutine sub_1
+subroutine sub_custom_2()
+     if (x > 1) then
+          call to_be_commented()
+          comment: do i=1,10
+     |     end do comment
+     end if
+end subroutine sub_custom_2
 =-=
-subroutine sub_1()
-!%%! !     call to_be_commented()
-!%%! !     comment: do i=1,10
-!%%! !     end do comment
-|end subroutine sub_1
+subroutine sub_custom_2()
+     if (x > 1) then
+          ! call to_be_commented()
+          ! comment: do i=1,10
+          ! |end do comment
+     end if
+end subroutine sub_custom_2
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-custom 20 104 "!%%!"))
+    (f90-ts-comment-region-custom 27 101 "!> "))
+
+Name: comment region custom 3
+=-=
+subroutine sub_custom_3()
+|!     call to_be_commented()
+!     comment: do i=1,10
+!     end do comment
+end subroutine sub_custom_3
+=-=
+subroutine sub_custom_3()
+     !> !     call to_be_commented()
+     !> !     comment: do i=1,10
+     !> !     end do comment|
+end subroutine sub_custom_3
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 56 138 "!!!"))
 
 Name: uncomment region custom 1
 =-=
-subroutine sub_1()
-|!%%!     call to_be_commented()
-!%%!     comment: do i=1,10
-!%%!     end do comment
-end subroutine sub_1
+subroutine sub_un_custom_1()
+     |if (x > 1) then
+     !!!  call to_be_commented()
+     !!!  comment: do i=1,10
+     !!!  end do comment
+     end if
+end subroutine sub_un_custom_1
 =-=
-subroutine sub_1()
-     call to_be_commented()
-     comment: do i=1,10
-     end do comment
-|end subroutine sub_1
+subroutine sub_un_custom_1()
+     if (x > 1) then
+          call to_be_commented()
+          comment: do i=1,10
+          end do comment
+|     end if
+end subroutine sub_un_custom_1
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 53 119 "! "))
+
+Name: comment region custom 2
+=-=
+subroutine sub_custom_2()
+     if (x > 1) then
+          ! call to_be_commented()
+          ! comment: do i=1,10
+     |     ! end do comment
+     end if
+end subroutine sub_custom_2
+=-=
+subroutine sub_custom_2()
+     if (x > 1) then
+          call to_be_commented()
+          comment: do i=1,10
+     |     end do comment
+     end if
+end subroutine sub_custom_2
 =-=-=
 
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-comment-region-custom 1 121 "!%%!"))
+    (f90-ts-comment-region-custom 37 145 "!!!"))
 
 Name: both-comment all custom 1
 =-=
-subroutine sub_1()
-!%%!     call to_be_commented()
-!%%!     comment: do i=1,10
-     end do |comment
-end subroutine sub_1
-
+subroutine sub_both_custom_1()
+     if (x > 1) then
+     !!!  call to_be_commented()
+     !!!  comment: do i=1,10
+     !!!  end do comment
+     end if
+end subroutine sub_both_custom_1
 =-=
-!%%!subroutine sub_1()
+subroutine sub_both_custom_1()
+!!!  if (x > 1) then
      call to_be_commented()
      comment: do i=1,10
-!%%!     end do comment
-!%%!end subroutine sub_1
-|
+     end do comment
+!!!  |end if
+end subroutine sub_both_custom_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 27 153 "! "))
+
+Name: both-comment all custom 2
+=-=
+subroutine sub_custom_2()
+     if (x > 1) then
+          ! call to_be_commented()
+          ! comment: do i=1,10
+          ! end do comment
+     end if
+|end subroutine sub_custom_2
+=-=
+subroutine sub_custom_2()
+     ! if (x > 1) then
+     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+     ! end if
+|end subroutine sub_custom_2
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 27 147"!!$ "))
+
+Name: both-comment all custom 3
+=-=
+subroutine sub_custom_3()
+     if (x > 1) then
+!!$       call to_be_commented()
+!!$       comment: do i=1,10
+!!$       end do comment
+     end if
+|end subroutine sub_custom_3
+
+=-=
+subroutine sub_custom_3()
+!!$  if (x > 1) then
+     call to_be_commented()
+     comment: do i=1,10
+     end do comment
+!!$  end if
+|end subroutine sub_custom_3
+
 =-=-=
