@@ -17,7 +17,6 @@ The mode is under **development**, features might only be partially implemented.
   - [Syntax highlight](#syntax-highlight)
     - [Special variables](#special-variables)
     - [Comment keywords and rules](#comment-keywords-and-rules)
-
   - [Indentation](#indentation)
     - [Indentation of multiline statement](#indentation-of-multiline-statement)
     - [OpenMP and other special comments](#openmp-and-other-special-comments)
@@ -409,7 +408,15 @@ a default or with a selectable prefix.
 
 Default prefix `f90-ts-comment-region-prefix` and extra prefixes
 `f90-ts-extra-comment-prefixes` can be customized as desired.
-Standard prefixes like `!$omp`, `!>` and some others are predefined.
+Standard prefixes like `!!$ `, `!$omp `, `!> ` and some others are predefined.
+Note that a trailing blank should be provided explicitly if desired.
+
+Indentation of prefixes can be controlled by special comment rules,
+see [Special comments](#openmp-and-other-special-comments).
+With `f90-ts-comment-prefix-keep-indent` it is possible to control
+whether indentation of commented code should be kept,
+or wether the prefix should be inserted at the proper column without removing
+any blanks to keep original indentation of commented code.
 
 
 ### Mark region based on tree-sitter nodes
