@@ -4255,11 +4255,41 @@ If called interactively, prompt for a prefix from
 
 
 ;;;-----------------------------------------------------------------------------
+;;; Imenu
+
+(defun f90-ts--imenu-name-fn (node)
+  "Return the name of the construct represented by NODE."
+  ;; TODO: define proper queries and use those to extract names,
+  ;; the implementation below only works for some nodes
+  (let ((name-node (cl-some (lambda (child)
+                              (when (string= (treesit-node-type child) "name")
+                                child))
+                            (treesit-node-children node))))
+    (if name-node
+        (treesit-node-text name-node t)
+      "Anonymous")))
+
+
+(defvar f90-ts--imenu-settings
+  ;;(CATEGORY     REGEXP                    PRED   NAME-FN)
+  '(("Program"    "program_statement"       nil    f90-ts--imenu-name-fn)
+    ("Module"     "module_statement"        nil    f90-ts--imenu-name-fn)
+    ("Submodule"  "submodule_statement"     nil    f90-ts--imenu-name-fn)
+    ("Subroutine" "subroutine_statement"    nil    f90-ts--imenu-name-fn)
+    ("Function"   "function_statement"      nil    f90-ts--imenu-name-fn)
+    ("Type"       "derived_type_definition" nil    f90-ts--imenu-name-fn)
+    ("Interface"  "interface_statement"     nil    f90-ts--imenu-name-fn))
+  "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
+
+
+;;;-----------------------------------------------------------------------------
 
 ;;;###autoload
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
+  :syntax-table f90-ts-mode-syntax-table
+
   ;; check if treesit has a ready parser for 'fortran
   (unless (treesit-available-p)
     (error "Tree-sitter support is not available"))
@@ -4286,9 +4316,14 @@ If called interactively, prompt for a prefix from
   ;; use the pre-defined indentation rules variable
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
+  ;; Imenu Setup
+  (setq-local treesit-simple-imenu-settings f90-ts--imenu-settings)
+
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!
   (treesit-major-mode-setup)
+
+  (imenu-add-to-menubar "Imenu")
 
   ;; set indentation functions (both add smart end completion before
   ;; indentation, so no hook available); this must be done AFTER
