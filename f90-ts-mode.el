@@ -407,15 +407,28 @@ preserve indentation within comments with `f90-ts-break-line'."
   :group 'f90-ts)
 
 
-(defcustom f90-ts-comment-region-prefix "!!$"
-  "Comment prefix."
+(defcustom f90-ts-comment-region-prefix "!!$ "
+  "Default comment prefix for commenting regions.
+Trailing blank(s) are not inserted automatically, but can be provided
+in the string."
   :type  'string
   :group 'f90-ts)
 
 
-(defcustom f90-ts-extra-comment-prefixes '("!" "!$omp" "!$acc" "!!!" "!>" "!<")
-  "List of additional comment prefixes for interactive selection."
+(defcustom f90-ts-extra-comment-prefixes '("! " "!$omp " "!$acc " "!!!" "!> " "!< ")
+  "List of additional comment prefixes for interactive selection.
+Trailing blank(s) are not inserted automatically, but can be provided
+in the string."
   :type  '(repeat string)
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-comment-prefix-keep-indent t
+  "Keep indentation in commen region operation when inserting comment prefix.
+If nil, just insert the prefix.  If non-nil, remove blanks up to length of
+prefix before commented command starts.  The preserves the original
+indentation."
+  :type  'boolean
   :group 'f90-ts)
 
 
@@ -463,7 +476,15 @@ Set to nil to disable keyword highlighting in comments."
     (:name "ford documentation"
      :match "^![<>]"
      :indent indented
-     :face font-lock-doc-face))
+     :face font-lock-doc-face)
+    (:name "comment region prefixes: column-0"
+     :match "^!!\\$"
+     :indent column-0
+     :face font-lock-comment-face)
+    (:name "comment region prefixes: context"
+     :match "^!!!"
+     :indent context
+     :face font-lock-comment-face))
   "Rules for special comment node indentation in `f90-ts-mode'.
 
 Each element is a plist with the following keys:
@@ -3786,11 +3807,11 @@ For region based indentation, smart end completion should be executed first,
 as this might repair the tree.  Only then indentation should be done.
 For single line the order does not matter.  Example:
 
-module do_mod
+module mod
 contains
- subroutine do_sub()
- end function do_sub
-end module do_mod
+ subroutine sub()
+ end function sub
+end module mod
 
 At the end function line, \"end\" represents the end subroutine statement,
 hence indentation as well as smart end completetion both work.  However,
@@ -4160,20 +4181,48 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
 (defun f90-ts-comment-region-with-prefix (beg-region end-region prefix)
   "Comment/uncomment every line in the region using comment PREFIX.
 Region is given by BEG-REGION and END-REGION.
-Insert comment prefix at the start of every line in the region.
+Insert comment prefix at every line in the region, taking special comment
+rules for indentation of comment prefix into account.
 If the prefix is already present, then remove it and uncomment the line."
-  (let ((end (copy-marker end-region)))
-    (goto-char beg-region)
-    (beginning-of-line)
-    (if (looking-at (regexp-quote prefix))
-        (delete-region (point) (match-end 0))
-      (insert prefix))
-    (while (and (zerop (forward-line 1))
-                (< (point) end))
-      (if (looking-at (regexp-quote prefix))
-          (delete-region (point) (match-end 0))
-        (insert prefix)))
-    (set-marker end nil)))
+  (let* ((prefix-re (regexp-quote prefix))
+         (re-uncomment (concat "\\s-*\\(?1:" prefix-re "\\)"))
+         (re-adjust    (concat "\\(?1:\\(?2:\\s-*\\)" prefix-re "\\)\\(?3:\\s-*\\)")))
+    (let ((beg (copy-marker beg-region))
+          (end (copy-marker end-region)))
+      (unwind-protect
+          (progn
+            ;; pass 1: insert or remove prefix at column 0 for each line
+            ;; in the region
+            (goto-char beg)
+            (beginning-of-line)
+            (cl-loop
+             do (if (looking-at re-uncomment)
+                    (delete-region (match-beginning 1) (match-end 1))
+                  (insert prefix))
+             while (and (zerop (forward-line 1))
+                        (< (point) end)))
+            ;; pass 2: re-indent the whole region at once
+            (treesit-indent-region beg end)
+            ;; pass 3 (backwards): for each commented line, strip the blanks
+            ;; that indent added before the prefix from after the prefix, this
+            ;; preserve original indentation within comment if possible
+            (goto-char end)
+            (beginning-of-line)
+            (cl-loop
+             do (when (looking-at re-adjust)
+                  (let* ((cap-group-before (if f90-ts-comment-prefix-keep-indent 1 2))
+                         (len-before (length (match-string cap-group-before)))
+                         (after (match-string 3))
+                         (len-after (min len-before
+                                         (length after))))
+                    (when (> len-after 0)
+                      (delete-region (match-beginning 3)
+                                     (+ (match-beginning 3) len-after)))))
+             while (and (> (point) beg)
+                        (zerop (forward-line -1))))
+            (goto-char end))
+        (set-marker beg nil)
+        (set-marker end nil)))))
 
 
 (defun f90-ts-comment-region-default (beg-region end-region)
@@ -4199,7 +4248,7 @@ If called interactively, prompt for a prefix from
     (completing-read "choose comment prefix: "
                           (append f90-ts-extra-comment-prefixes
                                   (list f90-ts-comment-region-prefix))
-                          nil t nil nil f90-ts-comment-region-prefix)))
+                          nil t nil nil (car f90-ts-extra-comment-prefixes))))
   (f90-ts-comment-region-with-prefix beg-region
                                      end-region
                                      prefix))

@@ -91,7 +91,15 @@ without final newline."
     (:name "ford documentation"
      :match "^![<>]"
      :indent indented
-     :face font-lock-doc-face))
+     :face font-lock-doc-face)
+    (:name "comment region prefixes: column-0"
+     :match "^!!\\$"
+     :indent column-0
+     :face font-lock-comment-face)
+    (:name "comment region prefixes: context"
+     :match "^!!!"
+     :indent context
+     :face font-lock-comment-face))
   "Test rules for special comment node indentation.")
 
 
@@ -136,8 +144,9 @@ without final newline."
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-comment-keyword-regexp . "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>")
-    (f90-ts-comment-region-prefix . "!!$")
-    (f90-ts-extra-comment-prefixes . ("!%%!" "!>"))
+    (f90-ts-comment-region-prefix . "!!$ ")
+    (f90-ts-extra-comment-prefixes . ("!!!" "! " "!> "))
+    (f90-ts-comment-prefix-keep-indent . t)
     (f90-ts-mark-region-reversed . nil)
     (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
                                         ; also needs treesit-font-lock-recompute-features
