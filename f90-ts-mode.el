@@ -332,6 +332,12 @@ Special comments such as separators are determined by rules in
     (define-key map (kbd "A-0") #'f90-ts-child0-region)
     (define-key map (kbd "A-[") #'f90-ts-prev-region)
     (define-key map (kbd "A-]") #'f90-ts-next-region)
+
+    (define-key map (kbd "C-A-a") #'f90-ts-thing-beginning-of-procedure)
+    (define-key map (kbd "C-A-e") #'f90-ts-thing-end-of-procedure)
+    (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
+    (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
+
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -531,6 +537,44 @@ seem to make much sense."
                                f90-ts-font-lock-openmp-face)
                         (face :tag "other face"))))
   :group 'f90-ts)
+
+
+;;;-----------------------------------------------------------------------------
+;;; tree-sitter workaround
+
+;; For virtual zero-length nodes, `treesit-node-parent' fails. For
+;;
+;;    call something(arg1, &
+;;                   arg2)
+;;
+;; the grammar injects a second ampersand of length zero right before "a".
+;; `treesit-node-at' at a point before arg2, returns the virtual ampersand node.
+;; But his node has no parent, but it has a previous and next sibling. A couple of
+;; treesit functions (like treesit-thing-at, used for which-function-mode etc.)
+;; using `treesit-node-at' followed by `treesit-parent-until' fail as a consequence.
+;; To circumvent this, treesit-node-parent is patched by using previous or next
+;; sibling and check, whether those have a proper parent. Which seems always the case.
+
+(define-advice treesit-node-parent (:around (orig node) f90-ts--skip-zero-width-extras)
+  "If NODE is zero-width with no parent, walk siblings to find a real parent.
+
+This is required for virtual ampersand continuation line nodes, for which
+there is no parent.  Those nodes always have direct proper previous and next
+siblings with the correct parent.  So walking is just one step in general."
+  (let ((parent (funcall orig node)))
+    (if (or parent
+            (< (treesit-node-start node) (treesit-node-end node)))
+        parent
+      ;; try previous siblings first, then next siblings as fallback,
+      ;; but for the intended case, one step to the prev-sibling resolves the issue
+      (or (cl-loop for candidate = (treesit-node-prev-sibling node)
+                                 then (treesit-node-prev-sibling candidate)
+                   while candidate
+                   thereis (funcall orig candidate))
+          (cl-loop for candidate = (treesit-node-next-sibling node)
+                                 then (treesit-node-next-sibling candidate)
+                   while candidate
+                   thereis (funcall orig candidate))))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -4716,12 +4760,173 @@ nothing changes."
                                  (f90-ts--imenu-capture-name node (plist-get spec :query))))))
              (sparse-tree (treesit-induce-sparse-tree root predicate))
              (items (f90-ts--menu-from-sparse-tree sparse-tree))
-             (final-menu (cons (f90-ts--menu-entry "↱ Top of buffer" (point-min-marker))
+             (final-menu (cons (f90-ts--menu-entry "Top of buffer" (point-min-marker))
                                (or items '(["(empty)" ignore t])))))
         ;;(f90-ts-log :menu "sparse-tree: \n%s" (pp-to-string sparse-tree))
         (setq f90-ts--menu-cache-root root)
         (setq f90-ts--menu-cache-result final-menu)
         final-menu))))
+
+
+;;;-----------------------------------------------------------------------------
+;;; Defun and thing
+
+(defun f90-ts--thing-node-p (node)
+  "Check whether NODE is named or anonymous.
+Just checking with regexp is not sufficient, as main structure node
+and keyword are sometimes equal.  But we only want the structure node."
+  (treesit-node-check node 'named))
+
+
+(defun f90-ts--defun-name (node)
+  "Return the name of defun NODE, for use in `which-function-mode' etc."
+  (caar (f90-ts--imenu-name-pos-fn node)))
+
+
+(defconst f90-ts--thing-defun-regexp-pred
+  (cons
+   (concat "^" (regexp-opt '("module"
+                             "submodule"
+                             "program"
+                             "subroutine"
+                             "function"
+                             "module_procedure"
+                             "interface"
+                             "derived_type_definition")) "$")
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine defun nodes.")
+
+
+(defconst f90-ts--thing-procedure-regexp-pred
+  (cons
+   (concat "^" (regexp-opt '("subroutine"
+                             "function"
+                             "module_procedure")) "$")
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine procedure nodes.")
+
+
+(defconst f90-ts--thing-interface-regexp-pred
+  (cons
+   "^interface$"
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine interface nodes.")
+
+
+(defconst f90-ts--thing-type-regexp-pred
+  (cons
+   "^derived_type_definition$"
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine derived type nodes.")
+
+
+(defconst f90-ts--thing-settings
+  `((fortran
+     (defun     ,f90-ts--thing-defun-regexp-pred)
+     (procedure ,f90-ts--thing-procedure-regexp-pred)
+     (interface ,f90-ts--thing-interface-regexp-pred)
+     (type      ,f90-ts--thing-type-regexp-pred)))
+  "List of things with regexp and predicates to identify relevant nodes.")
+
+
+;; keep this: it has been resolved by adding an advice for treesit-node-parent
+;; which resolves other related cases like `treesit-beginning-of-defun'
+;;
+;; after "(treesit-major-mode-setup)" in f90-ts-mode:
+;;  (setq-local add-log-current-defun-function #'f90-ts--add-log-current-defun)
+;;
+;; (defun f90-ts--add-log-current-defun ()
+;;   "Implement add-log-current-defun taking continuation lines in to account.
+;; If point is at a virtual ampersand node, it has no parent.  Consequently,
+;; the `treesit-parent-until'-ascend used in `treesit-thing-at' (which is called
+;; by `treesit-add-log-current-defun') fails.  To avoid this, we move point to
+;; a position where a proper node is obtained by `treesit-node-at'."
+;;   (let* ((pos-0 (point))
+;;          (node (treesit-node-at pos-0))
+;;          (pos (if (null (treesit-node-parent node))
+;;                   (treesit-node-end node)
+;;                 pos-0)))
+;;     (save-excursion
+;;       (goto-char pos)
+;;       (treesit-add-log-current-defun))))
+
+
+(defun f90-ts-thing-next-procedure ()
+  "Move to next procedure."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) 1 'beg 'procedure)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-prev-procedure ()
+  "Move to previous procedure."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) -1 'beg 'procedure)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-beginning-of-procedure ()
+  "Move to beginning of current procedure."
+  (interactive)
+  (treesit-beginning-of-thing 'procedure))
+
+
+(defun f90-ts-thing-end-of-procedure ()
+  "Move to end of current procedure."
+  (interactive)
+  (treesit-end-of-thing 'procedure))
+
+
+(defun f90-ts-thing-next-type ()
+  "Move to next derived type."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) 1 'beg 'type)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-prev-type ()
+  "Move to previous derived type."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) -1 'beg 'type)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-beginning-of-type ()
+  "Move to beginning of current derived type."
+  (interactive)
+  (treesit-beginning-of-thing 'type))
+
+
+(defun f90-ts-thing-end-of-type ()
+  "Move to end of current derived type."
+  (interactive)
+  (treesit-end-of-thing 'type))
+
+
+(defun f90-ts-thing-next-interface ()
+  "Move to next interface."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) 1 'beg 'interface)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-prev-interface ()
+  "Move to previous interface."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) -1 'beg 'interface)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-beginning-of-interface ()
+  "Move to beginning of current interface."
+  (interactive)
+  (treesit-beginning-of-thing 'interface))
+
+
+(defun f90-ts-thing-end-of-interface ()
+  "Move to end of current interface."
+  (interactive)
+  (treesit-end-of-thing 'interface))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -4731,9 +4936,11 @@ nothing changes."
    "Menu for `f90-ts-mode'."
    '("Fortran"
      ("Indent"
-      ["Indent line (tab)"           f90-ts-indent-and-complete-line    :active t]
-      ["Indent line (alt. 2)"        f90-ts-indent-for-tab-command-2    :active t]
-      ["Indent line (alt. 3)"        f90-ts-indent-for-tab-command-3    :active t]
+      ;; `indent-for-tab-command' invokes `f90-ts-indent-and-complete-line',
+      ;; but we use `indent-for-tab-command' to have keybinding shown properly
+      ["Indent line"                 indent-for-tab-command             :active t]
+      ["Indent line (alt 2)"         f90-ts-indent-for-tab-command-2    :active t]
+      ["Indent line (alt 3)"         f90-ts-indent-for-tab-command-3    :active t]
       ["Indent & complete statement" f90-ts-indent-and-complete-stmt    :active t]
       ["Indent & complete region"    f90-ts-indent-and-complete-region  :active (region-active-p)]
       "---"
@@ -4751,6 +4958,28 @@ nothing changes."
       ["Previous region" f90-ts-prev-region    :active (region-active-p)]
       ["Next region"     f90-ts-next-region    :active (region-active-p)])
      "---"
+     ("Defun & Thing"
+      ["Beginning of defun" beginning-of-defun :active t]
+      ["End of defun"       end-of-defun       :active t]
+      ["Mark defun"         mark-defun         :active t]
+      "---"
+      ["Narrow to defun"    narrow-to-defun    :active t]
+      ["Widen"              widen              :active (buffer-narrowed-p)]
+      "---"
+      ["Next procedure"          f90-ts-thing-next-procedure          :active t]
+      ["Prev procedure"          f90-ts-thing-prev-procedure          :active t]
+      ["Beginning of procedure"  f90-ts-thing-beginning-of-procedure  :active t]
+      ["End of procedure"        f90-ts-thing-end-of-procedure        :active t]
+      "---"
+      ["Next type"               f90-ts-thing-next-type               :active t]
+      ["Prev type"               f90-ts-thing-prev-type               :active t]
+      ["Beginning of type"       f90-ts-thing-beginning-of-type       :active t]
+      ["End of type"             f90-ts-thing-end-of-type             :active t]
+      "---"
+      ["Next interface"          f90-ts-thing-next-interface          :active t]
+      ["Prev interface"          f90-ts-thing-prev-interface          :active t]
+      ["Beginning of interface"  f90-ts-thing-beginning-of-interface  :active t]
+      ["End of interface"        f90-ts-thing-end-of-interface        :active t])
      ("Xref"
       ["Find definition"  xref-find-definitions :active t]
       ["Find references"  xref-find-references  :active t]
@@ -4798,6 +5027,12 @@ nothing changes."
 
   ;; Imenu Setup
   (setq-local imenu-create-index-function #'f90-ts-simple-imenu)
+
+  ;; Defun
+  (setq-local treesit-defun-type-regexp f90-ts--thing-defun-regexp-pred)
+  (setq-local treesit-defun-name-function #'f90-ts--defun-name)
+  (setq-local treesit-defun-tactic 'nested)  ; or 'top-level?
+  (setq-local treesit-thing-settings f90-ts--thing-settings)
 
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!

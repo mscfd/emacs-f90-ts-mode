@@ -178,6 +178,7 @@ The mode sets the following default mode local keybindings:
 - Join continued lines
 - Comment regions
 - Mark regions based on tree-sitter nodes
+- Defun and thing based navigation
 - Handling openmp and preprocessor directives
 - Imenu and a `Fortran` menu in the menu bar
 
