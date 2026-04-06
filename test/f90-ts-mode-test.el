@@ -32,6 +32,7 @@
 (require 'ert)
 (require 'ert-x)
 (require 'treesit)
+(require 'xref)
 (require 'f90-ts-mode)
 
 ;;; Code:
@@ -99,7 +100,11 @@ without final newline."
     (:name "comment region prefixes: context"
      :match "^!!!"
      :indent context
-     :face font-lock-comment-face))
+     :face font-lock-comment-face)
+    (:name "assertion for xref testing"
+     :match "^!@\\(def\\|ref\\)"
+     :indent column-0
+     :face font-lock-doc-face))
   "Test rules for special comment node indentation.")
 
 
@@ -653,6 +658,145 @@ or \"f90-ts-mode-extra\"."
             'f90-ts-mode))))))
 
 
+;; -----------------------------
+;; xref
+
+(defun f90-ts-mode-test--xref-parse-assertions ()
+  "Parse !@def and !@ref blocks located BELOW the target code.
+Return a list of tuples (type sym lines target-pos).
+
+Type is symbol def or ref.
+Sym is the name of the symbol passed to xref commands for checking.
+Lines is a list of lines (for def a single line, for ref a list of lines),
+which is compared with results from executing corresponding xref command.
+Target-pos is position of the line (the directly previous non-assertion line),
+on which to execute the xref command."
+  (save-excursion
+    (goto-char (point-min))
+    (cl-loop while (re-search-forward "!@\\(def\\|ref\\) \\(.+\\)" nil t)
+             for type = (if (string= (match-string 1) "def") 'def 'ref)
+             for raw-line = (match-string 2)
+             for target-pos = (save-excursion
+                                (goto-char (line-beginning-position))
+                                (while (progn (forward-line -1)
+                                              (looking-at-p "[[:space:]]*!@")))
+                                (line-beginning-position))
+             nconc (cl-loop for entry in (split-string raw-line "[[:space:]]+" t)
+                            for parts = (split-string entry "#")
+                            for sym = (car parts)
+                            for line-assert = (line-number-at-pos)
+                            ;; Parse comma-separated line numbers into a list of ints
+                            for line-parts = (and (cadr parts) (split-string (cadr parts) "," t))
+                            for expected-lines = (mapcar #'string-to-number line-parts)
+                            collect (list type sym expected-lines target-pos line-assert)))))
+
+
+(defun f90-ts-mode-test--xref-extract-line-numbers (items)
+  "Map a list of xref ITEMS to their line numbers."
+  (mapcar (lambda (item)
+            (let ((loc (xref-item-location item)))
+              (cond
+               ((markerp loc) (line-number-at-pos loc))
+               ((and (fboundp 'xref-buffer-location-p) (xref-buffer-location-p loc))
+                (with-current-buffer (xref-buffer-location-buffer loc)
+                  (line-number-at-pos (xref-buffer-location-position loc))))
+               (t (or (xref-location-line loc) 0)))))
+          items))
+
+
+(defun f90-ts-mode-test--xref-verify-def (assertion)
+  "Verify parsed assertion of type def.
+ASSERTION is a 5-tuple (TYPE SYM EXPECTED-LINES TARGET-POS LINE-ASSERT)
+Verify that SYM is defined exactly at the single line in EXPECTED-LINES.
+
+LINE-ASSERT is the line number of the assertion."
+  (cl-destructuring-bind (_ sym expected-lines _ line-assert) assertion
+    (let* ((backend (xref-find-backend))
+           (items (xref-backend-definitions backend sym))
+           (actual-lines (f90-ts-mode-test--xref-extract-line-numbers items)))
+      (unless (= (length expected-lines) 1)
+        (ert-fail (format "!@def for '%s' at line %d must specify exactly one line (e.g. sym#3)" sym line-assert)))
+      (unless (member (car expected-lines) actual-lines)
+        (ert-fail (format "Definition mismatch for '%s' at line %d: Expected line %d, but found %S"
+                          sym line-assert (car expected-lines) actual-lines))))))
+
+
+(defun f90-ts-mode-test--xref-verify-ref (assertion)
+  "Check parsed ASSERTION of type ref.
+ASSERTION is a 5-tuple (TYPE SYM EXPECTED-LINES TARGET-POS LINE-ASSERT)
+Verify that SYM references match EXPECTED-LINES exactly.
+
+LINE-ASSERT is the line number of the assertion."
+  (cl-destructuring-bind (_ sym expected-lines _ line-assert) assertion
+    (let* ((backend (xref-find-backend))
+           (items (xref-backend-references backend sym))
+           (actual-lines (sort (f90-ts-mode-test--xref-extract-line-numbers items) #'<))
+           (sorted-expected (sort expected-lines #'<)))
+      (unless (equal actual-lines sorted-expected)
+        (ert-fail (format "References mismatch for '%s' at line %d: Expected %S, but found %S"
+                          sym line-assert sorted-expected actual-lines))))))
+
+
+(defun f90-ts-mode-test--xref-check-assertion (assertion)
+  "Check parsed ASSERTION.
+ASSERTION is a 5-tuple (TYPE SYM EXPECTED-LINES TARGET-POS LINE-ASSERT)
+derived from !@def and !@ref statements."
+  (cl-destructuring-bind (type sym _ target-pos line-assert) assertion
+    (save-excursion
+      (goto-char target-pos)
+      (let ((regexp (cond
+                     ;; take .someop. symbols into account
+                     ((string-match-p "\\." sym) (regexp-quote sym))
+                     ;; take assignment into account, only looking for assignment(=)
+                     ((string= "=" sym) "(\\s-*=\\s-*)")
+                     ;; take overloaded operator into account, only looking for operator(+) and similar
+                     ((string-match-p "^\\Sw" sym) (concat "(\\s-*" (regexp-quote sym) "\\s-*)"))
+                     ;; standard identifier starting with a letter
+                     (t (concat "\\_<" (regexp-quote sym) "\\_>")))))
+        (if (not (re-search-forward regexp (line-end-position) t))
+            (ert-fail (format "Symbol '%s' not found on code line %d from assertion at line %d"
+                              sym (line-number-at-pos) line-assert))
+          (backward-char 1)
+          (pcase type
+            ('def (f90-ts-mode-test--xref-verify-def assertion))
+            ('ref (f90-ts-mode-test--xref-verify-ref assertion))))))))
+
+
+(defun f90-ts-mode-test--xref-run-assertions ()
+  "Run all parsed xref assertions."
+  (cl-loop for assertion in (f90-ts-mode-test--xref-parse-assertions)
+           do (f90-ts-mode-test--xref-check-assertion assertion)))
+
+
+(defun f90-ts-mode-test--xref-run-file (file)
+  "Load FILE from resources and run xref assertions."
+  (with-temp-buffer
+    (insert-file-contents (ert-resource-file file))
+    (f90-ts-mode)
+    (font-lock-ensure)
+    (when (treesit-ready-p 'fortran)
+      (treesit-parser-create 'fortran))
+    (f90-ts-mode-test--xref-run-assertions)))
+
+
+(defun f90-ts-mode-test--xref-register (prefix files)
+  "Dynamically generate ert-tests for xref in FILES.
+PREFIX is the test name prefix, usually \"f90-ts-mode-test-std\"."
+  (cl-loop
+   for file in files
+   for name-base = (string-replace
+                    "_" "-"
+                    (replace-regexp-in-string
+                     "^xref_" ""
+                     (file-name-sans-extension file)))
+   for test-name = (intern (format "%s--xref--%s" prefix name-base))
+   do (eval
+       `(ert-deftest ,test-name ()
+          (skip-unless (treesit-ready-p 'fortran))
+          (f90-ts-mode-test-with-custom-testing
+           (f90-ts-mode-test--xref-run-file ,file))))))
+
+
 ;;------------------------------------------------------------------------------
 ;; mark region helpers
 
@@ -812,6 +956,14 @@ point at 1+end of region."
    "font_lock_openmp.f90"
    "font_lock_operator.f90"
    "font_lock_special_var.f90"))
+
+
+;; xref tests
+(f90-ts-mode-test--xref-register
+ "f90-ts-mode-test-std"
+ '("xref_misc.f90"
+   "xref_interface.f90"
+   "xref_type.f90"))
 
 
 ;; register extra font lock tests
