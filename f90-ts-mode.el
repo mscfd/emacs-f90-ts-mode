@@ -4257,6 +4257,89 @@ If called interactively, prompt for a prefix from
 
 
 ;;;-----------------------------------------------------------------------------
+;;; Imenu and menu stuff
+
+(defvar f90-ts--imenu-queries
+  '(("program"
+     :label "program"
+     :query "(program (program_statement \"program\" (name) @name))")
+
+    ("module"
+     :label "module"
+     :query "(module (module_statement \"module\" (name) @name))")
+
+    ("submodule"
+     :label "submodule"
+     :query "(submodule (submodule_statement \"submodule\" (name) @name))")
+
+    ("subroutine"
+     :label "subroutine"
+     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name))")
+
+    ("function"
+     :label "function"
+     :query "(function (function_statement \"function\" name: (name) @name))")
+
+    ("derived_type_definition"
+     :label "type"
+     :query "(derived_type_definition \"type\" name: (type_name) @name)")
+
+    ("variable_declaration"
+     :label "variable"
+     :query "(variable_declaration (name) @name)"
+     :leaf t))
+  "Unified Tree-sitter query specification for Imenu and menu.")
+
+
+(defun f90-ts--imenu-spec-for-type (type)
+  "Return entry in alist `f90-ts--imenu-queries` for TYPE."
+  (alist-get type f90-ts--imenu-queries nil nil #'string=))
+
+
+(defun f90-ts--imenu-capture (node query)
+  "Run QUERY on NODE and return list of captured entities."
+  (treesit-query-capture node query))
+
+
+(defun f90-ts--imenu-capture-name (node query)
+  "Run QUERY on NODE and extract the captured name."
+  (when-let* ((caps (f90-ts--imenu-capture node query))
+              (name-node (cdr (assoc 'name caps))))
+    (treesit-node-text name-node t)))
+
+
+(defun f90-ts--imenu-name-fn (node)
+  "Extract name associated with NODE for use in imenu."
+  (let* ((type (treesit-node-type node))
+         (spec (f90-ts--imenu-spec-for-type type))
+         (query (plist-get spec :query)))
+    (or (and query (f90-ts--imenu-capture-name node query))
+        "node with no name")))
+
+
+(defun f90-ts--imenu-valid-node-p (query)
+  "Return a predicate checking whether QUERY captures a valid name."
+  (lambda (node)
+    (when query
+      (f90-ts--imenu-capture-name node query))))
+
+
+(defvar f90-ts--imenu-settings
+  (mapcar
+   (lambda (entry)
+     (let* ((type  (car entry))
+            (spec  (cdr entry))
+            (label (plist-get spec :label))
+            (query (plist-get spec :query)))
+       (list label
+             (format "^%s$" type)
+             (f90-ts--imenu-valid-node-p query)
+             #'f90-ts--imenu-name-fn)))
+   f90-ts--imenu-queries)
+  "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
+
+
+;;;-----------------------------------------------------------------------------
 
 ;;;###autoload
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
@@ -4290,9 +4373,14 @@ If called interactively, prompt for a prefix from
   ;; use the pre-defined indentation rules variable
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
+  ;; Imenu Setup
+  (setq-local treesit-simple-imenu-settings f90-ts--imenu-settings)
+
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!
   (treesit-major-mode-setup)
+
+  ;;(imenu-add-to-menubar "Imenu")
 
   ;; set indentation functions (both add smart end completion before
   ;; indentation, so no hook available); this must be done AFTER
