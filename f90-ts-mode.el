@@ -4263,6 +4263,8 @@ If called interactively, prompt for a prefix from
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
+  :syntax-table f90-ts-mode-syntax-table
+
   ;; check if treesit has a ready parser for 'fortran
   (unless (treesit-available-p)
     (error "Tree-sitter support is not available"))
