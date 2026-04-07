@@ -1687,8 +1687,8 @@ return it."
 Note that NODE and PARENT are live nodes, so a simple
 comparison is sufficient."
   (and f90-ts--indent-cache
-       (eq node   (f90-ts--indent-cached-node))
-       (eq parent (f90-ts--indent-cached-parent))))
+       (treesit-node-eq node   (f90-ts--indent-cached-node))
+       (treesit-node-eq parent (f90-ts--indent-cached-parent))))
 
 
 (defun f90-ts--indent-ensure-cache (node parent)
