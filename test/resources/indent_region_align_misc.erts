@@ -74,7 +74,7 @@ end subroutine sub_simple
 Name: align parameter list 5
 =-=
 module subroutine sub_mod(x, &
-       y)
+      y)
 end subroutine sub_mod
 =-=
 module subroutine sub_mod(x, &
@@ -83,6 +83,28 @@ end subroutine sub_mod
 =-=-=
 
 Name: align parameter list 6
+=-=
+module subroutine sub_mod(x, &
+       y)
+end subroutine sub_mod
+=-=
+module subroutine sub_mod(x, &
+       y)
+end subroutine sub_mod
+=-=-=
+
+Name: align parameter list 7
+=-=
+module subroutine sub_mod(x, &
+        y)
+end subroutine sub_mod
+=-=
+module subroutine sub_mod(x, &
+                          y)
+end subroutine sub_mod
+=-=-=
+
+Name: align parameter list 8
 =-=
 ! some fancy continuations
 function fun(x1, x2, x3, &
@@ -160,7 +182,7 @@ function eval() result(w)
               z &
                                    ), &
                             fun3(u, &
-            v, &
+             v, &
               w))
 end
 =-=

@@ -162,16 +162,6 @@ to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
   :group 'f90-ts-indent)
 
 
-(defcustom f90-ts-indent-list-always-include-default t
-  "Always include the default continued-line column in selected columns.
-This column is offered as additional choice for alignment in a list-like
-context.  It is the column of the first line of the continued statement
-plus the value of `f90-ts-indent-continued'."
-  :type  'boolean
-  :safe  'booleanp
-  :group 'f90-ts-indent)
-
-
 (defcustom f90-ts-indent-paren-default 1
   "Additional offset applied for alignment with opening parenthesis.
 The default is for all items except the closing parenthesis.
@@ -2591,8 +2581,9 @@ for default continued line indentation."
        (collect (treesit-node-start prev)
                 ;; add one because "::" as two and not one character as "="
                 f90-ts-indent-declaration))
-     ;; always add default continued line indentation
-     (collect (f90-ts--align-list-pstmt1-anoff)))))
+     ;; add default continued line indentation if items is empty (no smallest anoff)
+     (unless smallest-anoff
+       (collect (f90-ts--align-list-pstmt1-anoff))))))
 
 
 ;;++++++++++++++
@@ -2758,9 +2749,8 @@ Finally use VARIANT to select one pair to align with."
          (anoff-other (f90-ts--align-list-anoff-other loc
                                                       anoff-items
                                                       list-context))
-         ;; if selected, add default continued offset position as anchor
-         (anoff-extra (and f90-ts-indent-list-always-include-default
-                           (f90-ts--align-list-pstmt1-anoff)))
+         ;; always add default continued offset position as anchor
+         (anoff-extra (f90-ts--align-list-pstmt1-anoff))
          ;; anoff-primary is used as 'primary' in keep-or-primary, primary etc.
          (anoff-primary (car anoff-other))
          ;; final list of anchors (which are nodes or pairs (position offset))

@@ -132,7 +132,6 @@ without final newline."
     (f90-ts-indent-continued . 7)
     (f90-ts-indent-list-region . keep-or-primary)
     (f90-ts-indent-list-line . keep-or-primary)
-    (f90-ts-indent-list-always-include-default . nil)
     (f90-ts-indent-paren-default . 1)
     (f90-ts-indent-paren-close . 3)
     (f90-ts-indent-expr-assign-default . 2)
