@@ -631,13 +631,12 @@ Used with face `font-lock-builtin-face'.")
 (defun f90-ts-builtin-function-p (node)
   "Return non-nil if NODE represents a builtin function.
 The function assumes that NODE is an identifier and only checks the text of the
-node.
-
-Remark: the regexp engine invoked by tree-sitter query command \":match\" is
-case-sensitive, but the emacs regexp engine itself is case-insensitive.
-So plugging (:match ,(regexp-opt f90-ts--builtin-functions 'symbols) ...)
-into the font lock rule, as was originally done, does not work if the
-function name in the node contains some uppercase letters."
+node."
+;; Remark: the regexp engine invoked by tree-sitter query command :match is
+;; case-sensitive, but the emacs regexp engine itself is case-insensitive.
+;; So plugging (:match ,(regexp-opt f90-ts--builtin-functions 'symbols) ...)
+;; into the font lock rule, as was originally done, does not work if the
+;; function name in the node contains some uppercase letters."
   (cl-assert (f90-ts--node-type-p node "identifier")
              nil "builtin-function-p: identifier expected")
   (let ((text (treesit-node-text node))
@@ -1687,8 +1686,8 @@ return it."
 Note that NODE and PARENT are live nodes, so a simple
 comparison is sufficient."
   (and f90-ts--indent-cache
-       (eq node   (f90-ts--indent-cached-node))
-       (eq parent (f90-ts--indent-cached-parent))))
+       (treesit-node-eq node   (f90-ts--indent-cached-node))
+       (treesit-node-eq parent (f90-ts--indent-cached-parent))))
 
 
 (defun f90-ts--indent-ensure-cache (node parent)
@@ -4188,7 +4187,7 @@ If the prefix is already present, then remove it and uncomment the line."
          (re-uncomment (concat "\\s-*\\(?1:" prefix-re "\\)"))
          (re-adjust    (concat "\\(?1:\\(?2:\\s-*\\)" prefix-re "\\)\\(?3:\\s-*\\)")))
     (let ((beg (copy-marker beg-region))
-          (end (copy-marker end-region)))
+          (end (copy-marker end-region t)))
       (unwind-protect
           (progn
             ;; pass 1: insert or remove prefix at column 0 for each line
@@ -4207,7 +4206,10 @@ If the prefix is already present, then remove it and uncomment the line."
             ;; that indent added before the prefix from after the prefix, this
             ;; preserve original indentation within comment if possible
             (goto-char end)
-            (beginning-of-line)
+            ;; if end marker is at end of line, this line is not processed
+            (if (bolp)
+                (forward-line -1)
+              (beginning-of-line))
             (cl-loop
              do (when (looking-at re-adjust)
                   (let* ((cap-group-before (if f90-ts-comment-prefix-keep-indent 1 2))
@@ -4255,11 +4257,229 @@ If called interactively, prompt for a prefix from
 
 
 ;;;-----------------------------------------------------------------------------
+;;; Imenu and menu stuff
+
+(defvar f90-ts--imenu-queries
+  '(("program"
+     :label "program"
+     :query "(program (program_statement \"program\" (name) @name))")
+
+    ("module"
+     :label "module"
+     :query "(module (module_statement \"module\" (name) @name))")
+
+    ("submodule"
+     :label "submodule"
+     :query "(submodule (submodule_statement \"submodule\" (name) @name))")
+
+    ("subroutine"
+     :label "subroutine"
+     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name))")
+
+    ("function"
+     :label "function"
+     :query "(function (function_statement \"function\" name: (name) @name))")
+
+    ("derived_type_definition"
+     :label "type"
+     :query "(derived_type_definition \"type\" name: (type_name) @name)")
+
+    ("variable_declaration"
+     :label "variable"
+     :query "(variable_declaration (name) @name)"
+     :leaf t))
+  "Unified Tree-sitter query specification for Imenu and menu.")
+
+
+(defun f90-ts--imenu-spec-for-type (type)
+  "Return entry in alist `f90-ts--imenu-queries` for TYPE."
+  (alist-get type f90-ts--imenu-queries nil nil #'string=))
+
+
+(defun f90-ts--imenu-capture (node query)
+  "Run QUERY on NODE and return list of captured entities."
+  (treesit-query-capture node query))
+
+
+(defun f90-ts--imenu-capture-name (node query)
+  "Run QUERY on NODE and extract the captured name."
+  (when-let* ((caps (f90-ts--imenu-capture node query))
+              (name-node (cdr (assoc 'name caps))))
+    (treesit-node-text name-node t)))
+
+
+(defun f90-ts--imenu-name-fn (node)
+  "Extract name associated with NODE for use in imenu."
+  (let* ((type (treesit-node-type node))
+         (spec (f90-ts--imenu-spec-for-type type))
+         (query (plist-get spec :query)))
+    (or (and query (f90-ts--imenu-capture-name node query))
+        "node with no name")))
+
+
+(defun f90-ts--imenu-valid-node-p (query)
+  "Return a predicate checking whether QUERY captures a valid name."
+  (lambda (node)
+    (when query
+      (f90-ts--imenu-capture-name node query))))
+
+
+(defvar f90-ts--imenu-settings
+  (mapcar
+   (lambda (entry)
+     (let* ((type  (car entry))
+            (spec  (cdr entry))
+            (label (plist-get spec :label))
+            (query (plist-get spec :query)))
+       (list label
+             (format "^%s$" type)
+             (f90-ts--imenu-valid-node-p query)
+             #'f90-ts--imenu-name-fn)))
+   f90-ts--imenu-queries)
+  "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
+
+
+;;; ---------------------------------------------------------------
+;;; Menu tree builder (recursive, mirrors imenu but for easy-menu)
+
+(defvar-local f90-ts--menu-cache-root nil
+  "The root node used for the last menu generation.")
+
+
+(defvar-local f90-ts--menu-cache-result nil
+  "The last generated menu structure.")
+
+
+(defun f90-ts--menu-entry (label marker)
+  "Return a simple clickable menu vector for LABEL at MARKER."
+  (vector label
+          (lambda ()
+            (interactive)
+            (switch-to-buffer (marker-buffer marker))
+            (goto-char marker)
+            (push-mark))
+          t))
+
+
+(defun f90-ts--menu-from-sparse-tree (sparse-node)
+  "Recursively convert a SPARSE-NODE (NODE . CHILDREN) to easy-menu format."
+  (let* ((node     (car sparse-node))
+         (children (cdr sparse-node))
+         (type     (treesit-node-type node))
+         (spec     (f90-ts--imenu-spec-for-type type)))
+
+    (if (null spec)
+        ;; If the node itself isn't "interesting" (like the root),
+        ;; just process and return the children as a flat list.
+        (cl-mapcan #'f90-ts--menu-from-sparse-tree children)
+
+      (let* ((query      (plist-get spec :query))
+             (leaf       (plist-get spec :leaf))
+             (label-base (plist-get spec :label))
+             (name       (f90-ts--imenu-capture-name node query))
+             (label      (if (and name (not (string-empty-p name)))
+                             (format "%s: %s" label-base name)
+                           label-base))
+             (marker     (copy-marker (treesit-node-start node))))
+
+        (if (or leaf (null children))
+            ;; It's a leaf: return a list containing one vector
+            (list (f90-ts--menu-entry label marker))
+
+          (let ((open-label (format "%s ..." label))
+                (jump-label (format "%s" label)))
+            (list
+             ;; direct jump
+             (f90-ts--menu-entry jump-label marker)
+
+             ;; submenu
+             (cons open-label
+                   (cl-mapcan #'f90-ts--menu-from-sparse-tree children)))))))))
+
+
+(defun f90-ts--menu-tree (_current-menu)
+  "Filter function constructing relevant menu tree of treesitter nodes.
+
+Internally caching is used to avoid frequent construction of tree if
+nothing changes."
+  (let ((root (treesit-buffer-root-node)))
+    (if (and f90-ts--menu-cache-root
+             f90-ts--menu-cache-result
+             ;; Check if the cached root is still the current root
+             (treesit-node-eq root f90-ts--menu-cache-root)
+             ;; Ensure the node hasn't been invalidated by a re-parse
+             (not (treesit-node-check f90-ts--menu-cache-root 'outdated)))
+        ;; return cached menu
+        f90-ts--menu-cache-result
+      ;; Cache is invalid or missing: Rebuild
+      (let* ((predicate (lambda (node)
+                          (let* ((type (treesit-node-type node))
+                                 (spec (f90-ts--imenu-spec-for-type type)))
+                            (and spec
+                                 ;; run the query, as type of anonymous nodes might be equal to
+                                 ;; structure root nodes, like in (program (program_statement "program" ... ))
+                                 (f90-ts--imenu-capture-name node (plist-get spec :query))))))
+             (sparse-tree (treesit-induce-sparse-tree root predicate))
+             (items (f90-ts--menu-from-sparse-tree sparse-tree))
+             (final-menu (cons (f90-ts--menu-entry "↱ Top of buffer" (point-min-marker))
+                               (or items '(["(empty)" ignore t])))))
+        ;;(f90-ts-log :menu "sparse-tree: \n%s" (pp-to-string sparse-tree))
+        (setq f90-ts--menu-cache-root root)
+        (setq f90-ts--menu-cache-result final-menu)
+        final-menu))))
+
+
+;;;-----------------------------------------------------------------------------
+;;; menu definition
+
+(easy-menu-define f90-ts-mode-menu f90-ts-mode-map
+  "Menu for `f90-ts-mode'."
+  '("Fortran"
+    ("Region"
+     ["Enlarge region"  f90-ts-enlarge-region :active t]
+     ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
+     ["Previous region" f90-ts-prev-region    :active (region-active-p)]
+     ["Next region"     f90-ts-next-region    :active (region-active-p)])
+    "---"
+    ("Navigate"
+     :filter (lambda (menu) (f90-ts--menu-tree menu)))))
+
+ (easy-menu-define f90-ts-mode-menu f90-ts-mode-map
+   "Menu for `f90-ts-mode'."
+   '("Fortran"
+     ("Indent"
+      ["Indent line (tab)"           f90-ts-indent-and-complete-line    :active t]
+      ["Indent line (alt. 2)"        f90-ts-indent-for-tab-command-2    :active t]
+      ["Indent line (alt. 3)"        f90-ts-indent-for-tab-command-3    :active t]
+      ["Indent & complete statement" f90-ts-indent-and-complete-stmt    :active t]
+      ["Indent & complete region"    f90-ts-indent-and-complete-region  :active (region-active-p)]
+      "---"
+      ["Complete end statements in region" f90-ts-complete-smart-end-region :active t])
+     ("Break & Join lines"
+      ["Break line"          f90-ts-break-line      :active t]
+      ["Join with prev line" f90-ts-join-line-prev  :active t]
+      ["Join with next line" f90-ts-join-line-next  :active t])
+     ("Comment"
+      ["Comment/uncomment region (default prefix)" f90-ts-comment-region-default :active (region-active-p)]
+      ["Comment/uncomment region (custom prefix)"  f90-ts-comment-region-custom  :active (region-active-p)])
+     ("Region"
+      ["Enlarge region"  f90-ts-enlarge-region :active t]
+      ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
+      ["Previous region" f90-ts-prev-region    :active (region-active-p)]
+      ["Next region"     f90-ts-next-region    :active (region-active-p)])
+     "---"
+     ("Navigate"
+      :filter (lambda (menu) (f90-ts--menu-tree menu)))))
+
+
+;;;-----------------------------------------------------------------------------
 
 ;;;###autoload
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
+  :syntax-table f90-ts-mode-syntax-table
+
   ;; check if treesit has a ready parser for 'fortran
   (unless (treesit-available-p)
     (error "Tree-sitter support is not available"))
@@ -4286,9 +4506,14 @@ If called interactively, prompt for a prefix from
   ;; use the pre-defined indentation rules variable
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
+  ;; Imenu Setup
+  (setq-local treesit-simple-imenu-settings f90-ts--imenu-settings)
+
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!
   (treesit-major-mode-setup)
+
+  ;;(imenu-add-to-menubar "Imenu")
 
   ;; set indentation functions (both add smart end completion before
   ;; indentation, so no hook available); this must be done AFTER
