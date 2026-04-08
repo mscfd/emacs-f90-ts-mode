@@ -4437,39 +4437,52 @@ which return more than one match (like in variable declarations)."
 
 
 (defun f90-ts--menu-from-sparse-tree (sparse-node)
-  "Recursively convert a SPARSE-NODE (NODE . CHILDREN) to easy-menu format."
+  "Recursively convert a SPARSE-NODE=(NODE . CHILDREN) to easy-menu format."
   (let* ((node     (car sparse-node))
          (children (cdr sparse-node))
          (type     (treesit-node-type node))
          (spec     (f90-ts--imenu-spec-for-type type)))
 
     (if (null spec)
-        ;; If the node itself isn't "interesting" (like the root),
+        ;; if the node itself isn't "interesting" (like the root),
         ;; just process and return the children as a flat list.
         (cl-mapcan #'f90-ts--menu-from-sparse-tree children)
 
       (let* ((query      (plist-get spec :query))
              (leaf       (plist-get spec :leaf))
              (label-base (plist-get spec :label))
-             (name       (f90-ts--imenu-capture-name node query))
-             (label      (if (and name (not (string-empty-p name)))
-                             (format "%s: %s" label-base name)
-                           label-base))
-             (marker     (copy-marker (treesit-node-start node))))
+             ;; use name-pos-fn to get all (name . pos) pairs, with exact positions
+             (name-pos-list (f90-ts--imenu-name-pos-fn node)))
 
         (if (or leaf (null children))
-            ;; It's a leaf: return a list containing one vector
-            (list (f90-ts--menu-entry label marker))
+            ;; leaf: one menu entry per captured name, at its exact position
+            (mapcar (lambda (name-pos)
+                      (let* ((name   (car name-pos))
+                             (pos    (cdr name-pos))
+                             (label  (if (and name (not (string-empty-p name)))
+                                         (format "%s: %s" label-base name)
+                                       label-base))
+                             (marker (set-marker (make-marker) pos)))
+                        (f90-ts--menu-entry label marker)))
+                    (or name-pos-list
+                        ;; fallback: unnamed entry at node start
+                        (list (cons label-base (treesit-node-start node)))))
 
-          (let ((open-label (format "%s ..." label))
-                (jump-label (format "%s" label)))
-            (list
-             ;; direct jump
-             (f90-ts--menu-entry jump-label marker)
-
-             ;; submenu
-             (cons open-label
-                   (cl-mapcan #'f90-ts--menu-from-sparse-tree children)))))))))
+          ;; non-leaf: use first capture for the label/jump, children as submenu
+          (when name-pos-list
+            (let* ((first      (car name-pos-list))
+                   (name       (car first))
+                   (pos        (cdr first))
+                   (label      (if (and name (not (string-empty-p name)))
+                                   (format "%s: %s" label-base name)
+                                 label-base))
+                   (marker     (set-marker (make-marker) pos))
+                   (open-label (format "%s ..." label))
+                   (jump-label label))
+              (list
+               (f90-ts--menu-entry jump-label marker)
+               (cons open-label
+                     (cl-mapcan #'f90-ts--menu-from-sparse-tree children))))))))))
 
 
 (defun f90-ts--menu-tree (_current-menu)
@@ -4486,7 +4499,7 @@ nothing changes."
              (not (treesit-node-check f90-ts--menu-cache-root 'outdated)))
         ;; return cached menu
         f90-ts--menu-cache-result
-      ;; Cache is invalid or missing: Rebuild
+      ;; cache is invalid or missing: rebuild
       (let* ((predicate (lambda (node)
                           (let* ((type (treesit-node-type node))
                                  (spec (f90-ts--imenu-spec-for-type type)))
