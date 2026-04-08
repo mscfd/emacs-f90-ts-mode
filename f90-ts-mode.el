@@ -4250,7 +4250,7 @@ If called interactively, prompt for a prefix from
 ;;; Imenu and menu stuff
 
 (defvar f90-ts--imenu-queries
-  '(("program"
+  `(("program"
      :label "program"
      :query "(program (program_statement \"program\" (name) @name))")
 
@@ -4271,12 +4271,21 @@ If called interactively, prompt for a prefix from
      :query "(function (function_statement \"function\" name: (name) @name))")
 
     ("derived_type_definition"
-     :label "type"
-     :query "(derived_type_definition \"type\" name: (type_name) @name)")
+     :label "derived type"
+     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name))")
+
+    ("interface"
+     :label "interface"
+     :query ,(concat "(interface (interface_statement (abstract_specifier)?"
+                     " \"interface\""
+                     " [((name) @name)"
+                     " ((operator) @name)"
+                     " ((assignment) @name)]?"
+                     "))"))
 
     ("variable_declaration"
      :label "variable"
-     :query "(variable_declaration (name) @name)"
+     :query "(variable_declaration declarator: (_) @name)"
      :leaf t))
   "Unified Tree-sitter query specification for Imenu and menu.")
 
@@ -4298,20 +4307,24 @@ If called interactively, prompt for a prefix from
     (treesit-node-text name-node t)))
 
 
-(defun f90-ts--imenu-name-fn (node)
-  "Extract name associated with NODE for use in imenu."
+(defun f90-ts--imenu-name-pos-fn (node)
+  "Return list of (NAME . POSITION) for NODE applying associated imenu query."
   (let* ((type (treesit-node-type node))
          (spec (f90-ts--imenu-spec-for-type type))
-         (query (plist-get spec :query)))
-    (or (and query (f90-ts--imenu-capture-name node query))
-        "node with no name")))
+         (query (plist-get spec :query))
+         (caps (and query (treesit-query-capture node query))))
+    (when caps
+      (mapcar (lambda (c)
+                (let ((n (cdr c)))
+                  (cons (treesit-node-text n t)
+                        (treesit-node-start n))))
+              (seq-filter (lambda (c) (eq (car c) 'name)) caps)))))
 
 
 (defun f90-ts--imenu-valid-node-p (query)
-  "Return a predicate checking whether QUERY captures a valid name."
+  "Return a predicate checking whether QUERY captures anything."
   (lambda (node)
-    (when query
-      (f90-ts--imenu-capture-name node query))))
+    (and query (f90-ts--imenu-capture-name node query))))
 
 
 (defvar f90-ts--imenu-settings
@@ -4321,12 +4334,84 @@ If called interactively, prompt for a prefix from
             (spec  (cdr entry))
             (label (plist-get spec :label))
             (query (plist-get spec :query)))
-       (list label
-             (format "^%s$" type)
-             (f90-ts--imenu-valid-node-p query)
-             #'f90-ts--imenu-name-fn)))
+       (list label                              ; category
+             (format "^%s$" type)               ; regexp
+             (f90-ts--imenu-valid-node-p query) ; predicate
+             #'f90-ts--imenu-name-pos-fn)))     ; name-pos-fn
    f90-ts--imenu-queries)
   "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
+
+
+(defun f90-ts--simple-imenu-tree (node pred name-pos-fn)
+  "Like `treesit--simple-imenu-1', but supports multiple entries per leaf.
+
+NODE is a node in the tree returned by
+`treesit-induce-sparse-tree' (not a tree-sitter node, its car is
+a tree-sitter node).  Walk that tree and return an Imenu index.  Stop at nodes
+not satisfying PRED.
+
+NAME-POS-FN must return a list of (NAME . POSITION) to distinguish different
+positions for a single query with multiple captures."
+  (let* ((ts-node (car node))
+         (children (cdr node))
+         (subtrees (mapcan (lambda (child)
+                             (f90-ts--simple-imenu-tree child pred name-pos-fn))
+                           children))
+
+         ;; entries := list of (name . position)
+         (entries
+          (when ts-node
+            (funcall name-pos-fn ts-node)))
+
+         ;; marker helper
+         (make-marker-at
+          (lambda (pos)
+            (set-marker (make-marker) pos))))
+
+    (cond
+     ;; root node
+     ((null ts-node)
+      subtrees)
+
+     ;; predicate rejects node
+     ((and pred (not (funcall pred ts-node)))
+      subtrees)
+
+     ;; non-leaf: subgroup (use first entry only)
+     (subtrees
+      (when entries
+        (let* ((entry (car entries))
+               (name (car entry))
+               (pos  (cdr entry)))
+          `((,name
+             ,(cons " " (funcall make-marker-at pos))
+             ,@subtrees)))))
+
+     ;; leaf: expand all entries with exact positions
+     (t
+      (when entries
+        (mapcar (lambda (entry)
+                  (let ((name (car entry))
+                        (pos  (cdr entry)))
+                    (cons name (funcall make-marker-at pos))))
+                entries))))))
+
+
+(defun f90-ts-simple-imenu ()
+  "Return an Imenu index for the current buffer.
+This is a copy of `treesit-simple-imenu', but it can handle queries
+which return more than one match (like in variable declarations)."
+  (let ((root (treesit-buffer-root-node)))
+    (mapcan
+     (lambda (setting)
+       (cl-destructuring-bind (category regexp pred name-pos-fn) setting
+         (when-let* ((tree (treesit-induce-sparse-tree root regexp))
+                     (index (f90-ts--simple-imenu-tree
+                             tree pred name-pos-fn)))
+           (cl-assert category nil "f90-ts-simple-imenu: category expected")
+           (cl-assert name-pos-fn nil "f90-ts-simple-imenu: name-pos-fn expected")
+           (list (cons category index)))))
+     f90-ts--imenu-settings)))
 
 
 ;;; ---------------------------------------------------------------
@@ -4497,13 +4582,11 @@ nothing changes."
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
   ;; Imenu Setup
-  (setq-local treesit-simple-imenu-settings f90-ts--imenu-settings)
+  (setq-local imenu-create-index-function #'f90-ts-simple-imenu)
 
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!
   (treesit-major-mode-setup)
-
-  ;;(imenu-add-to-menubar "Imenu")
 
   ;; set indentation functions (both add smart end completion before
   ;; indentation, so no hook available); this must be done AFTER

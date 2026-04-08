@@ -40,7 +40,7 @@ The mode is under **development**, features might only be partially implemented.
 
 ### Tree-sitter grammar
 
-Currently it relies on a recent tree-sitter grammar version of fortran at
+Currently, it relies on a recent tree-sitter grammar version of fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
 There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
@@ -97,6 +97,9 @@ placed somewhere in `init.el` (or elsewhere).
   (setq treesit-language-source-alist
         (append treesit-language-source-alist
                 '((fortran "path_to/tree-sitter-fortran"))))
+
+  ;; uncomment if Imenu entry in menu bar is desired
+  ;;:hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
   :config
   (message "f90-ts-mode loaded")
@@ -175,6 +178,7 @@ The mode sets the following default mode local keybindings:
 - Comment regions
 - Mark regions based on tree-sitter nodes
 - Handling openmp and preprocessor directives
+- Imenu and a `Fortran` menu in the menu bar
 
 
 ### Syntax highlight
