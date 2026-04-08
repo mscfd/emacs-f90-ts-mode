@@ -4188,7 +4188,7 @@ If the prefix is already present, then remove it and uncomment the line."
          (re-uncomment (concat "\\s-*\\(?1:" prefix-re "\\)"))
          (re-adjust    (concat "\\(?1:\\(?2:\\s-*\\)" prefix-re "\\)\\(?3:\\s-*\\)")))
     (let ((beg (copy-marker beg-region))
-          (end (copy-marker end-region)))
+          (end (copy-marker end-region t)))
       (unwind-protect
           (progn
             ;; pass 1: insert or remove prefix at column 0 for each line
@@ -4207,7 +4207,10 @@ If the prefix is already present, then remove it and uncomment the line."
             ;; that indent added before the prefix from after the prefix, this
             ;; preserve original indentation within comment if possible
             (goto-char end)
-            (beginning-of-line)
+            ;; if end marker is at end of line, this line is not processed
+            (if (bolp)
+                (forward-line -1)
+              (beginning-of-line))
             (cl-loop
              do (when (looking-at re-adjust)
                   (let* ((cap-group-before (if f90-ts-comment-prefix-keep-indent 1 2))

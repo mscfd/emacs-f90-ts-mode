@@ -134,6 +134,42 @@ subroutine sub_some_2()
 Code:
   (lambda ()
     (f90-ts-mode)
+    (f90-ts-comment-region-default 25 36))
+
+Name: comment region some 3
+=-=
+subroutine sub_some_3()
+     x = 1
+|!!$     x = 2
+end subroutine sub_some_3
+=-=
+subroutine sub_some_3()
+!!$  x = 1
+|!!$     x = 2
+end subroutine sub_some_3
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-default 30 36))
+
+Name: comment region some 4
+=-=
+subroutine sub_some_4()
+     |x = 1
+!!$     x = 2
+end subroutine sub_some_4
+=-=
+subroutine sub_some_4()
+!!$  x = 1
+|!!$     x = 2
+end subroutine sub_some_4
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
     (f90-ts-comment-region-default 28 108))
 
 Name: uncomment region some 1
