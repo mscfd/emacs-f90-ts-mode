@@ -1,7 +1,7 @@
 # f90-ts-mode — Tree-sitter based Fortran 90 mode for Emacs
 
 **f90-ts-mode** is a major mode for editing **Fortran 90 / Fortran 2003** (and newer)
-based on Emacs’s built-in **Tree-sitter** support (requires Emacs 29+).
+based on Emacs’s built-in **Tree-sitter** support (requires Emacs 30+).
 
 The mode is under **development**, features might only be partially implemented.
 
@@ -463,20 +463,24 @@ Default Keybindings:
 The mode comes with a number of tests in `test/resources`, which cover part of the already
 implemented features.
 Registering and running tests is done in `test/f90-ts-mode-test.el`
-Currently there are tests for indentation (`indent_*.erts`) and for font locking
-(`font_lock_*.f90`).
 
-Standard tests are named `f90-ts-mode/...`, whereas expensive tests start with `f90-ts-mode-extra/...`.
-Registering is done semi-automatic in `f90-ts-mode-test-indent-register` and
-`f90-ts-mode-test-font-lock-register`.
+Standard tests are named `f90-ts-mode-test-std--...`, whereas expensive tests start with `f90-ts-mode-test-extra--...`.
+Registering of tests is done semi-automatic in `f90-ts-mode-test-indent-register`, `f90-ts-mode-test-font-lock-register`
+and other functions in `f90-ts-mode-test.el`.
 
 Tests are run with a prescribed set of custom variables. In particular indentation values are chosen
 all differently, such that errors can be spotted more easily.
 
+
 ### Makefile
 
-There is a Makefile for running the tests. Three targets are available: `test` (standard tests),
-`test-extra` (expensive extra tests) and `test-all` for all tests.
+There is a Makefile for running various tests. Relevant targets are:
+* test-checkdoc
+* test-byte-compile
+* test-ert-std
+* test-ert-extra
+* test-ert-all
+* test-ert-parallel (use with `make -j<N> test-ert-parallel` to run all ert tests in parallel)
 
 
 ### Indentation tests
@@ -500,28 +504,11 @@ is not highlighted.
 Note: fortran test code should NOT use the caret `^`, even in comments, as the ert parser gets confused.
 
 
-### Custom tests
+### Other tests
 
-Custom tests are erts based tests with a custom `Code` block for each test (and thus do not fit the
-prep-fn/action-fn scheme of the indentation tests above).
-This is used to test indentation of just a region, break and join line operations and
-to test the comment region functions.
+There are a number of other tests, like tests for region and navigation operations, or with custom
+action blocks for testing specific aspects not easily covered by the whole-buffer operations.
 
-New tests can easiy be added by placing a test file in `test/resources` and registering it
-in `test/f90-ts-mode-test.el`. Registering looks like:
-```elsip
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode"
- '("indent_region_basic.erts"
-   "indent_region_comments.erts"
-   "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
- '(nil ; no modification
-   f90-ts-mode-test--remove-indent
-   f90-ts-mode-test--add-indent)
- '(f90-ts-mode-test--indent-by-region)
- )
-```
 
 ## Logging and debugging
 

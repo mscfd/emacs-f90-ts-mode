@@ -1,0 +1,153 @@
+name: Emacs CI (tree-sitter + checks)
+
+on:
+  push:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    strategy:
+      matrix:
+        emacs-version: ["30.1"]
+
+    steps:
+      # -------------------------
+      # Checkout repo
+      # -------------------------
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # -------------------------
+      # Install dependencies
+      # -------------------------
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            libjansson-dev \
+            libgnutls28-dev \
+            libncurses-dev \
+            texinfo \
+            git \
+            cmake
+
+      # -------------------------
+      # Build tree-sitter 0.25.x
+      # -------------------------
+      - name: Build tree-sitter 0.25
+        run: |
+          git clone https://github.com/tree-sitter/tree-sitter.git
+          cd tree-sitter
+          git checkout v0.25.10
+
+          make
+          make PREFIX=$HOME/local install
+
+          echo "LD_LIBRARY_PATH=$HOME/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$HOME/local/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "CPATH=$HOME/local/include:$CPATH" >> $GITHUB_ENV
+
+      # -------------------------
+      # Build Emacs
+      # -------------------------
+      - name: Install Emacs
+        uses: purcell/setup-emacs@master
+        with:
+          version: ${{ matrix.emacs-version }}
+
+      - name: Verify version
+        run: emacs --version
+
+      - name: Verify tree-sitter linkage
+        run: |
+          EMACS_BIN=$(which emacs)
+          echo "Emacs binary: $EMACS_BIN"
+          LDD_OUT=$(ldd "$EMACS_BIN" | grep libtree-sitter)
+          echo "tree-sitter linkage: $LDD_OUT"
+          if ! echo "$LDD_OUT" | grep -q "libtree-sitter.so.0.25"; then
+            echo "Error: Emacs is not linked against libtree-sitter.so.0.25"
+            exit 1
+          fi
+          echo "Emacs is linked against libtree-sitter.so.0.25"
+
+      # -------------------------
+      # Build Emacs
+      # -------------------------
+      # - name: Build Emacs ${{ matrix.emacs-version }}
+      #   run: |
+      #     git clone --depth 1 --filter=blob:none https://github.com/emacs-mirror/emacs.git
+      #     cd emacs
+      #     git fetch --depth 1 origin tag emacs-${{ matrix.emacs-version }}
+      #     git checkout emacs-${{ matrix.emacs-version }}
+
+      #     ./autogen.sh
+      #     ./configure \
+      #       LDFLAGS="-Wl,-rpath,$HOME/local/lib" \
+      #       --with-gnutls \
+      #       --with-zlib \
+      #       --without-native-compilation \
+      #       --with-tree-sitter \
+      #       --without-mailutils \
+      #       --without-pop \
+      #       --without-x \
+      #       --without-sound \
+      #       --without-sqlite3 \
+      #       --without-xml2 \
+      #       --without-threads \
+      #       --without-compress-install \
+      #       CFLAGS="-O2"
+      #     make -j$(nproc)
+      #     sudo make install
+
+      # -------------------------
+      # Build Fortran grammar (mscfd/master)
+      # -------------------------
+      - name: Install tree-sitter CLI
+        run: |
+          npm install -g tree-sitter-cli@0.25.10
+
+      - name: Build tree-sitter-fortran
+        run: |
+          git clone --depth 1 --single-branch --branch master \
+            https://github.com/mscfd/tree-sitter-fortran.git
+          cd tree-sitter-fortran
+          echo "Grammar commit: $(git rev-parse HEAD)"
+
+          tree-sitter generate
+
+          cc -fPIC -c src/parser.c
+          cc -fPIC -c src/scanner.c 2>/dev/null || true
+          cc -shared parser.o scanner.o -o libtree-sitter-fortran.so || \
+            cc -shared parser.o -o libtree-sitter-fortran.so
+          mkdir -p ~/.emacs.d/tree-sitter
+          cp libtree-sitter-fortran.so ~/.emacs.d/tree-sitter/
+
+      # -------------------------
+      # Verify ABI compatibility
+      # -------------------------
+      - name: Verify tree-sitter ABI
+        run: |
+          emacs --batch -Q \
+            --eval "(progn
+              (add-to-list 'treesit-extra-load-path \"~/.emacs.d/tree-sitter\")
+
+              (let ((lib (treesit-library-abi-version))
+                    (lang (treesit-language-abi-version 'fortran)))
+                (princ (format \"lib ABI: %s\nlang ABI: %s\n\" lib lang))
+                (unless (and (= lib 15) (= lang 15))
+                  (princ \"ABI mismatch!\n\")
+                  (kill-emacs 1))))"
+
+      # -------------------------
+      # Run checks + tests
+      # -------------------------
+      - name: Run checks (targeted files)
+        run: |
+          make test-checkdoc
+          make test-byte-compile
+          make test-ert-std
