@@ -40,7 +40,7 @@ The mode is under **development**, features might only be partially implemented.
 
 ### Tree-sitter grammar
 
-Currently it relies on a recent tree-sitter grammar version of fortran at
+Currently, it relies on a recent tree-sitter grammar version of fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
 There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
@@ -97,6 +97,9 @@ placed somewhere in `init.el` (or elsewhere).
   (setq treesit-language-source-alist
         (append treesit-language-source-alist
                 '((fortran "path_to/tree-sitter-fortran"))))
+
+  ;; uncomment if Imenu entry in menu bar is desired
+  ;;:hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
   :config
   (message "f90-ts-mode loaded")
@@ -175,6 +178,7 @@ The mode sets the following default mode local keybindings:
 - Comment regions
 - Mark regions based on tree-sitter nodes
 - Handling openmp and preprocessor directives
+- Imenu and a `Fortran` menu in the menu bar
 
 
 ### Syntax highlight
@@ -276,10 +280,11 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argy, just_this, &
                              argz)
 ```
-Five options are currently implemented: `continued-line`, `rotate`, `keep-or-primary`,
-`keep-or-next` and `primary`.
-Moreover, `f90-ts-indent-list-always-include-default` controls whether simple indentation for
-continued lines should always be added (for example even in an argument context as above).
+Five options are currently implemented: `continued-line`,  `primary`, `rotate`, `keep-or-primary`
+and `keep-or-next`. Primary column is some outstanding column with respect to the context (like
+the smallest column of arguments in the example above, or the column just right to the opening parenthesis.
+The last three options `rotate`, `keep-or-primary` and `keep-or-next`, which collect and offer several
+alignment columns, always include the continued line position among the set of columns.
 
 Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-list-region`
 and `f90-ts-indent-list-line`, respectively.
@@ -289,7 +294,7 @@ used by functions bound to Shift+TAB and Control+Shift+TAB by default.
 Also check out [Continued statements and blocks](#indentation-of-continued-statements-and-blocks).
 
 Remark: currently options and variants are intended to experiment with and see what might work
-and is worth keeping. The additional keybinds for variant 2 and 3 also help with testing various
+and is worth keeping. The additional keybindings for variant 2 and 3 also help with testing various
 variants.
 
 

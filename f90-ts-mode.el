@@ -162,16 +162,6 @@ to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
   :group 'f90-ts-indent)
 
 
-(defcustom f90-ts-indent-list-always-include-default t
-  "Always include the default continued-line column in selected columns.
-This column is offered as additional choice for alignment in a list-like
-context.  It is the column of the first line of the continued statement
-plus the value of `f90-ts-indent-continued'."
-  :type  'boolean
-  :safe  'booleanp
-  :group 'f90-ts-indent)
-
-
 (defcustom f90-ts-indent-paren-default 1
   "Additional offset applied for alignment with opening parenthesis.
 The default is for all items except the closing parenthesis.
@@ -2591,8 +2581,9 @@ for default continued line indentation."
        (collect (treesit-node-start prev)
                 ;; add one because "::" as two and not one character as "="
                 f90-ts-indent-declaration))
-     ;; always add default continued line indentation
-     (collect (f90-ts--align-list-pstmt1-anoff)))))
+     ;; add default continued line indentation if items is empty (no smallest anoff)
+     (unless smallest-anoff
+       (collect (f90-ts--align-list-pstmt1-anoff))))))
 
 
 ;;++++++++++++++
@@ -2758,9 +2749,8 @@ Finally use VARIANT to select one pair to align with."
          (anoff-other (f90-ts--align-list-anoff-other loc
                                                       anoff-items
                                                       list-context))
-         ;; if selected, add default continued offset position as anchor
-         (anoff-extra (and f90-ts-indent-list-always-include-default
-                           (f90-ts--align-list-pstmt1-anoff)))
+         ;; always add default continued offset position as anchor
+         (anoff-extra (f90-ts--align-list-pstmt1-anoff))
          ;; anoff-primary is used as 'primary' in keep-or-primary, primary etc.
          (anoff-primary (car anoff-other))
          ;; final list of anchors (which are nodes or pairs (position offset))
@@ -4260,7 +4250,7 @@ If called interactively, prompt for a prefix from
 ;;; Imenu and menu stuff
 
 (defvar f90-ts--imenu-queries
-  '(("program"
+  `(("program"
      :label "program"
      :query "(program (program_statement \"program\" (name) @name))")
 
@@ -4281,12 +4271,21 @@ If called interactively, prompt for a prefix from
      :query "(function (function_statement \"function\" name: (name) @name))")
 
     ("derived_type_definition"
-     :label "type"
-     :query "(derived_type_definition \"type\" name: (type_name) @name)")
+     :label "derived type"
+     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name))")
+
+    ("interface"
+     :label "interface"
+     :query ,(concat "(interface (interface_statement (abstract_specifier)?"
+                     " \"interface\""
+                     " [((name) @name)"
+                     " ((operator) @name)"
+                     " ((assignment) @name)]?"
+                     "))"))
 
     ("variable_declaration"
      :label "variable"
-     :query "(variable_declaration (name) @name)"
+     :query "(variable_declaration declarator: (_) @name)"
      :leaf t))
   "Unified Tree-sitter query specification for Imenu and menu.")
 
@@ -4308,20 +4307,24 @@ If called interactively, prompt for a prefix from
     (treesit-node-text name-node t)))
 
 
-(defun f90-ts--imenu-name-fn (node)
-  "Extract name associated with NODE for use in imenu."
+(defun f90-ts--imenu-name-pos-fn (node)
+  "Return list of (NAME . POSITION) for NODE applying associated imenu query."
   (let* ((type (treesit-node-type node))
          (spec (f90-ts--imenu-spec-for-type type))
-         (query (plist-get spec :query)))
-    (or (and query (f90-ts--imenu-capture-name node query))
-        "node with no name")))
+         (query (plist-get spec :query))
+         (caps (and query (treesit-query-capture node query))))
+    (when caps
+      (mapcar (lambda (c)
+                (let ((n (cdr c)))
+                  (cons (treesit-node-text n t)
+                        (treesit-node-start n))))
+              (seq-filter (lambda (c) (eq (car c) 'name)) caps)))))
 
 
 (defun f90-ts--imenu-valid-node-p (query)
-  "Return a predicate checking whether QUERY captures a valid name."
+  "Return a predicate checking whether QUERY captures anything."
   (lambda (node)
-    (when query
-      (f90-ts--imenu-capture-name node query))))
+    (and query (f90-ts--imenu-capture-name node query))))
 
 
 (defvar f90-ts--imenu-settings
@@ -4331,12 +4334,84 @@ If called interactively, prompt for a prefix from
             (spec  (cdr entry))
             (label (plist-get spec :label))
             (query (plist-get spec :query)))
-       (list label
-             (format "^%s$" type)
-             (f90-ts--imenu-valid-node-p query)
-             #'f90-ts--imenu-name-fn)))
+       (list label                              ; category
+             (format "^%s$" type)               ; regexp
+             (f90-ts--imenu-valid-node-p query) ; predicate
+             #'f90-ts--imenu-name-pos-fn)))     ; name-pos-fn
    f90-ts--imenu-queries)
   "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
+
+
+(defun f90-ts--simple-imenu-tree (node pred name-pos-fn)
+  "Like `treesit--simple-imenu-1', but supports multiple entries per leaf.
+
+NODE is a node in the tree returned by
+`treesit-induce-sparse-tree' (not a tree-sitter node, its car is
+a tree-sitter node).  Walk that tree and return an Imenu index.  Stop at nodes
+not satisfying PRED.
+
+NAME-POS-FN must return a list of (NAME . POSITION) to distinguish different
+positions for a single query with multiple captures."
+  (let* ((ts-node (car node))
+         (children (cdr node))
+         (subtrees (mapcan (lambda (child)
+                             (f90-ts--simple-imenu-tree child pred name-pos-fn))
+                           children))
+
+         ;; entries := list of (name . position)
+         (entries
+          (when ts-node
+            (funcall name-pos-fn ts-node)))
+
+         ;; marker helper
+         (make-marker-at
+          (lambda (pos)
+            (set-marker (make-marker) pos))))
+
+    (cond
+     ;; root node
+     ((null ts-node)
+      subtrees)
+
+     ;; predicate rejects node
+     ((and pred (not (funcall pred ts-node)))
+      subtrees)
+
+     ;; non-leaf: subgroup (use first entry only)
+     (subtrees
+      (when entries
+        (let* ((entry (car entries))
+               (name (car entry))
+               (pos  (cdr entry)))
+          `((,name
+             ,(cons " " (funcall make-marker-at pos))
+             ,@subtrees)))))
+
+     ;; leaf: expand all entries with exact positions
+     (t
+      (when entries
+        (mapcar (lambda (entry)
+                  (let ((name (car entry))
+                        (pos  (cdr entry)))
+                    (cons name (funcall make-marker-at pos))))
+                entries))))))
+
+
+(defun f90-ts-simple-imenu ()
+  "Return an Imenu index for the current buffer.
+This is a copy of `treesit-simple-imenu', but it can handle queries
+which return more than one match (like in variable declarations)."
+  (let ((root (treesit-buffer-root-node)))
+    (mapcan
+     (lambda (setting)
+       (cl-destructuring-bind (category regexp pred name-pos-fn) setting
+         (when-let* ((tree (treesit-induce-sparse-tree root regexp))
+                     (index (f90-ts--simple-imenu-tree
+                             tree pred name-pos-fn)))
+           (cl-assert category nil "f90-ts-simple-imenu: category expected")
+           (cl-assert name-pos-fn nil "f90-ts-simple-imenu: name-pos-fn expected")
+           (list (cons category index)))))
+     f90-ts--imenu-settings)))
 
 
 ;;; ---------------------------------------------------------------
@@ -4362,39 +4437,52 @@ If called interactively, prompt for a prefix from
 
 
 (defun f90-ts--menu-from-sparse-tree (sparse-node)
-  "Recursively convert a SPARSE-NODE (NODE . CHILDREN) to easy-menu format."
+  "Recursively convert a SPARSE-NODE=(NODE . CHILDREN) to easy-menu format."
   (let* ((node     (car sparse-node))
          (children (cdr sparse-node))
          (type     (treesit-node-type node))
          (spec     (f90-ts--imenu-spec-for-type type)))
 
     (if (null spec)
-        ;; If the node itself isn't "interesting" (like the root),
+        ;; if the node itself isn't "interesting" (like the root),
         ;; just process and return the children as a flat list.
         (cl-mapcan #'f90-ts--menu-from-sparse-tree children)
 
       (let* ((query      (plist-get spec :query))
              (leaf       (plist-get spec :leaf))
              (label-base (plist-get spec :label))
-             (name       (f90-ts--imenu-capture-name node query))
-             (label      (if (and name (not (string-empty-p name)))
-                             (format "%s: %s" label-base name)
-                           label-base))
-             (marker     (copy-marker (treesit-node-start node))))
+             ;; use name-pos-fn to get all (name . pos) pairs, with exact positions
+             (name-pos-list (f90-ts--imenu-name-pos-fn node)))
 
         (if (or leaf (null children))
-            ;; It's a leaf: return a list containing one vector
-            (list (f90-ts--menu-entry label marker))
+            ;; leaf: one menu entry per captured name, at its exact position
+            (mapcar (lambda (name-pos)
+                      (let* ((name   (car name-pos))
+                             (pos    (cdr name-pos))
+                             (label  (if (and name (not (string-empty-p name)))
+                                         (format "%s: %s" label-base name)
+                                       label-base))
+                             (marker (set-marker (make-marker) pos)))
+                        (f90-ts--menu-entry label marker)))
+                    (or name-pos-list
+                        ;; fallback: unnamed entry at node start
+                        (list (cons label-base (treesit-node-start node)))))
 
-          (let ((open-label (format "%s ..." label))
-                (jump-label (format "%s" label)))
-            (list
-             ;; direct jump
-             (f90-ts--menu-entry jump-label marker)
-
-             ;; submenu
-             (cons open-label
-                   (cl-mapcan #'f90-ts--menu-from-sparse-tree children)))))))))
+          ;; non-leaf: use first capture for the label/jump, children as submenu
+          (when name-pos-list
+            (let* ((first      (car name-pos-list))
+                   (name       (car first))
+                   (pos        (cdr first))
+                   (label      (if (and name (not (string-empty-p name)))
+                                   (format "%s: %s" label-base name)
+                                 label-base))
+                   (marker     (set-marker (make-marker) pos))
+                   (open-label (format "%s ..." label))
+                   (jump-label label))
+              (list
+               (f90-ts--menu-entry jump-label marker)
+               (cons open-label
+                     (cl-mapcan #'f90-ts--menu-from-sparse-tree children))))))))))
 
 
 (defun f90-ts--menu-tree (_current-menu)
@@ -4411,7 +4499,7 @@ nothing changes."
              (not (treesit-node-check f90-ts--menu-cache-root 'outdated)))
         ;; return cached menu
         f90-ts--menu-cache-result
-      ;; Cache is invalid or missing: Rebuild
+      ;; cache is invalid or missing: rebuild
       (let* ((predicate (lambda (node)
                           (let* ((type (treesit-node-type node))
                                  (spec (f90-ts--imenu-spec-for-type type)))
@@ -4507,13 +4595,11 @@ nothing changes."
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
   ;; Imenu Setup
-  (setq-local treesit-simple-imenu-settings f90-ts--imenu-settings)
+  (setq-local imenu-create-index-function #'f90-ts-simple-imenu)
 
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!
   (treesit-major-mode-setup)
-
-  ;;(imenu-add-to-menubar "Imenu")
 
   ;; set indentation functions (both add smart end completion before
   ;; indentation, so no hook available); this must be done AFTER
