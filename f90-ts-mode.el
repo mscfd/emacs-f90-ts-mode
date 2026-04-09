@@ -4727,18 +4727,6 @@ nothing changes."
 ;;;-----------------------------------------------------------------------------
 ;;; menu definition
 
-(easy-menu-define f90-ts-mode-menu f90-ts-mode-map
-  "Menu for `f90-ts-mode'."
-  '("Fortran"
-    ("Region"
-     ["Enlarge region"  f90-ts-enlarge-region :active t]
-     ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
-     ["Previous region" f90-ts-prev-region    :active (region-active-p)]
-     ["Next region"     f90-ts-next-region    :active (region-active-p)])
-    "---"
-    ("Navigate"
-     :filter (lambda (menu) (f90-ts--menu-tree menu)))))
-
  (easy-menu-define f90-ts-mode-menu f90-ts-mode-map
    "Menu for `f90-ts-mode'."
    '("Fortran"
@@ -4763,6 +4751,13 @@ nothing changes."
       ["Previous region" f90-ts-prev-region    :active (region-active-p)]
       ["Next region"     f90-ts-next-region    :active (region-active-p)])
      "---"
+     ("Xref"
+      ["Find definition"  xref-find-definitions :active t]
+      ["Find references"  xref-find-references  :active t]
+      ["Find apropos"     xref-find-apropos     :active t]
+      "---"
+      ["Go back"          xref-go-back          :active t]
+      ["Go forward"       xref-go-forward       :active t])
      ("Navigate"
       :filter (lambda (menu) (f90-ts--menu-tree menu)))))
 
