@@ -22,6 +22,7 @@ The mode is under **development**, features might only be partially implemented.
     - [OpenMP and other special comments](#openmp-and-other-special-comments)
   - [Smart end completion](#smart-end-completion)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
+  - [Xref](#xref)
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
@@ -361,6 +362,19 @@ Indentation of continued statements from begin of statement to line at point is 
 `f90-ts-indent-and-complete-stmt`, which is bound to `C-<tab>`.
 
 This same function also indents a whole block if executed at its `end struct` line.
+
+
+### Xref
+
+The mode provides a minimal buffer local implementation of xref functions. In particular, the following
+functions can be used to find definitions and references of symbols (keybindings are the default ones):
+
+| Function: keybinding           | Description                          |
+|--------------------------------|--------------------------------------|
+| `xref-find-definitions`: `M-.` | Jump to definition                   |
+| `xref-find-references`: `M-?`  | Find all references                  |
+| `xref-find-apropos`: `C-M-.`   | Find symbols matching regexp pattern |
+| `xref-go-back`: `M-,`          | Pop back                             |
 
 
 
