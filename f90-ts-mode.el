@@ -1617,7 +1617,11 @@ rule but not for matched keywords, which are enforced with override=t."
       "allocate" "deallocate" "allocatable"
       "intent" "in" "out" "inout"
       "parameter" "save" "target" "pointer" "optional"
-      "dimension" "contiguous" "volatile"]
+      "dimension" "contiguous" "volatile"
+      "sync" "all" "images" "memory"
+      "form" "team" "change"
+      "lock" "unlock"
+      "fail" "image"]
       @font-lock-keyword-face))))
 
 
@@ -4048,6 +4052,20 @@ These are do loops, block statements, associate construct and forall statements.
   "Indentation rules for select statements (case and type).")
 
 
+(defvar f90-ts-indent-rules-coarray
+  (f90-ts--with-map-rules
+   ;; structures with a single region block and linear execution
+   ((n-p-gp     "end_coarray_critical_statement" "coarray_critical_statement" nil)        parent 0)
+   ((n-p-pstmtk nil                              "coarray_critical_statement" "critical") parent f90-ts-indent-block)
+   ((n-p-pstmtk nil                              "ERROR"                      "critical") previous-stmt-anchor f90-ts-indent-block)
+
+   ((n-p-gp     "end_coarray_team_statement" "coarray_team_statement" nil)        parent 0)
+   ((n-p-pstmtk nil                          "coarray_team_statement" "change") parent f90-ts-indent-block)
+   ((n-p-pstmtk nil                          "ERROR"                  "change") previous-stmt-anchor f90-ts-indent-block)
+   )
+  "Indentation rules for coarray statements.")
+
+
 (defvar f90-ts-indent-rules-catch-all
   (f90-ts--with-map-rules
    ;; final catch-all rule
@@ -4072,6 +4090,7 @@ These are do loops, block statements, associate construct and forall statements.
      ,@f90-ts-indent-rules-where
      ,@f90-ts-indent-rules-single-region
      ,@f90-ts-indent-rules-select
+     ,@f90-ts-indent-rules-coarray
      ,@f90-ts-indent-rules-catch-all))
   "List of all indentation rules in its proper sequence.")
 
@@ -4109,8 +4128,8 @@ might call a region based operation, but not the other way around.")
     "end_associate_statement"
     "end_enum_statement"
     "end_enumeration_type_statement"
-    ;;"end_coarray_team_statement"
-    ;;"end_coarray_critical_statement"
+    "end_coarray_team_statement"
+    "end_coarray_critical_statement"
     )
     "List of type names used for end struct statements.
 The parent of such a node represents the structure itself.
@@ -4162,7 +4181,9 @@ Return non-nil if something was changed and text actually replaced."
                                           " \"enumeration\" @construct \"type\" @construct2"
                                           " (_) *"
                                           " (type_name) @name"
-                                          "))")))
+                                          "))"))
+    ("coarray_critical_statement" . "(coarray_critical_statement (block_label_start_expression _ @name \":\")? \"critical\" @construct)")
+    ("coarray_team_statement"     . "(coarray_team_statement (block_label_start_expression _ @name \":\")? \"change\" @construct \"team\" @construct2)"))
   "Treesitter queries to extract relevant nodes for smart end completion.")
 
 

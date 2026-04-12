@@ -974,6 +974,7 @@ If buffer was modified, insert `**' otherwise insert '--'."
  '("font_lock_progmod.f90"
    "font_lock_comment.f90"
    "font_lock_builtin.f90"
+   "font_lock_operator.f90"
    "font_lock_interface.f90"
    "font_lock_type.f90"
    "font_lock_enum.f90"
@@ -982,7 +983,7 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "font_lock_where.f90"
    "font_lock_forall.f90"
    "font_lock_openmp.f90"
-   "font_lock_operator.f90"
+   "font_lock_coarray.f90"
    "font_lock_special_var.f90"))
 
 

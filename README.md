@@ -22,6 +22,7 @@ including syntax highlighting, indentation, navigation, and structural editing f
 - Comment region operations with configurable prefixes and indentation rules
 - Mark regions based on tree-sitter nodes
 - OpenMP and preprocessor directives
+- Coarray keywords and statements
 - `Imenu` and a `Fortran` menu in the menu bar
 - Navigation (defun, things, Xref, tree as submenu and as side panel buffer)
 
@@ -110,7 +111,6 @@ The following list provides features planned for implementation (somewhat ordere
     stop 1
 200 continue
 ```
-- Add support for coarray features (font-locking and indentation).
 - Fill operations similar to `f90-fill-region` and `f90-fill-paragraph`.
 - Support for (context-aware) `completion-at-point-function` (capf).
 - More list contexts. There is a number of list like contexts, which are not yet supported,
