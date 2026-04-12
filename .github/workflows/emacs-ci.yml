@@ -6,7 +6,10 @@ on:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     strategy:
       matrix:
@@ -17,7 +20,7 @@ jobs:
       # Checkout repo
       # -------------------------
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       # -------------------------
       # Install dependencies
@@ -42,10 +45,16 @@ jobs:
           git clone https://github.com/tree-sitter/tree-sitter.git
           cd tree-sitter
           git checkout v0.25.10
+
           make
-          sudo make install
-          echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/treesitter.conf
-          sudo ldconfig
+          make PREFIX=$HOME/.local install
+
+          echo "LD_LIBRARY_PATH=$HOME/.local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          echo "LIBRARY_PATH=$HOME/.local/lib:$LIBRARY_PATH" >> $GITHUB_ENV
+          echo "CPATH=$HOME/.local/include:$CPATH" >> $GITHUB_ENV
+          echo "PKG_CONFIG_PATH=$HOME/.local/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+
+
 
       # -------------------------
       # Build Emacs
@@ -59,6 +68,8 @@ jobs:
 
           ./autogen.sh
           ./configure \
+            --with-gnutls \
+            --with-zlib \
             --without-native-compilation \
             --with-tree-sitter \
             --without-mailutils \
@@ -66,9 +77,7 @@ jobs:
             --without-x \
             --without-sound \
             --without-sqlite3 \
-            --without-gnutls \
             --without-xml2 \
-            --without-zlib \
             --without-threads \
             --without-compress-install \
             CFLAGS="-O2"
@@ -80,7 +89,7 @@ jobs:
       # -------------------------
       - name: Install tree-sitter CLI
         run: |
-          npm install -g tree-sitter-cli
+          npm install -g tree-sitter-cli@0.25.10
 
       - name: Build tree-sitter-fortran
         run: |
