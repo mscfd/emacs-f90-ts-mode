@@ -67,6 +67,33 @@ subroutine if_stmt()
 end subroutine if_stmt
 =-=-=
 
+Name: if statement 5
+=-=
+subroutine test_elseif()
+     if (flag1) then
+          call a1()
+
+     else if (flag2) then
+          call a2()
+
+     elseif (flag3) then
+          call a3()
+
+     else if (flag4) then
+
+          call a4()
+     elseif (flag5) then
+
+          call a5()
+     else if (flag6) then
+          !call a6()
+
+     elseif (flag7) then
+          !call a7()
+     end if
+end subroutine test_elseif
+=-=-=
+
 Name: do loop constructs 1
 =-=
 module do_mod

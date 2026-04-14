@@ -3472,10 +3472,10 @@ and in case of ERROR nodes with incomplete code.")
    ((n-p-gp     "elseif_clause"    "if_statement"  nil)      parent 0)
    ((n-p-gp     "else_clause"      "if_statement"  nil)      parent 0)
    ((n-p-pstmtk nil                "if_statement"  "if")     parent f90-ts-indent-block) ; line right after if
-   ((n-p-pstmtk nil                "if_statement"  "elseif") parent f90-ts-indent-block) ; line right after elseif
    ((n-p-pstmtk nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line right after else, with empty else block
    ((n-p-pstmtk nil                "else_clause"   "else")   parent f90-ts-indent-block) ; line after else, with non-empty else block
-   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block)
+   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block) ; line right after "elseif"
+   ((n-p-pstmtk nil                "elseif_clause" "else")   parent f90-ts-indent-block) ; line right after "else if"
 
    ((n-p-pstmtk "elseif_clause"    "ERROR" "if") previous-stmt-anchor 0)
    ((n-p-pstmtk "elseif"           "ERROR" "if") previous-stmt-anchor 0)
