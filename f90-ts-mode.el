@@ -561,20 +561,22 @@ seem to make much sense."
 This is required for virtual ampersand continuation line nodes, for which
 there is no parent.  Those nodes always have direct proper previous and next
 siblings with the correct parent.  So walking is just one step in general."
-  (let ((parent (funcall orig node)))
-    (if (or parent
-            (< (treesit-node-start node) (treesit-node-end node)))
-        parent
-      ;; try previous siblings first, then next siblings as fallback,
-      ;; but for the intended case, one step to the prev-sibling resolves the issue
-      (or (cl-loop for candidate = (treesit-node-prev-sibling node)
-                                 then (treesit-node-prev-sibling candidate)
-                   while candidate
-                   thereis (funcall orig candidate))
-          (cl-loop for candidate = (treesit-node-next-sibling node)
-                                 then (treesit-node-next-sibling candidate)
-                   while candidate
-                   thereis (funcall orig candidate))))))
+  ;; remark: original function returns nil for (treesit-node-parent nil)
+  (when node
+    (let ((parent (funcall orig node)))
+      (if (or parent
+              (< (treesit-node-start node) (treesit-node-end node)))
+          parent
+        ;; try previous siblings first, then next siblings as fallback,
+        ;; but for the intended case, one step to the prev-sibling resolves the issue
+        (or (cl-loop for candidate = (treesit-node-prev-sibling node)
+                     then (treesit-node-prev-sibling candidate)
+                     while candidate
+                     thereis (funcall orig candidate))
+            (cl-loop for candidate = (treesit-node-next-sibling node)
+                     then (treesit-node-next-sibling candidate)
+                     while candidate
+                     thereis (funcall orig candidate)))))))
 
 
 ;;;-----------------------------------------------------------------------------
