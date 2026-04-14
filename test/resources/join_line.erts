@@ -155,6 +155,42 @@ end type t
 end submodule subm
 =-=-=
 
+Name: join next statement 5
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+
+
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &
+
+            |& 6**5
+end function test_fun
+=-=-=
+
+Name: join next statement 6
+=-=
+real function test_fun()
+     test_fun = &
+
+|    
+
+
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &
+
+            |& 6**5
+end function test_fun
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
