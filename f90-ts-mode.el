@@ -648,22 +648,72 @@ Note that the parse uses identifier not just for variables, but for types etc."
 
 
 (defconst f90-ts--builtin-functions
-  '("abs" "acos" "aimag" "aint" "allocated" "anint" "any" "asin"
-    "associated" "atan" "atan2" "btest" "ceiling" "char" "cmplx"
-    "conjg" "cos" "cosh" "count" "cshift" "date_and_time" "dble"
-    "dim" "dot_product" "dprod" "eoshift" "epsilon" "exp" "exponent"
-    "floor" "fraction" "huge" "iand" "ibclr" "ibits" "ibset" "ichar"
-    "ieor" "index" "int" "ior" "ishft" "ishftc" "kind" "lbound"
-    "len" "len_trim" "log" "log10" "logical" "matmul" "max"
-    "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
-    "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
-    "null" "pack" "precision" "present" "product" "radix"
-    "random_number" "random_seed" "range" "rank" "real" "repeat"
-    "reshape" "rrspacing" "scale" "scan" "selected_int_kind"
-    "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
-    "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
-    "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
-    "verify")
+  '(;; integer/real
+    "abs" "aimag" "aint" "anint" "ceiling" "conjg" "dble" "dim" "dprod"
+    "floor" "hypot" "max" "min" "mod" "modulo" "nearest" "nint" "real"
+    "rrspacing" "scale" "sign" "spacing"
+    ;; exponential and logarithmic
+    "exp" "log" "log10" "log_gamma" "gamma" "sqrt"
+    ;; trigonometric (radians)
+    "acos" "asin" "atan" "atan2" "cos" "sin" "tan"
+    ;; trigonometric (degrees)
+    "acosd" "asind" "atand" "atan2d" "cosd" "sind" "tand"
+    ;; trigonometric (half-revolutions)
+    "acospi" "asinpi" "atanpi" "atan2pi" "cospi" "sinpi" "tanpi"
+    ;; hyperbolic
+    "acosh" "asinh" "atanh" "cosh" "sinh" "tanh"
+    ;; error functions
+    "erf" "erfc" "erfc_scaled"
+    ;; bessel functions
+    "bessel_j0" "bessel_j1" "bessel_jn"
+    "bessel_y0" "bessel_y1" "bessel_yn"
+    ;; Floating-point model inquiry
+    "digits" "epsilon" "exponent" "fraction" "huge" "maxexponent"
+    "minexponent" "precision" "radix" "range" "rrspacing" "tiny"
+    ;; numeric type conversion
+    "cmplx" "int" "logical" "transfer"
+    ;; bit operations
+    "btest" "iand" "ibclr" "ibits" "ibset" "ieor" "ior"
+    "ishft" "ishftc" "leadz" "maskl" "maskr" "merge_bits"
+    "mvbits" "not" "popcnt" "poppar" "shifta" "shiftl" "shiftr"
+    "trailz" "bit_size"
+    ;; array inquiry
+    "allocated" "is_contiguous" "lbound" "rank" "shape" "size" "ubound"
+    ;; array construction, manipulation and reduction
+    "all" "any" "count" "cshift" "dot_product" "eoshift" "iall" "iany"
+    "iparity" "matmul" "maxloc" "maxval" "merge" "minloc" "minval" "norm2"
+    "pack" "parity" "product" "reduce" "reshape" "spread" "sum"
+    "transpose" "unpack"
+    ;; array location
+    "findloc" "maxloc" "minloc"
+    ;; character
+    "achar" "char" "iachar" "ichar" "index" "len" "len_trim"
+    "new_line" "repeat" "scan" "trim" "verify"
+    ;; kind and type inquiry
+    "kind" "selected_char_kind" "selected_int_kind"
+    "selected_logical_kind" "selected_real_kind" "storage_size"
+    "out_of_range"
+    ;; type inquiry
+    "extends_type_of" "same_type_as"
+    ;; pointer and allocation
+    "associated" "move_alloc" "null"
+    ;; coarray
+    "event_post" "event_query" "event_wait"
+    "failed_images" "get_team" "image_index" "image_status" "lcobound"
+    "num_images" "stopped_images" "team_number" "this_image" "ucobound"
+    "co_broadcast" "co_max" "co_min" "co_reduce" "co_sum"
+    ;; coarray atomic subroutines
+    "atomic_add" "atomic_and" "atomic_cas" "atomic_define"
+    "atomic_fetch_add" "atomic_fetch_and" "atomic_fetch_or"
+    "atomic_fetch_xor" "atomic_or" "atomic_ref" "atomic_xor"
+    ;; random numbers
+    "random_init" "random_number" "random_seed"
+    ;; system and environment
+    "command_argument_count" "cpu_time" "date_and_time"
+    "get_command" "get_command_argument" "get_environment_variable"
+    "is_iostat_end" "is_iostat_eor" "system_clock"
+    ;; miscellaneous
+    "present" )
   "List of all builtin keywords for font-lock highlighting.
 Used with face `font-lock-builtin-face'.")
 
