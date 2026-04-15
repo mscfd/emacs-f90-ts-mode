@@ -2644,21 +2644,6 @@ It does not descend into parenthesized_expressions."
 
 
 ;;++++++++++++++
-;; list context: binding_list, final_statement
-
-(defun f90-ts--align-list-items-binding (list-context _loc)
-  "Determine relevant children of LIST-CONTEXT of binding type.
-These are nodes of type \"binding_list\" or \"final_statement\".  Both occur
-in the contains part of a derived type definition."
-  (cl-assert (or (f90-ts--node-type-p list-context "binding_list")
-                 (f90-ts--node-type-p list-context "final_statement"))
-             nil "expected list context: binding_list or final_statement, got '%s'" list-context)
-  (when-let ((children (treesit-node-children list-context)))
-    ;; drop the (binding_name ...) part, and the => binding symbol
-    (seq-drop children 2)))
-
-
-;;++++++++++++++
 ;; list context: variable_declarations
 
 (defun f90-ts--align-list-items-var-decl (list-context loc)
@@ -2696,6 +2681,34 @@ which are \"argument_list\" and \"array_literal\"."
                  (f90-ts--node-type-p list-context "array_literal"))
              nil "align-list-items-children: wrong context, got '%s'" list-context)
   (treesit-node-children list-context))
+
+
+;;++++++++++++++
+;; list context: import statement
+
+(defun f90-ts--align-list-items-children1 (list-context _loc)
+  "Determine relevant children of LIST-CONTEXT by dropping first child.
+This is used for nodes of type \"import_statement\"."
+  (cl-assert (f90-ts--node-type-p list-context "import_statement")
+             nil "expected list context: import_statement, got '%s'" list-context)
+  (when-let ((children (treesit-node-children list-context)))
+    ;; drop the "import" keyword
+    (seq-drop children 1)))
+
+
+;;++++++++++++++
+;; list context: binding_list, final_statement
+
+(defun f90-ts--align-list-items-children2 (list-context _loc)
+  "Determine relevant children of LIST-CONTEXT by dropping first two children.
+This is used for nodes of type \"binding_list\" or \"final_statement\".
+Both occur in the contains part of a derived type definition."
+  (cl-assert (or (f90-ts--node-type-p list-context "binding_list")
+                 (f90-ts--node-type-p list-context "final_statement"))
+             nil "expected list context: binding_list or final_statement, got '%s'" list-context)
+  (when-let ((children (treesit-node-children list-context)))
+    ;; drop the (binding_name ...) part, and the => binding symbol
+    (seq-drop children 2)))
 
 
 ;;++++++++++++++
@@ -3087,7 +3100,7 @@ Finally use VARIANT to select one pair to align with."
 (defconst f90-ts--align-list-context-config
   (let ((expr-options '(:get-items-fn f90-ts--align-list-items-op-expr
                         :get-other-fn f90-ts--align-list-other-op-expr))
-        (bind-options '(:get-items-fn f90-ts--align-list-items-binding)))
+        (bind-options '(:get-items-fn f90-ts--align-list-items-children2)))
      (list
       (cons "logical_expression"       expr-options)
       (cons "math_expression"          expr-options)
@@ -3110,7 +3123,9 @@ Finally use VARIANT to select one pair to align with."
               :get-other-fn f90-ts--align-list-other-association))
       (cons "variable_declaration"
             '(:get-items-fn f90-ts--align-list-items-var-decl
-              :get-other-fn f90-ts--align-list-other-var-decl))))
+              :get-other-fn f90-ts--align-list-other-var-decl))
+      (cons "import_statement"
+            '(:get-items-fn f90-ts--align-list-items-children1))))
   "List of tree-sitter node types presenting some kind of list context.
 A list context is a node with children which are suitable for alignment if
 spread over several lines in a continued line statement.
