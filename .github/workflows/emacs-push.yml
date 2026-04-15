@@ -5,6 +5,14 @@ on:
 
 jobs:
   check:
+    if: >
+      !startsWith(github.event.head_commit.message, 'wip ') &&
+      !startsWith(github.event.head_commit.message, 'wip: ') &&
+      !startsWith(github.event.head_commit.message, 'WIP ') &&
+      !startsWith(github.event.head_commit.message, '[WIP] ') &&
+      !startsWith(github.event.head_commit.message, '[broken] ') &&
+      !startsWith(github.event.head_commit.message, '[BROKEN] ')
+
     runs-on: ubuntu-24.04
 
     env:
