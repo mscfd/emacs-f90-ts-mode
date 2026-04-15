@@ -561,20 +561,22 @@ seem to make much sense."
 This is required for virtual ampersand continuation line nodes, for which
 there is no parent.  Those nodes always have direct proper previous and next
 siblings with the correct parent.  So walking is just one step in general."
-  (let ((parent (funcall orig node)))
-    (if (or parent
-            (< (treesit-node-start node) (treesit-node-end node)))
-        parent
-      ;; try previous siblings first, then next siblings as fallback,
-      ;; but for the intended case, one step to the prev-sibling resolves the issue
-      (or (cl-loop for candidate = (treesit-node-prev-sibling node)
-                                 then (treesit-node-prev-sibling candidate)
-                   while candidate
-                   thereis (funcall orig candidate))
-          (cl-loop for candidate = (treesit-node-next-sibling node)
-                                 then (treesit-node-next-sibling candidate)
-                   while candidate
-                   thereis (funcall orig candidate))))))
+  ;; remark: original function returns nil for (treesit-node-parent nil)
+  (when node
+    (let ((parent (funcall orig node)))
+      (if (or parent
+              (< (treesit-node-start node) (treesit-node-end node)))
+          parent
+        ;; try previous siblings first, then next siblings as fallback,
+        ;; but for the intended case, one step to the prev-sibling resolves the issue
+        (or (cl-loop for candidate = (treesit-node-prev-sibling node)
+                     then (treesit-node-prev-sibling candidate)
+                     while candidate
+                     thereis (funcall orig candidate))
+            (cl-loop for candidate = (treesit-node-next-sibling node)
+                     then (treesit-node-next-sibling candidate)
+                     while candidate
+                     thereis (funcall orig candidate)))))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -3231,15 +3233,6 @@ and nodes for debugging purposes into the exclusive log buffer."
     nil))
 
 
-(defun f90-ts-indent-rules-info (msg)
-  "Create an indentation rule, which never matches, but prints a MSG header.
-If MSG is \"start\" or \"catch all\" print additional position and node info.
-
-Used as \",@(f90-ts-indent-rules-info message\"') in indentation rules."
-  `(;; for testing purposes
-    ((f90-ts--fail-info-is ,msg) parent 0)))
-
-
 ;;++++++++++++++
 ;; simple indentation rules: expansion with f90-ts-- prefix
 
@@ -3291,11 +3284,15 @@ passed through unchanged."
   "Build a list of treesit indent rule triples.
 Each element of TRIPLES is a (MATCHER ANCHOR OFFSET) form as accepted
 by `f90-ts--map-rule'.  Returns a list of all expanded triples suitable for
-use as the body of a `defvar' ruleset."
+use as the body of a `defvar' ruleset.
+As a special case, (fail-info-is MSG) is expanded to the
+triple ((f90-ts--fail-info-is MSG) parent 0) directly."
   `(list ,@(mapcar (lambda (triple)
-                     `(f90-ts--map-rule ,(nth 0 triple)
-                                        ,(nth 1 triple)
-                                        ,(nth 2 triple)))
+                     (if (eq (car triple) 'fail-info)
+                         `(list '(f90-ts--fail-info-is ,(nth 1 triple)) 'parent 0)
+                       `(f90-ts--map-rule ,(nth 0 triple)
+                                          ,(nth 1 triple)
+                                          ,(nth 2 triple))))
                    triples)))
 
 
@@ -3307,7 +3304,7 @@ use as the body of a `defvar' ruleset."
    ;; populate cache and then always fail
    (populate-cache parent 0)
    ;; info rules needs populated cache
-   ;;,@(f90-ts-indent-rules-info "start")
+   ;;(fail-info "start")
    )
   "Indentation rules executed at start.
 The main purpose is to fill the indentation cache for a new run.")
@@ -3475,10 +3472,10 @@ and in case of ERROR nodes with incomplete code.")
    ((n-p-gp     "elseif_clause"    "if_statement"  nil)      parent 0)
    ((n-p-gp     "else_clause"      "if_statement"  nil)      parent 0)
    ((n-p-pstmtk nil                "if_statement"  "if")     parent f90-ts-indent-block) ; line right after if
-   ((n-p-pstmtk nil                "if_statement"  "elseif") parent f90-ts-indent-block) ; line right after elseif
    ((n-p-pstmtk nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line right after else, with empty else block
    ((n-p-pstmtk nil                "else_clause"   "else")   parent f90-ts-indent-block) ; line after else, with non-empty else block
-   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block)
+   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block) ; line right after "elseif"
+   ((n-p-pstmtk nil                "elseif_clause" "else")   parent f90-ts-indent-block) ; line right after "else if"
 
    ((n-p-pstmtk "elseif_clause"    "ERROR" "if") previous-stmt-anchor 0)
    ((n-p-pstmtk "elseif"           "ERROR" "if") previous-stmt-anchor 0)
@@ -3575,7 +3572,7 @@ These are do loops, block statements, associate construct and forall statements.
 (defvar f90-ts-indent-rules-catch-all
   (f90-ts--with-map-rules
    ;; final catch-all rule
-   ;;,@(f90-ts-indent-rules-info "catch all")
+   ;;(fail-info "catch all")
    (catch-all catch-all-anchor 0))
   "Final indentation rule to handle unmatched cases.")
 
