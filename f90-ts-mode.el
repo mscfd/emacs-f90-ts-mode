@@ -396,7 +396,8 @@ For matching identifiers the face `f90-ts-font-lock-special-var' is used."
 
 (defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
   "Regular expression for matching and capturing comment starts.
-This is used to extract the comment prefix for `f90-ts-break-line'.
+This is used to extract the comment prefix for `f90-ts-break-line',
+`f90-ts-join-line-prev' and `f90-ts-join-line-next' operations.
 OpenMP prefix is matched by `f90-ts-openmp-prefix-regexp'.
 
 The variable should also add trailing whitespace characters to
@@ -719,10 +720,17 @@ parsed by the treesitter grammar."
         (and (< start pos))))))
 
 
-(defun f90-ts-bol-to-point-blank-p ()
+(defun f90-ts--bol-to-point-blank-p ()
   "Return non-nil if only blank characters exist between BOL and point.
 Note that in fortran, a continuation symbol shall not be used on blank lines."
   (looking-back "^\\s-*" (line-beginning-position)))
+
+
+(defun f90-ts--point-on-empty-line-p ()
+  "Return non-nil if point is on an empty line, containing at most blanks."
+  (save-excursion
+    (beginning-of-line)
+    (looking-at "[ \t]*$")))
 
 
 (defun f90-ts--node-not-number-literal-p (node)
@@ -994,6 +1002,20 @@ Comment nodes and ampersand are ignored"
      finally return current)))
 
 
+(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
+  "Filter NODES by PREDICATE and line number.
+Accept only NODES which are on a line prior to CUR-LINE.
+If PREDICATE is provided, additionally filter by predicate.
+For empty NODES, return an empty list."
+  (seq-filter
+   (lambda (node)
+     (and (or (not predicate)
+              (funcall predicate node))
+          (< (f90-ts--node-line node)
+             cur-line)))
+   nodes))
+
+
 (defun f90-ts--before-child (node line predicate)
   "Return child of NODE, which is on a previous LINE and satisfies PREDICATE.
 Take the last of all children satisfying this condition."
@@ -1149,20 +1171,6 @@ beginning of statement is found."
    for next-namp = (f90-ts--find-first-ampersand first)
    while next-namp
    finally return first))
-
-
-(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
-  "Filter NODES by PREDICATE and line number.
-Accept only NODES which are on a line prior to CUR-LINE.
-If PREDICATE is provided, additionally filter by predicate.
-For empty NODES, return an empty list."
-  (seq-filter
-   (lambda (node)
-     (and (or (not predicate)
-              (funcall predicate node))
-          (< (f90-ts--node-line node)
-             cur-line)))
-   nodes))
 
 
 (defun f90-ts--after-stmt-line1-p (node pos)
@@ -4120,7 +4128,7 @@ The variant to be used can be customized.  Intended for use in key bindings."
       (delete-horizontal-space)
       (insert "\n" prefix)))
 
-   ((f90-ts-bol-to-point-blank-p)
+   ((f90-ts--bol-to-point-blank-p)
     ;; this results in an empty line, no ampersand
     (delete-horizontal-space)
     (insert "\n"))
@@ -4130,59 +4138,138 @@ The variant to be used can be customized.  Intended for use in key bindings."
     (f90-ts--break-line-insert-amp-at-end)
     (newline 1)
     (if f90-ts-beginning-ampersand (insert "&"))))
-
+  ;; finally indent the new line after insertion of the newline
   (indent-according-to-mode))
 
 
-;; TODO for both join variants:
-;; * joining of comment line and openmp statements
-;; * empty lines within continued statements
-;;
+(defun f90-ts--join-line-empty-prev ()
+  "For point on an empty line, remove all blank lines before point.
+After the operation point is after the last character on the non-blank line."
+  (cl-assert (f90-ts--point-on-empty-line-p)
+             nil "internal error: f90-ts--join-line-empty requires point to be on an empty line")
+  (let* ((prev (save-excursion
+                 (skip-chars-backward "[ \t\n]")
+                 (point)))
+         (end (line-end-position)))
+    (delete-region prev end)))
+
+
+(defun f90-ts--join-line-empty-next ()
+  "For point on an empty line, remove all blank lines after point.
+Move point to first character on the line after it was originally placed."
+  (cl-assert (f90-ts--point-on-empty-line-p)
+             nil "internal error: f90-ts--join-line-empty requires point to be on an empty line")
+  (let* ((next (save-excursion
+                 (skip-chars-forward "[ \t\n]")
+                 (line-beginning-position)))
+         (beg (line-beginning-position)))
+    (delete-region beg next)
+    (back-to-indentation)))
+
+
 ;; note: due to comments and empty lines, a simple forward-line or backward-line
-;; does not seem possibly easily, instead we should check and reconstruct the
+;; does not seem possible easily, instead we should check and reconstruct the
 ;; (&, comment*, &) sequence of nodes and use it for navigation and changes,
 ;; and to unify the two join variants
+(defun f90-ts--join-line-aux (first secnd)
+  "Join lines between nodes FIRST and SECND.
+For continued lines without comments in between, FIRST and SECND are the two
+ampersand nodes (FIRST at end of line, SECND at beginning of next non-empty
+line).  This function joins the two lines where FIRST and SECND are located,
+and removes any empty lines in-between."
+  (let* ((is-amp-1st (f90-ts--node-type-p first "&"))
+         (is-amp-2nd (f90-ts--node-type-p secnd "&"))
+         (is-comment-1st (f90-ts--node-type-p first "comment"))
+         (is-comment-2nd (f90-ts--node-type-p secnd "comment")))
+    (cl-destructuring-bind (beg end post)
+        (cond
+         ((and is-amp-1st is-amp-2nd)
+          ;; chose start and end positions such that the two ampersand are
+          ;; removed as well
+          (list (treesit-node-start first)
+                (treesit-node-end secnd)
+                (lambda ()
+                  (fixup-whitespace)
+                  (skip-chars-forward "[ \t]"))))
+
+         ((and is-amp-1st is-comment-2nd)
+          ;; append comment after ampersand
+          (list (treesit-node-end first)
+                (treesit-node-start secnd)
+                (lambda () (insert " "))))
+
+         ((and is-comment-1st
+               is-comment-2nd
+               (string= (f90-ts--comment-prefix first)
+                        (f90-ts--comment-prefix secnd)))
+          ;; two comments with same comment prefix, join comments
+          (list (save-excursion
+                  ;; if the comment has trailing blanks, we need to remove them
+                  (goto-char (treesit-node-end first))
+                  (skip-chars-backward "[ \t]")
+                  (point))
+                (+ (treesit-node-start secnd)
+                   (length (f90-ts--comment-prefix secnd)))
+                (lambda () (insert " "))))
+
+         ((and (null is-comment-1st)
+               is-comment-2nd)
+          ;; some command and a comment, append comment
+          (list (save-excursion
+                  ;; if the node end position does not correspond with last non-blank characters
+                  ;; (can happen for comments, but any other node, maybe), remove trailing blanks
+                  (goto-char (treesit-node-end first))
+                  (skip-chars-backward "[ \t]")
+                  (point))
+                (treesit-node-start secnd)
+                (lambda () (insert " "))))
+
+         (t
+          ;; only delete intermediate empty lines
+          (list (save-excursion
+                  (goto-char (treesit-node-end first))
+                  (line-beginning-position 2))
+                (save-excursion
+                  (goto-char (treesit-node-start secnd))
+                  (line-beginning-position))
+                (lambda () (skip-chars-forward "[ \t]")))))
+
+      (if (and beg end)
+          (progn
+            (delete-region beg end)
+            (goto-char beg)
+            (when post
+              (funcall post)))
+        (message "join failed: joining not possible")))))
+
+
 (defun f90-ts-join-line-prev ()
   "Join previous line with the current one, if part of a continued statement.
 This is (partially) a counterpart to `f90-ts-break-line'.
 If previous line has comments (at end, next line etc.) joining is not done."
   (interactive)
-  (let* ((first-node (or (f90-ts--first-node-on-line (point))
-                         (treesit-node-at (point))))
-         (amp-node (and (f90-ts--node-type-p first-node "&")
-                        first-node))
-         (prev-node (and amp-node
-                         (treesit-node-prev-sibling amp-node)))
-         (bol (save-excursion
-                (back-to-indentation)
-                (point))))
-    ;; if amp-node is non-nil it is the first node on line and thus the second
-    ;; (possibly virtual) ampersand of a continued statement, comments might be
-    ;; in between those two ampersands
-    (cl-assert (or (null first-node)
-                   (and amp-node
-                        (f90-ts--node-type-p prev-node '("&" "comment"))))
-               nil "internal error: prev node is not an ampersand or comment?")
-    (if (and amp-node
-             prev-node
-             (f90-ts--node-type-p prev-node "&"))
-        (let ((end (treesit-node-end amp-node)))
-          (if (= bol end)
-              ;; point is on the line of the ampersand, join completely
-              (let ((beg (treesit-node-start prev-node)))
-                (delete-region beg end)
-                (goto-char beg)
-                (fixup-whitespace))
-            ;; next proper continued line is not at point but later
-            (let ((beg (treesit-node-end prev-node)))
-              (cl-assert (< (line-number-at-pos bol)
-                            (line-number-at-pos end))
-                         nil "internal error: bol and end at same line?")
-              ;; do not delete the first &, as we also do not delete second &
-              (delete-region beg bol)
-              (goto-char beg)
-              (fixup-whitespace))))
-      (message "join failed: not a simple continued line"))))
+  (if (f90-ts--point-on-empty-line-p)
+      (f90-ts--join-line-empty-prev)
+    (let* ((pos-1 (save-excursion
+                    (beginning-of-line)
+                    (skip-chars-backward "[ \t\n]")
+                    (point)))
+           (pos-2 (save-excursion
+                    (beginning-of-line)
+                    (skip-chars-forward "[ \t\n]")
+                    (point)))
+           (first (f90-ts--node-on-pos pos-1 nil))
+           (secnd (f90-ts--node-on-pos pos-2 nil)))
+      (cl-assert first nil "internal error (f90-ts-join-line-prev): first node is nil")
+      (cl-assert secnd nil "internal error (f90-ts-join-line-prev): secnd node is nil")
+      (cl-assert (or (= pos-1 (treesit-node-end first))
+                     (and (f90-ts--node-type-p first "comment")
+                          (string-blank-p (buffer-substring pos-1 (treesit-node-end first)))))
+                 nil "internal error (f90-ts-join-line-prev): first node has wrong end position")
+      (cl-assert (= pos-2 (treesit-node-start secnd))
+                 nil "internal error (f90-ts-join-line-prev): secnd node has wrong start position")
+
+      (f90-ts--join-line-aux first secnd))))
 
 
 (defun f90-ts-join-line-next ()
@@ -4190,27 +4277,28 @@ If previous line has comments (at end, next line etc.) joining is not done."
 This is (partially) a counterpart to `f90-ts-break-line'.
 If continued line has comments (at end, next line etc.) joining is not done."
   (interactive)
-  (let* ((last-node (f90-ts--last-node-on-line (point)))
-         (amp-node (and (f90-ts--node-type-p last-node "&")
-                        last-node))
-         (next-node (and amp-node (treesit-node-next-sibling amp-node))))
-    ;; if amp-node is non-nil it is the last node on line and an ampersand,
-    ;; thus next node is either (possibly virtual) ampersand of a continued
-    ;; statement, or a comment (which are allowed to be in between those two
-    ;; ampersands)
-    (cl-assert (or (null last-node)
-                   (and amp-node
-                        (f90-ts--node-type-p next-node '("&" "comment"))))
-               nil "internal error: next node is not an ampersand or comment?")
-    (if (and amp-node
-             next-node
-             (f90-ts--node-type-p next-node "&"))
-        (let ((beg (treesit-node-start amp-node))
-              (end (treesit-node-end next-node)))
-          (delete-region beg end)
-          (goto-char beg)
-          (fixup-whitespace))
-      (message "join failed: not a simple continued line"))))
+  (if (f90-ts--point-on-empty-line-p)
+      (f90-ts--join-line-empty-next)
+    (let* ((pos-1 (save-excursion
+                    (end-of-line)
+                    (skip-chars-backward "[ \t\n]")
+                    (point)))
+           (pos-2 (save-excursion
+                    (end-of-line)
+                    (skip-chars-forward "[ \t\n]")
+                    (point)))
+           (first (f90-ts--node-on-pos pos-1 nil))
+           (secnd (f90-ts--node-on-pos pos-2 nil)))
+      (cl-assert first nil "internal error (f90-ts-join-line-next): first node is nil")
+      (cl-assert secnd nil "internal error (f90-ts-join-line-next): secnd node is nil")
+      (cl-assert (or (= pos-1 (treesit-node-end first))
+                     (and (f90-ts--node-type-p first "comment")
+                          (string-blank-p (buffer-substring pos-1 (treesit-node-end first)))))
+                 nil "internal error (f90-ts-join-line-next): first node has wrong end position")
+      (cl-assert (= pos-2 (treesit-node-start secnd))
+                 nil "internal error (f90-ts-join-line-next): secnd node has wrong start position")
+
+      (f90-ts--join-line-aux first secnd))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -4299,11 +4387,15 @@ The node must be strictly larger than the region (BEG END)."
     (f90-ts--largest-node-same-span cover)))
 
 
-(defun f90-ts--node-on-pos (pos)
-  "Function `treesit-node-on' works on half-open regions.
+(defun f90-ts--node-on-pos (pos named)
+  "Return the smallest node covering position POS.
+If NAMED is non-nil, consider only named nodes, otherwise include anonymous
+nodes as well.
+
+Function `treesit-node-on' works on half-open regions.
 It returns a node spanning the half-open region [beg, end).
-If pos is at end position of node, then the region [pos,pos) is empty and
-`treesit-node-on' returns a larger node, which is not expected in this context.
+If POS is at end position of node, then the region [POS,POS) is empty and
+`treesit-node-on' returns a larger node.
 This function queries at POS and at POS-1, and selects the smallest node
 containing POS in the closed interval logic.
 Example
@@ -4312,10 +4404,10 @@ subroutine sub()
    end if|
 end subroutine sub
 If point is at |, then the smallest named no is the end_statement node
-for \"end if\". However, treesit-node-on returns the subroutine node.
+for \"end if\".  However, treesit-node-on returns the subroutine node.
 Querying at POS-1 gives the expected answer."
-  (let* ((nodes (list (treesit-node-on pos      pos      nil 'named)
-                      (treesit-node-on (1- pos) (1- pos) nil 'named)))
+  (let* ((nodes (list (treesit-node-on pos      pos      nil named)
+                      (treesit-node-on (1- pos) (1- pos) nil named)))
          (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
                                                 (<= pos (treesit-node-end n))))
                                nodes))
@@ -4344,7 +4436,7 @@ than current region."
     ;; no active region, select smallest named node at point
     ;; (but move point to nonspace part first)
     (if-let* ((pos (f90-ts--pos-nonspace (point)))
-              (node-on (f90-ts--node-on-pos pos))
+              (node-on (f90-ts--node-on-pos pos 'named))
               (node (f90-ts--largest-node-same-span node-on)))
         (f90-ts--mark-region-node node
                                   f90-ts-mark-region-reversed)

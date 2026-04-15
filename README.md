@@ -525,6 +525,4 @@ The following logging functions are available:
 All write into a dedicated log buffer `*f90-ts-log*` with its own minor mode to allow some
 dedicated keybindings.
 
-By default nothing is logged and the buffer is empty. There are almost no (not even commented)
-logging instruction in the code left. But the original extensive logging is available in
-branch `logging`, which will be kept alive for the time being.
+By default nothing is logged and the buffer is empty.
