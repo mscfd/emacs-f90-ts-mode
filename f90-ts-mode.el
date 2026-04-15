@@ -1398,7 +1398,7 @@ rule but not for matched keywords, which are enforced with override=t."
       "function" "subroutine" "procedure"
       "bind" "result" "end" "call"
       "public" "private" "protected" "contains"
-      "use" "only" "implicit" "none" "external"
+      "use" "only" "import" "implicit" "none" "external"
       "pure" "impure" "elemental" "recursive"
       "type" "class" "is" "typeof" "classof"
       "if" "then" "else" "elseif" "endif"
@@ -1496,14 +1496,17 @@ rule but not for matched keywords, which are enforced with override=t."
      ((derived_type_statement
        base: (base_type_specifier
               (identifier)       @font-lock-type-face)))
-     (end_type_statement
-      (name)                     @font-lock-type-face))
 
-   :language 'fortran
-   :feature 'type
+     (import_statement
+      "import"
+      (identifier)                @font-lock-type-face)
+
+     (end_type_statement
+      (name)                     @font-lock-type-face)
+
    ;; special declarations (e.g. within allocate statements)
    ;; TODO: should the grammar use type_name instead of identifier as done elsewhere?
-   '(((allocate_statement
+   ((allocate_statement
       type: (identifier)        @font-lock-type-face))
      (type_statement
       type: (identifier)        @font-lock-type-face))))

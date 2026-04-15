@@ -112,3 +112,17 @@ program int23
       int3 = int3 + z(i)
  end do integrate
 end program int23
+
+
+! alignment of import statement
+module mod
+ abstract interface
+      subroutine sub_ifc(x, y, z)
+           import some_t, some_s, &
+                other_r
+           class(some_t), intent(inout) :: x
+           type(some_s), intent(in) :: y
+           class(other_r), pointer, intent(out) :: z
+      end subroutine sub_ifc
+ end interface
+end module mod
