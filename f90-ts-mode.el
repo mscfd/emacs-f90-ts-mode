@@ -4730,18 +4730,6 @@ If called interactively, prompt for a prefix from
   (alist-get type f90-ts--imenu-queries nil nil #'string=))
 
 
-(defun f90-ts--imenu-capture (node query)
-  "Run QUERY on NODE and return list of captured entities."
-  (treesit-query-capture node query))
-
-
-(defun f90-ts--imenu-capture-name (node query)
-  "Run QUERY on NODE and extract the captured name."
-  (when-let* ((caps (f90-ts--imenu-capture node query))
-              (name-node (cdr (assoc 'name caps))))
-    (treesit-node-text name-node t)))
-
-
 (defun f90-ts--imenu-name-pos-fn (node)
   "Return list of (NAME . POSITION) for NODE using its associated imenu query.
 This extracts the name by taking the first captured node from the query,
@@ -4786,19 +4774,22 @@ Using `treesit-simple-imenu' is far more expensive computationally."
     (f90-ts--imenu-group-items items)))
 
 
-;;; ---------------------------------------------------------------
-;;; Menu tree builder (recursive, mirrors imenu but for easy-menu)
+;;;-----------------------------------------------------------------------------
+;;; Navigate tree builder for fortran easy-menu
+;;; (this mirrors imenu, but it is recursively constructed)
 
-(defvar-local f90-ts--menu-cache-root nil
-  "The root node used for the last menu generation.")
+(defvar-local f90-ts--menu-nav-cache-root nil
+  "The root node used for the last menu generation.
+It is used to verify via `treesit-node-eq', whether the cached navigation tree
+is still valid")
 
 
-(defvar-local f90-ts--menu-cache-result nil
+(defvar-local f90-ts--menu-nav-cache-result nil
   "The last generated menu structure.")
 
 
-(defun f90-ts--menu-entry (label marker)
-  "Return a simple clickable menu vector for LABEL at MARKER."
+(defun f90-ts--menu-nav-entry (label marker)
+  "Return a clickable easy-menu vector for LABEL jumping to MARKER."
   (vector label
           (lambda ()
             (interactive)
@@ -4808,83 +4799,151 @@ Using `treesit-simple-imenu' is far more expensive computationally."
           t))
 
 
-(defun f90-ts--menu-from-sparse-tree (sparse-node)
-  "Recursively convert a SPARSE-NODE=(NODE . CHILDREN) to easy-menu format."
-  (let* ((node     (car sparse-node))
-         (children (cdr sparse-node))
-         (type     (treesit-node-type node))
-         (spec     (f90-ts--imenu-spec-for-type type)))
-
-    (if (null spec)
-        ;; if the node itself isn't "interesting" (like the root),
-        ;; just process and return the children as a flat list.
-        (cl-mapcan #'f90-ts--menu-from-sparse-tree children)
-
-      (let* ((leaf       (plist-get spec :leaf))
-             (label-base (plist-get spec :label))
-             ;; use name-pos-fn to get all (name . pos) pairs, with exact positions
-             (name-pos-list (f90-ts--imenu-name-pos-fn node)))
-
-        (if (or leaf (null children))
-            ;; leaf: one menu entry per captured name, at its exact position
-            (mapcar (lambda (name-pos)
-                      (let* ((name   (car name-pos))
-                             (pos    (cdr name-pos))
-                             (label  (if (and name (not (string-empty-p name)))
-                                         (format "%s: %s" label-base name)
-                                       label-base))
-                             (marker (set-marker (make-marker) pos)))
-                        (f90-ts--menu-entry label marker)))
-                    (or name-pos-list
-                        ;; fallback: unnamed entry at node start
-                        (list (cons label-base (treesit-node-start node)))))
-
-          ;; non-leaf: use first capture for the label/jump, children as submenu
-          (when name-pos-list
-            (let* ((first      (car name-pos-list))
-                   (name       (car first))
-                   (pos        (cdr first))
-                   (label      (if (and name (not (string-empty-p name)))
-                                   (format "%s: %s" label-base name)
-                                 label-base))
-                   (marker     (set-marker (make-marker) pos))
-                   (open-label (format "%s ..." label))
-                   (jump-label label))
-              (list
-               (f90-ts--menu-entry jump-label marker)
-               (cons open-label
-                     (cl-mapcan #'f90-ts--menu-from-sparse-tree children))))))))))
+(defconst f90-ts--menu-nav-query-compiled
+  (let ((query-string
+         (mapconcat
+          (lambda (entry)
+            (let ((query (plist-get (cdr entry) :query)))
+              ;; Wrap each original imenu query with @struct on the outer form
+              ;; Example:
+              ;;   (subroutine (...) @name_subroutine)
+              ;; becomes:
+              ;;   ((subroutine (...) @name_subroutine) @struct)
+              (concat "(" query " @struct)")))
+          f90-ts--imenu-queries
+          "\n")))
+    (treesit-query-compile 'fortran query-string))
+  "Pre-compiled Tree-sitter query for menu generation with struct captures.")
 
 
-(defun f90-ts--menu-tree (_current-menu)
-  "Filter function constructing relevant menu tree of treesitter nodes.
+(defun f90-ts--menu-nav-combine-captures (captures)
+  "Pair consecutive (struct-a name-a struct-a name-a ...) in CAPTURES.
+Return a list of triples (name-type struct-node name-node) where name-type
+is capture symbol of name-a and nodes are captured node of struct and name."
+  (cl-loop
+   for ((_ . struct-node) (type . name-node)) on captures by #'cddr
+   collect (list type struct-node name-node)))
 
-Internally caching is used to avoid frequent construction of tree if
-nothing changes."
+
+(defun f90-ts--menu-nav-node-hash-fn (node)
+  "Hash function for NODE using its start position."
+  (treesit-node-start node))
+
+
+(define-hash-table-test 'f90-ts--menu-nav-node-hash-test
+  #'treesit-node-eq
+  ;; hash function: use node's start position
+  #'f90-ts--menu-nav-node-hash-fn)
+
+
+(defun f90-ts--menu-nav-node-table (root)
+  "Capture all menu nodes under ROOT in one pass using name-struct pairing.
+Returns an alist mapping each struct node to a list of (LABEL NAME POS) tuples."
+  (let* ((captures (treesit-query-capture root f90-ts--menu-nav-query-compiled))
+         (entities (f90-ts--menu-nav-combine-captures captures))
+         (table (make-hash-table :test 'f90-ts--menu-nav-node-hash-test)))
+    (cl-loop
+     for (type struct-node name-node) in entities
+     for label = (alist-get type f90-ts--imenu-capture-to-label)
+     do (progn
+          (cl-assert label nil "internal error (f90-ts--menu-nav-node-table): label expected")
+          (cl-pushnew
+           (list label
+                 (treesit-node-text name-node t)
+                 (treesit-node-start name-node))
+           (gethash struct-node table)
+           :test #'equal)))
+    table))
+
+
+(defun f90-ts--menu-nav-tree-predicate (node-table)
+  "Return a predicate that accepts nodes present in NODE-TABLE."
+  (lambda (node)
+    (gethash node node-table)))
+
+
+(defun f90-ts--menu-nav-tree-process-fn (node-table)
+  "Return a PROCESS-FN for `treesit-induce-sparse-node' for navigate menu.
+The returned process function replaces a raw node with its entry list
+from NODE-TABLE."
+  (lambda (node)
+    (gethash node node-table)))
+
+
+(defun f90-ts--menu-nav-from-leaf (triple)
+  "Build a `f90-ts--menu-nav-entry' from a (LABEL-BASE NAME POS) TRIPLE."
+  (let* ((label-base (nth 0 triple))
+         (name       (nth 1 triple))
+         (pos        (nth 2 triple))
+         (label (if (and name (not (string-empty-p name)))
+                    (format "%s: %s" label-base name)
+                  label-base))
+         (marker (set-marker (make-marker) pos)))
+    (f90-ts--menu-nav-entry label marker)))
+
+
+(defun f90-ts--menu-nav-from-branch (entries children)
+  "Build two `f90-ts--menu-nav-entry' from a spares node and its CHILDREN.
+Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
+  (let* ((first      (car entries))
+         (label-base (nth 0 first))
+         (name       (nth 1 first))
+         (pos        (nth 2 first))
+         (label (if (and name (not (string-empty-p name)))
+                    (format "%s: %s" label-base name)
+                  label-base))
+         (marker (set-marker (make-marker) pos)))
+    (list
+     (f90-ts--menu-nav-entry label marker)
+     (cons (format "%s ..." label)
+           (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children)))))
+
+
+(defun f90-ts--menu-nav-from-sparse-tree (sparse-node)
+  "Recursively convert SPARSE-NODE to easy-menu format.
+
+SPARSE-NODE is ((TRIPLE ...) . CHILDREN) where each TRIPLE is
+\(LABEL-BASE NAME POS) as produced by the one-pass capture."
+  (let* ((entries  (car sparse-node))
+         (children (cdr sparse-node)))
+    (cond
+     ;; root sentinel (root of a sparse tree, which usually is a forest
+     ;; rather than a tree), just walk the forest
+     ((null entries)
+      (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children))
+
+     ;; leaf node (either something like a variable declaration or
+     ;; some structure without sub-nodes like an empty subroutine body).
+     ((null children)
+      (mapcar #'f90-ts--menu-nav-from-leaf entries))
+
+     ;; a branch, which is a structure contains other interesting items
+     ;; (like a subroutine with variable declarations inside it)
+     (t
+      (f90-ts--menu-nav-from-branch entries children)))))
+
+
+(defun f90-ts--menu-nav-tree (_current-menu)
+  "Return the easy-menu structure for the current buffer, with caching."
   (let ((root (treesit-buffer-root-node)))
-    (if (and f90-ts--menu-cache-root
-             f90-ts--menu-cache-result
-             ;; Check if the cached root is still the current root
-             (treesit-node-eq root f90-ts--menu-cache-root)
-             ;; Ensure the node hasn't been invalidated by a re-parse
-             (not (treesit-node-check f90-ts--menu-cache-root 'outdated)))
-        ;; return cached menu
-        f90-ts--menu-cache-result
-      ;; cache is invalid or missing: rebuild
-      (let* ((predicate (lambda (node)
-                          (let* ((type (treesit-node-type node))
-                                 (spec (f90-ts--imenu-spec-for-type type)))
-                            (and spec
-                                 ;; run the query, as type of anonymous nodes might be equal to
-                                 ;; structure root nodes, like in (program (program_statement "program" ... ))
-                                 (f90-ts--imenu-capture-name node (plist-get spec :query))))))
-             (sparse-tree (treesit-induce-sparse-tree root predicate))
-             (items (f90-ts--menu-from-sparse-tree sparse-tree))
-             (final-menu (cons (f90-ts--menu-entry "Top of buffer" (point-min-marker))
+    (if (and f90-ts--menu-nav-cache-root
+             f90-ts--menu-nav-cache-result
+             (treesit-node-eq root f90-ts--menu-nav-cache-root)
+             (not (treesit-node-check f90-ts--menu-nav-cache-root 'outdated)))
+        f90-ts--menu-nav-cache-result
+      (let* ((node-table (f90-ts--menu-nav-node-table root))
+             (sparse-tree (treesit-induce-sparse-tree
+                           root
+                           (f90-ts--menu-nav-tree-predicate node-table)
+                           (f90-ts--menu-nav-tree-process-fn node-table)))
+             (items (f90-ts--menu-nav-from-sparse-tree sparse-tree))
+             (final-menu (cons (f90-ts--menu-nav-entry "Top of buffer"
+                                                       (point-min-marker))
                                (or items '(["(empty)" ignore t])))))
+        (setq f90-ts--menu-nav-cache-root   root)
+        (setq f90-ts--menu-nav-cache-result final-menu)
         ;;(f90-ts-log :menu "sparse-tree: \n%s" (pp-to-string sparse-tree))
-        (setq f90-ts--menu-cache-root root)
-        (setq f90-ts--menu-cache-result final-menu)
+        ;;(f90-ts-log :menu "final: %s" final-menu)
         final-menu))))
 
 
@@ -5109,7 +5168,7 @@ and keyword are sometimes equal.  But we only want the structure node."
       ["Go forward"       xref-go-forward       :active t])
      ("Navigate"
       :visible f90-ts-menu-show-navigate
-      :filter (lambda (menu) (f90-ts--menu-tree menu)))))
+      :filter (lambda (menu) (f90-ts--menu-nav-tree menu)))))
 
 
 ;;;-----------------------------------------------------------------------------
