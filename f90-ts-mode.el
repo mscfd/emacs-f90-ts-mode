@@ -315,6 +315,14 @@ Copied from prog mode `f90-mode'."
   :group 'f90-ts)
 
 
+(defcustom f90-ts-menu-show-navigate t
+  "Show navigate submenu in fortran menu if Non-nil.
+For large source files, the menu might not be useful and reduce performance."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90-ts)
+
+
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching special variables.
 This is used for syntax highlighting of variables like \"self\" and \"this\".
@@ -5143,6 +5151,7 @@ and keyword are sometimes equal.  But we only want the structure node."
       ["Go back"          xref-go-back          :active t]
       ["Go forward"       xref-go-forward       :active t])
      ("Navigate"
+      :visible f90-ts-menu-show-navigate
       :filter (lambda (menu) (f90-ts--menu-tree menu)))))
 
 
