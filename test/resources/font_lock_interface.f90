@@ -55,15 +55,25 @@
   abstract interface
 ! ^^^^^^^^ font-lock-keyword-face
 !          ^^^^^^^^^ font-lock-keyword-face
-       subroutine sub_ifc(x)
+       subroutine sub_ifc(x, y, z)
 !      ^^^^^^^^^^ font-lock-keyword-face
 !                 ^^^^^^^ font-lock-function-name-face
 !                        ^ f90-ts-font-lock-bracket-face
 !                         ^ nil
-!                          ^ f90-ts-font-lock-bracket-face
-            import some_t
-!           ^^^^^^ nil
-!                  ^^^^^^ nil
+!                          ^ f90-ts-font-lock-delimiter-face
+!                            ^ nil
+!                             ^ f90-ts-font-lock-delimiter-face
+!                               ^ nil
+!                                ^ f90-ts-font-lock-bracket-face
+            import some_t, some_s, &
+!           ^^^^^^ font-lock-keyword-face
+!                  ^^^^^^ font-lock-type-face
+!                        ^ f90-ts-font-lock-delimiter-face
+!                          ^^^^^^ font-lock-type-face
+!                                ^ f90-ts-font-lock-delimiter-face
+!                                  ^ f90-ts-font-lock-delimiter-face
+                   other_r
+!                  ^^^^^^^ font-lock-type-face
             class(some_t), intent(inout) :: x
 !           ^^^^^ font-lock-keyword-face
 !                ^ f90-ts-font-lock-bracket-face
@@ -73,6 +83,26 @@
 !                          ^^^^^^^^^^^^^ font-lock-keyword-face
 !                                        ^^ f90-ts-font-lock-delimiter-face
 !                                           ^ nil
+            type(some_s), intent(in) :: y
+!           ^^^^ font-lock-keyword-face
+!               ^ f90-ts-font-lock-bracket-face
+!                ^^^^^^ font-lock-type-face
+!                      ^ f90-ts-font-lock-bracket-face
+!                       ^ f90-ts-font-lock-delimiter-face
+!                         ^^^^^^^^^^ font-lock-keyword-face
+!                                    ^^ f90-ts-font-lock-delimiter-face
+!                                       ^ nil
+            class(other_r), pointer, intent(out) :: z
+!           ^^^^^ font-lock-keyword-face
+!                ^ f90-ts-font-lock-bracket-face
+!                 ^^^^^^^ font-lock-type-face
+!                        ^ f90-ts-font-lock-bracket-face
+!                         ^ f90-ts-font-lock-delimiter-face
+!                           ^^^^^^^ font-lock-keyword-face
+!                                  ^ f90-ts-font-lock-delimiter-face
+!                                    ^^^^^^^^^^^ font-lock-keyword-face
+!                                                ^^ f90-ts-font-lock-delimiter-face
+!                                                   ^ nil
        end subroutine sub_ifc
 !      ^^^ font-lock-keyword-face
 !          ^^^^^^^^^^ font-lock-keyword-face
