@@ -244,29 +244,6 @@ Primary alignment column for the second line of a declaration plus
 
 ;;;-----------------------------------------------------------------------------
 
-(defcustom f90-ts-smart-end 'blink
-  "Determine whether and how to complete an end statement.
-If set to blink, perform completion and then jump to the opening clause of the
-completed statement.
-If set to no-blink perform completion without jumping.
-Value nil turns off smart end completion.
-
-Copied from prog mode `f90-mode'."
-  :type  '(choice (const blink) (const no-blink) (const nil))
-  :safe  (lambda (value) (memq value '(blink no-blink nil)))
-  :group 'f90-ts)
-
-
-;; same as in legacy f90 mode
-(defcustom f90-ts-beginning-ampersand nil
-  "Non-nil gives automatic insertion of `&' at start of continuation line."
-  :type  'boolean
-  :safe  'booleanp
-  :group 'f90-ts)
-
-
-;;;-----------------------------------------------------------------------------
-
 (defface f90-ts-font-lock-delimiter-face
   '((t :foreground "Sienna4"
        :weight medium))
@@ -315,75 +292,28 @@ Special comments such as separators are determined by rules in
 
 
 ;;;-----------------------------------------------------------------------------
-;;; keymap and syntax table
-
-(defvar f90-ts-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
-    ; <tab> is bound to indent-for-tab-command by default
-    (define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
-    (define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
-    (define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
-
-    (define-key map (kbd "A-<return>") 'f90-ts-break-line)
-    (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
-    (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
-    (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)
-    (define-key map (kbd "A-0") #'f90-ts-child0-region)
-    (define-key map (kbd "A-[") #'f90-ts-prev-region)
-    (define-key map (kbd "A-]") #'f90-ts-next-region)
-
-    (define-key map (kbd "C-A-a") #'f90-ts-thing-beginning-of-procedure)
-    (define-key map (kbd "C-A-e") #'f90-ts-thing-end-of-procedure)
-    (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
-    (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
-
-    map)
-  "Keymap for `f90-ts-mode'.")
-
-
-(defvar f90-ts-mode-syntax-table
-  (let ((table (make-syntax-table)))
-    ;; --- symbols and words ---
-    ;; '_' is a symbol constituent in Fortran
-    (modify-syntax-entry ?_ "_" table)
-
-    ;; --- string delimiters ---
-    (modify-syntax-entry ?\" "\"" table)
-    (modify-syntax-entry ?\' "\"" table)
-
-    ;; --- comments ---
-    ;; '!' starts a comment. '<' means start, 'b' means it's a
-    ;; "Style B" comment (standard for line-based comments).
-    (modify-syntax-entry ?! "< b" table)
-    ;; newline ends the comment. '>' means end.
-    (modify-syntax-entry ?\n "> b" table)
-
-    ;; delimiters, newline, continuation
-    (modify-syntax-entry ?\r " "  table) ; return is whitespace
-    (modify-syntax-entry ?&  "."  table) ; continuation line
-    (modify-syntax-entry ?%  "."  table) ; component reference
-
-    ;; --- Arithmetic/Logic Punctuation ---
-    (modify-syntax-entry ?+ "." table)
-    (modify-syntax-entry ?- "." table)
-    (modify-syntax-entry ?* "." table)
-    (modify-syntax-entry ?/ "." table)
-    (modify-syntax-entry ?= "." table)
-    (modify-syntax-entry ?< "." table)
-    (modify-syntax-entry ?> "." table)
-    (modify-syntax-entry ?. "." table)  ; this is difficult, as dot in ".and." for example
-                                        ; should belong to the symbol class and not punctuation,
-                                        ; but having this as symbol would interfer with for example
-                                        ; "this_flag.and.other_flag", appearing as one big symbol,
-                                        ; likewise it could be difficult with floating point numbers?
-
-    table)
-  "Syntax table for `f90-ts-mode'.")
-
-
-;;;-----------------------------------------------------------------------------
 ;;; other options
+
+(defcustom f90-ts-smart-end 'blink
+  "Determine whether and how to complete an end statement.
+If set to blink, perform completion and then jump to the opening clause of the
+completed statement.
+If set to no-blink perform completion without jumping.
+Value nil turns off smart end completion.
+
+Copied from prog mode `f90-mode'."
+  :type  '(choice (const blink) (const no-blink) (const nil))
+  :safe  (lambda (value) (memq value '(blink no-blink nil)))
+  :group 'f90-ts)
+
+
+;; same as in legacy f90 mode
+(defcustom f90-ts-beginning-ampersand nil
+  "Non-nil gives automatic insertion of `&' at start of continuation line."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90-ts)
+
 
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching special variables.
@@ -538,6 +468,74 @@ seem to make much sense."
                                f90-ts-font-lock-openmp-face)
                         (face :tag "other face"))))
   :group 'f90-ts)
+
+
+;;;-----------------------------------------------------------------------------
+;;; keymap and syntax table
+
+(defvar f90-ts-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+    ; <tab> is bound to indent-for-tab-command by default
+    (define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
+    (define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
+    (define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+
+    (define-key map (kbd "A-<return>") 'f90-ts-break-line)
+    (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
+    (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
+    (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)
+    (define-key map (kbd "A-0") #'f90-ts-child0-region)
+    (define-key map (kbd "A-[") #'f90-ts-prev-region)
+    (define-key map (kbd "A-]") #'f90-ts-next-region)
+
+    (define-key map (kbd "C-A-a") #'f90-ts-thing-beginning-of-procedure)
+    (define-key map (kbd "C-A-e") #'f90-ts-thing-end-of-procedure)
+    (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
+    (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
+
+    map)
+  "Keymap for `f90-ts-mode'.")
+
+
+(defvar f90-ts-mode-syntax-table
+  (let ((table (make-syntax-table)))
+    ;; --- symbols and words ---
+    ;; '_' is a symbol constituent in Fortran
+    (modify-syntax-entry ?_ "_" table)
+
+    ;; --- string delimiters ---
+    (modify-syntax-entry ?\" "\"" table)
+    (modify-syntax-entry ?\' "\"" table)
+
+    ;; --- comments ---
+    ;; '!' starts a comment. '<' means start, 'b' means it's a
+    ;; "Style B" comment (standard for line-based comments).
+    (modify-syntax-entry ?! "< b" table)
+    ;; newline ends the comment. '>' means end.
+    (modify-syntax-entry ?\n "> b" table)
+
+    ;; delimiters, newline, continuation
+    (modify-syntax-entry ?\r " "  table) ; return is whitespace
+    (modify-syntax-entry ?&  "."  table) ; continuation line
+    (modify-syntax-entry ?%  "."  table) ; component reference
+
+    ;; --- Arithmetic/Logic Punctuation ---
+    (modify-syntax-entry ?+ "." table)
+    (modify-syntax-entry ?- "." table)
+    (modify-syntax-entry ?* "." table)
+    (modify-syntax-entry ?/ "." table)
+    (modify-syntax-entry ?= "." table)
+    (modify-syntax-entry ?< "." table)
+    (modify-syntax-entry ?> "." table)
+    (modify-syntax-entry ?. "." table)  ; this is difficult, as dot in ".and." for example
+                                        ; should belong to the symbol class and not punctuation,
+                                        ; but having this as symbol would interfer with for example
+                                        ; "this_flag.and.other_flag", appearing as one big symbol,
+                                        ; likewise it could be difficult with floating point numbers?
+
+    table)
+  "Syntax table for `f90-ts-mode'.")
 
 
 ;;;-----------------------------------------------------------------------------
