@@ -4663,50 +4663,70 @@ If called interactively, prompt for a prefix from
 (defvar f90-ts--imenu-queries
   `(("program"
      :label "program"
-     :query "(program (program_statement \"program\" (name) @name))")
+     :query "(program (program_statement \"program\" (name) @name_program))")
 
     ("module"
      :label "module"
-     :query "(module (module_statement \"module\" (name) @name))")
+     :query "(module (module_statement \"module\" (name) @name_module))")
 
     ("submodule"
      :label "submodule"
-     :query "(submodule (submodule_statement \"submodule\" (name) @name))")
+     :query "(submodule (submodule_statement \"submodule\" (name) @name_submodule))")
 
     ("subroutine"
      :label "subroutine"
-     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name))")
+     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name_subroutine))")
 
     ("function"
      :label "function"
-     :query "(function (function_statement \"function\" name: (name) @name))")
+     :query "(function (function_statement \"function\" name: (name) @name_function))")
 
     ("module_procedure"
      :label "module procedure"
-     :query "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name))")
+     :query "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name_module_proc))")
 
     ("derived_type_definition"
      :label "derived type"
-     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name))")
+     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name_dt_type))")
 
     ("interface"
      :label "interface"
      :query ,(concat "(interface (interface_statement (abstract_specifier)?"
                      " \"interface\""
-                     " [((name) @name)"
-                     " ((operator) @name)"
-                     " ((assignment) @name)]?"
+                     " [((name) @name_interface)"
+                     " ((operator) @name_interface)"
+                     " ((assignment) @name_interface)]?"
                      "))"))
 
     ("variable_declaration"
      :label "variable"
-     :query "(variable_declaration declarator: (_) @name)"
+     :query "(variable_declaration declarator: (_) @name_var_decl)"
      :leaf t))
   "Unified Tree-sitter query specification for Imenu and menu.")
 
 
+(defconst f90-ts--imenu-query-compiled
+  (let ((query-string
+         (mapconcat
+          (lambda (entry)
+            (plist-get (cdr entry) :query))
+          f90-ts--imenu-queries
+          "\n")))
+    (treesit-query-compile 'fortran query-string))
+  "Pre-compiled global query for a one-pass scan to build imenu.")
+
+
+(defconst f90-ts--imenu-capture-to-label
+  (cl-loop for (_ . spec) in f90-ts--imenu-queries
+           for query = (plist-get spec :query)
+           when (and query (string-match "@\\([a-zA-Z_]+\\)" query))
+           collect (cons (intern (match-string 1 query))
+                         (plist-get spec :label)))
+  "Alist mapping capture symbols to menu label strings.")
+
+
 (defun f90-ts--imenu-spec-for-type (type)
-  "Return entry in alist `f90-ts--imenu-queries` for TYPE."
+  "Return the plist for TYPE from `f90-ts--imenu-queries'."
   (alist-get type f90-ts--imenu-queries nil nil #'string=))
 
 
@@ -4723,110 +4743,47 @@ If called interactively, prompt for a prefix from
 
 
 (defun f90-ts--imenu-name-pos-fn (node)
-  "Return list of (NAME . POSITION) for NODE applying associated imenu query."
-  (let* ((type (treesit-node-type node))
-         (spec (f90-ts--imenu-spec-for-type type))
+  "Return list of (NAME . POSITION) for NODE using its associated imenu query.
+This extracts the name by taking the first captured node from the query,
+regardless of the capture name symbol used."
+  (let* ((type  (treesit-node-type node))
+         (spec  (f90-ts--imenu-spec-for-type type))
          (query (plist-get spec :query))
-         (caps (and query (treesit-query-capture node query))))
-    (when caps
-      (mapcar (lambda (c)
-                (let ((n (cdr c)))
-                  (cons (treesit-node-text n t)
-                        (treesit-node-start n))))
-              (seq-filter (lambda (c) (eq (car c) 'name)) caps)))))
+         (caps  (and query (treesit-query-capture node query))))
+    (cl-loop for (_ . node) in caps
+             collect (cons (treesit-node-text node t)
+                           (treesit-node-start node)))))
 
 
-(defun f90-ts--imenu-valid-node-p (query)
-  "Return a predicate checking whether QUERY captures anything."
-  (lambda (node)
-    (and query (f90-ts--imenu-capture-name node query))))
+(defun f90-ts--imenu-group-items (items)
+  "Group flat ITEMS list into ((LABEL (NAME . MARKER) ...) ...) for Imenu.
+Each element of ITEMS is (LABEL NAME . MARKER)."
+  (cl-loop for (label . group) in (seq-group-by #'car items)
+           collect (cons label
+                         (mapcar (lambda (item)
+                                   (cons (cadr item) (caddr item)))
+                                 group))))
 
 
-(defvar f90-ts--imenu-settings
-  (mapcar
-   (lambda (entry)
-     (let* ((type  (car entry))
-            (spec  (cdr entry))
-            (label (plist-get spec :label))
-            (query (plist-get spec :query)))
-       (list label                              ; category
-             (format "^%s$" type)               ; regexp
-             (f90-ts--imenu-valid-node-p query) ; predicate
-             #'f90-ts--imenu-name-pos-fn)))     ; name-pos-fn
-   f90-ts--imenu-queries)
-  "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
-
-
-(defun f90-ts--simple-imenu-tree (node pred name-pos-fn)
-  "Like `treesit--simple-imenu-1', but supports multiple entries per leaf.
-
-NODE is a node in the tree returned by
-`treesit-induce-sparse-tree' (not a tree-sitter node, its car is
-a tree-sitter node).  Walk that tree and return an Imenu index.  Stop at nodes
-not satisfying PRED.
-
-NAME-POS-FN must return a list of (NAME . POSITION) to distinguish different
-positions for a single query with multiple captures."
-  (let* ((ts-node (car node))
-         (children (cdr node))
-         (subtrees (mapcan (lambda (child)
-                             (f90-ts--simple-imenu-tree child pred name-pos-fn))
-                           children))
-
-         ;; entries := list of (name . position)
-         (entries
-          (when ts-node
-            (funcall name-pos-fn ts-node)))
-
-         ;; marker helper
-         (make-marker-at
-          (lambda (pos)
-            (set-marker (make-marker) pos))))
-
-    (cond
-     ;; root node
-     ((null ts-node)
-      subtrees)
-
-     ;; predicate rejects node
-     ((and pred (not (funcall pred ts-node)))
-      subtrees)
-
-     ;; non-leaf: subgroup (use first entry only)
-     (subtrees
-      (when entries
-        (let* ((entry (car entries))
-               (name (car entry))
-               (pos  (cdr entry)))
-          `((,name
-             ,(cons " " (funcall make-marker-at pos))
-             ,@subtrees)))))
-
-     ;; leaf: expand all entries with exact positions
-     (t
-      (when entries
-        (mapcar (lambda (entry)
-                  (let ((name (car entry))
-                        (pos  (cdr entry)))
-                    (cons name (funcall make-marker-at pos))))
-                entries))))))
+(defun f90-ts--imenu-captures-to-items (captures)
+  "Convert raw CAPTURES from `treesit-query-capture' to a flat item list.
+Returns a list of (LABEL NAME . MARKER) triples."
+  (cl-loop for (type . node) in captures
+           for label = (alist-get type f90-ts--imenu-capture-to-label)
+           when label
+           collect (list label
+                         (treesit-node-text node t)
+                         (set-marker (make-marker)
+                                     (treesit-node-start node)))))
 
 
 (defun f90-ts-simple-imenu ()
-  "Return an Imenu index for the current buffer.
-This is a copy of `treesit-simple-imenu', but it can handle queries
-which return more than one match (like in variable declarations)."
-  (let ((root (treesit-buffer-root-node)))
-    (mapcan
-     (lambda (setting)
-       (cl-destructuring-bind (category regexp pred name-pos-fn) setting
-         (when-let* ((tree (treesit-induce-sparse-tree root regexp))
-                     (index (f90-ts--simple-imenu-tree
-                             tree pred name-pos-fn)))
-           (cl-assert category nil "f90-ts-simple-imenu: category expected")
-           (cl-assert name-pos-fn nil "f90-ts-simple-imenu: name-pos-fn expected")
-           (list (cons category index)))))
-     f90-ts--imenu-settings)))
+  "Return an Imenu index for the current buffer using a single query pass.
+Using `treesit-simple-imenu' is far more expensive computationally."
+  (let* ((root     (treesit-buffer-root-node))
+         (captures (treesit-query-capture root f90-ts--imenu-query-compiled))
+         (items    (f90-ts--imenu-captures-to-items captures)))
+    (f90-ts--imenu-group-items items)))
 
 
 ;;; ---------------------------------------------------------------
