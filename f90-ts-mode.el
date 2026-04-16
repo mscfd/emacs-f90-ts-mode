@@ -37,6 +37,7 @@
 ;;   - Indentation
 ;;   - Alignment for multiline statements where applicable
 ;;   - Smart end completion
+;;   - Xref (buffer local)
 ;;   - Break and join continued lines
 ;;   - Comment region (un)commenting with configurable prefixes
 ;;   - OpenMP and preprocessor directive handling
@@ -69,6 +70,8 @@
 
 (require 'cl-lib)
 (require 'treesit)
+(require 'xref)
+
 
 ;;;-----------------------------------------------------------------------------
 
@@ -159,16 +162,6 @@ to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
 Used as ternary setting in `indent-for-tab-command'.  Can be be bound
 to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
   :type  f90-ts--indent-list-radio
-  :group 'f90-ts-indent)
-
-
-(defcustom f90-ts-indent-list-always-include-default t
-  "Always include the default continued-line column in selected columns.
-This column is offered as additional choice for alignment in a list-like
-context.  It is the column of the first line of the continued statement
-plus the value of `f90-ts-indent-continued'."
-  :type  'boolean
-  :safe  'booleanp
   :group 'f90-ts-indent)
 
 
@@ -339,6 +332,12 @@ Special comments such as separators are determined by rules in
     (define-key map (kbd "A-0") #'f90-ts-child0-region)
     (define-key map (kbd "A-[") #'f90-ts-prev-region)
     (define-key map (kbd "A-]") #'f90-ts-next-region)
+
+    (define-key map (kbd "C-A-a") #'f90-ts-thing-beginning-of-procedure)
+    (define-key map (kbd "C-A-e") #'f90-ts-thing-end-of-procedure)
+    (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
+    (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
+
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -397,7 +396,8 @@ For matching identifiers the face `f90-ts-font-lock-special-var' is used."
 
 (defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
   "Regular expression for matching and capturing comment starts.
-This is used to extract the comment prefix for `f90-ts-break-line'.
+This is used to extract the comment prefix for `f90-ts-break-line',
+`f90-ts-join-line-prev' and `f90-ts-join-line-next' operations.
 OpenMP prefix is matched by `f90-ts-openmp-prefix-regexp'.
 
 The variable should also add trailing whitespace characters to
@@ -541,6 +541,46 @@ seem to make much sense."
 
 
 ;;;-----------------------------------------------------------------------------
+;;; tree-sitter workaround
+
+;; For virtual zero-length nodes, `treesit-node-parent' fails. For
+;;
+;;    call something(arg1, &
+;;                   arg2)
+;;
+;; the grammar injects a second ampersand of length zero right before "a".
+;; `treesit-node-at' at a point before arg2, returns the virtual ampersand node.
+;; But his node has no parent, but it has a previous and next sibling. A couple of
+;; treesit functions (like treesit-thing-at, used for which-function-mode etc.)
+;; using `treesit-node-at' followed by `treesit-parent-until' fail as a consequence.
+;; To circumvent this, treesit-node-parent is patched by using previous or next
+;; sibling and check, whether those have a proper parent. Which seems always the case.
+
+(define-advice treesit-node-parent (:around (orig node) f90-ts--skip-zero-width-extras)
+  "If NODE is zero-width with no parent, walk siblings to find a real parent.
+
+This is required for virtual ampersand continuation line nodes, for which
+there is no parent.  Those nodes always have direct proper previous and next
+siblings with the correct parent.  So walking is just one step in general."
+  ;; remark: original function returns nil for (treesit-node-parent nil)
+  (when node
+    (let ((parent (funcall orig node)))
+      (if (or parent
+              (< (treesit-node-start node) (treesit-node-end node)))
+          parent
+        ;; try previous siblings first, then next siblings as fallback,
+        ;; but for the intended case, one step to the prev-sibling resolves the issue
+        (or (cl-loop for candidate = (treesit-node-prev-sibling node)
+                     then (treesit-node-prev-sibling candidate)
+                     while candidate
+                     thereis (funcall orig candidate))
+            (cl-loop for candidate = (treesit-node-next-sibling node)
+                     then (treesit-node-next-sibling candidate)
+                     while candidate
+                     thereis (funcall orig candidate)))))))
+
+
+;;;-----------------------------------------------------------------------------
 ;;; auxiliary predicates
 
 (defun f90-ts--node-type-p (node type)
@@ -608,22 +648,72 @@ Note that the parse uses identifier not just for variables, but for types etc."
 
 
 (defconst f90-ts--builtin-functions
-  '("abs" "acos" "aimag" "aint" "allocated" "anint" "any" "asin"
-    "associated" "atan" "atan2" "btest" "ceiling" "char" "cmplx"
-    "conjg" "cos" "cosh" "count" "cshift" "date_and_time" "dble"
-    "dim" "dot_product" "dprod" "eoshift" "epsilon" "exp" "exponent"
-    "floor" "fraction" "huge" "iand" "ibclr" "ibits" "ibset" "ichar"
-    "ieor" "index" "int" "ior" "ishft" "ishftc" "kind" "lbound"
-    "len" "len_trim" "log" "log10" "logical" "matmul" "max"
-    "maxexponent" "maxloc" "maxval" "merge" "min" "minexponent"
-    "minloc" "minval" "mod" "modulo" "mvbits" "nearest" "nint" "not"
-    "null" "pack" "precision" "present" "product" "radix"
-    "random_number" "random_seed" "range" "rank" "real" "repeat"
-    "reshape" "rrspacing" "scale" "scan" "selected_int_kind"
-    "selected_real_kind" "set_exponent" "shape" "sign" "sin" "sinh"
-    "size" "spacing" "spread" "sqrt" "sum" "system_clock" "tan"
-    "tanh" "tiny" "transfer" "transpose" "trim" "ubound" "unpack"
-    "verify")
+  '(;; integer/real
+    "abs" "aimag" "aint" "anint" "ceiling" "conjg" "dble" "dim" "dprod"
+    "floor" "hypot" "max" "min" "mod" "modulo" "nearest" "nint" "real"
+    "rrspacing" "scale" "sign" "spacing"
+    ;; exponential and logarithmic
+    "exp" "log" "log10" "log_gamma" "gamma" "sqrt"
+    ;; trigonometric (radians)
+    "acos" "asin" "atan" "atan2" "cos" "sin" "tan"
+    ;; trigonometric (degrees)
+    "acosd" "asind" "atand" "atan2d" "cosd" "sind" "tand"
+    ;; trigonometric (half-revolutions)
+    "acospi" "asinpi" "atanpi" "atan2pi" "cospi" "sinpi" "tanpi"
+    ;; hyperbolic
+    "acosh" "asinh" "atanh" "cosh" "sinh" "tanh"
+    ;; error functions
+    "erf" "erfc" "erfc_scaled"
+    ;; bessel functions
+    "bessel_j0" "bessel_j1" "bessel_jn"
+    "bessel_y0" "bessel_y1" "bessel_yn"
+    ;; Floating-point model inquiry
+    "digits" "epsilon" "exponent" "fraction" "huge" "maxexponent"
+    "minexponent" "precision" "radix" "range" "rrspacing" "tiny"
+    ;; numeric type conversion
+    "cmplx" "int" "logical" "transfer"
+    ;; bit operations
+    "btest" "iand" "ibclr" "ibits" "ibset" "ieor" "ior"
+    "ishft" "ishftc" "leadz" "maskl" "maskr" "merge_bits"
+    "mvbits" "not" "popcnt" "poppar" "shifta" "shiftl" "shiftr"
+    "trailz" "bit_size"
+    ;; array inquiry
+    "allocated" "is_contiguous" "lbound" "rank" "shape" "size" "ubound"
+    ;; array construction, manipulation and reduction
+    "all" "any" "count" "cshift" "dot_product" "eoshift" "iall" "iany"
+    "iparity" "matmul" "maxloc" "maxval" "merge" "minloc" "minval" "norm2"
+    "pack" "parity" "product" "reduce" "reshape" "spread" "sum"
+    "transpose" "unpack"
+    ;; array location
+    "findloc" "maxloc" "minloc"
+    ;; character
+    "achar" "char" "iachar" "ichar" "index" "len" "len_trim"
+    "new_line" "repeat" "scan" "trim" "verify"
+    ;; kind and type inquiry
+    "kind" "selected_char_kind" "selected_int_kind"
+    "selected_logical_kind" "selected_real_kind" "storage_size"
+    "out_of_range"
+    ;; type inquiry
+    "extends_type_of" "same_type_as"
+    ;; pointer and allocation
+    "associated" "move_alloc" "null"
+    ;; coarray
+    "event_post" "event_query" "event_wait"
+    "failed_images" "get_team" "image_index" "image_status" "lcobound"
+    "num_images" "stopped_images" "team_number" "this_image" "ucobound"
+    "co_broadcast" "co_max" "co_min" "co_reduce" "co_sum"
+    ;; coarray atomic subroutines
+    "atomic_add" "atomic_and" "atomic_cas" "atomic_define"
+    "atomic_fetch_add" "atomic_fetch_and" "atomic_fetch_or"
+    "atomic_fetch_xor" "atomic_or" "atomic_ref" "atomic_xor"
+    ;; random numbers
+    "random_init" "random_number" "random_seed"
+    ;; system and environment
+    "command_argument_count" "cpu_time" "date_and_time"
+    "get_command" "get_command_argument" "get_environment_variable"
+    "is_iostat_end" "is_iostat_eor" "system_clock"
+    ;; miscellaneous
+    "present" )
   "List of all builtin keywords for font-lock highlighting.
 Used with face `font-lock-builtin-face'.")
 
@@ -680,10 +770,17 @@ parsed by the treesitter grammar."
         (and (< start pos))))))
 
 
-(defun f90-ts-bol-to-point-blank-p ()
+(defun f90-ts--bol-to-point-blank-p ()
   "Return non-nil if only blank characters exist between BOL and point.
 Note that in fortran, a continuation symbol shall not be used on blank lines."
   (looking-back "^\\s-*" (line-beginning-position)))
+
+
+(defun f90-ts--point-on-empty-line-p ()
+  "Return non-nil if point is on an empty line, containing at most blanks."
+  (save-excursion
+    (beginning-of-line)
+    (looking-at "[ \t]*$")))
 
 
 (defun f90-ts--node-not-number-literal-p (node)
@@ -955,6 +1052,20 @@ Comment nodes and ampersand are ignored"
      finally return current)))
 
 
+(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
+  "Filter NODES by PREDICATE and line number.
+Accept only NODES which are on a line prior to CUR-LINE.
+If PREDICATE is provided, additionally filter by predicate.
+For empty NODES, return an empty list."
+  (seq-filter
+   (lambda (node)
+     (and (or (not predicate)
+              (funcall predicate node))
+          (< (f90-ts--node-line node)
+             cur-line)))
+   nodes))
+
+
 (defun f90-ts--before-child (node line predicate)
   "Return child of NODE, which is on a previous LINE and satisfies PREDICATE.
 Take the last of all children satisfying this condition."
@@ -1110,20 +1221,6 @@ beginning of statement is found."
    for next-namp = (f90-ts--find-first-ampersand first)
    while next-namp
    finally return first))
-
-
-(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
-  "Filter NODES by PREDICATE and line number.
-Accept only NODES which are on a line prior to CUR-LINE.
-If PREDICATE is provided, additionally filter by predicate.
-For empty NODES, return an empty list."
-  (seq-filter
-   (lambda (node)
-     (and (or (not predicate)
-              (funcall predicate node))
-          (< (f90-ts--node-line node)
-             cur-line)))
-   nodes))
 
 
 (defun f90-ts--after-stmt-line1-p (node pos)
@@ -1600,6 +1697,207 @@ rule but not for matched keywords, which are enforced with override=t."
    (f90-ts--font-lock-rules-value)
    (f90-ts--font-lock-rules-delimiter))
   "List of font-lock rules.")
+
+
+;;;-----------------------------------------------------------------------------
+;;; Xref backend
+
+(defconst f90-ts--xref-def-query
+  "(program (program_statement (name) @def))
+   (module (module_statement (name) @def))
+   (submodule (submodule_statement (name) @def))
+   (subroutine (subroutine_statement name: (name) @def))
+   (function (function_statement name: (name) @def))
+   (module_procedure_statement name: (name) @def)
+   (interface_statement (name) @def)
+   (interface_statement (operator (operator_name) @def))
+   (interface_statement (assignment \"=\" @def))
+   (derived_type_definition (derived_type_statement (type_name) @def))
+   (preproc_def name: (identifier) @def)
+   (preproc_function_def name: (identifier) @def)"
+  "Query for xref for finding definitions of symbol captured as @def.
+
+Each clause matches a syntactic construct that introduces a named
+entity (e.g. subroutine, function, module, derived type, or macro)
+and binds the relevant node to the capture name @def.
+
+The resulting captures are consumed by
+`f90-ts--xref-find-definitions' to locate definition positions.")
+
+(defconst f90-ts--xref-ref-query
+  "[(identifier)
+    (name)
+    (type_name)
+    (type_member)
+    (method_name)
+    (operator_name)
+    (user_defined_operator)
+    (procedure_interface)
+   ] @ref"
+  "Query for xref for finding references of symbols captured by @ref.
+
+The query is very general and might find incorrect references.  There is
+also no consideration for the scope of a symbol.")
+
+(defun f90-ts--xref-find-definitions (identifier)
+  "Find all definitions of IDENTIFIER in the current buffer.
+
+IDENTIFIER is a string representing the symbol to search for.
+The search is case-insensitive, reflecting Fortran's
+case-insensitive semantics.
+
+This function:
+1. Executes `f90-ts--xref-def-query' against the current buffer's tree-sitter
+   syntax tree.
+2. Filters captured nodes whose text matches IDENTIFIER.
+3. Converts matching nodes into xref-item objects.
+
+Returns a list of xref-item instances suitable for consumption by
+`xref-backend-definitions'."
+  (let* ((id-lowcase (downcase identifier))
+         (scope (treesit-buffer-root-node))
+         (id-nodes (treesit-query-capture scope
+                                          f90-ts--xref-def-query
+                                          nil nil t)))
+    (cl-loop for node in id-nodes
+             when (string= (downcase (treesit-node-text node t)) id-lowcase)
+             collect (f90-ts--xref-make-item node))))
+
+
+(defun f90-ts--xref-find-references (identifier)
+  "Find all references to IDENTIFIER in the current buffer.
+
+IDENTIFIER is a string naming the symbol to search for.
+The search is case-insensitive.
+
+This function performs a broad tree-sitter query that captures all
+identifier nodes, then filters them by textual equality with
+IDENTIFIER.
+
+Note that this approach is purely syntactic and does not account
+for scope, shadowing, or semantic resolution.
+
+Returns a list of xref-item instances suitable for
+`xref-backend-references'."
+  (let* ((id-lowcase (downcase identifier))
+         (scope (treesit-buffer-root-node))
+         (id-nodes (treesit-query-capture scope
+                                          f90-ts--xref-ref-query
+                                          nil nil t)))
+    (cl-loop for node in id-nodes
+             when (progn
+                    (f90-ts-log :xref "node=%s, text=%s, id=%s" node (treesit-node-text node t) id-lowcase)
+                    (string= (downcase (treesit-node-text node t)) id-lowcase))
+             collect (f90-ts--xref-make-item node))))
+
+
+(defun f90-ts--xref-make-item (node)
+  "Construct an xref-item from a tree-sitter NODE.
+
+NODE is expected to represent an identifier or definition site.
+The function extracts:
+
+- A human-readable display string consisting of the full line containing NODE.
+- A buffer location corresponding to the start of NODE.
+
+The resulting xref-item can be used by xref commands to display and navigate
+search results."
+  (let ((start (treesit-node-start node)))
+    (xref-make
+     (save-excursion
+       (goto-char start)
+       (string-trim (buffer-substring-no-properties
+                     (line-beginning-position)
+                     (line-end-position))))
+     (xref-make-buffer-location (current-buffer) start))))
+
+
+(cl-defmethod xref-backend-identifier-at-point ((_backend (eql f90-ts)))
+  "Return the identifier at point for the f90-ts backend.
+
+This method is invoked by xref to determine the default symbol
+under the cursor when performing operations like
+`xref-find-definitions'.
+
+It uses `thing-at-point' with the symbol type and returns the
+result as a string, or nil if no symbol is found."
+  (thing-at-point 'symbol t))
+
+
+(cl-defmethod xref-backend-identifier-completion-table ((_backend (eql f90-ts)))
+  "Return a completion table of identifiers in the current buffer.
+
+This method provides candidates for identifier completion in xref commands.
+It collects all identifier nodes from the tree-sitter syntax tree and returns
+their textual representations.
+Currently only named nodes with type \"identifier\" are captured.
+
+Duplicates are not explicitly removed, so callers may wish to handle
+deduplication if necessary."
+  (let ((id-nodes (treesit-query-capture
+                   (treesit-buffer-root-node)
+                   '((identifier) @id)
+                   nil nil t)))
+    (cl-loop for node in id-nodes
+             collect (treesit-node-text node t))))
+
+
+(cl-defmethod xref-backend-definitions ((_backend (eql f90-ts)) identifier)
+  "Return definition locations for IDENTIFIER using the f90-ts backend.
+
+Uses `f90-ts--xref-find-definitions', which performs a buffer-local search for
+matching definition nodes."
+  (f90-ts--xref-find-definitions identifier))
+
+
+(cl-defmethod xref-backend-references ((_backend (eql f90-ts)) identifier)
+  "Return reference locations for IDENTIFIER using the f90-ts backend.
+
+Uses `f90-ts--xref-find-references', which performs a syntactic search over
+identifier nodes in the current buffer."
+  (f90-ts--xref-find-references identifier))
+
+
+(cl-defmethod xref-backend-apropos ((_backend (eql f90-ts)) pattern)
+  "Return all identifiers matching regexp PATTERN in the current buffer.
+
+This implementation performs a tree-sitter query over all identifier
+nodes and returns those whose textual representation matches PATTERN.
+
+The match is case-insensitive, following Fortran conventions."
+  (let ((case-fold-search t))
+    (cl-loop for node
+             in (treesit-query-capture (treesit-buffer-root-node)
+                                       '((identifier) @id)
+                                       nil nil t)
+             for text = (buffer-substring-no-properties
+                         (treesit-node-start node)
+                         (treesit-node-end node))
+             when (string-match-p pattern text)
+             collect (f90-ts--xref-make-item node))))
+
+
+(defun f90-ts-xref-backend ()
+  "Return the symbol identifying the f90-ts xref backend.
+Return f90-ts backend unless a higher-level backend is active.
+
+This function is intended to be added to
+`xref-backend-functions'.  When invoked by xref's backend
+discovery mechanism, it signals that the current buffer should
+use the f90-ts backend by returning the symbol f90-ts.
+
+Because this function is typically installed buffer-locally, it
+activates the backend only for buffers using `f90-ts-mode'."
+  (cond
+   ;; prefer LSP and eglot if active
+   ((bound-and-true-p lsp-mode) nil)
+   ((bound-and-true-p eglot--managed-mode) nil)
+
+   ;; prefer etags if TAGS table exists
+   ((and tags-file-name (file-exists-p tags-file-name)) nil)
+
+   ;; otherwise use the backend provided here
+   (t 'f90-ts)))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -2591,8 +2889,9 @@ for default continued line indentation."
        (collect (treesit-node-start prev)
                 ;; add one because "::" as two and not one character as "="
                 f90-ts-indent-declaration))
-     ;; always add default continued line indentation
-     (collect (f90-ts--align-list-pstmt1-anoff)))))
+     ;; add default continued line indentation if items is empty (no smallest anoff)
+     (unless smallest-anoff
+       (collect (f90-ts--align-list-pstmt1-anoff))))))
 
 
 ;;++++++++++++++
@@ -2758,9 +3057,8 @@ Finally use VARIANT to select one pair to align with."
          (anoff-other (f90-ts--align-list-anoff-other loc
                                                       anoff-items
                                                       list-context))
-         ;; if selected, add default continued offset position as anchor
-         (anoff-extra (and f90-ts-indent-list-always-include-default
-                           (f90-ts--align-list-pstmt1-anoff)))
+         ;; always add default continued offset position as anchor
+         (anoff-extra (f90-ts--align-list-pstmt1-anoff))
          ;; anoff-primary is used as 'primary' in keep-or-primary, primary etc.
          (anoff-primary (car anoff-other))
          ;; final list of anchors (which are nodes or pairs (position offset))
@@ -2993,15 +3291,6 @@ and nodes for debugging purposes into the exclusive log buffer."
     nil))
 
 
-(defun f90-ts-indent-rules-info (msg)
-  "Create an indentation rule, which never matches, but prints a MSG header.
-If MSG is \"start\" or \"catch all\" print additional position and node info.
-
-Used as \",@(f90-ts-indent-rules-info message\"') in indentation rules."
-  `(;; for testing purposes
-    ((f90-ts--fail-info-is ,msg) parent 0)))
-
-
 ;;++++++++++++++
 ;; simple indentation rules: expansion with f90-ts-- prefix
 
@@ -3053,11 +3342,15 @@ passed through unchanged."
   "Build a list of treesit indent rule triples.
 Each element of TRIPLES is a (MATCHER ANCHOR OFFSET) form as accepted
 by `f90-ts--map-rule'.  Returns a list of all expanded triples suitable for
-use as the body of a `defvar' ruleset."
+use as the body of a `defvar' ruleset.
+As a special case, (fail-info-is MSG) is expanded to the
+triple ((f90-ts--fail-info-is MSG) parent 0) directly."
   `(list ,@(mapcar (lambda (triple)
-                     `(f90-ts--map-rule ,(nth 0 triple)
-                                        ,(nth 1 triple)
-                                        ,(nth 2 triple)))
+                     (if (eq (car triple) 'fail-info)
+                         `(list '(f90-ts--fail-info-is ,(nth 1 triple)) 'parent 0)
+                       `(f90-ts--map-rule ,(nth 0 triple)
+                                          ,(nth 1 triple)
+                                          ,(nth 2 triple))))
                    triples)))
 
 
@@ -3069,7 +3362,7 @@ use as the body of a `defvar' ruleset."
    ;; populate cache and then always fail
    (populate-cache parent 0)
    ;; info rules needs populated cache
-   ;;,@(f90-ts-indent-rules-info "start")
+   ;;(fail-info "start")
    )
   "Indentation rules executed at start.
 The main purpose is to fill the indentation cache for a new run.")
@@ -3237,10 +3530,10 @@ and in case of ERROR nodes with incomplete code.")
    ((n-p-gp     "elseif_clause"    "if_statement"  nil)      parent 0)
    ((n-p-gp     "else_clause"      "if_statement"  nil)      parent 0)
    ((n-p-pstmtk nil                "if_statement"  "if")     parent f90-ts-indent-block) ; line right after if
-   ((n-p-pstmtk nil                "if_statement"  "elseif") parent f90-ts-indent-block) ; line right after elseif
    ((n-p-pstmtk nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line right after else, with empty else block
    ((n-p-pstmtk nil                "else_clause"   "else")   parent f90-ts-indent-block) ; line after else, with non-empty else block
-   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block)
+   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block) ; line right after "elseif"
+   ((n-p-pstmtk nil                "elseif_clause" "else")   parent f90-ts-indent-block) ; line right after "else if"
 
    ((n-p-pstmtk "elseif_clause"    "ERROR" "if") previous-stmt-anchor 0)
    ((n-p-pstmtk "elseif"           "ERROR" "if") previous-stmt-anchor 0)
@@ -3337,7 +3630,7 @@ These are do loops, block statements, associate construct and forall statements.
 (defvar f90-ts-indent-rules-catch-all
   (f90-ts--with-map-rules
    ;; final catch-all rule
-   ;;,@(f90-ts-indent-rules-info "catch all")
+   ;;(fail-info "catch all")
    (catch-all catch-all-anchor 0))
   "Final indentation rule to handle unmatched cases.")
 
@@ -3885,7 +4178,7 @@ The variant to be used can be customized.  Intended for use in key bindings."
       (delete-horizontal-space)
       (insert "\n" prefix)))
 
-   ((f90-ts-bol-to-point-blank-p)
+   ((f90-ts--bol-to-point-blank-p)
     ;; this results in an empty line, no ampersand
     (delete-horizontal-space)
     (insert "\n"))
@@ -3895,59 +4188,138 @@ The variant to be used can be customized.  Intended for use in key bindings."
     (f90-ts--break-line-insert-amp-at-end)
     (newline 1)
     (if f90-ts-beginning-ampersand (insert "&"))))
-
+  ;; finally indent the new line after insertion of the newline
   (indent-according-to-mode))
 
 
-;; TODO for both join variants:
-;; * joining of comment line and openmp statements
-;; * empty lines within continued statements
-;;
+(defun f90-ts--join-line-empty-prev ()
+  "For point on an empty line, remove all blank lines before point.
+After the operation point is after the last character on the non-blank line."
+  (cl-assert (f90-ts--point-on-empty-line-p)
+             nil "internal error: f90-ts--join-line-empty requires point to be on an empty line")
+  (let* ((prev (save-excursion
+                 (skip-chars-backward "[ \t\n]")
+                 (point)))
+         (end (line-end-position)))
+    (delete-region prev end)))
+
+
+(defun f90-ts--join-line-empty-next ()
+  "For point on an empty line, remove all blank lines after point.
+Move point to first character on the line after it was originally placed."
+  (cl-assert (f90-ts--point-on-empty-line-p)
+             nil "internal error: f90-ts--join-line-empty requires point to be on an empty line")
+  (let* ((next (save-excursion
+                 (skip-chars-forward "[ \t\n]")
+                 (line-beginning-position)))
+         (beg (line-beginning-position)))
+    (delete-region beg next)
+    (back-to-indentation)))
+
+
 ;; note: due to comments and empty lines, a simple forward-line or backward-line
-;; does not seem possibly easily, instead we should check and reconstruct the
+;; does not seem possible easily, instead we should check and reconstruct the
 ;; (&, comment*, &) sequence of nodes and use it for navigation and changes,
 ;; and to unify the two join variants
+(defun f90-ts--join-line-aux (first secnd)
+  "Join lines between nodes FIRST and SECND.
+For continued lines without comments in between, FIRST and SECND are the two
+ampersand nodes (FIRST at end of line, SECND at beginning of next non-empty
+line).  This function joins the two lines where FIRST and SECND are located,
+and removes any empty lines in-between."
+  (let* ((is-amp-1st (f90-ts--node-type-p first "&"))
+         (is-amp-2nd (f90-ts--node-type-p secnd "&"))
+         (is-comment-1st (f90-ts--node-type-p first "comment"))
+         (is-comment-2nd (f90-ts--node-type-p secnd "comment")))
+    (cl-destructuring-bind (beg end post)
+        (cond
+         ((and is-amp-1st is-amp-2nd)
+          ;; chose start and end positions such that the two ampersand are
+          ;; removed as well
+          (list (treesit-node-start first)
+                (treesit-node-end secnd)
+                (lambda ()
+                  (fixup-whitespace)
+                  (skip-chars-forward "[ \t]"))))
+
+         ((and is-amp-1st is-comment-2nd)
+          ;; append comment after ampersand
+          (list (treesit-node-end first)
+                (treesit-node-start secnd)
+                (lambda () (insert " "))))
+
+         ((and is-comment-1st
+               is-comment-2nd
+               (string= (f90-ts--comment-prefix first)
+                        (f90-ts--comment-prefix secnd)))
+          ;; two comments with same comment prefix, join comments
+          (list (save-excursion
+                  ;; if the comment has trailing blanks, we need to remove them
+                  (goto-char (treesit-node-end first))
+                  (skip-chars-backward "[ \t]")
+                  (point))
+                (+ (treesit-node-start secnd)
+                   (length (f90-ts--comment-prefix secnd)))
+                (lambda () (insert " "))))
+
+         ((and (null is-comment-1st)
+               is-comment-2nd)
+          ;; some command and a comment, append comment
+          (list (save-excursion
+                  ;; if the node end position does not correspond with last non-blank characters
+                  ;; (can happen for comments, but any other node, maybe), remove trailing blanks
+                  (goto-char (treesit-node-end first))
+                  (skip-chars-backward "[ \t]")
+                  (point))
+                (treesit-node-start secnd)
+                (lambda () (insert " "))))
+
+         (t
+          ;; only delete intermediate empty lines
+          (list (save-excursion
+                  (goto-char (treesit-node-end first))
+                  (line-beginning-position 2))
+                (save-excursion
+                  (goto-char (treesit-node-start secnd))
+                  (line-beginning-position))
+                (lambda () (skip-chars-forward "[ \t]")))))
+
+      (if (and beg end)
+          (progn
+            (delete-region beg end)
+            (goto-char beg)
+            (when post
+              (funcall post)))
+        (message "join failed: joining not possible")))))
+
+
 (defun f90-ts-join-line-prev ()
   "Join previous line with the current one, if part of a continued statement.
 This is (partially) a counterpart to `f90-ts-break-line'.
 If previous line has comments (at end, next line etc.) joining is not done."
   (interactive)
-  (let* ((first-node (or (f90-ts--first-node-on-line (point))
-                         (treesit-node-at (point))))
-         (amp-node (and (f90-ts--node-type-p first-node "&")
-                        first-node))
-         (prev-node (and amp-node
-                         (treesit-node-prev-sibling amp-node)))
-         (bol (save-excursion
-                (back-to-indentation)
-                (point))))
-    ;; if amp-node is non-nil it is the first node on line and thus the second
-    ;; (possibly virtual) ampersand of a continued statement, comments might be
-    ;; in between those two ampersands
-    (cl-assert (or (null first-node)
-                   (and amp-node
-                        (f90-ts--node-type-p prev-node '("&" "comment"))))
-               nil "internal error: prev node is not an ampersand or comment?")
-    (if (and amp-node
-             prev-node
-             (f90-ts--node-type-p prev-node "&"))
-        (let ((end (treesit-node-end amp-node)))
-          (if (= bol end)
-              ;; point is on the line of the ampersand, join completely
-              (let ((beg (treesit-node-start prev-node)))
-                (delete-region beg end)
-                (goto-char beg)
-                (fixup-whitespace))
-            ;; next proper continued line is not at point but later
-            (let ((beg (treesit-node-end prev-node)))
-              (cl-assert (< (line-number-at-pos bol)
-                            (line-number-at-pos end))
-                         nil "internal error: bol and end at same line?")
-              ;; do not delete the first &, as we also do not delete second &
-              (delete-region beg bol)
-              (goto-char beg)
-              (fixup-whitespace))))
-      (message "join failed: not a simple continued line"))))
+  (if (f90-ts--point-on-empty-line-p)
+      (f90-ts--join-line-empty-prev)
+    (let* ((pos-1 (save-excursion
+                    (beginning-of-line)
+                    (skip-chars-backward "[ \t\n]")
+                    (point)))
+           (pos-2 (save-excursion
+                    (beginning-of-line)
+                    (skip-chars-forward "[ \t\n]")
+                    (point)))
+           (first (f90-ts--node-on-pos pos-1 nil))
+           (secnd (f90-ts--node-on-pos pos-2 nil)))
+      (cl-assert first nil "internal error (f90-ts-join-line-prev): first node is nil")
+      (cl-assert secnd nil "internal error (f90-ts-join-line-prev): secnd node is nil")
+      (cl-assert (or (= pos-1 (treesit-node-end first))
+                     (and (f90-ts--node-type-p first "comment")
+                          (string-blank-p (buffer-substring pos-1 (treesit-node-end first)))))
+                 nil "internal error (f90-ts-join-line-prev): first node has wrong end position")
+      (cl-assert (= pos-2 (treesit-node-start secnd))
+                 nil "internal error (f90-ts-join-line-prev): secnd node has wrong start position")
+
+      (f90-ts--join-line-aux first secnd))))
 
 
 (defun f90-ts-join-line-next ()
@@ -3955,27 +4327,28 @@ If previous line has comments (at end, next line etc.) joining is not done."
 This is (partially) a counterpart to `f90-ts-break-line'.
 If continued line has comments (at end, next line etc.) joining is not done."
   (interactive)
-  (let* ((last-node (f90-ts--last-node-on-line (point)))
-         (amp-node (and (f90-ts--node-type-p last-node "&")
-                        last-node))
-         (next-node (and amp-node (treesit-node-next-sibling amp-node))))
-    ;; if amp-node is non-nil it is the last node on line and an ampersand,
-    ;; thus next node is either (possibly virtual) ampersand of a continued
-    ;; statement, or a comment (which are allowed to be in between those two
-    ;; ampersands)
-    (cl-assert (or (null last-node)
-                   (and amp-node
-                        (f90-ts--node-type-p next-node '("&" "comment"))))
-               nil "internal error: next node is not an ampersand or comment?")
-    (if (and amp-node
-             next-node
-             (f90-ts--node-type-p next-node "&"))
-        (let ((beg (treesit-node-start amp-node))
-              (end (treesit-node-end next-node)))
-          (delete-region beg end)
-          (goto-char beg)
-          (fixup-whitespace))
-      (message "join failed: not a simple continued line"))))
+  (if (f90-ts--point-on-empty-line-p)
+      (f90-ts--join-line-empty-next)
+    (let* ((pos-1 (save-excursion
+                    (end-of-line)
+                    (skip-chars-backward "[ \t\n]")
+                    (point)))
+           (pos-2 (save-excursion
+                    (end-of-line)
+                    (skip-chars-forward "[ \t\n]")
+                    (point)))
+           (first (f90-ts--node-on-pos pos-1 nil))
+           (secnd (f90-ts--node-on-pos pos-2 nil)))
+      (cl-assert first nil "internal error (f90-ts-join-line-next): first node is nil")
+      (cl-assert secnd nil "internal error (f90-ts-join-line-next): secnd node is nil")
+      (cl-assert (or (= pos-1 (treesit-node-end first))
+                     (and (f90-ts--node-type-p first "comment")
+                          (string-blank-p (buffer-substring pos-1 (treesit-node-end first)))))
+                 nil "internal error (f90-ts-join-line-next): first node has wrong end position")
+      (cl-assert (= pos-2 (treesit-node-start secnd))
+                 nil "internal error (f90-ts-join-line-next): secnd node has wrong start position")
+
+      (f90-ts--join-line-aux first secnd))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -4064,11 +4437,15 @@ The node must be strictly larger than the region (BEG END)."
     (f90-ts--largest-node-same-span cover)))
 
 
-(defun f90-ts--node-on-pos (pos)
-  "Function `treesit-node-on' works on half-open regions.
+(defun f90-ts--node-on-pos (pos named)
+  "Return the smallest node covering position POS.
+If NAMED is non-nil, consider only named nodes, otherwise include anonymous
+nodes as well.
+
+Function `treesit-node-on' works on half-open regions.
 It returns a node spanning the half-open region [beg, end).
-If pos is at end position of node, then the region [pos,pos) is empty and
-`treesit-node-on' returns a larger node, which is not expected in this context.
+If POS is at end position of node, then the region [POS,POS) is empty and
+`treesit-node-on' returns a larger node.
 This function queries at POS and at POS-1, and selects the smallest node
 containing POS in the closed interval logic.
 Example
@@ -4077,10 +4454,10 @@ subroutine sub()
    end if|
 end subroutine sub
 If point is at |, then the smallest named no is the end_statement node
-for \"end if\". However, treesit-node-on returns the subroutine node.
+for \"end if\".  However, treesit-node-on returns the subroutine node.
 Querying at POS-1 gives the expected answer."
-  (let* ((nodes (list (treesit-node-on pos      pos      nil 'named)
-                      (treesit-node-on (1- pos) (1- pos) nil 'named)))
+  (let* ((nodes (list (treesit-node-on pos      pos      nil named)
+                      (treesit-node-on (1- pos) (1- pos) nil named)))
          (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
                                                 (<= pos (treesit-node-end n))))
                                nodes))
@@ -4109,7 +4486,7 @@ than current region."
     ;; no active region, select smallest named node at point
     ;; (but move point to nonspace part first)
     (if-let* ((pos (f90-ts--pos-nonspace (point)))
-              (node-on (f90-ts--node-on-pos pos))
+              (node-on (f90-ts--node-on-pos pos 'named))
               (node (f90-ts--largest-node-same-span node-on)))
         (f90-ts--mark-region-node node
                                   f90-ts-mark-region-reversed)
@@ -4260,7 +4637,7 @@ If called interactively, prompt for a prefix from
 ;;; Imenu and menu stuff
 
 (defvar f90-ts--imenu-queries
-  '(("program"
+  `(("program"
      :label "program"
      :query "(program (program_statement \"program\" (name) @name))")
 
@@ -4280,13 +4657,26 @@ If called interactively, prompt for a prefix from
      :label "function"
      :query "(function (function_statement \"function\" name: (name) @name))")
 
+    ("module_procedure"
+     :label "module procedure"
+     :query "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name))")
+
     ("derived_type_definition"
-     :label "type"
-     :query "(derived_type_definition \"type\" name: (type_name) @name)")
+     :label "derived type"
+     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name))")
+
+    ("interface"
+     :label "interface"
+     :query ,(concat "(interface (interface_statement (abstract_specifier)?"
+                     " \"interface\""
+                     " [((name) @name)"
+                     " ((operator) @name)"
+                     " ((assignment) @name)]?"
+                     "))"))
 
     ("variable_declaration"
      :label "variable"
-     :query "(variable_declaration (name) @name)"
+     :query "(variable_declaration declarator: (_) @name)"
      :leaf t))
   "Unified Tree-sitter query specification for Imenu and menu.")
 
@@ -4308,20 +4698,24 @@ If called interactively, prompt for a prefix from
     (treesit-node-text name-node t)))
 
 
-(defun f90-ts--imenu-name-fn (node)
-  "Extract name associated with NODE for use in imenu."
+(defun f90-ts--imenu-name-pos-fn (node)
+  "Return list of (NAME . POSITION) for NODE applying associated imenu query."
   (let* ((type (treesit-node-type node))
          (spec (f90-ts--imenu-spec-for-type type))
-         (query (plist-get spec :query)))
-    (or (and query (f90-ts--imenu-capture-name node query))
-        "node with no name")))
+         (query (plist-get spec :query))
+         (caps (and query (treesit-query-capture node query))))
+    (when caps
+      (mapcar (lambda (c)
+                (let ((n (cdr c)))
+                  (cons (treesit-node-text n t)
+                        (treesit-node-start n))))
+              (seq-filter (lambda (c) (eq (car c) 'name)) caps)))))
 
 
 (defun f90-ts--imenu-valid-node-p (query)
-  "Return a predicate checking whether QUERY captures a valid name."
+  "Return a predicate checking whether QUERY captures anything."
   (lambda (node)
-    (when query
-      (f90-ts--imenu-capture-name node query))))
+    (and query (f90-ts--imenu-capture-name node query))))
 
 
 (defvar f90-ts--imenu-settings
@@ -4331,12 +4725,84 @@ If called interactively, prompt for a prefix from
             (spec  (cdr entry))
             (label (plist-get spec :label))
             (query (plist-get spec :query)))
-       (list label
-             (format "^%s$" type)
-             (f90-ts--imenu-valid-node-p query)
-             #'f90-ts--imenu-name-fn)))
+       (list label                              ; category
+             (format "^%s$" type)               ; regexp
+             (f90-ts--imenu-valid-node-p query) ; predicate
+             #'f90-ts--imenu-name-pos-fn)))     ; name-pos-fn
    f90-ts--imenu-queries)
   "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
+
+
+(defun f90-ts--simple-imenu-tree (node pred name-pos-fn)
+  "Like `treesit--simple-imenu-1', but supports multiple entries per leaf.
+
+NODE is a node in the tree returned by
+`treesit-induce-sparse-tree' (not a tree-sitter node, its car is
+a tree-sitter node).  Walk that tree and return an Imenu index.  Stop at nodes
+not satisfying PRED.
+
+NAME-POS-FN must return a list of (NAME . POSITION) to distinguish different
+positions for a single query with multiple captures."
+  (let* ((ts-node (car node))
+         (children (cdr node))
+         (subtrees (mapcan (lambda (child)
+                             (f90-ts--simple-imenu-tree child pred name-pos-fn))
+                           children))
+
+         ;; entries := list of (name . position)
+         (entries
+          (when ts-node
+            (funcall name-pos-fn ts-node)))
+
+         ;; marker helper
+         (make-marker-at
+          (lambda (pos)
+            (set-marker (make-marker) pos))))
+
+    (cond
+     ;; root node
+     ((null ts-node)
+      subtrees)
+
+     ;; predicate rejects node
+     ((and pred (not (funcall pred ts-node)))
+      subtrees)
+
+     ;; non-leaf: subgroup (use first entry only)
+     (subtrees
+      (when entries
+        (let* ((entry (car entries))
+               (name (car entry))
+               (pos  (cdr entry)))
+          `((,name
+             ,(cons " " (funcall make-marker-at pos))
+             ,@subtrees)))))
+
+     ;; leaf: expand all entries with exact positions
+     (t
+      (when entries
+        (mapcar (lambda (entry)
+                  (let ((name (car entry))
+                        (pos  (cdr entry)))
+                    (cons name (funcall make-marker-at pos))))
+                entries))))))
+
+
+(defun f90-ts-simple-imenu ()
+  "Return an Imenu index for the current buffer.
+This is a copy of `treesit-simple-imenu', but it can handle queries
+which return more than one match (like in variable declarations)."
+  (let ((root (treesit-buffer-root-node)))
+    (mapcan
+     (lambda (setting)
+       (cl-destructuring-bind (category regexp pred name-pos-fn) setting
+         (when-let* ((tree (treesit-induce-sparse-tree root regexp))
+                     (index (f90-ts--simple-imenu-tree
+                             tree pred name-pos-fn)))
+           (cl-assert category nil "f90-ts-simple-imenu: category expected")
+           (cl-assert name-pos-fn nil "f90-ts-simple-imenu: name-pos-fn expected")
+           (list (cons category index)))))
+     f90-ts--imenu-settings)))
 
 
 ;;; ---------------------------------------------------------------
@@ -4362,39 +4828,51 @@ If called interactively, prompt for a prefix from
 
 
 (defun f90-ts--menu-from-sparse-tree (sparse-node)
-  "Recursively convert a SPARSE-NODE (NODE . CHILDREN) to easy-menu format."
+  "Recursively convert a SPARSE-NODE=(NODE . CHILDREN) to easy-menu format."
   (let* ((node     (car sparse-node))
          (children (cdr sparse-node))
          (type     (treesit-node-type node))
          (spec     (f90-ts--imenu-spec-for-type type)))
 
     (if (null spec)
-        ;; If the node itself isn't "interesting" (like the root),
+        ;; if the node itself isn't "interesting" (like the root),
         ;; just process and return the children as a flat list.
         (cl-mapcan #'f90-ts--menu-from-sparse-tree children)
 
-      (let* ((query      (plist-get spec :query))
-             (leaf       (plist-get spec :leaf))
+      (let* ((leaf       (plist-get spec :leaf))
              (label-base (plist-get spec :label))
-             (name       (f90-ts--imenu-capture-name node query))
-             (label      (if (and name (not (string-empty-p name)))
-                             (format "%s: %s" label-base name)
-                           label-base))
-             (marker     (copy-marker (treesit-node-start node))))
+             ;; use name-pos-fn to get all (name . pos) pairs, with exact positions
+             (name-pos-list (f90-ts--imenu-name-pos-fn node)))
 
         (if (or leaf (null children))
-            ;; It's a leaf: return a list containing one vector
-            (list (f90-ts--menu-entry label marker))
+            ;; leaf: one menu entry per captured name, at its exact position
+            (mapcar (lambda (name-pos)
+                      (let* ((name   (car name-pos))
+                             (pos    (cdr name-pos))
+                             (label  (if (and name (not (string-empty-p name)))
+                                         (format "%s: %s" label-base name)
+                                       label-base))
+                             (marker (set-marker (make-marker) pos)))
+                        (f90-ts--menu-entry label marker)))
+                    (or name-pos-list
+                        ;; fallback: unnamed entry at node start
+                        (list (cons label-base (treesit-node-start node)))))
 
-          (let ((open-label (format "%s ..." label))
-                (jump-label (format "%s" label)))
-            (list
-             ;; direct jump
-             (f90-ts--menu-entry jump-label marker)
-
-             ;; submenu
-             (cons open-label
-                   (cl-mapcan #'f90-ts--menu-from-sparse-tree children)))))))))
+          ;; non-leaf: use first capture for the label/jump, children as submenu
+          (when name-pos-list
+            (let* ((first      (car name-pos-list))
+                   (name       (car first))
+                   (pos        (cdr first))
+                   (label      (if (and name (not (string-empty-p name)))
+                                   (format "%s: %s" label-base name)
+                                 label-base))
+                   (marker     (set-marker (make-marker) pos))
+                   (open-label (format "%s ..." label))
+                   (jump-label label))
+              (list
+               (f90-ts--menu-entry jump-label marker)
+               (cons open-label
+                     (cl-mapcan #'f90-ts--menu-from-sparse-tree children))))))))))
 
 
 (defun f90-ts--menu-tree (_current-menu)
@@ -4411,7 +4889,7 @@ nothing changes."
              (not (treesit-node-check f90-ts--menu-cache-root 'outdated)))
         ;; return cached menu
         f90-ts--menu-cache-result
-      ;; Cache is invalid or missing: Rebuild
+      ;; cache is invalid or missing: rebuild
       (let* ((predicate (lambda (node)
                           (let* ((type (treesit-node-type node))
                                  (spec (f90-ts--imenu-spec-for-type type)))
@@ -4421,7 +4899,7 @@ nothing changes."
                                  (f90-ts--imenu-capture-name node (plist-get spec :query))))))
              (sparse-tree (treesit-induce-sparse-tree root predicate))
              (items (f90-ts--menu-from-sparse-tree sparse-tree))
-             (final-menu (cons (f90-ts--menu-entry "↱ Top of buffer" (point-min-marker))
+             (final-menu (cons (f90-ts--menu-entry "Top of buffer" (point-min-marker))
                                (or items '(["(empty)" ignore t])))))
         ;;(f90-ts-log :menu "sparse-tree: \n%s" (pp-to-string sparse-tree))
         (setq f90-ts--menu-cache-root root)
@@ -4430,27 +4908,178 @@ nothing changes."
 
 
 ;;;-----------------------------------------------------------------------------
-;;; menu definition
+;;; Defun and thing
 
-(easy-menu-define f90-ts-mode-menu f90-ts-mode-map
-  "Menu for `f90-ts-mode'."
-  '("Fortran"
-    ("Region"
-     ["Enlarge region"  f90-ts-enlarge-region :active t]
-     ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
-     ["Previous region" f90-ts-prev-region    :active (region-active-p)]
-     ["Next region"     f90-ts-next-region    :active (region-active-p)])
-    "---"
-    ("Navigate"
-     :filter (lambda (menu) (f90-ts--menu-tree menu)))))
+(defun f90-ts--thing-node-p (node)
+  "Check whether NODE is named or anonymous.
+Just checking with regexp is not sufficient, as main structure node
+and keyword are sometimes equal.  But we only want the structure node."
+  (treesit-node-check node 'named))
+
+
+(defun f90-ts--defun-name (node)
+  "Return the name of defun NODE, for use in `which-function-mode' etc."
+  (caar (f90-ts--imenu-name-pos-fn node)))
+
+
+(defconst f90-ts--thing-defun-regexp-pred
+  (cons
+   (concat "^" (regexp-opt '("module"
+                             "submodule"
+                             "program"
+                             "subroutine"
+                             "function"
+                             "module_procedure"
+                             "interface"
+                             "derived_type_definition")) "$")
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine defun nodes.")
+
+
+(defconst f90-ts--thing-procedure-regexp-pred
+  (cons
+   (concat "^" (regexp-opt '("subroutine"
+                             "function"
+                             "module_procedure")) "$")
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine procedure nodes.")
+
+
+(defconst f90-ts--thing-interface-regexp-pred
+  (cons
+   "^interface$"
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine interface nodes.")
+
+
+(defconst f90-ts--thing-type-regexp-pred
+  (cons
+   "^derived_type_definition$"
+   #'f90-ts--thing-node-p)
+  "Regexp and predicate for matching node types to determine derived type nodes.")
+
+
+(defconst f90-ts--thing-settings
+  `((fortran
+     (defun     ,f90-ts--thing-defun-regexp-pred)
+     (procedure ,f90-ts--thing-procedure-regexp-pred)
+     (interface ,f90-ts--thing-interface-regexp-pred)
+     (type      ,f90-ts--thing-type-regexp-pred)))
+  "List of things with regexp and predicates to identify relevant nodes.")
+
+
+;; keep this: it has been resolved by adding an advice for treesit-node-parent
+;; which resolves other related cases like `treesit-beginning-of-defun'
+;;
+;; after "(treesit-major-mode-setup)" in f90-ts-mode:
+;;  (setq-local add-log-current-defun-function #'f90-ts--add-log-current-defun)
+;;
+;; (defun f90-ts--add-log-current-defun ()
+;;   "Implement add-log-current-defun taking continuation lines in to account.
+;; If point is at a virtual ampersand node, it has no parent.  Consequently,
+;; the `treesit-parent-until'-ascend used in `treesit-thing-at' (which is called
+;; by `treesit-add-log-current-defun') fails.  To avoid this, we move point to
+;; a position where a proper node is obtained by `treesit-node-at'."
+;;   (let* ((pos-0 (point))
+;;          (node (treesit-node-at pos-0))
+;;          (pos (if (null (treesit-node-parent node))
+;;                   (treesit-node-end node)
+;;                 pos-0)))
+;;     (save-excursion
+;;       (goto-char pos)
+;;       (treesit-add-log-current-defun))))
+
+
+(defun f90-ts-thing-next-procedure ()
+  "Move to next procedure."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) 1 'beg 'procedure)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-prev-procedure ()
+  "Move to previous procedure."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) -1 'beg 'procedure)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-beginning-of-procedure ()
+  "Move to beginning of current procedure."
+  (interactive)
+  (treesit-beginning-of-thing 'procedure))
+
+
+(defun f90-ts-thing-end-of-procedure ()
+  "Move to end of current procedure."
+  (interactive)
+  (treesit-end-of-thing 'procedure))
+
+
+(defun f90-ts-thing-next-type ()
+  "Move to next derived type."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) 1 'beg 'type)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-prev-type ()
+  "Move to previous derived type."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) -1 'beg 'type)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-beginning-of-type ()
+  "Move to beginning of current derived type."
+  (interactive)
+  (treesit-beginning-of-thing 'type))
+
+
+(defun f90-ts-thing-end-of-type ()
+  "Move to end of current derived type."
+  (interactive)
+  (treesit-end-of-thing 'type))
+
+
+(defun f90-ts-thing-next-interface ()
+  "Move to next interface."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) 1 'beg 'interface)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-prev-interface ()
+  "Move to previous interface."
+  (interactive)
+  (when-let ((pos (treesit-navigate-thing (point) -1 'beg 'interface)))
+    (goto-char pos)))
+
+
+(defun f90-ts-thing-beginning-of-interface ()
+  "Move to beginning of current interface."
+  (interactive)
+  (treesit-beginning-of-thing 'interface))
+
+
+(defun f90-ts-thing-end-of-interface ()
+  "Move to end of current interface."
+  (interactive)
+  (treesit-end-of-thing 'interface))
+
+
+;;;-----------------------------------------------------------------------------
+;;; menu definition
 
  (easy-menu-define f90-ts-mode-menu f90-ts-mode-map
    "Menu for `f90-ts-mode'."
    '("Fortran"
      ("Indent"
-      ["Indent line (tab)"           f90-ts-indent-and-complete-line    :active t]
-      ["Indent line (alt. 2)"        f90-ts-indent-for-tab-command-2    :active t]
-      ["Indent line (alt. 3)"        f90-ts-indent-for-tab-command-3    :active t]
+      ;; `indent-for-tab-command' invokes `f90-ts-indent-and-complete-line',
+      ;; but we use `indent-for-tab-command' to have keybinding shown properly
+      ["Indent line"                 indent-for-tab-command             :active t]
+      ["Indent line (alt 2)"         f90-ts-indent-for-tab-command-2    :active t]
+      ["Indent line (alt 3)"         f90-ts-indent-for-tab-command-3    :active t]
       ["Indent & complete statement" f90-ts-indent-and-complete-stmt    :active t]
       ["Indent & complete region"    f90-ts-indent-and-complete-region  :active (region-active-p)]
       "---"
@@ -4468,6 +5097,35 @@ nothing changes."
       ["Previous region" f90-ts-prev-region    :active (region-active-p)]
       ["Next region"     f90-ts-next-region    :active (region-active-p)])
      "---"
+     ("Defun & Thing"
+      ["Beginning of defun" beginning-of-defun :active t]
+      ["End of defun"       end-of-defun       :active t]
+      ["Mark defun"         mark-defun         :active t]
+      "---"
+      ["Narrow to defun"    narrow-to-defun    :active t]
+      ["Widen"              widen              :active (buffer-narrowed-p)]
+      "---"
+      ["Next procedure"          f90-ts-thing-next-procedure          :active t]
+      ["Prev procedure"          f90-ts-thing-prev-procedure          :active t]
+      ["Beginning of procedure"  f90-ts-thing-beginning-of-procedure  :active t]
+      ["End of procedure"        f90-ts-thing-end-of-procedure        :active t]
+      "---"
+      ["Next type"               f90-ts-thing-next-type               :active t]
+      ["Prev type"               f90-ts-thing-prev-type               :active t]
+      ["Beginning of type"       f90-ts-thing-beginning-of-type       :active t]
+      ["End of type"             f90-ts-thing-end-of-type             :active t]
+      "---"
+      ["Next interface"          f90-ts-thing-next-interface          :active t]
+      ["Prev interface"          f90-ts-thing-prev-interface          :active t]
+      ["Beginning of interface"  f90-ts-thing-beginning-of-interface  :active t]
+      ["End of interface"        f90-ts-thing-end-of-interface        :active t])
+     ("Xref"
+      ["Find definition"  xref-find-definitions :active t]
+      ["Find references"  xref-find-references  :active t]
+      ["Find apropos"     xref-find-apropos     :active t]
+      "---"
+      ["Go back"          xref-go-back          :active t]
+      ["Go forward"       xref-go-forward       :active t])
      ("Navigate"
       :filter (lambda (menu) (f90-ts--menu-tree menu)))))
 
@@ -4507,19 +5165,25 @@ nothing changes."
   (setq-local treesit-simple-indent-rules f90-ts-indent-rules)
 
   ;; Imenu Setup
-  (setq-local treesit-simple-imenu-settings f90-ts--imenu-settings)
+  (setq-local imenu-create-index-function #'f90-ts-simple-imenu)
+
+  ;; Defun
+  (setq-local treesit-defun-type-regexp f90-ts--thing-defun-regexp-pred)
+  (setq-local treesit-defun-name-function #'f90-ts--defun-name)
+  (setq-local treesit-defun-tactic 'nested)  ; or 'top-level?
+  (setq-local treesit-thing-settings f90-ts--thing-settings)
 
   ;; basic setup helper provided by emacs for tree-sitter powered modes,
   ;; this must be called after setting setq-local variables above!
   (treesit-major-mode-setup)
-
-  ;;(imenu-add-to-menubar "Imenu")
 
   ;; set indentation functions (both add smart end completion before
   ;; indentation, so no hook available); this must be done AFTER
   ;; calling treesit-major-mode-setup
   (setq-local indent-line-function #'f90-ts-indent-and-complete-line)
   (setq-local indent-region-function #'f90-ts-indent-and-complete-region)
+
+  (add-hook 'xref-backend-functions #'f90-ts-xref-backend nil t)
 
   ;; provide a simple mode name in the modeline
   (setq-local mode-name "F90-TS"))

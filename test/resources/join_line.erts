@@ -13,7 +13,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     call sub_2(arg1,| arg2)
+     call sub_2(arg1, |arg2)
 end subroutine sub_1
 =-=-=
 
@@ -25,7 +25,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     call sub_2(arg1,| arg2)
+     call sub_2(arg1, |arg2)
 end subroutine sub_1
 =-=-=
 
@@ -37,7 +37,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     call sub_2(arg1,| arg2)
+     call sub_2(arg1, |arg2)
 end subroutine sub_1
 =-=-=
 
@@ -93,6 +93,99 @@ real function test_fun()
 end function test_fun
 =-=-=
 
+Name: join prev statement 7
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                ! comment      
+          
+
+                |arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                ! comment      
+                |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join prev statement 8
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+
+
+                ! comment      |
+          
+
+                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, & |! comment      
+          
+
+                arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join prev statement 9
+=-=
+subroutine sub_1()
+     ! comment      
+|     ! continued
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     ! comment |continued
+end subroutine sub_1
+=-=-=
+
+Name: join prev statement 10
+=-=
+subroutine sub_1()
+     !!$ comment      
+|     ! continued
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     !!$ comment      
+     |! continued
+end subroutine sub_1
+=-=-=
+
+Name: join prev statement 11
+=-=
+subroutine sub_1()
+    x = 1
+
+
+    |y = 2
+end subroutine sub_1
+=-=
+subroutine sub_1()
+    x = 1
+    |y = 2
+end subroutine sub_1
+=-=-=
+
+
+Name: join prev statement 12
+=-=
+subroutine sub_1()
+    x = 1
+
+
+
+    |! y = 2
+end subroutine sub_1
+=-=
+subroutine sub_1()
+    x = 1 |! y = 2
+end subroutine sub_1
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -106,7 +199,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     call sub_2(arg1,| arg2)
+     call sub_2(arg1, |arg2)
 end subroutine sub_1
 =-=-=
 
@@ -118,7 +211,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     call sub_2(arg1,| arg2)
+     call sub_2(arg1, |arg2)
 end subroutine sub_1
 =-=-=
 
@@ -133,7 +226,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     call sub_2(arg1,| arg2)
+     call sub_2(arg1, |arg2)
 end subroutine sub_1
 =-=-=
 
@@ -141,18 +234,145 @@ Name: join next statement 4
 =-=
 submodule (mod) subm
 type :: t
-     integer :: &  |
+     integer ::   &  |
 
 
-            & i = 65
+            &   i = 65
 end type t
 end submodule subm
 =-=
 submodule (mod) subm
 type :: t
-     integer ::| i = 65
+     integer :: |i = 65
 end type t
 end submodule subm
+=-=-=
+
+Name: join next statement 5
+=-=
+real function test_fun()
+     test_fun = &
+
+            |
+
+
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &
+
+            |& 6**5
+end function test_fun
+=-=-=
+
+Name: join next statement 6
+=-=
+real function test_fun()
+     test_fun = &
+
+|    
+
+
+            & 6**5
+end function test_fun
+=-=
+real function test_fun()
+     test_fun = &
+
+            |& 6**5
+end function test_fun
+=-=-=
+
+
+Name: join next statement 7
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                ! comment      |
+          
+
+                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                ! comment      
+                |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join next statement 8
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+|                ! comment      
+          
+
+                arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                ! comment      
+                |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: join next statement 9
+=-=
+subroutine sub_1()
+     ! comment    |  
+     ! continued
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     ! comment |continued
+end subroutine sub_1
+=-=-=
+
+Name: join next statement 10
+=-=
+subroutine sub_1()
+     !!$ comment      |
+     ! continued
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     !!$ comment      
+     |! continued
+end subroutine sub_1
+=-=-=
+
+Name: join next statement 11
+=-=
+subroutine sub_1()
+    x = 1|
+
+
+    y = 2
+end subroutine sub_1
+=-=
+subroutine sub_1()
+    x = 1
+    |y = 2
+end subroutine sub_1
+=-=-=
+
+
+Name: join next statement 12
+=-=
+subroutine sub_1()
+    x = 1    |
+
+
+
+    ! y = 2
+end subroutine sub_1
+=-=
+subroutine sub_1()
+    x = 1 |! y = 2
+end subroutine sub_1
 =-=-=
 
 Code:
@@ -173,6 +393,6 @@ real function test_fun()
 end function test_fun
 =-=
 real function test_fun()
-     test_fun =| 6**5
+     test_fun = |6**5
 end function test_fun
 =-=-=

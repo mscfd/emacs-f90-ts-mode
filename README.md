@@ -1,7 +1,7 @@
 # f90-ts-mode — Tree-sitter based Fortran 90 mode for Emacs
 
 **f90-ts-mode** is a major mode for editing **Fortran 90 / Fortran 2003** (and newer)
-based on Emacs’s built-in **Tree-sitter** support (requires Emacs 29+).
+based on Emacs’s built-in **Tree-sitter** support (requires Emacs 30+).
 
 The mode is under **development**, features might only be partially implemented.
 
@@ -22,6 +22,7 @@ The mode is under **development**, features might only be partially implemented.
     - [OpenMP and other special comments](#openmp-and-other-special-comments)
   - [Smart end completion](#smart-end-completion)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
+  - [Xref](#xref)
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
@@ -40,7 +41,7 @@ The mode is under **development**, features might only be partially implemented.
 
 ### Tree-sitter grammar
 
-Currently it relies on a recent tree-sitter grammar version of fortran at
+Currently, it relies on a recent tree-sitter grammar version of fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
 There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
@@ -97,6 +98,9 @@ placed somewhere in `init.el` (or elsewhere).
   (setq treesit-language-source-alist
         (append treesit-language-source-alist
                 '((fortran "path_to/tree-sitter-fortran"))))
+
+  ;; uncomment if Imenu entry in menu bar is desired
+  ;;:hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
   :config
   (message "f90-ts-mode loaded")
@@ -174,7 +178,9 @@ The mode sets the following default mode local keybindings:
 - Join continued lines
 - Comment regions
 - Mark regions based on tree-sitter nodes
+- Defun and thing based navigation
 - Handling openmp and preprocessor directives
+- Imenu and a `Fortran` menu in the menu bar
 
 
 ### Syntax highlight
@@ -276,10 +282,11 @@ call sub_with_many_arguments(argx, another, one_more, &
                              argy, just_this, &
                              argz)
 ```
-Five options are currently implemented: `continued-line`, `rotate`, `keep-or-primary`,
-`keep-or-next` and `primary`.
-Moreover, `f90-ts-indent-list-always-include-default` controls whether simple indentation for
-continued lines should always be added (for example even in an argument context as above).
+Five options are currently implemented: `continued-line`,  `primary`, `rotate`, `keep-or-primary`
+and `keep-or-next`. Primary column is some outstanding column with respect to the context (like
+the smallest column of arguments in the example above, or the column just right to the opening parenthesis.
+The last three options `rotate`, `keep-or-primary` and `keep-or-next`, which collect and offer several
+alignment columns, always include the continued line position among the set of columns.
 
 Behaviour of indentation of a region and of a line are controlled by `f90-ts-indent-list-region`
 and `f90-ts-indent-list-line`, respectively.
@@ -289,7 +296,7 @@ used by functions bound to Shift+TAB and Control+Shift+TAB by default.
 Also check out [Continued statements and blocks](#indentation-of-continued-statements-and-blocks).
 
 Remark: currently options and variants are intended to experiment with and see what might work
-and is worth keeping. The additional keybinds for variant 2 and 3 also help with testing various
+and is worth keeping. The additional keybindings for variant 2 and 3 also help with testing various
 variants.
 
 
@@ -356,6 +363,19 @@ Indentation of continued statements from begin of statement to line at point is 
 `f90-ts-indent-and-complete-stmt`, which is bound to `C-<tab>`.
 
 This same function also indents a whole block if executed at its `end struct` line.
+
+
+### Xref
+
+The mode provides a minimal buffer local implementation of xref functions. In particular, the following
+functions can be used to find definitions and references of symbols (keybindings are the default ones):
+
+| Function: keybinding           | Description                          |
+|--------------------------------|--------------------------------------|
+| `xref-find-definitions`: `M-.` | Jump to definition                   |
+| `xref-find-references`: `M-?`  | Find all references                  |
+| `xref-find-apropos`: `C-M-.`   | Find symbols matching regexp pattern |
+| `xref-go-back`: `M-,`          | Pop back                             |
 
 
 
@@ -444,20 +464,24 @@ Default Keybindings:
 The mode comes with a number of tests in `test/resources`, which cover part of the already
 implemented features.
 Registering and running tests is done in `test/f90-ts-mode-test.el`
-Currently there are tests for indentation (`indent_*.erts`) and for font locking
-(`font_lock_*.f90`).
 
-Standard tests are named `f90-ts-mode/...`, whereas expensive tests start with `f90-ts-mode-extra/...`.
-Registering is done semi-automatic in `f90-ts-mode-test-indent-register` and
-`f90-ts-mode-test-font-lock-register`.
+Standard tests are named `f90-ts-mode-test-std--...`, whereas expensive tests start with `f90-ts-mode-test-extra--...`.
+Registering of tests is done semi-automatic in `f90-ts-mode-test-indent-register`, `f90-ts-mode-test-font-lock-register`
+and other functions in `f90-ts-mode-test.el`.
 
 Tests are run with a prescribed set of custom variables. In particular indentation values are chosen
 all differently, such that errors can be spotted more easily.
 
+
 ### Makefile
 
-There is a Makefile for running the tests. Three targets are available: `test` (standard tests),
-`test-extra` (expensive extra tests) and `test-all` for all tests.
+There is a Makefile for running various tests. Relevant targets are:
+* test-checkdoc
+* test-byte-compile
+* test-ert-std
+* test-ert-extra
+* test-ert-all
+* test-ert-parallel (use with `make -j<N> test-ert-parallel` to run all ert tests in parallel)
 
 
 ### Indentation tests
@@ -481,28 +505,11 @@ is not highlighted.
 Note: fortran test code should NOT use the caret `^`, even in comments, as the ert parser gets confused.
 
 
-### Custom tests
+### Other tests
 
-Custom tests are erts based tests with a custom `Code` block for each test (and thus do not fit the
-prep-fn/action-fn scheme of the indentation tests above).
-This is used to test indentation of just a region, break and join line operations and
-to test the comment region functions.
+There are a number of other tests, like tests for region and navigation operations, or with custom
+action blocks for testing specific aspects not easily covered by the whole-buffer operations.
 
-New tests can easiy be added by placing a test file in `test/resources` and registering it
-in `test/f90-ts-mode-test.el`. Registering looks like:
-```elsip
-(f90-ts-mode-test-prep-act-register
- "f90-ts-mode"
- '("indent_region_basic.erts"
-   "indent_region_comments.erts"
-   "indent_region_constructs.erts"
-   "indent_region_preproc.erts")
- '(nil ; no modification
-   f90-ts-mode-test--remove-indent
-   f90-ts-mode-test--add-indent)
- '(f90-ts-mode-test--indent-by-region)
- )
-```
 
 ## Logging and debugging
 
@@ -518,6 +525,4 @@ The following logging functions are available:
 All write into a dedicated log buffer `*f90-ts-log*` with its own minor mode to allow some
 dedicated keybindings.
 
-By default nothing is logged and the buffer is empty. There are almost no (not even commented)
-logging instruction in the code left. But the original extensive logging is available in
-branch `logging`, which will be kept alive for the time being.
+By default nothing is logged and the buffer is empty.
