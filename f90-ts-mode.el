@@ -244,29 +244,6 @@ Primary alignment column for the second line of a declaration plus
 
 ;;;-----------------------------------------------------------------------------
 
-(defcustom f90-ts-smart-end 'blink
-  "Determine whether and how to complete an end statement.
-If set to blink, perform completion and then jump to the opening clause of the
-completed statement.
-If set to no-blink perform completion without jumping.
-Value nil turns off smart end completion.
-
-Copied from prog mode `f90-mode'."
-  :type  '(choice (const blink) (const no-blink) (const nil))
-  :safe  (lambda (value) (memq value '(blink no-blink nil)))
-  :group 'f90-ts)
-
-
-;; same as in legacy f90 mode
-(defcustom f90-ts-beginning-ampersand nil
-  "Non-nil gives automatic insertion of `&' at start of continuation line."
-  :type  'boolean
-  :safe  'booleanp
-  :group 'f90-ts)
-
-
-;;;-----------------------------------------------------------------------------
-
 (defface f90-ts-font-lock-delimiter-face
   '((t :foreground "Sienna4"
        :weight medium))
@@ -315,75 +292,36 @@ Special comments such as separators are determined by rules in
 
 
 ;;;-----------------------------------------------------------------------------
-;;; keymap and syntax table
-
-(defvar f90-ts-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
-    ; <tab> is bound to indent-for-tab-command by default
-    (define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
-    (define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
-    (define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
-
-    (define-key map (kbd "A-<return>") 'f90-ts-break-line)
-    (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
-    (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
-    (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)
-    (define-key map (kbd "A-0") #'f90-ts-child0-region)
-    (define-key map (kbd "A-[") #'f90-ts-prev-region)
-    (define-key map (kbd "A-]") #'f90-ts-next-region)
-
-    (define-key map (kbd "C-A-a") #'f90-ts-thing-beginning-of-procedure)
-    (define-key map (kbd "C-A-e") #'f90-ts-thing-end-of-procedure)
-    (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
-    (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
-
-    map)
-  "Keymap for `f90-ts-mode'.")
-
-
-(defvar f90-ts-mode-syntax-table
-  (let ((table (make-syntax-table)))
-    ;; --- symbols and words ---
-    ;; '_' is a symbol constituent in Fortran
-    (modify-syntax-entry ?_ "_" table)
-
-    ;; --- string delimiters ---
-    (modify-syntax-entry ?\" "\"" table)
-    (modify-syntax-entry ?\' "\"" table)
-
-    ;; --- comments ---
-    ;; '!' starts a comment. '<' means start, 'b' means it's a
-    ;; "Style B" comment (standard for line-based comments).
-    (modify-syntax-entry ?! "< b" table)
-    ;; newline ends the comment. '>' means end.
-    (modify-syntax-entry ?\n "> b" table)
-
-    ;; delimiters, newline, continuation
-    (modify-syntax-entry ?\r " "  table) ; return is whitespace
-    (modify-syntax-entry ?&  "."  table) ; continuation line
-    (modify-syntax-entry ?%  "."  table) ; component reference
-
-    ;; --- Arithmetic/Logic Punctuation ---
-    (modify-syntax-entry ?+ "." table)
-    (modify-syntax-entry ?- "." table)
-    (modify-syntax-entry ?* "." table)
-    (modify-syntax-entry ?/ "." table)
-    (modify-syntax-entry ?= "." table)
-    (modify-syntax-entry ?< "." table)
-    (modify-syntax-entry ?> "." table)
-    (modify-syntax-entry ?. "." table)  ; this is difficult, as dot in ".and." for example
-                                        ; should belong to the symbol class and not punctuation,
-                                        ; but having this as symbol would interfer with for example
-                                        ; "this_flag.and.other_flag", appearing as one big symbol,
-                                        ; likewise it could be difficult with floating point numbers?
-
-    table)
-  "Syntax table for `f90-ts-mode'.")
-
-
-;;;-----------------------------------------------------------------------------
 ;;; other options
+
+(defcustom f90-ts-smart-end 'blink
+  "Determine whether and how to complete an end statement.
+If set to blink, perform completion and then jump to the opening clause of the
+completed statement.
+If set to no-blink perform completion without jumping.
+Value nil turns off smart end completion.
+
+Copied from prog mode `f90-mode'."
+  :type  '(choice (const blink) (const no-blink) (const nil))
+  :safe  (lambda (value) (memq value '(blink no-blink nil)))
+  :group 'f90-ts)
+
+
+;; same as in legacy f90 mode
+(defcustom f90-ts-beginning-ampersand nil
+  "Non-nil gives automatic insertion of `&' at start of continuation line."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-menu-show-navigate t
+  "Show navigate submenu in fortran menu if Non-nil.
+For large source files, the menu might not be useful and reduce performance."
+  :type  'boolean
+  :safe  'booleanp
+  :group 'f90-ts)
+
 
 (defcustom f90-ts-special-var-regexp "\\_<\\(self\\|this\\)\\_>"
   "Regular expression for matching special variables.
@@ -538,6 +476,74 @@ seem to make much sense."
                                f90-ts-font-lock-openmp-face)
                         (face :tag "other face"))))
   :group 'f90-ts)
+
+
+;;;-----------------------------------------------------------------------------
+;;; keymap and syntax table
+
+(defvar f90-ts-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "C-<tab>") #'f90-ts-indent-and-complete-stmt)
+    ; <tab> is bound to indent-for-tab-command by default
+    (define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
+    (define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
+    (define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+
+    (define-key map (kbd "A-<return>") 'f90-ts-break-line)
+    (define-key map (kbd "A-<backspace>") #'f90-ts-join-line-prev)
+    (define-key map (kbd "A-<delete>") #'f90-ts-join-line-next)
+    (define-key map (kbd "A-\\") #'f90-ts-enlarge-region)
+    (define-key map (kbd "A-0") #'f90-ts-child0-region)
+    (define-key map (kbd "A-[") #'f90-ts-prev-region)
+    (define-key map (kbd "A-]") #'f90-ts-next-region)
+
+    (define-key map (kbd "C-A-a") #'f90-ts-thing-beginning-of-procedure)
+    (define-key map (kbd "C-A-e") #'f90-ts-thing-end-of-procedure)
+    (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
+    (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
+
+    map)
+  "Keymap for `f90-ts-mode'.")
+
+
+(defvar f90-ts-mode-syntax-table
+  (let ((table (make-syntax-table)))
+    ;; --- symbols and words ---
+    ;; '_' is a symbol constituent in Fortran
+    (modify-syntax-entry ?_ "_" table)
+
+    ;; --- string delimiters ---
+    (modify-syntax-entry ?\" "\"" table)
+    (modify-syntax-entry ?\' "\"" table)
+
+    ;; --- comments ---
+    ;; '!' starts a comment. '<' means start, 'b' means it's a
+    ;; "Style B" comment (standard for line-based comments).
+    (modify-syntax-entry ?! "< b" table)
+    ;; newline ends the comment. '>' means end.
+    (modify-syntax-entry ?\n "> b" table)
+
+    ;; delimiters, newline, continuation
+    (modify-syntax-entry ?\r " "  table) ; return is whitespace
+    (modify-syntax-entry ?&  "."  table) ; continuation line
+    (modify-syntax-entry ?%  "."  table) ; component reference
+
+    ;; --- Arithmetic/Logic Punctuation ---
+    (modify-syntax-entry ?+ "." table)
+    (modify-syntax-entry ?- "." table)
+    (modify-syntax-entry ?* "." table)
+    (modify-syntax-entry ?/ "." table)
+    (modify-syntax-entry ?= "." table)
+    (modify-syntax-entry ?< "." table)
+    (modify-syntax-entry ?> "." table)
+    (modify-syntax-entry ?. "." table)  ; this is difficult, as dot in ".and." for example
+                                        ; should belong to the symbol class and not punctuation,
+                                        ; but having this as symbol would interfer with for example
+                                        ; "this_flag.and.other_flag", appearing as one big symbol,
+                                        ; likewise it could be difficult with floating point numbers?
+
+    table)
+  "Syntax table for `f90-ts-mode'.")
 
 
 ;;;-----------------------------------------------------------------------------
@@ -4657,185 +4663,133 @@ If called interactively, prompt for a prefix from
 (defvar f90-ts--imenu-queries
   `(("program"
      :label "program"
-     :query "(program (program_statement \"program\" (name) @name))")
+     :query "(program (program_statement \"program\" (name) @name_program))")
 
     ("module"
      :label "module"
-     :query "(module (module_statement \"module\" (name) @name))")
+     :query "(module (module_statement \"module\" (name) @name_module))")
 
     ("submodule"
      :label "submodule"
-     :query "(submodule (submodule_statement \"submodule\" (name) @name))")
+     :query "(submodule (submodule_statement \"submodule\" (name) @name_submodule))")
 
     ("subroutine"
      :label "subroutine"
-     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name))")
+     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name_subroutine))")
 
     ("function"
      :label "function"
-     :query "(function (function_statement \"function\" name: (name) @name))")
+     :query "(function (function_statement \"function\" name: (name) @name_function))")
 
     ("module_procedure"
      :label "module procedure"
-     :query "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name))")
+     :query "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name_module_proc))")
 
     ("derived_type_definition"
      :label "derived type"
-     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name))")
+     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name_dt_type))")
 
     ("interface"
      :label "interface"
      :query ,(concat "(interface (interface_statement (abstract_specifier)?"
                      " \"interface\""
-                     " [((name) @name)"
-                     " ((operator) @name)"
-                     " ((assignment) @name)]?"
+                     " [((name) @name_interface)"
+                     " ((operator) @name_interface)"
+                     " ((assignment) @name_interface)]?"
                      "))"))
 
     ("variable_declaration"
      :label "variable"
-     :query "(variable_declaration declarator: (_) @name)"
+     :query "(variable_declaration declarator: (_) @name_var_decl)"
      :leaf t))
   "Unified Tree-sitter query specification for Imenu and menu.")
 
 
+(defconst f90-ts--imenu-query-compiled
+  (let ((query-string
+         (mapconcat
+          (lambda (entry)
+            (plist-get (cdr entry) :query))
+          f90-ts--imenu-queries
+          "\n")))
+    (treesit-query-compile 'fortran query-string))
+  "Pre-compiled global query for a one-pass scan to build imenu.")
+
+
+(defconst f90-ts--imenu-capture-to-label
+  (cl-loop for (_ . spec) in f90-ts--imenu-queries
+           for query = (plist-get spec :query)
+           when (and query (string-match "@\\([a-zA-Z_]+\\)" query))
+           collect (cons (intern (match-string 1 query))
+                         (plist-get spec :label)))
+  "Alist mapping capture symbols to menu label strings.")
+
+
 (defun f90-ts--imenu-spec-for-type (type)
-  "Return entry in alist `f90-ts--imenu-queries` for TYPE."
+  "Return the plist for TYPE from `f90-ts--imenu-queries'."
   (alist-get type f90-ts--imenu-queries nil nil #'string=))
 
 
-(defun f90-ts--imenu-capture (node query)
-  "Run QUERY on NODE and return list of captured entities."
-  (treesit-query-capture node query))
-
-
-(defun f90-ts--imenu-capture-name (node query)
-  "Run QUERY on NODE and extract the captured name."
-  (when-let* ((caps (f90-ts--imenu-capture node query))
-              (name-node (cdr (assoc 'name caps))))
-    (treesit-node-text name-node t)))
-
-
 (defun f90-ts--imenu-name-pos-fn (node)
-  "Return list of (NAME . POSITION) for NODE applying associated imenu query."
-  (let* ((type (treesit-node-type node))
-         (spec (f90-ts--imenu-spec-for-type type))
+  "Return list of (NAME . POSITION) for NODE using its associated imenu query.
+This extracts the name by taking the first captured node from the query,
+regardless of the capture name symbol used."
+  (let* ((type  (treesit-node-type node))
+         (spec  (f90-ts--imenu-spec-for-type type))
          (query (plist-get spec :query))
-         (caps (and query (treesit-query-capture node query))))
-    (when caps
-      (mapcar (lambda (c)
-                (let ((n (cdr c)))
-                  (cons (treesit-node-text n t)
-                        (treesit-node-start n))))
-              (seq-filter (lambda (c) (eq (car c) 'name)) caps)))))
+         (caps  (and query (treesit-query-capture node query))))
+    (cl-loop for (_ . node) in caps
+             collect (cons (treesit-node-text node t)
+                           (treesit-node-start node)))))
 
 
-(defun f90-ts--imenu-valid-node-p (query)
-  "Return a predicate checking whether QUERY captures anything."
-  (lambda (node)
-    (and query (f90-ts--imenu-capture-name node query))))
+(defun f90-ts--imenu-group-items (items)
+  "Group flat ITEMS list into ((LABEL (NAME . MARKER) ...) ...) for Imenu.
+Each element of ITEMS is (LABEL NAME . MARKER)."
+  (cl-loop for (label . group) in (seq-group-by #'car items)
+           collect (cons label
+                         (mapcar (lambda (item)
+                                   (cons (cadr item) (caddr item)))
+                                 group))))
 
 
-(defvar f90-ts--imenu-settings
-  (mapcar
-   (lambda (entry)
-     (let* ((type  (car entry))
-            (spec  (cdr entry))
-            (label (plist-get spec :label))
-            (query (plist-get spec :query)))
-       (list label                              ; category
-             (format "^%s$" type)               ; regexp
-             (f90-ts--imenu-valid-node-p query) ; predicate
-             #'f90-ts--imenu-name-pos-fn)))     ; name-pos-fn
-   f90-ts--imenu-queries)
-  "Settings for `treesit-simple-imenu-settings' in `f90-ts-mode'.")
-
-
-(defun f90-ts--simple-imenu-tree (node pred name-pos-fn)
-  "Like `treesit--simple-imenu-1', but supports multiple entries per leaf.
-
-NODE is a node in the tree returned by
-`treesit-induce-sparse-tree' (not a tree-sitter node, its car is
-a tree-sitter node).  Walk that tree and return an Imenu index.  Stop at nodes
-not satisfying PRED.
-
-NAME-POS-FN must return a list of (NAME . POSITION) to distinguish different
-positions for a single query with multiple captures."
-  (let* ((ts-node (car node))
-         (children (cdr node))
-         (subtrees (mapcan (lambda (child)
-                             (f90-ts--simple-imenu-tree child pred name-pos-fn))
-                           children))
-
-         ;; entries := list of (name . position)
-         (entries
-          (when ts-node
-            (funcall name-pos-fn ts-node)))
-
-         ;; marker helper
-         (make-marker-at
-          (lambda (pos)
-            (set-marker (make-marker) pos))))
-
-    (cond
-     ;; root node
-     ((null ts-node)
-      subtrees)
-
-     ;; predicate rejects node
-     ((and pred (not (funcall pred ts-node)))
-      subtrees)
-
-     ;; non-leaf: subgroup (use first entry only)
-     (subtrees
-      (when entries
-        (let* ((entry (car entries))
-               (name (car entry))
-               (pos  (cdr entry)))
-          `((,name
-             ,(cons " " (funcall make-marker-at pos))
-             ,@subtrees)))))
-
-     ;; leaf: expand all entries with exact positions
-     (t
-      (when entries
-        (mapcar (lambda (entry)
-                  (let ((name (car entry))
-                        (pos  (cdr entry)))
-                    (cons name (funcall make-marker-at pos))))
-                entries))))))
+(defun f90-ts--imenu-captures-to-items (captures)
+  "Convert raw CAPTURES from `treesit-query-capture' to a flat item list.
+Returns a list of (LABEL NAME . MARKER) triples."
+  (cl-loop for (type . node) in captures
+           for label = (alist-get type f90-ts--imenu-capture-to-label)
+           when label
+           collect (list label
+                         (treesit-node-text node t)
+                         (set-marker (make-marker)
+                                     (treesit-node-start node)))))
 
 
 (defun f90-ts-simple-imenu ()
-  "Return an Imenu index for the current buffer.
-This is a copy of `treesit-simple-imenu', but it can handle queries
-which return more than one match (like in variable declarations)."
-  (let ((root (treesit-buffer-root-node)))
-    (mapcan
-     (lambda (setting)
-       (cl-destructuring-bind (category regexp pred name-pos-fn) setting
-         (when-let* ((tree (treesit-induce-sparse-tree root regexp))
-                     (index (f90-ts--simple-imenu-tree
-                             tree pred name-pos-fn)))
-           (cl-assert category nil "f90-ts-simple-imenu: category expected")
-           (cl-assert name-pos-fn nil "f90-ts-simple-imenu: name-pos-fn expected")
-           (list (cons category index)))))
-     f90-ts--imenu-settings)))
+  "Return an Imenu index for the current buffer using a single query pass.
+Using `treesit-simple-imenu' is far more expensive computationally."
+  (let* ((root     (treesit-buffer-root-node))
+         (captures (treesit-query-capture root f90-ts--imenu-query-compiled))
+         (items    (f90-ts--imenu-captures-to-items captures)))
+    (f90-ts--imenu-group-items items)))
 
 
-;;; ---------------------------------------------------------------
-;;; Menu tree builder (recursive, mirrors imenu but for easy-menu)
+;;;-----------------------------------------------------------------------------
+;;; Navigate tree builder for fortran easy-menu
+;;; (this mirrors imenu, but it is recursively constructed)
 
-(defvar-local f90-ts--menu-cache-root nil
-  "The root node used for the last menu generation.")
+(defvar-local f90-ts--menu-nav-cache-root nil
+  "The root node used for the last menu generation.
+It is used to verify via `treesit-node-eq', whether the cached navigation tree
+is still valid")
 
 
-(defvar-local f90-ts--menu-cache-result nil
+(defvar-local f90-ts--menu-nav-cache-result nil
   "The last generated menu structure.")
 
 
-(defun f90-ts--menu-entry (label marker)
-  "Return a simple clickable menu vector for LABEL at MARKER."
+(defun f90-ts--menu-nav-entry (label marker)
+  "Return a clickable easy-menu vector for LABEL jumping to MARKER."
   (vector label
           (lambda ()
             (interactive)
@@ -4845,83 +4799,151 @@ which return more than one match (like in variable declarations)."
           t))
 
 
-(defun f90-ts--menu-from-sparse-tree (sparse-node)
-  "Recursively convert a SPARSE-NODE=(NODE . CHILDREN) to easy-menu format."
-  (let* ((node     (car sparse-node))
-         (children (cdr sparse-node))
-         (type     (treesit-node-type node))
-         (spec     (f90-ts--imenu-spec-for-type type)))
-
-    (if (null spec)
-        ;; if the node itself isn't "interesting" (like the root),
-        ;; just process and return the children as a flat list.
-        (cl-mapcan #'f90-ts--menu-from-sparse-tree children)
-
-      (let* ((leaf       (plist-get spec :leaf))
-             (label-base (plist-get spec :label))
-             ;; use name-pos-fn to get all (name . pos) pairs, with exact positions
-             (name-pos-list (f90-ts--imenu-name-pos-fn node)))
-
-        (if (or leaf (null children))
-            ;; leaf: one menu entry per captured name, at its exact position
-            (mapcar (lambda (name-pos)
-                      (let* ((name   (car name-pos))
-                             (pos    (cdr name-pos))
-                             (label  (if (and name (not (string-empty-p name)))
-                                         (format "%s: %s" label-base name)
-                                       label-base))
-                             (marker (set-marker (make-marker) pos)))
-                        (f90-ts--menu-entry label marker)))
-                    (or name-pos-list
-                        ;; fallback: unnamed entry at node start
-                        (list (cons label-base (treesit-node-start node)))))
-
-          ;; non-leaf: use first capture for the label/jump, children as submenu
-          (when name-pos-list
-            (let* ((first      (car name-pos-list))
-                   (name       (car first))
-                   (pos        (cdr first))
-                   (label      (if (and name (not (string-empty-p name)))
-                                   (format "%s: %s" label-base name)
-                                 label-base))
-                   (marker     (set-marker (make-marker) pos))
-                   (open-label (format "%s ..." label))
-                   (jump-label label))
-              (list
-               (f90-ts--menu-entry jump-label marker)
-               (cons open-label
-                     (cl-mapcan #'f90-ts--menu-from-sparse-tree children))))))))))
+(defconst f90-ts--menu-nav-query-compiled
+  (let ((query-string
+         (mapconcat
+          (lambda (entry)
+            (let ((query (plist-get (cdr entry) :query)))
+              ;; Wrap each original imenu query with @struct on the outer form
+              ;; Example:
+              ;;   (subroutine (...) @name_subroutine)
+              ;; becomes:
+              ;;   ((subroutine (...) @name_subroutine) @struct)
+              (concat "(" query " @struct)")))
+          f90-ts--imenu-queries
+          "\n")))
+    (treesit-query-compile 'fortran query-string))
+  "Pre-compiled Tree-sitter query for menu generation with struct captures.")
 
 
-(defun f90-ts--menu-tree (_current-menu)
-  "Filter function constructing relevant menu tree of treesitter nodes.
+(defun f90-ts--menu-nav-combine-captures (captures)
+  "Pair consecutive (struct-a name-a struct-a name-a ...) in CAPTURES.
+Return a list of triples (name-type struct-node name-node) where name-type
+is capture symbol of name-a and nodes are captured node of struct and name."
+  (cl-loop
+   for ((_ . struct-node) (type . name-node)) on captures by #'cddr
+   collect (list type struct-node name-node)))
 
-Internally caching is used to avoid frequent construction of tree if
-nothing changes."
+
+(defun f90-ts--menu-nav-node-hash-fn (node)
+  "Hash function for NODE using its start position."
+  (treesit-node-start node))
+
+
+(define-hash-table-test 'f90-ts--menu-nav-node-hash-test
+  #'treesit-node-eq
+  ;; hash function: use node's start position
+  #'f90-ts--menu-nav-node-hash-fn)
+
+
+(defun f90-ts--menu-nav-node-table (root)
+  "Capture all menu nodes under ROOT in one pass using name-struct pairing.
+Returns an alist mapping each struct node to a list of (LABEL NAME POS) tuples."
+  (let* ((captures (treesit-query-capture root f90-ts--menu-nav-query-compiled))
+         (entities (f90-ts--menu-nav-combine-captures captures))
+         (table (make-hash-table :test 'f90-ts--menu-nav-node-hash-test)))
+    (cl-loop
+     for (type struct-node name-node) in entities
+     for label = (alist-get type f90-ts--imenu-capture-to-label)
+     do (progn
+          (cl-assert label nil "internal error (f90-ts--menu-nav-node-table): label expected")
+          (cl-pushnew
+           (list label
+                 (treesit-node-text name-node t)
+                 (treesit-node-start name-node))
+           (gethash struct-node table)
+           :test #'equal)))
+    table))
+
+
+(defun f90-ts--menu-nav-tree-predicate (node-table)
+  "Return a predicate that accepts nodes present in NODE-TABLE."
+  (lambda (node)
+    (gethash node node-table)))
+
+
+(defun f90-ts--menu-nav-tree-process-fn (node-table)
+  "Return a PROCESS-FN for `treesit-induce-sparse-node' for navigate menu.
+The returned process function replaces a raw node with its entry list
+from NODE-TABLE."
+  (lambda (node)
+    (gethash node node-table)))
+
+
+(defun f90-ts--menu-nav-from-leaf (triple)
+  "Build a `f90-ts--menu-nav-entry' from a (LABEL-BASE NAME POS) TRIPLE."
+  (let* ((label-base (nth 0 triple))
+         (name       (nth 1 triple))
+         (pos        (nth 2 triple))
+         (label (if (and name (not (string-empty-p name)))
+                    (format "%s: %s" label-base name)
+                  label-base))
+         (marker (set-marker (make-marker) pos)))
+    (f90-ts--menu-nav-entry label marker)))
+
+
+(defun f90-ts--menu-nav-from-branch (entries children)
+  "Build two `f90-ts--menu-nav-entry' from a spares node and its CHILDREN.
+Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
+  (let* ((first      (car entries))
+         (label-base (nth 0 first))
+         (name       (nth 1 first))
+         (pos        (nth 2 first))
+         (label (if (and name (not (string-empty-p name)))
+                    (format "%s: %s" label-base name)
+                  label-base))
+         (marker (set-marker (make-marker) pos)))
+    (list
+     (f90-ts--menu-nav-entry label marker)
+     (cons (format "%s ..." label)
+           (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children)))))
+
+
+(defun f90-ts--menu-nav-from-sparse-tree (sparse-node)
+  "Recursively convert SPARSE-NODE to easy-menu format.
+
+SPARSE-NODE is ((TRIPLE ...) . CHILDREN) where each TRIPLE is
+\(LABEL-BASE NAME POS) as produced by the one-pass capture."
+  (let* ((entries  (car sparse-node))
+         (children (cdr sparse-node)))
+    (cond
+     ;; root sentinel (root of a sparse tree, which usually is a forest
+     ;; rather than a tree), just walk the forest
+     ((null entries)
+      (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children))
+
+     ;; leaf node (either something like a variable declaration or
+     ;; some structure without sub-nodes like an empty subroutine body).
+     ((null children)
+      (mapcar #'f90-ts--menu-nav-from-leaf entries))
+
+     ;; a branch, which is a structure contains other interesting items
+     ;; (like a subroutine with variable declarations inside it)
+     (t
+      (f90-ts--menu-nav-from-branch entries children)))))
+
+
+(defun f90-ts--menu-nav-tree (_current-menu)
+  "Return the easy-menu structure for the current buffer, with caching."
   (let ((root (treesit-buffer-root-node)))
-    (if (and f90-ts--menu-cache-root
-             f90-ts--menu-cache-result
-             ;; Check if the cached root is still the current root
-             (treesit-node-eq root f90-ts--menu-cache-root)
-             ;; Ensure the node hasn't been invalidated by a re-parse
-             (not (treesit-node-check f90-ts--menu-cache-root 'outdated)))
-        ;; return cached menu
-        f90-ts--menu-cache-result
-      ;; cache is invalid or missing: rebuild
-      (let* ((predicate (lambda (node)
-                          (let* ((type (treesit-node-type node))
-                                 (spec (f90-ts--imenu-spec-for-type type)))
-                            (and spec
-                                 ;; run the query, as type of anonymous nodes might be equal to
-                                 ;; structure root nodes, like in (program (program_statement "program" ... ))
-                                 (f90-ts--imenu-capture-name node (plist-get spec :query))))))
-             (sparse-tree (treesit-induce-sparse-tree root predicate))
-             (items (f90-ts--menu-from-sparse-tree sparse-tree))
-             (final-menu (cons (f90-ts--menu-entry "Top of buffer" (point-min-marker))
+    (if (and f90-ts--menu-nav-cache-root
+             f90-ts--menu-nav-cache-result
+             (treesit-node-eq root f90-ts--menu-nav-cache-root)
+             (not (treesit-node-check f90-ts--menu-nav-cache-root 'outdated)))
+        f90-ts--menu-nav-cache-result
+      (let* ((node-table (f90-ts--menu-nav-node-table root))
+             (sparse-tree (treesit-induce-sparse-tree
+                           root
+                           (f90-ts--menu-nav-tree-predicate node-table)
+                           (f90-ts--menu-nav-tree-process-fn node-table)))
+             (items (f90-ts--menu-nav-from-sparse-tree sparse-tree))
+             (final-menu (cons (f90-ts--menu-nav-entry "Top of buffer"
+                                                       (point-min-marker))
                                (or items '(["(empty)" ignore t])))))
+        (setq f90-ts--menu-nav-cache-root   root)
+        (setq f90-ts--menu-nav-cache-result final-menu)
         ;;(f90-ts-log :menu "sparse-tree: \n%s" (pp-to-string sparse-tree))
-        (setq f90-ts--menu-cache-root root)
-        (setq f90-ts--menu-cache-result final-menu)
+        ;;(f90-ts-log :menu "final: %s" final-menu)
         final-menu))))
 
 
@@ -5145,7 +5167,8 @@ and keyword are sometimes equal.  But we only want the structure node."
       ["Go back"          xref-go-back          :active t]
       ["Go forward"       xref-go-forward       :active t])
      ("Navigate"
-      :filter (lambda (menu) (f90-ts--menu-tree menu)))))
+      :visible f90-ts-menu-show-navigate
+      :filter (lambda (menu) (f90-ts--menu-nav-tree menu)))))
 
 
 ;;;-----------------------------------------------------------------------------
