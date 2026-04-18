@@ -1988,21 +1988,11 @@ return it."
        (aref f90-ts--indent-cache f90-ts--indent-slot-parent)))
 
 
-(defun f90-ts--indent-cache-valid-p (node parent)
-  "Check whether cache is valid and not empty or stale.
-Note that NODE and PARENT are live nodes, so a simple
-comparison is sufficient."
-  (and f90-ts--indent-cache
-       (treesit-node-eq node   (f90-ts--indent-cached-node))
-       (treesit-node-eq parent (f90-ts--indent-cached-parent))))
-
-
-(defun f90-ts--indent-ensure-cache (node parent)
-  "Return cache for NODE and PARENT, reusing it if the cache is valid."
-  (when (not (f90-ts--indent-cache-valid-p node parent))
-      (setq f90-ts--indent-cache (make-vector f90-ts--indent-cache-size 'unset))
-      (aset f90-ts--indent-cache f90-ts--indent-slot-node   node)
-      (aset f90-ts--indent-cache f90-ts--indent-slot-parent parent))
+(defun f90-ts--indent-create-cache (node parent)
+  "Create cache for NODE and PARENT for indentation rules."
+  (setq f90-ts--indent-cache (make-vector f90-ts--indent-cache-size 'unset))
+  (aset f90-ts--indent-cache f90-ts--indent-slot-node   node)
+  (aset f90-ts--indent-cache f90-ts--indent-slot-parent parent)
   f90-ts--indent-cache)
 
 
@@ -2226,7 +2216,7 @@ otherwise return column as is."
 This dummy matcher should be the very first rule to be executed to reset the
 cache for a new indentation run.
 The cache stores NODE and PARENT and prepares further internal values."
-  (f90-ts--indent-ensure-cache node parent)
+  (f90-ts--indent-create-cache node parent)
   nil)
 
 
@@ -3977,8 +3967,9 @@ If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
 
 ;;; line indentation for <tab>, C-<tab> etc.
 ;;;  * f90-ts-indent-and-complete-stmt
-;;;  * f90-ts-indent-and-complete-line{-[2,3]}
-;;;  * f90-ts-indent-line{-[2,3]}
+;;;  * f90-ts-indent-and-complete-line
+;;;  * f90-ts-indent-line
+;;;  * f90-ts-indent-for-tab-command{-[2,3]}
 ;;;
 ;;; region indentation:
 ;;;  * f90-ts-indent-and-complete-region
