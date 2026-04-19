@@ -142,7 +142,7 @@ without final newline."
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
     (f90-ts-indent-declaration . 3)
-    (f90-ts-beginning-ampersand . nil)
+    (f90-ts-leading-ampersand . nil)
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")

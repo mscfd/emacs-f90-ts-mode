@@ -307,9 +307,9 @@ Copied from prog mode `f90-mode'."
   :group 'f90-ts)
 
 
-;; same as in legacy f90 mode
-(defcustom f90-ts-beginning-ampersand nil
-  "Non-nil gives automatic insertion of `&' at start of continuation line."
+;; same as f90-beginning-ampersand in legacy f90 mode
+(defcustom f90-ts-leading-ampersand nil
+  "Non-nil gives automatic insertion of leading `&' at a continued line."
   :type  'boolean
   :safe  'booleanp
   :group 'f90-ts)
@@ -4202,7 +4202,7 @@ The variant to be used can be customized.  Intended for use in key bindings."
     (delete-horizontal-space)
     (f90-ts--break-line-insert-amp-at-end)
     (newline 1)
-    (if f90-ts-beginning-ampersand (insert "&"))))
+    (if f90-ts-leading-ampersand (insert "&"))))
   ;; finally indent the new line after insertion of the newline
   (indent-according-to-mode))
 

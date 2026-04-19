@@ -302,7 +302,7 @@ variants.
 
 TODO:
 * implement further list like structures, refine existing once
-* handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
+* handle leading ampersand (related to `f90-ts-leading-ampersand` for line breaks)
 
 
 #### OpenMP and other special comments
@@ -396,7 +396,7 @@ comment starter, and inserted into the new line to continue the comment.
 The comment starter is found by regexp `f90-ts-comment-prefix-regexp`, which can be customized if necessary.
 
 Whether a leading ampersand at the start of the new line is inserted is controlled by
-`f90-ts-beginning-ampersand`. However, this has not yet been tested, in conjunction with indentation
+`f90-ts-leading-ampersand`. However, this has not yet been tested, in conjunction with indentation
 and in particular with list item alignment.
 
 
