@@ -1,0 +1,107 @@
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(indent . 3))
+          (f90-ts-indent-list-line 'primary))
+      (f90-ts-indent-and-complete-line)))
+
+Name: leading ampersand with indent 1
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+|5
+end subroutine sub
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+        &         |5
+end subroutine sub
+=-=-=
+
+Name: leading ampersand with indent 2
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+|5 + &
+4
+end subroutine sub
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+        &         |5 + &
+4
+end subroutine sub
+=-=-=
+
+Name: leading ampersand with indent 3
+=-=
+subroutine sub()
+     x = &
+         ! comment
+|           5
+end subroutine sub
+=-=
+subroutine sub()
+     x = &
+         ! comment
+        &   |5
+end subroutine sub
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(column . 2))
+          (f90-ts-indent-list-line 'primary))
+      (f90-ts-indent-and-complete-line)))
+
+Name: leading ampersand with column 1
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+|&5
+end subroutine sub
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+  &               |5
+end subroutine sub
+=-=-=
+
+Name: leading ampersand with column 2
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+|&5 + &
+4
+end subroutine sub
+=-=
+subroutine sub()
+     x123456789 = 6 + &
+  &               |5 + &
+4
+end subroutine sub
+=-=-=
+
+Name: leading ampersand with indent 3
+=-=
+subroutine sub()
+     x = &
+         ! comment
+|           5
+end subroutine sub
+=-=
+subroutine sub()
+     x = &
+         ! comment
+  &         |5
+end subroutine sub
+=-=-=
