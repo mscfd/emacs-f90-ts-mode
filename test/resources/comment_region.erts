@@ -301,7 +301,6 @@ subroutine sub_un_custom_1()
 end subroutine sub_un_custom_1
 =-=-=
 
-
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -398,4 +397,64 @@ subroutine sub_custom_3()
 !!$  end if
 |end subroutine sub_custom_3
 
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 29 156 "! "))
+
+Name: comment region trailing blank 1
+=-=
+subroutine sub_trailing_1()
+     if (x > 1) then
+
+          call to_be_commented()
+|
+          ! comment: do i=1,10
+          ! end do comment
+     end if
+
+end subroutine sub_trailing_1
+=-=
+subroutine sub_trailing_1()
+     ! if (x > 1) then
+     !
+     !    call to_be_commented()
+     !
+     comment: do i=1,10
+     end do comment
+     ! end if
+     !
+|end subroutine sub_trailing_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 29 166 "!!$    "))
+
+Name: comment region trailing blank 2
+=-=
+subroutine sub_trailing_2()
+     if (x > 1) then
+
+          call to_be_commented()
+|
+          !!$    comment: do i=1,10
+          !!$    end do comment
+     end if
+
+end subroutine sub_trailing_2
+=-=
+subroutine sub_trailing_2()
+!!$    if (x > 1) then
+!!$
+!!$       call to_be_commented()
+!!$
+     comment: do i=1,10
+     end do comment
+!!$    end if
+!!$
+|end subroutine sub_trailing_2
 =-=-=
