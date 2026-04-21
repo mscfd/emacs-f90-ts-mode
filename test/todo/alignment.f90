@@ -1,3 +1,28 @@
+! parenthesized_expression needs to be included in the list-context handling
+! "commment 2" is child of parenthesized_expression, and thus not recognised
+! as part of the following math_expression
+subroutine math()
+     x1234567890 = ( & ! comment 1
+            ! comment 2
+            5 + 6 &
+                      )
+end subroutine math
+
+! primary column for facet_ix is after "::", if there is no relevant item
+! on the previous line, maybe the standard offset is more appropriate
+! (same for argument lists etc.)
+subroutine arr1()
+     ! list context alignment of numbers in array
+     integer, dimension(1:3,1:4), parameter:: &
+        &                                     facet_ix = reshape(&
+        &                                                        [2,3,4, &
+        &                                                         1,4,3, &
+        &                                                         1,2,4, &
+        &                                                         1,3,2 &
+        &                                                           ], [3,4])
+end subroutine arr1
+
+
 ! list context for case range
 subroutine select_case()
      select_variant: select case (variant)
