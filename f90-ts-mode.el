@@ -5377,64 +5377,66 @@ and keyword are sometimes equal.  But we only want the structure node."
 ;;;-----------------------------------------------------------------------------
 ;;; menu definition
 
- (easy-menu-define f90-ts-mode-menu f90-ts-mode-map
-   "Menu for `f90-ts-mode'."
-   '("Fortran"
-     ("Indent"
-      ;; `indent-for-tab-command' invokes `f90-ts-indent-and-complete-line',
-      ;; but we use `indent-for-tab-command' to have keybinding shown properly
-      ["Indent line"                 indent-for-tab-command             :active t]
-      ["Indent line (alt 2)"         f90-ts-indent-for-tab-command-2    :active t]
-      ["Indent line (alt 3)"         f90-ts-indent-for-tab-command-3    :active t]
-      ["Indent & complete statement" f90-ts-indent-and-complete-stmt    :active t]
-      ["Indent & complete region"    f90-ts-indent-and-complete-region  :active (region-active-p)]
-      "---"
-      ["Complete end statements in region" f90-ts-complete-smart-end-region :active t])
-     ("Break & Join lines"
-      ["Break line"          f90-ts-break-line      :active t]
-      ["Join with prev line" f90-ts-join-line-prev  :active t]
-      ["Join with next line" f90-ts-join-line-next  :active t])
-     ("Comment"
-      ["Comment/uncomment region (default prefix)" f90-ts-comment-region-default :active (region-active-p)]
-      ["Comment/uncomment region (custom prefix)"  f90-ts-comment-region-custom  :active (region-active-p)])
-     ("Region"
-      ["Enlarge region"  f90-ts-enlarge-region :active t]
-      ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
-      ["Previous region" f90-ts-prev-region    :active (region-active-p)]
-      ["Next region"     f90-ts-next-region    :active (region-active-p)])
+(easy-menu-define f90-ts-mode-menu f90-ts-mode-map
+  "Menu for `f90-ts-mode'."
+  '("Fortran"
+    ("Indent"
+     ;; `indent-for-tab-command' invokes `f90-ts-indent-and-complete-line',
+     ;; but we use `indent-for-tab-command' to have keybinding shown properly
+     ["Indent line"                 indent-for-tab-command             :active t]
+     ["Indent line (alt 2)"         f90-ts-indent-for-tab-command-2    :active t]
+     ["Indent line (alt 3)"         f90-ts-indent-for-tab-command-3    :active t]
+     ["Indent & complete statement" f90-ts-indent-and-complete-stmt    :active t]
+     ["Indent & complete region"    f90-ts-indent-and-complete-region  :active (region-active-p)]
      "---"
-     ("Defun & Thing"
-      ["Beginning of defun" beginning-of-defun :active t]
-      ["End of defun"       end-of-defun       :active t]
-      ["Mark defun"         mark-defun         :active t]
-      "---"
-      ["Narrow to defun"    narrow-to-defun    :active t]
-      ["Widen"              widen              :active (buffer-narrowed-p)]
-      "---"
-      ["Next procedure"          f90-ts-thing-next-procedure          :active t]
-      ["Prev procedure"          f90-ts-thing-prev-procedure          :active t]
-      ["Beginning of procedure"  f90-ts-thing-beginning-of-procedure  :active t]
-      ["End of procedure"        f90-ts-thing-end-of-procedure        :active t]
-      "---"
-      ["Next type"               f90-ts-thing-next-type               :active t]
-      ["Prev type"               f90-ts-thing-prev-type               :active t]
-      ["Beginning of type"       f90-ts-thing-beginning-of-type       :active t]
-      ["End of type"             f90-ts-thing-end-of-type             :active t]
-      "---"
-      ["Next interface"          f90-ts-thing-next-interface          :active t]
-      ["Prev interface"          f90-ts-thing-prev-interface          :active t]
-      ["Beginning of interface"  f90-ts-thing-beginning-of-interface  :active t]
-      ["End of interface"        f90-ts-thing-end-of-interface        :active t])
-     ("Xref"
-      ["Find definition"  xref-find-definitions :active t]
-      ["Find references"  xref-find-references  :active t]
-      ["Find apropos"     xref-find-apropos     :active t]
-      "---"
-      ["Go back"          xref-go-back          :active t]
-      ["Go forward"       xref-go-forward       :active t])
-     ("Navigate"
-      :visible f90-ts-menu-show-navigate
-      :filter (lambda (menu) (f90-ts--menu-nav-tree menu)))))
+     ["Complete end statements in region" f90-ts-complete-smart-end-region :active t])
+    ("Break & Join lines"
+     ["Break line"          f90-ts-break-line      :active t]
+     ["Join with prev line" f90-ts-join-line-prev  :active t]
+     ["Join with next line" f90-ts-join-line-next  :active t])
+    ("Comment"
+     ["Comment/uncomment region (default prefix)" f90-ts-comment-region-default :active (region-active-p)]
+     ["Comment/uncomment region (custom prefix)"  f90-ts-comment-region-custom  :active (region-active-p)])
+    ("Region"
+     ["Enlarge region"  f90-ts-enlarge-region :active t]
+     ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
+     ["Previous region" f90-ts-prev-region    :active (region-active-p)]
+     ["Next region"     f90-ts-next-region    :active (region-active-p)])
+    "---"
+    ("Defun & Thing"
+     ["Beginning of defun" beginning-of-defun :active t]
+     ["End of defun"       end-of-defun       :active t]
+     ["Mark defun"         mark-defun         :active t]
+     "---"
+     ["Narrow to defun"    narrow-to-defun    :active t]
+     ["Widen"              widen              :active (buffer-narrowed-p)]
+     "---"
+     ["Next procedure"          f90-ts-thing-next-procedure          :active t]
+     ["Prev procedure"          f90-ts-thing-prev-procedure          :active t]
+     ["Beginning of procedure"  f90-ts-thing-beginning-of-procedure  :active t]
+     ["End of procedure"        f90-ts-thing-end-of-procedure        :active t]
+     "---"
+     ["Next type"               f90-ts-thing-next-type               :active t]
+     ["Prev type"               f90-ts-thing-prev-type               :active t]
+     ["Beginning of type"       f90-ts-thing-beginning-of-type       :active t]
+     ["End of type"             f90-ts-thing-end-of-type             :active t]
+     "---"
+     ["Next interface"          f90-ts-thing-next-interface          :active t]
+     ["Prev interface"          f90-ts-thing-prev-interface          :active t]
+     ["Beginning of interface"  f90-ts-thing-beginning-of-interface  :active t]
+     ["End of interface"        f90-ts-thing-end-of-interface        :active t])
+    ("Xref"
+     ["Find definition"  xref-find-definitions :active t]
+     ["Find references"  xref-find-references  :active t]
+     ["Find apropos"     xref-find-apropos     :active t]
+     "---"
+     ["Go back"          xref-go-back          :active t]
+     ["Go forward"       xref-go-forward       :active t])
+    ("Navigate"
+     :visible f90-ts-menu-show-navigate
+     :filter (lambda (menu) (f90-ts--menu-nav-tree menu)))
+    "---"
+    ["Customize f90-ts" (customize-group 'f90-ts) :active t]))
 
 
 ;;;-----------------------------------------------------------------------------
