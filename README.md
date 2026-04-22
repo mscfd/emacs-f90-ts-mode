@@ -21,6 +21,7 @@ The mode is under **development**, features might only be partially implemented.
     - [Indentation of multiline statement](#indentation-of-multiline-statement)
     - [OpenMP and other special comments](#openmp-and-other-special-comments)
   - [Smart end completion](#smart-end-completion)
+  - [Indentation of continued statements with leading ampersand](#indentation-of-continued-statements-with-leading-ampersand)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
   - [Xref](#xref)
   - [Breaking and joining lines](#breaking-and-joining-lines)
@@ -284,7 +285,7 @@ call sub_with_many_arguments(argx, another, one_more, &
 ```
 Five options are currently implemented: `continued-line`,  `primary`, `rotate`, `keep-or-primary`
 and `keep-or-next`. Primary column is some outstanding column with respect to the context (like
-the smallest column of arguments in the example above, or the column just right to the opening parenthesis.
+the smallest column of arguments in the example above, or the column just right to the opening parenthesis).
 The last three options `rotate`, `keep-or-primary` and `keep-or-next`, which collect and offer several
 alignment columns, always include the continued line position among the set of columns.
 
@@ -299,10 +300,6 @@ Remark: currently options and variants are intended to experiment with and see w
 and is worth keeping. The additional keybindings for variant 2 and 3 also help with testing various
 variants.
 
-
-TODO:
-* implement further list like structures, refine existing once
-* handle leading ampersand (related to `f90-ts-beginning-ampersand` for line breaks)
 
 
 #### OpenMP and other special comments
@@ -354,6 +351,15 @@ using the treesitter generated AST. Lower, upper and title case of construct key
 end statement, including whether to use `end`, `END` or `End`.
 
 
+### Indentation of continued statements with leading ampersand
+
+Leading ampersand in continued lines is optional. By setting `f90-ts-leading-ampersand` to non-nil,
+indentation operations (and break line operation) insert a leading ampersand where applicable.
+Indentation is done as if the leading ampersand is not present.
+The leading ampersand can be placed at an absolute column or relative to indentation of the continued statement.
+This is controlled by `f90-ts-leading-ampersand-style`.
+
+
 ### Indentation of continued statements and blocks
 
 For incomplete statements on continued lines or incomplete structure blocks,
@@ -395,9 +401,8 @@ then the comment starter (like '!>', '!<' or similar) is extracted, including in
 comment starter, and inserted into the new line to continue the comment.
 The comment starter is found by regexp `f90-ts-comment-prefix-regexp`, which can be customized if necessary.
 
-Whether a leading ampersand at the start of the new line is inserted is controlled by
-`f90-ts-beginning-ampersand`. However, this has not yet been tested, in conjunction with indentation
-and in particular with list item alignment.
+Whether a leading ampersand at the start of the new line is inserted is controlled by option
+`f90-ts-leading-ampersand`.
 
 
 #### Joining lines

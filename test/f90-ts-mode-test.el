@@ -142,7 +142,8 @@ without final newline."
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
     (f90-ts-indent-declaration . 3)
-    (f90-ts-beginning-ampersand . nil)
+    (f90-ts-leading-ampersand . nil)
+    (f90-ts-leading-ampersand-style . (indent . 3))
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\s-+")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\s-+")
@@ -886,7 +887,8 @@ point at 1+end of region."
 (f90-ts-mode-test--prep-act-register
  "f90-ts-mode-test-std"
  '("indent_region_align_misc.erts"
-   "indent_region_align_expr.erts")
+   "indent_region_align_expr.erts"
+   "indent_region_leading_amp.erts")
  '(nil ; no preparation
    )
  '(f90-ts-mode-test--indent-by-region))
@@ -897,6 +899,8 @@ point at 1+end of region."
  "f90-ts-mode-test-std"
  '("indent_region_partial.erts"
    "indent_line_align.erts"
+   "indent_line_leading_amp.erts"
+   "indent_stmt_misc.erts"
    "break_line.erts"
    "join_line.erts"
    "mark_region.erts"

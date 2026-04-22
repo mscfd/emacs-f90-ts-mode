@@ -1,0 +1,240 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(indent . 3)))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Point-Char: |
+
+Name: align various lists 1
+=-=
+subroutine simulate(set, fsim1, &
+   &                     fsim2, out)
+     real(kind=real32), dimension(:), &
+        &               target, &
+
+        &               intent(in) :: set
+     integer, dimension(:), &
+        &     allocatable, &
+        &     intent(out) :: fsim1, &
+        &                    fsim2
+
+     procedure(simulator_ifc) :: &
+        &   fsim
+
+     call sim_init(set, &
+        &          out)
+     call sim_run(fsim, set, &
+        &               out)
+end subroutine simulate
+=-=-=
+
+Name: align various lists 2
+=-=
+subroutine simulate(set, fsim1, &
+                         fsim2, out)
+     real(kind=real32), dimension(:), &
+                        target, &
+
+                        intent(in) :: set
+     integer, dimension(:), &
+              allocatable, &
+              intent(out) :: fsim1, &
+                             fsim2
+
+     procedure(simulator_ifc) :: &
+            fsim
+
+     call sim_init(set, &
+                   out)
+     call sim_run(fsim, set, &
+                        out)
+end subroutine simulate
+=-=
+subroutine simulate(set, fsim1, &
+   &                     fsim2, out)
+     real(kind=real32), dimension(:), &
+        &               target, &
+
+        &               intent(in) :: set
+     integer, dimension(:), &
+        &     allocatable, &
+        &     intent(out) :: fsim1, &
+        &                    fsim2
+
+     procedure(simulator_ifc) :: &
+        &   fsim
+
+     call sim_init(set, &
+        &          out)
+     call sim_run(fsim, set, &
+        &               out)
+end subroutine simulate
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(column . 1)))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Point-Char: |
+
+Name: align various lists 3
+=-=
+subroutine simulate(set, fsim1, &
+ &                       fsim2, out)
+     real(kind=real32), dimension(:), &
+ &                      target, &
+
+ &                      intent(in) :: set
+     integer, dimension(:), &
+ &            allocatable, &
+ &            intent(out) :: fsim1, &
+ &                           fsim2
+
+     procedure(simulator_ifc) :: &
+ &          fsim
+
+     call sim_init(set, &
+ &                 out)
+     call sim_run(fsim, set, &
+ &                      out)
+end subroutine simulate
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(indent . 3)))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: align parameter list 1
+=-=
+subroutine sub_simple(x, y, z, &
+   &                  a, &
+                      ! comment
+   &                        b)
+end subroutine sub_simple
+=-=-=
+
+
+Name: align parameter list 2
+=-=
+subroutine sub_simple(x, y, z, &
+                      a, &
+                      ! comment
+                            b)
+end subroutine sub_simple
+=-=
+subroutine sub_simple(x, y, z, &
+   &                  a, &
+                      ! comment
+   &                        b)
+end subroutine sub_simple
+=-=-=
+
+Name: align associate list 1
+=-=
+subroutine sub()
+     components: associate(matrix_A => this%model_A%mat, &
+        &                  matrix_B => this%model_B%mat, &
+        &                  N => this%model_size)
+     end associate components
+end subroutine sub
+=-=-=
+
+Name: align argument lists 1
+=-=
+function eval() result(w)
+     call algorithm(fun1(a, b), fun2(x, y, &
+              z &
+                                   ), &
+                            fun3(u, &
+             v, &
+              w))
+end
+=-=
+function eval() result(w)
+     call algorithm(fun1(a, b), fun2(x, y, &
+        &                            z &
+        &                              ), &
+        &           fun3(u, &
+        &                v, &
+        &                w))
+end function eval
+=-=-=
+
+Name: align array literal 1
+=-=
+subroutine arr1()
+! list context alignment of numbers in array
+integer, dimension(1:3,1:4), parameter:: &
+&   facet_ix = reshape(&
+&   [2,3,4, &
+&   1,4,3, &
+&   1,2,4, &
+&   1,3,2 &
+&   ], [3,4])
+end subroutine arr1
+=-=
+subroutine arr1()
+     ! list context alignment of numbers in array
+     integer, dimension(1:3,1:4), parameter:: &
+        &                                     facet_ix = reshape(&
+        &                                                        [2,3,4, &
+        &                                                         1,4,3, &
+        &                                                         1,2,4, &
+        &                                                         1,3,2 &
+        &                                                           ], [3,4])
+end subroutine arr1
+=-=-=
+
+Name: align array literal 2
+=-=
+subroutine arr2()
+     real, dimension(1:10), parameter :: &
+        &   bernoulli = (/ 1.0, -0.5, 0.16667, 0.0, &
+        &                 -0.03333, 0.0, &
+        &                  0.0238, 0.0 &
+        &                   /)
+end subroutine arr2
+=-=-=
+
+Name: align array literal 3
+=-=
+subroutine arr3()
+     character(len=5), dimension(1:3) :: & ! comment
+          
+          ! comment
+          
+                                  rgb = &
+                                         (/ &
+              'red  ', &
+              'green', &
+              'blue ' /), &
+           alpha = 'trnsp'
+end
+=-=
+subroutine arr3()
+     character(len=5), dimension(1:3) :: & ! comment
+          
+                                         ! comment
+          
+        &                                rgb = &
+        &                                (/ &
+        &                                  'red  ', &
+        &                                  'green', &
+        &                                  'blue ' /), &
+        &                                alpha = 'trnsp'
+end subroutine arr3
+=-=-=

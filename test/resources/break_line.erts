@@ -153,3 +153,56 @@ real function test_fun()
             |
 end function test_fun
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(indent . 3)))
+      (f90-ts-break-line)))
+
+Name: break with leading ampersand 1
+=-=
+subroutine sub_1()
+     call sub_2(arg1,| arg2)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+        &       |arg2)
+end subroutine sub_1
+=-=-=
+
+Name: break with leading ampersand 2
+=-=
+subroutine sub_2()
+     call sub_2(arg1,    |  arg2)
+end subroutine sub_2
+=-=
+subroutine sub_2()
+     call sub_2(arg1, &
+        &       |arg2)
+end subroutine sub_2
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t)
+          (f90-ts-leading-ampersand-style '(column . 0)))
+      (f90-ts-break-line)))
+
+Name: break with leading ampersand 3
+=-=
+subroutine sub_3()
+     ! invalid code
+     x = |! number still to add
+end subroutine sub_3
+=-=
+subroutine sub_3()
+     ! invalid code
+     x = &
+&           ! number still to add
+end subroutine sub_3
+=-=-=

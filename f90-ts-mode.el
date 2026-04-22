@@ -242,6 +242,21 @@ Primary alignment column for the second line of a declaration plus
   :group 'f90-ts-indent)
 
 
+(defcustom f90-ts-leading-ampersand-style '(indent . 3)
+  "Indentation style for leading ampersands in continued lines.
+Value is a list of the form (TYPE VALUE) where TYPE is either:
+- `column': place the ampersand at column VALUE (0-based)
+- `indent': place the ampersand with offset VALUE relative to first
+  line of the continued statement."
+  :type '(choice (cons :tag "Fixed column"
+                       (const :tag "" :format "" column)
+                       (integer :tag "Fixed column number"))
+                 (cons :tag "Indent offset"
+                       (const :tag "" :format "" indent)
+                       (integer :tag "Offset to first line")))
+  :group 'f90-ts)
+
+
 ;;;-----------------------------------------------------------------------------
 
 (defface f90-ts-font-lock-delimiter-face
@@ -307,9 +322,9 @@ Copied from prog mode `f90-mode'."
   :group 'f90-ts)
 
 
-;; same as in legacy f90 mode
-(defcustom f90-ts-beginning-ampersand nil
-  "Non-nil gives automatic insertion of `&' at start of continuation line."
+;; same as f90-beginning-ampersand in legacy f90 mode
+(defcustom f90-ts-leading-ampersand nil
+  "Non-nil gives automatic insertion of leading `&' at a continued line."
   :type  'boolean
   :safe  'booleanp
   :group 'f90-ts)
@@ -1794,9 +1809,7 @@ Returns a list of xref-item instances suitable for
                                           f90-ts--xref-ref-query
                                           nil nil t)))
     (cl-loop for node in id-nodes
-             when (progn
-                    (f90-ts-log :xref "node=%s, text=%s, id=%s" node (treesit-node-text node t) id-lowcase)
-                    (string= (downcase (treesit-node-text node t)) id-lowcase))
+             when (string= (downcase (treesit-node-text node t)) id-lowcase)
              collect (f90-ts--xref-make-item node))))
 
 
@@ -1988,21 +2001,11 @@ return it."
        (aref f90-ts--indent-cache f90-ts--indent-slot-parent)))
 
 
-(defun f90-ts--indent-cache-valid-p (node parent)
-  "Check whether cache is valid and not empty or stale.
-Note that NODE and PARENT are live nodes, so a simple
-comparison is sufficient."
-  (and f90-ts--indent-cache
-       (treesit-node-eq node   (f90-ts--indent-cached-node))
-       (treesit-node-eq parent (f90-ts--indent-cached-parent))))
-
-
-(defun f90-ts--indent-ensure-cache (node parent)
-  "Return cache for NODE and PARENT, reusing it if the cache is valid."
-  (when (not (f90-ts--indent-cache-valid-p node parent))
-      (setq f90-ts--indent-cache (make-vector f90-ts--indent-cache-size 'unset))
-      (aset f90-ts--indent-cache f90-ts--indent-slot-node   node)
-      (aset f90-ts--indent-cache f90-ts--indent-slot-parent parent))
+(defun f90-ts--indent-create-cache (node parent)
+  "Create cache for NODE and PARENT for indentation rules."
+  (setq f90-ts--indent-cache (make-vector f90-ts--indent-cache-size 'unset))
+  (aset f90-ts--indent-cache f90-ts--indent-slot-node   node)
+  (aset f90-ts--indent-cache f90-ts--indent-slot-parent parent)
   f90-ts--indent-cache)
 
 
@@ -2226,7 +2229,7 @@ otherwise return column as is."
 This dummy matcher should be the very first rule to be executed to reset the
 cache for a new indentation run.
 The cache stores NODE and PARENT and prepares further internal values."
-  (f90-ts--indent-ensure-cache node parent)
+  (f90-ts--indent-create-cache node parent)
   nil)
 
 
@@ -3682,6 +3685,16 @@ These are do loops, block statements, associate construct and forall statements.
 ;;;-----------------------------------------------------------------------------
 ;;; Smart end completion
 
+(defvar-local f90-ts--indent-modified-outside-line nil
+  "Non-nil if a line operation modified text outside the current line.
+Set by operations like `f90-ts--complete-smart-end-indent' that indent
+a whole block.  Checked by `f90-ts--with-check-modified-line' to prevent
+incorrectly restoring the buffer-modified flag.
+
+This assumes that a line operation using `f90-ts--with-check-modified-line'
+might call a region based operation, but not the other way around.")
+
+
 (defconst f90-ts--complete-end-structs
   '("end_program_statement"
     "end_module_statement"
@@ -3898,7 +3911,6 @@ option or statement indentation."
     (when (and (= (line-number-at-pos beg) (line-number-at-pos end))
                (and text (string-match-p "^end" text))
                (member type f90-ts--complete-end-structs))
-
       (let ((node-struct (treesit-node-parent node))
             node-struct-new)
         (when-let ((completion (f90-ts--complete-smart-end-compose node-struct)))
@@ -3928,6 +3940,14 @@ block.  If indentation changes something, the tree is updated and node-struct
 becomes stale.  In this case, the function return the node-struct-new,
 otherwise nil."
   (let ((variant-saved f90-ts--align-continued-variant-tab)
+        (beg (treesit-node-start node-struct))
+        ;; end position of node-struct sometimes reaches into next line
+        ;; (including the eos token)
+        (end (save-excursion
+               (goto-char (treesit-node-end node-struct))
+               (if (bolp)
+                   (1- (point))
+                 (point))))
         beg-marker
         end-marker
         node-struct-new)
@@ -3936,12 +3956,15 @@ otherwise nil."
           ;; use region variant for indentation (no rotation of list
           ;; items on continued lines)
           (setq f90-ts--align-continued-variant-tab nil)
-          (setq beg-marker (copy-marker (treesit-node-start node-struct) t))
-          (setq end-marker (copy-marker (treesit-node-end node-struct) t))
-          (treesit-indent-region beg-marker end-marker)
+          (setq beg-marker (copy-marker beg t))
+          (setq end-marker (copy-marker end t))
+          (f90-ts--indent-and-complete-region-aux beg-marker end-marker)
           (when (treesit-node-check node-struct 'outdated)
+            ;; remember that the region has been modified in case it was invoked
+            ;; by some line operation which wants to keep track of modifications
+            (setq f90-ts--indent-modified-outside-line t)
             (setq node-struct-new (treesit-node-on (marker-position beg-marker)
-                                                  (marker-position end-marker)))))
+                                                   (marker-position end-marker)))))
       ;; revert to saved tab variant
       (setq f90-ts--align-continued-variant-tab variant-saved)
       (when beg-marker (set-marker beg-marker nil))
@@ -3968,35 +3991,180 @@ If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
           (when indent-struct
             ;; update node-struct, if indent changes anything
             (setq node-struct (or (f90-ts--complete-smart-end-indent node-struct)
-                                 node-struct)))
+                                  node-struct)))
           (f90-ts--complete-smart-end-show node-struct))))))
 
 
 ;;;------------------------------------------------------------------------------
-;;; Indentation and smart end completion
+;;; Indentation: auxiliary function
+;;; mainly for handling leading ampersands in continued lines
 
-;;; line indentation for <tab>, C-<tab> etc.
-;;;  * f90-ts-indent-and-complete-stmt
-;;;  * f90-ts-indent-and-complete-line{-[2,3]}
-;;;  * f90-ts-indent-line{-[2,3]}
-;;;
-;;; region indentation:
-;;;  * f90-ts-indent-and-complete-region
+(defmacro f90-ts--with-check-modified-line (&rest body)
+  "Execute BODY, restoring unmodified status if current line is unchanged.
 
-(defun f90-ts--indent-stmt-region (beg end)
-  "Apply indent region from begin of line at BEG to end of line at END.
-Return true if the region was already properly indented (nothing was
-changed)."
-  (let ((beg-reg (save-excursion
-                    (goto-char beg)
-                    (line-beginning-position)))
-        (end-reg (save-excursion
-                    (goto-char end)
-                    (line-end-position))))
-    ;; possibly slow if continued lines are very long (but safer)
-    (let ((old-text (buffer-substring-no-properties beg-reg end-reg)))
-      (treesit-indent-region beg-reg end-reg)
-      (string= old-text (buffer-substring-no-properties beg-reg end-reg)))))
+Note: do not use symbols `modified-before' and `line-before' symbols
+in BODY."
+  (declare (indent 0))
+  `(let* ((modified-before (buffer-modified-p))
+          (f90-ts--indent-modified-outside-line nil)
+          (line-before (unless modified-before
+                         (buffer-substring-no-properties
+                          (line-beginning-position)
+                          (line-end-position)))))
+     ,@body
+     (unless (or modified-before f90-ts--indent-modified-outside-line)
+       (when (string= line-before
+                      (buffer-substring-no-properties
+                       (line-beginning-position)
+                       (line-end-position)))
+         (restore-buffer-modified-p nil)))))
+
+
+(defmacro f90-ts--with-check-modified-region (beg end &rest body)
+  "Execute BODY, restoring unmodified status if region BEG..END is unchanged.
+
+Note: do not use symbols `modified-before' and `region-before' symbols
+in BODY."
+  (declare (indent 2))
+  `(let* ((modified-before (buffer-modified-p))
+          (region-before (unless modified-before
+                           (buffer-substring-no-properties ,beg ,end))))
+     ,@body
+     (unless modified-before
+       (when (string= region-before
+                      (buffer-substring-no-properties ,beg ,end))
+         (restore-buffer-modified-p nil)))))
+
+
+(defun f90-ts--indent-leading-ampersand-column ()
+  "Compute the column for a leading ampersand on the current line.
+Uses `f90-ts-leading-ampersand-style' to determine placement.
+For the `indent' style, uses the column of the first node of the
+continued statement plus the configured offset."
+  (pcase f90-ts-leading-ampersand-style
+    (`(column . ,col)
+     col)
+    (`(indent . ,offset)
+     (+ offset
+        (let* ((node (f90-ts--node-at-indent-pos (point)))
+               (parent (treesit-node-parent node))
+               (pstmt-1 (f90-ts--previous-stmt-first node parent)))
+          (f90-ts--node-column pstmt-1))))
+    (_ (error "Invalid f90-ts-leading-ampersand-style: %S"
+              f90-ts-leading-ampersand-style))))
+
+
+(defun f90-ts--indent-blank-leading-ampersand-line ()
+  "Handle a leading ampersand on the current line before indentation.
+If point is at an ampersand after moving to the indentation column,
+temporarily replace it with a space so that `treesit-indent' sees
+the first proper node on that line.  Returns non-nil if an ampersand was
+found (and replaced), nil otherwise."
+  (unless (f90-ts--point-on-empty-line-p)
+    (save-excursion
+      (back-to-indentation)
+      (let ((node (treesit-node-at (point))))
+        (cl-assert (= (f90-ts--node-line node)
+                      (line-number-at-pos (point)))
+                   nil
+                   "internal error (f90-ts--indent-blank-leading-ampersand-line): node not on current line")
+        (when (f90-ts--node-type-p node "&")
+          (delete-char 1)
+          (insert " ")
+          t)))))
+
+
+(defun f90-ts--indent-restore-leading-ampersand-line ()
+  "Restore a leading ampersand after indentation.
+It moves to the column determined by `f90-ts--indent-leading-ampersand-column'
+inserting blanks and moving code to the right if necessary.
+Then it pastes an ampersand at the determined column, leaving the code
+positioned as it is."
+  (let ((amp-col (f90-ts--indent-leading-ampersand-column)))
+    (back-to-indentation)
+    (let* ((indent-col (current-column))
+           (delta (- indent-col amp-col)))
+      (if (<= delta 0)
+          (insert (make-string (- delta) ?\s))
+        (backward-char delta )
+        (delete-char 1))
+      (insert "&"))))
+
+
+(defun f90-ts--indent-blank-leading-ampersand-region (beg end)
+  "Replace leading ampersands with blanks for each line in BEG..END.
+Returns a vector of booleans (one per line) indicating which lines
+had a leading ampersand.  BEG and END must be markers or positions
+that remain valid after buffer modifications."
+  (save-excursion
+    (goto-char beg)
+    (let* ((line-beg (line-number-at-pos beg))
+           (line-end (line-number-at-pos end))
+           (n-lines  (- line-end line-beg -1))
+           (has-amp-vec    (make-vector n-lines nil)))
+      (cl-loop
+       for ix from 0
+       for line from line-beg to line-end
+       ;; note ix is equal to (- line line-beg)
+       do (progn
+            (cl-assert (= (line-number-at-pos (point)) line)
+                       nil
+                       "f90-ts--indent-blank-leading-ampersand-region: line mismatch at index %d: expected line %d, got %d"
+                       ix line (line-number-at-pos (point)))
+            (aset has-amp-vec ix (f90-ts--indent-blank-leading-ampersand-line))
+            (forward-line 1)))
+      ;; return the vector of flags for restoring the ampersands
+      has-amp-vec)))
+
+
+(defun f90-ts--indent-restore-leading-ampersand-region (beg has-amp-vec)
+  "Restore leading ampersands for lines starting at BEG according to HAS-AMP-VEC.
+HAS-AMP-VEC is a boolean vector as returned by
+`f90-ts--indent-blank-leading-ampersand-region'."
+  (save-excursion
+    (goto-char beg)
+    (let ((line-beg (line-number-at-pos beg)))
+     (cl-loop
+      for line from line-beg
+      for has-amp across has-amp-vec
+      do (progn
+           (cl-assert (= (line-number-at-pos (point)) line)
+                      nil
+                      "f90-ts--indent-restore-leading-ampersand-region: line mismatch at index %d: expected line %d, got %d"
+                      (- line line-beg) line (line-number-at-pos (point)))
+           (when (or has-amp
+                     (and f90-ts-leading-ampersand
+                          (let ((node-first (f90-ts--first-node-on-line (point))))
+                            (f90-ts--node-type-p node-first "&"))))
+             (f90-ts--indent-restore-leading-ampersand-line))
+           (forward-line 1))))))
+
+
+(defun f90-ts--indent-line-aux (&optional variant)
+  "Indent a single line.
+This is the default function for indentation of a single line.  Smart end
+completion or other extra stuff is not executed by this function.
+If provided VARIANT is the variant symbol for how to compute alignment in
+multi-line statements.  Default value is `f90-ts-indent-list-line'.
+Optional leading ampersands on continuation lines are temporarily
+removed before calling `treesit-indent' and then restored at the
+column determined by `f90-ts-leading-ampersand-style'."
+  (let ((f90-ts--align-continued-variant-tab
+         (or variant f90-ts-indent-list-line))
+        (has-amp (f90-ts--indent-blank-leading-ampersand-line)))
+    ;; do indentation without leading ampersand
+    (treesit-indent)
+    ;; where applicable insert leading ampersand if there was already
+    ;; one or if f90-ts-leading-ampersand is non-nil
+    (save-excursion
+      (when (or has-amp
+                (and f90-ts-leading-ampersand
+                     (let ((node-first (f90-ts--first-node-on-line (point))))
+                       (f90-ts--node-type-p node-first "&"))))
+        (f90-ts--indent-restore-leading-ampersand-line)))
+    ;; if at beginning of line and ampersand after point, we need to skip to
+    ;; indentation after save-excursion (whose marker does not help here)
+    (skip-chars-forward "& \t")))
 
 
 (defun f90-ts--indent-and-complete-line-aux (variant indent-struct)
@@ -4005,10 +4173,70 @@ VARIANT is the tab variant to be used.
 If INDENT-STRUCT is true, and point is at some end statement, then
 indent the whole block closed by the end statement after smart end
 completion."
-  (let ((f90-ts--align-continued-variant-tab variant))
-    (treesit-indent)
-    (f90-ts--complete-smart-tab indent-struct)))
+  ;; indent line, taking leading ampersand into account if necessary
+  (f90-ts--indent-line-aux variant)
+  ;; if end statement, do smart end completion
+  (f90-ts--complete-smart-tab indent-struct))
 
+
+(defun f90-ts--indent-stmt-region (beg end)
+  "Apply indent region from begin of line at BEG to end of line at END.
+Return true if the region was already properly indented (nothing was
+changed)."
+  (let ((beg-reg (save-excursion
+                   (goto-char beg)
+                   (line-beginning-position)))
+        (end-reg (save-excursion
+                   (goto-char end)
+                   (line-end-position))))
+    (let ((old-text (buffer-substring-no-properties beg-reg end-reg))
+          (has-amp-vec (f90-ts--indent-blank-leading-ampersand-region beg-reg end-reg)))
+      (treesit-indent-region beg-reg end-reg)
+      (f90-ts--indent-restore-leading-ampersand-region beg-reg has-amp-vec)
+      ;; place point properly on last line, but where does treesit-indent-region and
+      ;; the restore function (which uses a save-excursion) put point?
+      (skip-chars-forward "& \t")
+      (string= old-text (buffer-substring-no-properties beg-reg end-reg)))))
+
+
+(defun f90-ts--indent-and-complete-region-aux (beg end)
+  "Indent region and execute smart end completion in region from BEG to END.
+This is an auxiliary function for f90-ts-indent-and-complete-region.  But it
+can also be called by line based operations triggering indentation and
+completion for a region, like indent-stmt operations on an end struct line."
+  (let (beg-marker end-marker)
+    (unwind-protect
+        (progn
+          ;; beg marker should stay before inserted text
+          ;; end marker should stay after inserted text
+          (setq beg-marker (copy-marker beg))
+          (setq end-marker (copy-marker end t))
+          (f90-ts--with-check-modified-region beg-marker end-marker
+            (f90-ts-complete-smart-end-region beg-marker end-marker)
+            ;; remove leading ampersands, saving which lines had them
+            (let ((has-amp-vec (f90-ts--indent-blank-leading-ampersand-region
+                                beg-marker end-marker)))
+              (treesit-indent-region beg-marker end-marker)
+              ;; Restore ampersands.  beg-marker still points to the
+              ;; first line (insertion-type nil keeps it before any text
+              ;; treesit-indent may have inserted at the start).
+              (f90-ts--indent-restore-leading-ampersand-region
+               beg-marker has-amp-vec))))
+      (when beg-marker (set-marker beg-marker nil))
+      (when end-marker (set-marker end-marker nil)))))
+
+
+;;;------------------------------------------------------------------------------
+;;; Indentation and smart end completion
+
+;;; line indentation for <tab>, C-<tab> etc.
+;;;  * f90-ts-indent-and-complete-stmt
+;;;  * f90-ts-indent-and-complete-line
+;;;  * f90-ts-indent-line
+;;;  * f90-ts-indent-for-tab-command{-[2,3]}
+;;;
+;;; region indentation:
+;;;  * f90-ts-indent-and-complete-region
 
 (defun f90-ts-indent-and-complete-line ()
   "Indent and apply smart end completion to current line.
@@ -4016,9 +4244,10 @@ This is the default function for indent and smart complete of end lines,
 bound to <tab>.  More advanced indentations of involved continued lines and
 block structures is done by `f90-ts--indent-and-complete-stmt'"
   (interactive)
-  (f90-ts--indent-and-complete-line-aux
-   f90-ts-indent-list-line
-   nil))
+  (f90-ts--with-check-modified-line
+   (f90-ts--indent-and-complete-line-aux
+    f90-ts-indent-list-line
+    nil)))
 
 
 (defun f90-ts-indent-line (&optional variant)
@@ -4028,48 +4257,8 @@ completion or other extra stuff is not executed by this function.
 If provided VARIANT is the variant symbol for how to compute alignment in
 multi-line statements.  Default value is `f90-ts-indent-list-line'."
   (interactive)
-  (let ((f90-ts--align-continued-variant-tab
-         (or variant f90-ts-indent-list-line)))
-    (treesit-indent)))
-
-
-(defun f90-ts-indent-and-complete-stmt ()
-  "Perform indentation and smart end completion for a whole statement.
-In general, this just calls `f90-ts--indent-and-complete-line-aux'
-with non-nil for indent-struct.
-However, if within a continued line region, it determines the first line of
-the current statement and performs indent region from this first line up to
-and including the current line.  If indentation of current line has not
-changed, then it indents the current line by invoking
-`f90-ts--indent-and-complete' to apply rules like rotation of list context
-items.  Otherwise it indents  with default line choice."
-  (interactive)
-  (cond
-   ((use-region-p)
-    (let ((beg (region-beginning))
-          (end (region-end)))
-      (f90-ts-complete-smart-end-region beg end)))
-
-   ((not (f90-ts--pos-within-continued-stmt-p (point)))
-    ;; just do indent-and-complete plus block indentation if applicable
-    (f90-ts--indent-and-complete-line-aux
-     f90-ts-indent-list-line ; use default line variant
-     t))
-
-   (t
-    ;; multi-line statement
-    (let* ((end (point))
-           (node (f90-ts--first-node-on-line end))
-           (first (f90-ts--first-node-of-stmt node))
-           (beg (treesit-node-start first)))
-
-      (if (f90-ts--indent-stmt-region beg end)
-          ;; no indentation applied, invoke indentation for current line
-          ;; like doing rotational alignment,
-          ;; no smart end completion necessary, as there is no end is involved
-          (f90-ts-indent-line)
-        ;; statement up to current line was changed by indent statement region
-        (back-to-indentation))))))
+  (f90-ts--with-check-modified-line
+   (f90-ts--indent-line-aux variant)))
 
 
 ;; used by f90-ts-indent-and-complete-region
@@ -4130,27 +4319,63 @@ contains
 end module mod
 
 At the end function line, \"end\" represents the end subroutine statement,
-hence indentation as well as smart end completetion both work.  However,
+hence indentation as well as smart end completion both work.  However,
 the keyword \"function\" after \"end\" starts a new function and muddles the
-subsequent tree."
+subsequent tree.
+
+Leading ampersands on continuation lines are temporarily removed before
+calling `treesit-indent-region' and restored afterwards at the column
+determined by `f90-ts-leading-ampersand-style'."
   (interactive
    (if (use-region-p)
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
+  (f90-ts--indent-and-complete-region-aux beg end))
 
-  ;; we need markers as indent-region changes the positions
-  ;; of beg and end in general
-  (let (beg-marker end-marker)
-    (unwind-protect
-        (progn
-          ;; beg marker should stay before inserted text
-          ;; end marker should stay after inserted text
-          (setq beg-marker (copy-marker beg))
-          (setq end-marker (copy-marker end t))
-          (f90-ts-complete-smart-end-region beg-marker end-marker))
-          (treesit-indent-region beg-marker end-marker)
-      (when beg-marker (set-marker beg-marker nil))
-      (when end-marker (set-marker end-marker nil)))))
+
+(defun f90-ts-indent-and-complete-stmt ()
+  "Perform indentation and smart end completion for a whole statement.
+In general, this just calls `f90-ts--indent-and-complete-line-aux'
+with non-nil for argument `indent-struct' to trigger indentation of a
+whole structure if at end of some structure.
+
+However, if within a continued line region, it determines the first line of
+the current statement and performs indent region from this first line up to
+and including the current line.  If indentation of current line has not
+changed, then it indents the current line by invoking
+`f90-ts--indent-and-complete' to apply rules like rotation of list context
+items.  Otherwise it indents with default line choice.
+
+If a region is active, then just invoke `f90-ts-indent-and-complete-region'"
+  (interactive)
+  (cond
+   ((use-region-p)
+    (f90-ts-indent-and-complete-region (region-beginning)
+                                       (region-end)))
+
+   ((not (f90-ts--pos-within-continued-stmt-p (point)))
+    ;; just do indent-and-complete plus block indentation if applicable
+    (f90-ts--with-check-modified-line
+     (f90-ts--indent-and-complete-line-aux
+      f90-ts-indent-list-line ; use default line variant
+      t)))
+
+   (t
+    ;; multi-line statement
+    (let* ((end (point))
+           (node (f90-ts--first-node-on-line end))
+           (first (f90-ts--first-node-of-stmt node))
+           (beg (treesit-node-start first))
+           (variant-line f90-ts-indent-list-line))
+      (f90-ts--with-check-modified-region beg end
+        (if (f90-ts--indent-stmt-region beg end)
+            ;; no indentation applied, invoke indentation for current line
+            ;; like doing rotational alignment,
+            ;; no smart end completion necessary, as there is no end is involved
+            (f90-ts--indent-line-aux variant-line)
+          ;; statement up to current line was changed by indent statement region
+          (back-to-indentation)
+          (skip-chars-forward "& \t")))))))
 
 
 (defun f90-ts-indent-for-tab-command-2 ()
@@ -4211,7 +4436,7 @@ The variant to be used can be customized.  Intended for use in key bindings."
     (delete-horizontal-space)
     (f90-ts--break-line-insert-amp-at-end)
     (newline 1)
-    (if f90-ts-beginning-ampersand (insert "&"))))
+    (if f90-ts-leading-ampersand (insert "&"))))
   ;; finally indent the new line after insertion of the newline
   (indent-according-to-mode))
 
