@@ -1263,11 +1263,15 @@ Empty lines are automatically skipped as those are not present in the tree."
 
 
 (defun f90-ts--indent-pos-at-node (node)
-  "Determine indentation position of line where start of NODE is located."
-  ;; TODO: is this correct even with treesit-indent-region?
+  "Determine indentation position of line where start of NODE is located.
+Besides blanks, skip leading ampersands as well.
+
+Note: this can be used as anchor in indentation even within
+`treesit-indent-region', which uses buffering of computed (anchor offset)."
   (save-excursion
     (goto-char (treesit-node-start node))
-    (back-to-indentation)
+    (beginning-of-line)
+    (skip-chars-forward "& \t")
     (point)))
 
 
