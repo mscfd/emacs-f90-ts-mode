@@ -5161,7 +5161,7 @@ Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
          (marker (set-marker (make-marker) pos)))
     (list
      (f90-ts--menu-nav-entry label marker)
-     (cons (format "%s ..." label)
+     (cons (format "     [+]" label)
            (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children)))))
 
 
