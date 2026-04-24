@@ -5041,31 +5041,19 @@ Using `treesit-simple-imenu' is far more expensive computationally."
 
 
 ;;;-----------------------------------------------------------------------------
-;;; Navigate tree builder for fortran easy-menu
+;;; Navigation tree builder (for use with fortran easy-menu and navigation buffer)
 ;;; (this mirrors imenu, but it is recursively constructed)
 
-(defvar-local f90-ts--menu-nav-cache-root nil
-  "The root node used for the last menu generation.
-It is used to verify via `treesit-node-eq', whether the cached navigation tree
-is still valid")
+(defvar-local f90-ts--nav-tree-cache-root nil
+  "The treesit root node at the time of the last navigation tree build.
+Used to verify via `treesit-node-eq' whether the cache is still valid.")
 
 
-(defvar-local f90-ts--menu-nav-cache-result nil
-  "The last generated menu structure.")
+(defvar-local f90-ts--nav-tree-cache nil
+  "The last generated sparse navigation tree.")
 
 
-(defun f90-ts--menu-nav-entry (label marker)
-  "Return a clickable easy-menu vector for LABEL jumping to MARKER."
-  (vector label
-          (lambda ()
-            (interactive)
-            (switch-to-buffer (marker-buffer marker))
-            (goto-char marker)
-            (push-mark))
-          t))
-
-
-(defconst f90-ts--menu-nav-query-compiled
+(defconst f90-ts--nav-tree-query-compiled
   (let ((query-string
          (mapconcat
           (lambda (entry)
@@ -5082,7 +5070,7 @@ is still valid")
   "Pre-compiled Tree-sitter query for menu generation with struct captures.")
 
 
-(defun f90-ts--menu-nav-combine-captures (captures)
+(defun f90-ts--nav-tree-combine-captures (captures)
   "Pair consecutive (struct-a name-a struct-a name-a ...) in CAPTURES.
 Return a list of triples (name-type struct-node name-node) where name-type
 is capture symbol of name-a and nodes are captured node of struct and name."
@@ -5091,28 +5079,27 @@ is capture symbol of name-a and nodes are captured node of struct and name."
    collect (list type struct-node name-node)))
 
 
-(defun f90-ts--menu-nav-node-hash-fn (node)
+(defun f90-ts--nav-tree-node-hash-fn (node)
   "Hash function for NODE using its start position."
   (treesit-node-start node))
 
 
-(define-hash-table-test 'f90-ts--menu-nav-node-hash-test
+(define-hash-table-test 'f90-ts--nav-tree-node-hash-test
   #'treesit-node-eq
-  ;; hash function: use node's start position
-  #'f90-ts--menu-nav-node-hash-fn)
+  #'f90-ts--nav-tree-node-hash-fn)
 
 
-(defun f90-ts--menu-nav-node-table (root)
+(defun f90-ts--nav-tree-node-table (root)
   "Capture all menu nodes under ROOT in one pass using name-struct pairing.
 Returns an alist mapping each struct node to a list of (LABEL NAME POS) tuples."
-  (let* ((captures (treesit-query-capture root f90-ts--menu-nav-query-compiled))
-         (entities (f90-ts--menu-nav-combine-captures captures))
-         (table (make-hash-table :test 'f90-ts--menu-nav-node-hash-test)))
+  (let* ((captures (treesit-query-capture root f90-ts--nav-tree-query-compiled))
+         (entities (f90-ts--nav-tree-combine-captures captures))
+         (table (make-hash-table :test 'f90-ts--nav-tree-node-hash-test)))
     (cl-loop
      for (type struct-node name-node) in entities
      for label = (alist-get type f90-ts--imenu-capture-to-label)
      do (progn
-          (cl-assert label nil "internal error (f90-ts--menu-nav-node-table): label expected")
+          (cl-assert label nil "internal error (f90-ts--nav-tree-node-table): label expected")
           (cl-pushnew
            (list label
                  (treesit-node-text name-node t)
@@ -5122,13 +5109,13 @@ Returns an alist mapping each struct node to a list of (LABEL NAME POS) tuples."
     table))
 
 
-(defun f90-ts--menu-nav-tree-predicate (node-table)
+(defun f90-ts--nav-tree-tree-predicate (node-table)
   "Return a predicate that accepts nodes present in NODE-TABLE."
   (lambda (node)
     (gethash node node-table)))
 
 
-(defun f90-ts--menu-nav-tree-process-fn (node-table)
+(defun f90-ts--nav-tree-tree-process-fn (node-table)
   "Return a PROCESS-FN for `treesit-induce-sparse-node' for navigate menu.
 The returned process function replaces a raw node with its entry list
 from NODE-TABLE."
@@ -5136,8 +5123,43 @@ from NODE-TABLE."
     (gethash node node-table)))
 
 
-(defun f90-ts--menu-nav-from-leaf (triple)
-  "Build a `f90-ts--menu-nav-entry' from a (LABEL-BASE NAME POS) TRIPLE."
+(defun f90-ts--nav-tree-build ()
+  "Build the sparse navigation tree for the current buffer.
+If the cached tree is still valid, return this.
+Otherwise build the tree and cache it along with its root node in
+`f90-ts--nav-tree-cache' and `f90-ts--nav-tree-cache-root'."
+  (let ((root (treesit-buffer-root-node)))
+    (if (and f90-ts--nav-tree-cache-root
+             f90-ts--nav-tree-cache
+             (treesit-node-eq root f90-ts--nav-tree-cache-root)
+             (not (treesit-node-check f90-ts--nav-tree-cache-root 'outdated)))
+        f90-ts--nav-tree-cache
+      (let* ((node-table  (f90-ts--nav-tree-node-table root))
+             (sparse-tree (treesit-induce-sparse-tree
+                           root
+                           (f90-ts--nav-tree-tree-predicate node-table)
+                           (f90-ts--nav-tree-tree-process-fn node-table))))
+        (setq f90-ts--nav-tree-cache-root root)
+        (setq f90-ts--nav-tree-cache      sparse-tree)
+        sparse-tree))))
+
+
+;;;-----------------------------------------------------------------------------
+;;; Easy-menu renderer from navigation tree
+
+(defun f90-ts--nav-menu-entry (label marker)
+  "Return a clickable easy-menu vector for LABEL jumping to MARKER."
+  (vector label
+          (lambda ()
+            (interactive)
+            (switch-to-buffer (marker-buffer marker))
+            (goto-char marker)
+            (push-mark))
+          t))
+
+
+(defun f90-ts--nav-menu-from-leaf (triple)
+  "Build a `f90-ts--nav-menu-entry' from a (LABEL-BASE NAME POS) TRIPLE."
   (let* ((label-base (nth 0 triple))
          (name       (nth 1 triple))
          (pos        (nth 2 triple))
@@ -5145,11 +5167,11 @@ from NODE-TABLE."
                     (format "%s: %s" label-base name)
                   label-base))
          (marker (set-marker (make-marker) pos)))
-    (f90-ts--menu-nav-entry label marker)))
+    (f90-ts--nav-menu-entry label marker)))
 
 
-(defun f90-ts--menu-nav-from-branch (entries children)
-  "Build two `f90-ts--menu-nav-entry' from a spares node and its CHILDREN.
+(defun f90-ts--nav-menu-from-branch (entries children)
+  "Build two `f90-ts--nav-menu-entry' from a sparse node and its CHILDREN.
 Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
   (let* ((first      (car entries))
          (label-base (nth 0 first))
@@ -5160,12 +5182,12 @@ Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
                   label-base))
          (marker (set-marker (make-marker) pos)))
     (list
-     (f90-ts--menu-nav-entry label marker)
-     (cons (format "     [+]" label)
-           (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children)))))
+     (f90-ts--nav-menu-entry label marker)
+     (cons "     [+]"
+           (cl-mapcan #'f90-ts--nav-menu-from-sparse-tree children)))))
 
 
-(defun f90-ts--menu-nav-from-sparse-tree (sparse-node)
+(defun f90-ts--nav-menu-from-sparse-tree (sparse-node)
   "Recursively convert SPARSE-NODE to easy-menu format.
 
 SPARSE-NODE is ((TRIPLE ...) . CHILDREN) where each TRIPLE is
@@ -5176,41 +5198,149 @@ SPARSE-NODE is ((TRIPLE ...) . CHILDREN) where each TRIPLE is
      ;; root sentinel (root of a sparse tree, which usually is a forest
      ;; rather than a tree), just walk the forest
      ((null entries)
-      (cl-mapcan #'f90-ts--menu-nav-from-sparse-tree children))
+      (cl-mapcan #'f90-ts--nav-menu-from-sparse-tree children))
 
      ;; leaf node (either something like a variable declaration or
      ;; some structure without sub-nodes like an empty subroutine body).
      ((null children)
-      (mapcar #'f90-ts--menu-nav-from-leaf entries))
+      (mapcar #'f90-ts--nav-menu-from-leaf entries))
 
      ;; a branch, which is a structure contains other interesting items
      ;; (like a subroutine with variable declarations inside it)
      (t
-      (f90-ts--menu-nav-from-branch entries children)))))
+      (f90-ts--nav-menu-from-branch entries children)))))
 
 
-(defun f90-ts--menu-nav-tree (_current-menu)
+(defun f90-ts--nav-menu-tree (_current-menu)
   "Return the easy-menu structure for the current buffer, with caching."
-  (let ((root (treesit-buffer-root-node)))
-    (if (and f90-ts--menu-nav-cache-root
-             f90-ts--menu-nav-cache-result
-             (treesit-node-eq root f90-ts--menu-nav-cache-root)
-             (not (treesit-node-check f90-ts--menu-nav-cache-root 'outdated)))
-        f90-ts--menu-nav-cache-result
-      (let* ((node-table (f90-ts--menu-nav-node-table root))
-             (sparse-tree (treesit-induce-sparse-tree
-                           root
-                           (f90-ts--menu-nav-tree-predicate node-table)
-                           (f90-ts--menu-nav-tree-process-fn node-table)))
-             (items (f90-ts--menu-nav-from-sparse-tree sparse-tree))
-             (final-menu (cons (f90-ts--menu-nav-entry "Top of buffer"
-                                                       (point-min-marker))
-                               (or items '(["(empty)" ignore t])))))
-        (setq f90-ts--menu-nav-cache-root   root)
-        (setq f90-ts--menu-nav-cache-result final-menu)
-        ;;(f90-ts-log :menu "sparse-tree: \n%s" (pp-to-string sparse-tree))
-        ;;(f90-ts-log :menu "final: %s" final-menu)
-        final-menu))))
+  (let* ((sparse-tree (f90-ts--nav-tree-build))
+         (items       (f90-ts--nav-menu-from-sparse-tree sparse-tree)))
+    (cons (f90-ts--nav-menu-entry "Top of buffer" (point-min-marker))
+          (or items '(["(empty)" ignore t])))))
+
+
+;;;-----------------------------------------------------------------------------
+;;; Navigation buffer derived from navigation tree
+
+;; (defvar f90-ts--nav-buffer-name "*F90-TS Navigate*")
+
+;; (defvar-local f90-ts--nav-source-buffer nil
+;;   "The Fortran source buffer this nav panel was spawned from.")
+
+;; (defvar f90-ts--nav-buffer-mode-map
+;;   (let ((map (make-sparse-keymap)))
+;;     (define-key map (kbd "RET") #'f90-ts--nav-buffer-jump)
+;;     (define-key map (kbd "SPC") #'f90-ts--nav-buffer-preview)
+;;     (define-key map (kbd "n")   #'next-line)
+;;     (define-key map (kbd "p")   #'previous-line)
+;;     (define-key map (kbd "j")   #'next-line)
+;;     (define-key map (kbd "k")   #'previous-line)
+;;     (define-key map (kbd "g")   #'f90-ts--nav-buffer-refresh)
+;;     (define-key map (kbd "q")   #'f90-ts--nav-buffer-quit)
+;;     (define-key map (kbd "C-g") #'f90-ts--nav-buffer-quit)
+;;     map))
+
+;; (define-derived-mode f90-ts-nav-mode special-mode "F90-Nav"
+;;   "Major mode for the F90 navigation side-panel."
+;;   (setq truncate-lines t)
+;;   (hl-line-mode 1))
+
+
+;; (defface f90-ts-nav-depth-0-face
+;;   '((t :inherit font-lock-keyword-face :weight bold))
+;;   "Face for top-level nav entries.")
+
+;; (defface f90-ts-nav-depth-1-face
+;;   '((t :inherit font-lock-function-name-face))
+;;   "Face for second-level nav entries.")
+
+;; (defface f90-ts-nav-depth-2-face
+;;   '((t :inherit font-lock-variable-name-face))
+;;   "Face for deeper nav entries.")
+
+;; (defconst f90-ts--nav-buffer-depth-faces
+;;   [f90-ts-nav-depth-0-face f90-ts-nav-depth-1-face f90-ts-nav-depth-2-face])
+
+;; (defun f90-ts--nav-buffer-render (ir-nodes)
+;;   "Render IR-NODES into the current navigation buffer."
+;;   (let ((inhibit-read-only t))
+;;     (erase-buffer)
+;;     (f90-ts--nav-buffer-render-nodes ir-nodes 0)
+;;     (goto-char (point-min))))
+
+;; (defun f90-ts--nav-buffer-render-nodes (nodes depth)
+;;   "Insert NODES at DEPTH, recursing into children."
+;;   (dolist (node nodes)
+;;     (let* ((indent (make-string (* depth 2) ?\s))
+;;            (face   (aref f90-ts--nav-buffer-depth-faces
+;;                          (min depth (1- (length f90-ts--nav-buffer-depth-faces)))))
+;;            (text   (concat indent
+;;                            (propertize (f90-ts-nav-node-label node) 'face face))))
+;;       (insert text)
+;;       (put-text-property (line-beginning-position) (line-end-position)
+;;                          'f90-ts-nav-marker (f90-ts-nav-node-marker node))
+;;       (insert "\n"))
+;;     (f90-ts--nav-buffer-render-nodes (f90-ts-nav-node-children node) (1+ depth))))
+
+
+;; (defun f90-ts--nav-buffer-marker-at-point ()
+;;   (get-text-property (line-beginning-position) 'f90-ts-nav-marker))
+
+;; (defun f90-ts--nav-buffer-jump ()
+;;   "Jump to the entry on the current line and close the nav buffer."
+;;   (interactive)
+;;   (when-let ((marker (f90-ts--nav-buffer-marker-at-point)))
+;;     (unless (buffer-live-p (marker-buffer marker))
+;;       (user-error "Source buffer no longer live"))
+;;     (pop-to-buffer (marker-buffer marker))
+;;     (goto-char marker)
+;;     (recenter)))
+
+;; (defun f90-ts--nav-buffer-preview ()
+;;   "Preview the entry at point without leaving the nav buffer."
+;;   (interactive)
+;;   (when-let ((marker (f90-ts--nav-buffer-marker-at-point)))
+;;     (unless (buffer-live-p (marker-buffer marker))
+;;       (user-error "Source buffer no longer live"))
+;;     (with-selected-window (display-buffer (marker-buffer marker)
+;;                                           '(display-buffer-reuse-window))
+;;       (goto-char marker)
+;;       (recenter))))
+
+;; (defun f90-ts--nav-buffer-quit ()
+;;   "Quit the nav buffer."
+;;   (interactive)
+;;   (quit-window))
+
+;; (defun f90-ts--nav-buffer-refresh ()
+;;   "Rebuild the nav buffer from the source buffer."
+;;   (interactive)
+;;   (let ((src (or f90-ts--nav-buffer-source-buffer
+;;                  (user-error "No source buffer recorded"))))
+;;     (unless (buffer-live-p src)
+;;       (user-error "Source buffer no longer live"))
+;;     (with-current-buffer src
+;;       (setq f90-ts--nav-buffer-menu-cache-root nil)
+;;       (f90-ts-nav-open))))
+
+
+;; (defun f90-ts-nav-open ()
+;;   "Open (or refresh) the F90 navigation side-panel for the current buffer."
+;;   (interactive)
+;;   (let* ((src-buf (current-buffer))
+;;          (_       (when (null f90-ts--nav-buffer-cache-result)
+;;                     Warm the IR cache if not already populated.
+;;                     (f90-ts--nav-buffer-menu-tree nil)))
+;;          (ir      f90-ts--nav-buffer-cache-result)
+;;          (nav-buf (get-buffer-create f90-ts--nav-buffer-buffer-name)))
+;;     (with-current-buffer nav-buf
+;;       (f90-ts-nav-mode)
+;;       (setq f90-ts--nav-buffer-source-buffer src-buf)
+;;       (f90-ts--nav-buffer-render ir))
+;;     (display-buffer nav-buf
+;;                     '(display-buffer-in-side-window
+;;                       (side . left)
+;;                       (window-width . 35)))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5434,7 +5564,7 @@ and keyword are sometimes equal.  But we only want the structure node."
      ["Go forward"       xref-go-forward       :active t])
     ("Navigate"
      :visible f90-ts-menu-show-navigate
-     :filter (lambda (menu) (f90-ts--menu-nav-tree menu)))
+     :filter (lambda (menu) (f90-ts--nav-menu-tree menu)))
     "---"
     ["Customize f90-ts" (customize-group 'f90-ts) :active t]))
 
