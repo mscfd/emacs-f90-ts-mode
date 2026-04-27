@@ -5327,12 +5327,30 @@ is still valid")
 
 
 (defun f90-ts--menu-nav-combine-captures (captures)
-  "Pair consecutive (struct-a name-a struct-a name-a ...) in CAPTURES.
+  "Pair consecutive (struct name struct name ...) in CAPTURES.
 Return a list of triples (name-type struct-node name-node) where name-type
-is capture symbol of name-a and nodes are captured node of struct and name."
-  (cl-loop
-   for ((_ . struct-node) (type . name-node)) on captures by #'cddr
-   collect (list type struct-node name-node)))
+is capture symbol of name and nodes are captured node of struct and name.
+
+In general the captures have exactly one name for a struct.  But in some cases,
+it might be possible that there is zero, one or more name captures in the list.
+Return a triple for each (struct name_i) pair with name_i one of the name nodes
+after struct."
+  (let ((groups (mapcar #'nreverse
+                        (nreverse (cl-reduce
+                                   (lambda (acc cap)
+                                     (if (eq (car cap) 'struct)
+                                         (push (list cap) acc) ; build new struct sublist
+                                       (setcar acc (cons cap (car acc)))
+                                       acc))
+                                   captures
+                                   :initial-value nil)))))
+
+    (cl-mapcan (lambda (group)
+                 (let ((struct-node (cdar group))
+                       (names (cdr group)))
+                   (cl-loop for (type . name-node) in names
+                            collect (list type struct-node name-node))))
+               groups)))
 
 
 (defun f90-ts--menu-nav-node-hash-fn (node)
@@ -5356,7 +5374,7 @@ Returns an alist mapping each struct node to a list of (LABEL NAME POS) tuples."
      for (type struct-node name-node) in entities
      for label = (alist-get type f90-ts--imenu-capture-to-label)
      do (progn
-          (cl-assert label nil "internal error (f90-ts--menu-nav-node-table): label expected")
+          (cl-assert label nil "label is nil for entry = %s, %s, %s" type struct-node name-node)
           (cl-pushnew
            (list label
                  (treesit-node-text name-node t)
