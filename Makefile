@@ -1,6 +1,8 @@
 EMACS ?= emacs
 EMACSFLAGS = -batch -Q -L .
+
 LOAD = \
+	--eval "(setq debug-on-error t)" \
 	--eval "(progn \
 	  (require 'treesit) \
 	  (setq treesit-language-source-alist nil) \
@@ -11,6 +13,7 @@ LOAD = \
 	-l ert \
 	-l f90-ts-mode.el \
 	-l test/f90-ts-mode-test.el
+
 ERTFLAGS = --eval '(setq ert-batch-print-length nil ert-batch-print-level nil)'
 
 SRCS = f90-ts-mode.el test/f90-ts-mode-test.el
@@ -20,23 +23,37 @@ define run-ert
 		--eval '(ert-run-tests-batch-and-exit "$(1)")'
 endef
 
+# ----------------------------------------------------------------------
+# test discovery
+# ----------------------------------------------------------------------
+
 INDENT_BY_LINE_TESTS := $(shell \
-	$(EMACS) $(EMACSFLAGS) $(LOAD) \
-	--eval '(with-temp-file "/tmp/ert-tests.txt" \
-	          (mapc (lambda (s) (insert (format "%s\n" (ert-test-name s)))) \
-	                (ert-select-tests "^f90-ts-mode-test-extra--indent-by-line--" t)))' \
-	2>/dev/null && cat /tmp/ert-tests.txt)
+	set -e; \
+	tmp=$$(mktemp); \
+	if ! $(EMACS) $(EMACSFLAGS) $(LOAD) \
+	  --eval '(with-temp-file "'"$$tmp"'" \
+	            (mapc (lambda (s) (insert (format "%s\n" (ert-test-name s)))) \
+	                  (ert-select-tests "^f90-ts-mode-test-extra--indent-by-line--" t)))'; \
+	then \
+	  echo "ERROR: test discovery failed (likely elisp syntax error)" >&2; \
+	  exit 1; \
+	fi; \
+	cat $$tmp; rm -f $$tmp )
 
 INDENT_BY_LINE_TARGETS := $(foreach t,$(INDENT_BY_LINE_TESTS),\
-	test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(t))))
+	_test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(t))))
 
 define make-indent-by-line-target
-.PHONY: test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1)))
-test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1))):
+.PHONY: _test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1)))
+_test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1))):
 	$$(call run-ert,^$(1)$$)
 endef
 
 $(foreach t,$(INDENT_BY_LINE_TESTS),$(eval $(call make-indent-by-line-target,$(t))))
+
+# ----------------------------------------------------------------------
+# checkdoc
+# ----------------------------------------------------------------------
 
 .PHONY: test-checkdoc
 test-checkdoc:
@@ -48,13 +65,17 @@ test-checkdoc:
 			--eval "(when (get-buffer checkdoc-diagnostic-buffer) \
 			  (with-current-buffer checkdoc-diagnostic-buffer \
 			    (let ((content (string-trim (buffer-string)))) \
-                  (if (string-match-p \"\\.el:[0-9]+:\" content) \
+			      (if (string-match-p \"\\.el:[0-9]+:\" content) \
 			        (progn \
 			          (princ (concat content \"\\n\") 'external-debugging-output) \
 			          (kill-emacs 1)) \
-			        (princ (concat \"checkdoc: $$file passed without warnings or errors\\n\") \
+			        (princ (concat \"checkdoc: $$file passed\\n\") \
 			          'external-debugging-output)))))" || exit 1; \
 	done
+
+# ----------------------------------------------------------------------
+# byte compile
+# ----------------------------------------------------------------------
 
 .PHONY: test-byte-compile
 test-byte-compile:
@@ -75,12 +96,12 @@ test-byte-compile:
 		        (kill-emacs 1)))))" \
 	2>&1; rc=$$? ; rm -f $(foreach f,$(SRCS),$(f:%.el=%.elc)) ; \
 	if [ $$rc -eq 0 ]; then \
-		echo "byte-compile: all files passed without errors or warnings"; \
+		echo "byte-compile: all files passed"; \
 	fi ; exit $$rc
 
-
-.PHONY: check
-check: checkdoc byte-compile
+# ----------------------------------------------------------------------
+# standard ERT
+# ----------------------------------------------------------------------
 
 .PHONY: test-ert-std
 test-ert-std:
@@ -94,20 +115,38 @@ test-ert-extra:
 test-ert-all:
 	$(call run-ert,^f90-ts-mode-test)
 
-.PHONY: test-ert-parallel
-test-ert-parallel: test-ert-p-main \
-               test-ert-p-extra-font-lock \
-               test-ert-p-extra-indent-by-region \
-               $(INDENT_BY_LINE_TARGETS)
+# ----------------------------------------------------------------------
+# parallel execution
+# ----------------------------------------------------------------------
 
-.PHONY: test-ert-p-main
-test-ert-p-main:
+.PHONY: test-ert-parallel
+test-ert-parallel:
+	@echo "Running ERT tests in parallel..."
+	@fail=0; \
+	targets="_test-ert-p-main \
+	         _test-ert-p-extra-font-lock \
+	         _test-ert-p-extra-indent-by-region \
+	         $(INDENT_BY_LINE_TARGETS)"; \
+	$(MAKE) -j $$targets || fail=1; \
+	if [ $$fail -ne 0 ]; then \
+	  echo "ERT RESULT: FAILURE"; \
+	  exit 1; \
+	else \
+	  echo "ERT RESULT: SUCCESS"; \
+	fi
+
+# ----------------------------------------------------------------------
+# internal parallel targets
+# ----------------------------------------------------------------------
+
+.PHONY: _test-ert-p-main
+_test-ert-p-main:
 	$(call run-ert,^f90-ts-mode-test-std)
 
-.PHONY: test-ert-p-extra-font-lock
-test-ert-p-extra-font-lock:
+.PHONY: _test-ert-p-extra-font-lock
+_test-ert-p-extra-font-lock:
 	$(call run-ert,^f90-ts-mode-test-extra--font-lock--)
 
-.PHONY: test-ert-p-extra-indent-by-region
-test-ert-p-extra-indent-by-region:
+.PHONY: _test-ert-p-extra-indent-by-region
+_test-ert-p-extra-indent-by-region:
 	$(call run-ert,^f90-ts-mode-test-extra--indent-by-region--)
