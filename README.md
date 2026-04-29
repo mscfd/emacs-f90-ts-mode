@@ -3,7 +3,7 @@
 **f90-ts-mode** is a major mode for editing **Fortran 90 / Fortran 2003** (and newer)
 based on Emacs’s built-in **Tree-sitter** support (requires Emacs 30+).
 
-The mode is under **development**, features might only be partially implemented.
+The mode is still under **development**.
 
 
 ## Table of Contents
@@ -24,6 +24,9 @@ The mode is under **development**, features might only be partially implemented.
   - [Indentation of continued statements with leading ampersand](#indentation-of-continued-statements-with-leading-ampersand)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
   - [Xref](#xref)
+  - [Imenu](#imenu)
+  - [Navigation menu](#navigation-menu)
+  - [Navigation buffer](#navigation-buffer)
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
@@ -179,9 +182,11 @@ The mode sets the following default mode local keybindings:
 - Join continued lines
 - Comment regions
 - Mark regions based on tree-sitter nodes
-- Defun and thing based navigation
 - Handling openmp and preprocessor directives
 - Imenu and a `Fortran` menu in the menu bar
+- Navigation tree as submenu and as a side panel buffer
+- Defun and thing based navigation
+
 
 
 ### Syntax highlight and font lock faces
@@ -383,6 +388,54 @@ functions can be used to find definitions and references of symbols (keybindings
 | `xref-find-references`: `M-?`  | Find all references                  |
 | `xref-find-apropos`: `C-M-.`   | Find symbols matching regexp pattern |
 | `xref-go-back`: `M-,`          | Pop back                             |
+
+
+### Imenu
+
+The mode provides an Imenu implementation via `f90-ts-simple-imenu`.
+Entries are grouped by `module`, `submodule`, `subroutine`, `function`, `module procedure`,
+`derived type`, `interface` and `variable`.
+
+
+### Navigation menu
+
+Additionally to the Imenu grouping, the `Fortran` menu offers a submenu where the same imenu
+items are structured as a tree reflecting the hierarchical structure of the source file,
+with submenus for structures that contain other items.
+
+
+### Navigation buffer
+
+The navigation buffer provides a persistent side panel showing the structure of the current
+Fortran source buffer. It is based on the same tree as offered in the [Navigation menu](#navigation-menu).
+It can be opened with `f90-ts-nav-buffer-open` and focused with `f90-ts-nav-buffer-focus`.
+
+The panel prints the tree, reflecting the nesting of program units.
+Entries are colour-coded by kind using customizable faces:
+
+| Face                        | Used for                                      |
+|-----------------------------|-----------------------------------------------|
+| `f90-ts-nav-module-face`    | `program`, `module`, `submodule`              |
+| `f90-ts-nav-procedure-face` | `subroutine`, `function`, `interface`         |
+| `f90-ts-nav-type-face`      | derived type definitions                      |
+| `f90-ts-nav-variable-face`  | variable declarations                         |
+
+Automatic synchronisation of the highlighted entry in the side panel with active source buffer is
+controlled by `f90-ts-nav-buffer-auto-sync`. The sync is debounced via an idle timer
+(see `f90-ts-nav-buffer-idle-delay`), so that rapid cursor movement does not cause
+excessive updates.
+
+The nav buffer is automatically refreshed after edits, also after the idle delay.
+
+Keybindings in the navigation buffer:
+
+| Key     | Function                        |
+|---------|---------------------------------|
+| `RET`   | Jump to entry in source buffer  |
+| `SPC`   | Preview entry without leaving   |
+| `n`/`p` | Move to next/previous entry     |
+| `g`     | Refresh the navigation buffer   |
+| `q`/`C-g` | Quit the navigation buffer    |
 
 
 

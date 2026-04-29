@@ -72,6 +72,8 @@
 (require 'treesit)
 (require 'xref)
 
+;; hl-line is used for the navigation buffer
+(require 'hl-line)
 
 ;;;-----------------------------------------------------------------------------
 
@@ -92,6 +94,12 @@ Standard font-lock faces are used as well."
 
 (defgroup f90-ts-indent nil
   "Indentation for Tree-sitter f90-ts mode."
+  :prefix "f90-ts-"
+  :group  'f90-ts)
+
+
+(defgroup f90-ts-nav nil
+  "Navigation for Tree-sitter f90-ts mode."
   :prefix "f90-ts-"
   :group  'f90-ts)
 
@@ -315,6 +323,44 @@ Special comments such as separators are determined by rules in
 
 
 ;;;-----------------------------------------------------------------------------
+
+(defface f90-ts-nav-procedure-face
+  '((t :inherit font-lock-function-name-face :weight bold))
+  "Face for subroutine, function, and interface entries in navigation buffer."
+  :group 'f90-ts-nav)
+
+
+(defface f90-ts-nav-type-face
+  '((t :inherit font-lock-type-face :weight bold))
+  "Face for type entries in navigation buffer."
+  :group 'f90-ts-nav)
+
+
+(defface f90-ts-nav-module-face
+  '((t :inherit font-lock-function-name-face :weight bold))
+  "Face for module, submodule, program entries in navigation buffer."
+  :group 'f90-ts-nav)
+
+
+(defface f90-ts-nav-variable-face
+  '((t :inherit default))
+  "Face for variable entries in navigation buffer."
+  :group 'f90-ts-nav)
+
+
+(defcustom f90-ts-nav-buffer-auto-sync t
+  "If non-nil the point in the nav buffer follows point in the source buffer."
+  :type 'boolean
+  :group 'f90-ts-nav)
+
+
+(defcustom f90-ts-nav-buffer-idle-delay 1.0
+  "Seconds of idle time before the nav buffer is automatically refreshed."
+  :type 'number
+  :group 'f90-ts-nav)
+
+
+;;;-----------------------------------------------------------------------------
 ;;; other options
 
 (defcustom f90-ts-smart-end 'blink
@@ -525,6 +571,8 @@ seem to make much sense."
     (define-key map (kbd "C-A-p") #'f90-ts-thing-prev-procedure)
     (define-key map (kbd "C-A-n") #'f90-ts-thing-next-procedure)
 
+    (define-key map (kbd "C-c C-t") #'f90-ts-nav-buffer-open)
+    (define-key map (kbd "C-c C-f") #'f90-ts-nav-buffer-focus)
     map)
   "Keymap for `f90-ts-mode'.")
 
@@ -5173,41 +5221,49 @@ If called interactively, prompt for a prefix from
 (defvar f90-ts--nav-queries
   `(("program"
      :label   "program"
+     :face    f90-ts-nav-module-face
      :capture name_program
      :query   "(program (program_statement \"program\" (name) @name_program))")
 
     ("module"
      :label   "module"
+     :face    f90-ts-nav-module-face
      :capture name_module
      :query   "(module (module_statement \"module\" (name) @name_module))")
 
     ("submodule"
      :label   "submodule"
+     :face    f90-ts-nav-module-face
      :capture name_submodule
      :query   "(submodule (submodule_statement \"submodule\" (name) @name_submodule))")
 
     ("subroutine"
      :label   "subroutine"
+     :face    f90-ts-nav-procedure-face
      :capture name_subroutine
      :query   "(subroutine (subroutine_statement \"subroutine\" name: (name) @name_subroutine))")
 
     ("function"
      :label   "function"
+     :face    f90-ts-nav-procedure-face
      :capture name_function
      :query   "(function (function_statement \"function\" name: (name) @name_function))")
 
     ("module_procedure"
      :label   "module procedure"
+     :face    f90-ts-nav-procedure-face
      :capture name_module_proc
      :query   "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name_module_proc))")
 
     ("derived_type_definition"
      :label   "derived type"
+     :face    f90-ts-nav-type-face
      :capture name_dt_type
      :query   "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name_dt_type))")
 
     ("interface"
      :label   "interface"
+     :face    f90-ts-nav-procedure-face
      :capture name_interface
      :query   ,(concat "(interface (interface_statement (abstract_specifier)?"
                        " \"interface\""
@@ -5218,6 +5274,7 @@ If called interactively, prompt for a prefix from
 
     ("variable_declaration"
      :label   "variable"
+     :face    f90-ts-nav-variable-face
      :capture name_var_decl
      :query   ,(concat "(variable_declaration"
                        " declarator:"
@@ -5254,6 +5311,14 @@ non-nil and non-empty it is appended as \"LABEL: NAME\"."
     (if (and name (not (string-empty-p name)))
         (format "%s: %s" label-base name)
       label-base)))
+
+
+(defun f90-ts--nav-entry-face (key)
+  "Return the face for KEY, a symbol from `f90-ts--nav-queries'.
+If no :face property is present, then return `f90-ts-nav-variable-face'
+as default face."
+  (or (plist-get (alist-get key f90-ts--nav-queries) :face)
+      'f90-ts-nav-variable-face))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5525,6 +5590,357 @@ and itself SPARSE-NODES."
           (or items '(["(empty)" ignore t])))))
 
 
+;;;-----------------------------------------------------------------------------
+;;; Navigation buffer: based on navigation tree
+
+(defvar f90-ts--nav-buffer-name "*F90-TS Navigate*"
+  "Buffer name for the f90-ts navigation buffer.")
+
+
+(defvar-local f90-ts--nav-buffer-source nil
+  "The Fortran source buffer this nav panel was spawned from.")
+
+
+(defvar f90-ts-nav-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "RET") #'f90-ts--nav-buffer-jump)
+    (define-key map (kbd "SPC") #'f90-ts--nav-buffer-preview)
+    (define-key map (kbd "n")   #'next-line)
+    (define-key map (kbd "p")   #'previous-line)
+    (define-key map (kbd "g")   #'f90-ts--nav-buffer-refresh)
+    (define-key map (kbd "q")   #'f90-ts--nav-buffer-quit)
+    (define-key map (kbd "C-g") #'f90-ts--nav-buffer-quit)
+    map)
+  "Keymap for `f90-ts-nav-mode'.")
+
+
+;;;-----------------------------------------------------------------------------
+;;; Navigation buffer: map sparse tree to navigation buffer tree
+
+(cl-defstruct f90-ts-nav-buffer-node
+  "A node in the navigation buffer tree.
+KIND is the type string (\"subroutine\", \"module\", …), which serves as a key..
+LABEL is the display string.  MARKER points into the source buffer.
+CHILDREN is a (possibly empty) list of child nodes."
+  kind label marker face children)
+
+
+(defun f90-ts--nav-buffer-node-from-entry (entry &optional children)
+  "Build a `f90-ts-nav-buffer-node' from a (KEY NAME POS) ENTRY and CHILDREN."
+  (let* ((key    (nth 0 entry))
+         (name   (nth 1 entry))
+         (pos    (nth 2 entry))
+         (label  (f90-ts--nav-entry-label key name))
+         (face   (f90-ts--nav-entry-face key))
+         (marker (set-marker (make-marker) pos)))
+    (make-f90-ts-nav-buffer-node :kind     key
+                                 :label    label
+                                 :marker   marker
+                                 :face     face
+                                 :children (or children '()))))
+
+
+(defun f90-ts--nav-buffer-from-sparse-tree (sparse-node)
+  "Convert SPARSE-NODE into a list of nav tree nodes.
+SPARSE-NODE is from `f90-ts--nav-tree-build' and originates in
+`f90-ts--nav-tree-node-table'.  It is a pair (ENTRIES . CHILDREN),
+where each ENTRY in the list of ENTRIES has the form (KEY NAME POS).
+CHILDREN are further sparse nodes of the same shape.
+
+Returns a flat list of `f90-ts-nav-buffer-node' structs."
+  (let* ((entries  (car sparse-node))
+         (children (cdr sparse-node)))
+    (cond
+     ;; root sentinel: no entries, just walk the forest
+     ((null entries)
+      (cl-mapcan #'f90-ts--nav-buffer-from-sparse-tree children))
+
+     ;; leaf node: one nav tree node per entry, no children
+     ((null children)
+      (mapcar #'f90-ts--nav-buffer-node-from-entry entries))
+
+     ;; branch: build the parent node(s) with converted children
+     (t
+      (let ((child-nodes (cl-mapcan #'f90-ts--nav-buffer-from-sparse-tree children)))
+        ;; there should only be exactly one entry for a non-leaf node,
+        ;; be defensive: only the first gets the children
+        (cons (f90-ts--nav-buffer-node-from-entry (car entries) child-nodes)
+              (mapcar #'f90-ts--nav-buffer-node-from-entry (cdr entries))))))))
+
+
+;;;-----------------------------------------------------------------------------
+;;; Navigation buffer: rendering, interaction
+
+(defvar-local f90-ts--nav-buffer-idle-timer nil
+  "Idle timer for automatic nav buffer refresh after source edits.")
+
+
+(defvar-local f90-ts--nav-buffer-last-sync-pos nil
+  "Last value of point when nav buffer was synced.
+This is used to avoid excessive syncing.")
+
+
+(defun f90-ts--nav-buffer-render-nodes (nodes depth)
+  "Insert NODES at DEPTH into the nav buffer and recurse into children."
+  (cl-loop for node in nodes
+           for indent = (make-string (* depth 2) ?\s)
+           for face   = (f90-ts-nav-buffer-node-face node)
+           for text   = (concat indent
+                                (propertize (f90-ts-nav-buffer-node-label node)
+                                            'face face))
+           do (progn
+                (insert text)
+                (put-text-property (line-beginning-position) (line-end-position)
+                                   'f90-ts-nav-marker
+                                   (f90-ts-nav-buffer-node-marker node))
+                (put-text-property (line-beginning-position) (line-end-position)
+                                   'f90-ts-nav-kind
+                                   (f90-ts-nav-buffer-node-kind node))
+                (insert "\n")
+                (f90-ts--nav-buffer-render-nodes
+                 (f90-ts-nav-buffer-node-children node) (1+ depth)))))
+
+
+(defun f90-ts--nav-buffer-render (tree-nodes)
+  "Render TREE-NODES into the current navigation buffer."
+  (let ((inhibit-read-only t))
+    (erase-buffer)
+    (f90-ts--nav-buffer-render-nodes tree-nodes 0)
+    (goto-char (point-min))))
+
+
+(defun f90-ts--nav-buffer-marker-at-point ()
+  "Return the marker stored on the current line, or nil."
+  (get-text-property (line-beginning-position) 'f90-ts-nav-marker))
+
+
+(defun f90-ts--nav-buffer-jump ()
+  "Jump to the entry on the current line and close the nav buffer."
+  (interactive)
+  (when-let ((marker (f90-ts--nav-buffer-marker-at-point)))
+    (unless (buffer-live-p (marker-buffer marker))
+      (user-error "Source buffer no longer live"))
+    (pop-to-buffer (marker-buffer marker))
+    (goto-char marker)
+    (recenter)))
+
+
+(defun f90-ts--nav-buffer-preview ()
+  "Preview the entry at point without leaving the nav buffer."
+  (interactive)
+  (when-let ((marker (f90-ts--nav-buffer-marker-at-point)))
+    (unless (buffer-live-p (marker-buffer marker))
+      (user-error "Source buffer no longer live"))
+    (with-selected-window (display-buffer (marker-buffer marker)
+                                          '(display-buffer-reuse-window))
+      (goto-char marker)
+      (recenter)
+      (pulse-momentary-highlight-one-line (point)))))
+
+
+(defun f90-ts--nav-buffer-schedule-refresh ()
+  "Schedule a nav buffer refresh.
+It is scheduled after `f90-ts-nav-buffer-idle-delay' seconds of the source
+buffer being idle."
+  (when f90-ts--nav-buffer-idle-timer
+    (cancel-timer f90-ts--nav-buffer-idle-timer))
+  (setq f90-ts--nav-buffer-idle-timer
+        (run-with-idle-timer f90-ts-nav-buffer-idle-delay nil
+                             #'f90-ts--nav-buffer-refresh-from-timer
+                             (current-buffer))))
+
+
+(defun f90-ts--nav-buffer-refresh-from-timer (src-buf)
+  "Refresh the nav buffer for SRC-BUF if it is still live."
+  (when (buffer-live-p src-buf)
+    (with-current-buffer src-buf
+      (setq f90-ts--nav-tree-cache-root nil)
+      (f90-ts-nav-buffer-open))))
+
+
+(defun f90-ts--nav-buffer-after-change (&rest _)
+  "Schedule a nav buffer refresh after a source buffer change."
+  (f90-ts--nav-buffer-schedule-refresh))
+
+
+(defun f90-ts--nav-buffer-associated-line (pos)
+  "Return the nav buffer line number of the entry associated with POS.
+POS is a buffer position in the source buffer.
+Must be called with the nav buffer as current buffer, as it reads
+`f90-ts--nav-buffer-source' to resolve line numbers in the source buffer.
+Returns nil if no suitable entry is found.
+
+For non-variable entries the associated entry is the closest one whose
+marker position is <= POS.  For variable entries the marker must be on
+the same source line as POS; among those, the entry is selected if POS
+is >= the marker position, except for the first variable on the line
+which also captures positions before it on that line."
+  (let ((assoc-line nil)
+        (assoc-mline nil)
+        (line (with-current-buffer f90-ts--nav-buffer-source
+                (line-number-at-pos pos)))
+        (done nil))
+    (save-excursion
+      (goto-char (point-min))
+      (while (and (not (eobp)) (not done))
+        (let* ((marker (get-text-property (line-beginning-position) 'f90-ts-nav-marker))
+               (kind   (get-text-property (line-beginning-position) 'f90-ts-nav-kind))
+               (nav-line (line-number-at-pos))
+               (mpos   (and marker
+                            (with-current-buffer f90-ts--nav-buffer-source
+                              (marker-position marker))))
+               (mline  (and mpos
+                            (with-current-buffer f90-ts--nav-buffer-source
+                              (line-number-at-pos mpos)))))
+          (cl-assert marker nil "nav buffer line %s has no marker" nav-line)
+          (if (and (> mline line))
+              (setq done t)
+            (when (or (not (string= kind "variable_declaration"))
+                      (and (= mline line) ; only consider variable declarations if on the same line
+                           (or (not assoc-line) ; nothing found so far
+                               (< assoc-mline mline) ; accept even if pos is before marker pos
+                               (<= mpos pos) ; find last variable with marker before point
+                               )))
+              (setq assoc-line  nav-line
+                    assoc-mline mline)))
+          (unless done
+            (forward-line 1))))
+      (or assoc-line
+          ;; if assoc-line is nil but there are markers, point is before first marker
+          ;; return line number of that first marker entry
+          (and (goto-char (point-min))
+               (get-text-property (point) 'f90-ts-nav-marker)
+               (line-number-at-pos))))))
+
+
+(defun f90-ts--nav-buffer-sync-now (src-buf pos)
+  "Actually perform the nav buffer sync for SRC-BUF at POS."
+  (when (buffer-live-p src-buf)
+    (let ((nav-buf (get-buffer f90-ts--nav-buffer-name)))
+      (when (and nav-buf
+                 (buffer-live-p nav-buf)
+                 (get-buffer-window nav-buf))
+        (with-current-buffer nav-buf
+          (when-let ((assoc-line (f90-ts--nav-buffer-associated-line pos)))
+            (goto-char (point-min))
+            (forward-line (1- assoc-line))
+            (when-let ((nav-win (get-buffer-window nav-buf)))
+              (set-window-point nav-win (point))
+              (with-selected-window nav-win
+                (recenter)
+                (hl-line-move hl-line-overlay)))))))))
+
+
+(defun f90-ts--nav-buffer-sync ()
+  "Schedule a nav buffer sync via idle timer."
+  (when f90-ts-nav-buffer-auto-sync
+    (when f90-ts--nav-buffer-idle-timer
+      (cancel-timer f90-ts--nav-buffer-idle-timer))
+    (setq f90-ts--nav-buffer-idle-timer
+          (run-with-idle-timer f90-ts-nav-buffer-idle-delay
+                               nil #'f90-ts--nav-buffer-sync-now
+                               (current-buffer) (point)))))
+
+
+(defun f90-ts--nav-buffer-follow-source (_frame)
+  "Re-render the nav buffer when focus is moved to a different f90-ts buffer."
+  (let ((nav-buf (get-buffer f90-ts--nav-buffer-name)))
+    (when (and nav-buf
+               (buffer-live-p nav-buf)
+               (derived-mode-p 'f90-ts-mode)
+               (not (eq (current-buffer)
+                        (buffer-local-value 'f90-ts--nav-buffer-source
+                                            nav-buf))))
+      (f90-ts-nav-buffer-open))))
+
+
+(defun f90-ts--nav-buffer-add-hooks ()
+  "Install the hooks for sync and idle refresh timer.
+This is done for the current f90-ts source buffer."
+  (add-hook 'post-command-hook #'f90-ts--nav-buffer-sync nil t)
+  (add-hook 'after-change-functions
+            #'f90-ts--nav-buffer-after-change nil t))
+
+
+(defun f90-ts--nav-buffer-refresh ()
+  "Rebuild the nav buffer from the source buffer."
+  (interactive)
+  (let ((src (or f90-ts--nav-buffer-source
+                 (user-error "Not linked to a F90-TS source buffer"))))
+    (unless (buffer-live-p src)
+      (user-error "Linked source buffer no longer live"))
+    (with-current-buffer src
+      ;; invalidate the shared cache
+      (setq f90-ts--nav-tree-cache-root nil)
+      (f90-ts-nav-buffer-open))))
+
+
+(define-derived-mode f90-ts-nav-mode special-mode "F90-TS-Nav"
+  "Major mode for the F90 navigation side-panel."
+  :keymap f90-ts-nav-mode-map
+  (setq truncate-lines t)
+  (hl-line-mode 1))
+
+
+;;;###autoload
+(defun f90-ts-nav-buffer-open ()
+  "Open (or refresh) the F90 navigation side-panel for the current buffer."
+  (interactive)
+
+  (when (not (derived-mode-p 'f90-ts-mode))
+    (user-error "Not a F90-TS source buffer, navigation buffer not available"))
+
+  (let* ((src-buf (current-buffer))
+         (sparse (f90-ts--nav-tree-build))
+         (tree-nodes (f90-ts--nav-buffer-from-sparse-tree sparse))
+         (nav-buf (get-buffer-create f90-ts--nav-buffer-name)))
+    (with-current-buffer nav-buf
+      ;; only on first creation, otherwise defvar-local variables are deleted
+      (unless (derived-mode-p 'f90-ts-nav-mode)
+        (f90-ts-nav-mode))
+      (setq f90-ts--nav-buffer-source src-buf)
+      (f90-ts--nav-buffer-render tree-nodes))
+
+    (display-buffer nav-buf
+                    '(display-buffer-in-side-window
+                      (side . left)
+                      (window-width . 35)))
+    (with-selected-window (get-buffer-window nav-buf)
+      (hl-line-highlight))
+    (f90-ts--nav-buffer-add-hooks)
+    ;; add hook for automatic nav buffer switching
+    (add-hook 'window-buffer-change-functions
+              #'f90-ts--nav-buffer-follow-source)))
+
+
+;;;###autoload
+(defun f90-ts-nav-buffer-focus ()
+  "Focus the navigation side buffer, opening it first if necessary."
+  (interactive)
+  (unless (get-buffer f90-ts--nav-buffer-name)
+    (f90-ts-nav-buffer-open))
+  (when-let ((nav-win (get-buffer-window f90-ts--nav-buffer-name)))
+    (select-window nav-win)))
+
+
+;;;###autoload
+(defun f90-ts--nav-buffer-quit ()
+  "Quit the nav buffer."
+  (interactive)
+  (remove-hook 'window-buffer-change-functions
+               #'f90-ts--nav-buffer-follow-source)
+  (quit-window))
+
+
+(easy-menu-define f90-ts-nav-mode-menu f90-ts-nav-mode-map
+  "Menu for the F90 navigation side buffer."
+  '("F90-TS-Nav"
+    ["Jump to entry"    f90-ts--nav-buffer-jump    :active t]
+    ["Preview entry"    f90-ts--nav-buffer-preview :active t]
+    "---"
+    ["Refresh"          f90-ts--nav-buffer-refresh :active t]
+    "---"
+    ["Quit"             f90-ts--nav-buffer-quit    :active t]))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5746,7 +6162,10 @@ and keyword are sometimes equal.  But we only want the structure node."
      "---"
      ["Go back"          xref-go-back          :active t]
      ["Go forward"       xref-go-forward       :active t])
-    ("Navigate"
+    "---"
+    ["Open navigation side buffer" f90-ts-nav-buffer-open :active t]
+    ["Focus navigation side buffer" f90-ts-nav-buffer-focus :active t]
+    ("Navigation tree"
      :visible f90-ts-menu-show-navigate
      :filter (lambda (menu) (f90-ts--nav-menu-tree menu)))
     "---"
