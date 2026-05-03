@@ -5168,76 +5168,111 @@ If called interactively, prompt for a prefix from
 
 
 ;;;-----------------------------------------------------------------------------
-;;; Imenu and menu stuff
+;;; Imenu and navigation: queries and further properties
 
-(defvar f90-ts--imenu-queries
+(defvar f90-ts--nav-queries
   `(("program"
-     :label "program"
-     :query "(program (program_statement \"program\" (name) @name_program))")
+     :label   "program"
+     :capture name_program
+     :query   "(program (program_statement \"program\" (name) @name_program))")
 
     ("module"
-     :label "module"
-     :query "(module (module_statement \"module\" (name) @name_module))")
+     :label   "module"
+     :capture name_module
+     :query   "(module (module_statement \"module\" (name) @name_module))")
 
     ("submodule"
-     :label "submodule"
-     :query "(submodule (submodule_statement \"submodule\" (name) @name_submodule))")
+     :label   "submodule"
+     :capture name_submodule
+     :query   "(submodule (submodule_statement \"submodule\" (name) @name_submodule))")
 
     ("subroutine"
-     :label "subroutine"
-     :query "(subroutine (subroutine_statement \"subroutine\" name: (name) @name_subroutine))")
+     :label   "subroutine"
+     :capture name_subroutine
+     :query   "(subroutine (subroutine_statement \"subroutine\" name: (name) @name_subroutine))")
 
     ("function"
-     :label "function"
-     :query "(function (function_statement \"function\" name: (name) @name_function))")
+     :label   "function"
+     :capture name_function
+     :query   "(function (function_statement \"function\" name: (name) @name_function))")
 
     ("module_procedure"
-     :label "module procedure"
-     :query "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name_module_proc))")
+     :label   "module procedure"
+     :capture name_module_proc
+     :query   "(module_procedure (module_procedure_statement \"module\" \"procedure\" name: (name) @name_module_proc))")
 
     ("derived_type_definition"
-     :label "derived type"
-     :query "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name_dt_type))")
+     :label   "derived type"
+     :capture name_dt_type
+     :query   "(derived_type_definition (derived_type_statement \"type\" (_) * (type_name) @name_dt_type))")
 
     ("interface"
-     :label "interface"
-     :query ,(concat "(interface (interface_statement (abstract_specifier)?"
-                     " \"interface\""
-                     " [((name) @name_interface)"
-                     " ((operator) @name_interface)"
-                     " ((assignment) @name_interface)]?"
-                     "))"))
+     :label   "interface"
+     :capture name_interface
+     :query   ,(concat "(interface (interface_statement (abstract_specifier)?"
+                       " \"interface\""
+                       " [((name) @name_interface)"
+                       "  ((operator) @name_interface)"
+                       "  ((assignment) @name_interface)]?"
+                       "))"))
 
     ("variable_declaration"
-     :label "variable"
-     :query "(variable_declaration declarator: (_) @name_var_decl)"
+     :label   "variable"
+     :capture name_var_decl
+     :query   ,(concat "(variable_declaration"
+                       " declarator:"
+                       " [((identifier) @name_var_decl)"
+                       "  (init_declarator left: (identifier) @name_var_decl)"
+                       "  (pointer_init_declarator left: (identifier) @name_var_decl)"
+                       "  (sized_declarator (identifier) @name_var_decl)])")
      :leaf t))
-  "Unified Tree-sitter query specification for Imenu and menu.")
+  "Query specification and properties for Imenu, nav-buffer and nav-tree menu.
+Each entry is a list (KEY PLIST) where KEY is a string returned by the related
+Tree-sitter node type, and PLIST may contain:
+  :label   Display string used in Imenu and menus.
+  :capture Symbol matching the Tree-sitter capture name for the node name.
+  :query   Tree-sitter query string capturing the relevant node name.
+  :leaf    Non-nil if entries should be treated as leaf nodes (no children).")
 
+
+(defconst f90-ts--nav-capture-key-alist
+  (cl-loop for (key . plist) in f90-ts--nav-queries
+           collect (cons (plist-get plist :capture) key))
+  "Alist mapping Tree-sitter capture symbols to query-key.
+Each entry is (CAPTURE-SYMBOL . KEY) where KEY is the
+car of the corresponding entry in `f90-ts--nav-queries'.")
+
+
+(defun f90-ts--nav-entry-label (key name)
+  "Return the display label string for KEY and NAME.
+KEY is a symbol from `f90-ts--nav-queries'.  NAME is the identifier or name
+of the entry.
+The base label is looked up via :label in the query plist.  If NAME is
+non-nil and non-empty it is appended as \"LABEL: NAME\"."
+  (let* ((plist (alist-get key f90-ts--nav-queries))
+         (label-base (plist-get plist :label)))
+    (if (and name (not (string-empty-p name)))
+        (format "%s: %s" label-base name)
+      label-base)))
+
+
+;;;-----------------------------------------------------------------------------
+;;; Imenu
 
 (defconst f90-ts--imenu-query-compiled
   (let ((query-string
          (mapconcat
           (lambda (entry)
             (plist-get (cdr entry) :query))
-          f90-ts--imenu-queries
+          f90-ts--nav-queries
           "\n")))
     (treesit-query-compile 'fortran query-string))
   "Pre-compiled global query for a one-pass scan to build imenu.")
 
 
-(defconst f90-ts--imenu-capture-to-label
-  (cl-loop for (_ . spec) in f90-ts--imenu-queries
-           for query = (plist-get spec :query)
-           when (and query (string-match "@\\([a-zA-Z_]+\\)" query))
-           collect (cons (intern (match-string 1 query))
-                         (plist-get spec :label)))
-  "Alist mapping capture symbols to menu label strings.")
-
-
 (defun f90-ts--imenu-spec-for-type (type)
-  "Return the plist for TYPE from `f90-ts--imenu-queries'."
-  (alist-get type f90-ts--imenu-queries nil nil #'string=))
+  "Return the plist for TYPE from `f90-ts--nav-queries'."
+  (alist-get type f90-ts--nav-queries nil nil #'string=))
 
 
 (defun f90-ts--imenu-name-pos-fn (node)
@@ -5264,10 +5299,12 @@ Each element of ITEMS is (LABEL NAME . MARKER)."
 
 
 (defun f90-ts--imenu-captures-to-items (captures)
-  "Convert raw CAPTURES from `treesit-query-capture' to a flat item list.
-Returns a list of (LABEL NAME . MARKER) triples."
-  (cl-loop for (type . node) in captures
-           for label = (alist-get type f90-ts--imenu-capture-to-label)
+  "Convert raw CAPTURES from `treesit-query-capture' to a flat list of items.
+Items are triples (LABEL NAME MARKER), where LABEL is derived from the
+capture symbol via `f90-ts--nav-queries'."
+  (cl-loop for (cap-sym . node) in captures
+           for key   = (alist-get cap-sym f90-ts--nav-capture-key-alist)
+           for label = (and key (plist-get (alist-get key f90-ts--nav-queries) :label))
            when label
            collect (list label
                          (treesit-node-text node t)
@@ -5302,13 +5339,13 @@ Used to verify via `treesit-node-eq' whether the cache is still valid.")
          (mapconcat
           (lambda (entry)
             (let ((query (plist-get (cdr entry) :query)))
-              ;; Wrap each original imenu query with @struct on the outer form
+              ;; wrap each original nav query with @struct on the outer form
               ;; Example:
               ;;   (subroutine (...) @name_subroutine)
               ;; becomes:
               ;;   ((subroutine (...) @name_subroutine) @struct)
               (concat "(" query " @struct)")))
-          f90-ts--imenu-queries
+          f90-ts--nav-queries
           "\n")))
     (treesit-query-compile 'fortran query-string))
   "Pre-compiled Tree-sitter query for menu generation with struct captures.")
@@ -5321,8 +5358,8 @@ is capture symbol of name and nodes are captured node of struct and name.
 
 In general the captures have exactly one name for a struct.  But in some cases,
 it might be possible that there is zero, one or more name captures in the list.
-Return a triple for each (struct name_i) pair with name_i one of the name nodes
-after struct."
+Return a triple for each (struct name_i) pair with name_i being one of the name
+nodes after struct."
   (let ((groups (mapcar #'nreverse
                         (nreverse (cl-reduce
                                    (lambda (acc cap)
@@ -5336,8 +5373,8 @@ after struct."
     (cl-mapcan (lambda (group)
                  (let ((struct-node (cdar group))
                        (names (cdr group)))
-                   (cl-loop for (type . name-node) in names
-                            collect (list type struct-node name-node))))
+                   (cl-loop for (cap-sym . name-node) in names
+                            collect (list cap-sym struct-node name-node))))
                groups)))
 
 
@@ -5353,18 +5390,19 @@ after struct."
 
 (defun f90-ts--nav-tree-node-table (root)
   "Capture all menu nodes under ROOT in one pass using name-struct pairing.
-Returns an alist mapping each struct node to a list of (LABEL NAME POS) tuples."
+Returns a hash table mapping each struct node to a list of (KEY NAME POS)
+triples, where KEY is a type name from `f90-ts--nav-queries'."
   (let* ((captures (treesit-query-capture root f90-ts--nav-tree-query-compiled))
          (entities (f90-ts--nav-tree-combine-captures captures))
          (table (make-hash-table :test 'f90-ts--nav-tree-node-hash-test)))
     (cl-loop
-     for (type struct-node name-node) in entities
-     for label = (alist-get type f90-ts--imenu-capture-to-label)
+     for (cap-sym struct-node name-node) in entities
+     for key = (alist-get cap-sym f90-ts--nav-capture-key-alist)
      do (progn
-          (cl-assert label nil "label is nil for entry = %s, %s, %s"
-                     type struct-node name-node)
+          (cl-assert key nil "key is nil for capture-symbol = %s, struct = %s, name = %s"
+                     cap-sym struct-node name-node)
           (cl-pushnew
-           (list label
+           (list key
                  (treesit-node-text name-node t)
                  (treesit-node-start name-node))
            (gethash struct-node table)
@@ -5393,13 +5431,13 @@ If the cached tree is still valid, return this.
 Otherwise build the tree and cache it along with its root node in
 `f90-ts--nav-tree-cache' and `f90-ts--nav-tree-cache-root'.
 
-A sparse node in the tree is a pair (TRIPLES . CHILDREN),
-where TRIPLES is a list of (LABEL-BASE NAME POS) as produced by
+A sparse node in the tree is a pair (ENTRIES . CHILDREN),
+where ENTRIES is a list of triples (KEY NAME POS) as produced by
 `f90-ts--nav-tree-node-table'.  CHILDREN is a list of sparse nodes
 which are children of the sparse node.
-If a sparse node has children, then TRIPLES should be contain at most one
-triple.  For example, the root node usually is not itself interesting but
-has a list of children, so TRIPLES=nil but CHILDREN is non-empty."
+If a sparse node has children, then ENTRIES should contain at most one triple.
+For example, the root node usually is not interesting itself but has a list of
+children, so ENTRIES=nil but CHILDREN is non-empty."
   (let ((root (treesit-buffer-root-node)))
     (if (and f90-ts--nav-tree-cache-root
              f90-ts--nav-tree-cache
@@ -5430,28 +5468,24 @@ has a list of children, so TRIPLES=nil but CHILDREN is non-empty."
           t))
 
 
-(defun f90-ts--nav-menu-from-leaf (triple)
-  "Build a `f90-ts--nav-menu-entry' from TRIPLE=(LABEL-BASE NAME POS)."
-  (let* ((label-base (nth 0 triple))
-         (name       (nth 1 triple))
-         (pos        (nth 2 triple))
-         (label (if (and name (not (string-empty-p name)))
-                    (format "%s: %s" label-base name)
-                  label-base))
+(defun f90-ts--nav-menu-from-leaf (entry)
+  "Build a `f90-ts--nav-menu-entry' from ENTRY=(KEY NAME POS)."
+  (let* ((key    (nth 0 entry))
+         (name   (nth 1 entry))
+         (pos    (nth 2 entry))
+         (label  (f90-ts--nav-entry-label key name))
          (marker (set-marker (make-marker) pos)))
     (f90-ts--nav-menu-entry label marker)))
 
 
 (defun f90-ts--nav-menu-from-branch (entries children)
-  "Build two `f90-ts--nav-menu-entry' from a sparse node and its CHILDREN.
-Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
-  (let* ((first      (car entries))
-         (label-base (nth 0 first))
-         (name       (nth 1 first))
-         (pos        (nth 2 first))
-         (label (if (and name (not (string-empty-p name)))
-                    (format "%s: %s" label-base name)
-                  label-base))
+  "Build two `f90-ts--nav-menu-entry' items from a sparse node and its CHILDREN.
+ENTRIES contains exactly one triple for a non-leaf structure."
+  (let* ((first  (car entries))
+         (key    (nth 0 first))
+         (name   (nth 1 first))
+         (pos    (nth 2 first))
+         (label  (f90-ts--nav-entry-label key name))
          (marker (set-marker (make-marker) pos)))
     (list
      (f90-ts--nav-menu-entry label marker)
@@ -5461,7 +5495,7 @@ Note that ENTRIES contains exactly one sparse node for a non-leaf structure."
 
 (defun f90-ts--nav-menu-from-sparse-tree (sparse-node)
   "Recursively convert SPARSE-NODE to easy-menu format.
-SPARSE-NODE is a pair (TRIPLES . CHILDREN), where TRIPLES is produced by
+SPARSE-NODE is a pair (ENTRIES . CHILDREN), where ENTRIES is produced by
 `f90-ts--nav-tree-node-table' and CHILDREN are children of SPARSE-NODE,
 and itself SPARSE-NODES."
   (let* ((entries  (car sparse-node))
