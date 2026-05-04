@@ -402,7 +402,7 @@ For matching identifiers the face `f90-ts-font-lock-special-var' is used."
   :group 'f90-ts)
 
 
-(defcustom f90-ts-comment-prefix-regexp "!\\S-*\\s-+"
+(defcustom f90-ts-comment-prefix-regexp "!\\S-*\\(\\s-+\\|$\\)"
   "Regular expression for matching and capturing comment starts.
 This is used to extract the comment prefix for `f90-ts-break-line',
 `f90-ts-join-line-prev' and `f90-ts-join-line-next' operations.
@@ -448,7 +448,7 @@ If this option is set, then point is placed at start of region."
   :group 'f90-ts)
 
 
-(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\s-+"
+(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?\\(\\s-+\\|$\\)"
   "Regular expression for matching OpenMP starts.
 This is used for line break operations, as openmp statements require
 continuation symbols.
