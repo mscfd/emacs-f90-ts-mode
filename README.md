@@ -14,9 +14,9 @@ The mode is under **development**, features might only be partially implemented.
   - [Setup](#setup)
   - [Keybindings](#keybindings)
 - [Features](#features)
-  - [Syntax highlight](#syntax-highlight)
+  - [Syntax highlight and font lock faces](#syntax-highlight-and-font-lock-faces)
     - [Special variables](#special-variables)
-    - [Comment keywords and rules](#comment-keywords-and-rules)
+    - [Comment regexps and rules](#comment-regexps-and-rules)
   - [Indentation](#indentation)
     - [Indentation of multiline statement](#indentation-of-multiline-statement)
     - [OpenMP and other special comments](#openmp-and-other-special-comments)
@@ -172,7 +172,7 @@ The mode sets the following default mode local keybindings:
 ## Features
 (with inspiration from the legacy f90 mode in emacs)
 
-- Syntax highlighting
+- Syntax highlighting (font lock faces)
 - Indentation
 - Smart end completion
 - Break lines with automatic continuation and comment starters for comment lines
@@ -184,7 +184,7 @@ The mode sets the following default mode local keybindings:
 - Imenu and a `Fortran` menu in the menu bar
 
 
-### Syntax highlight
+### Syntax highlight and font lock faces
 
 The mode has four levels of font-locking, which is controlled by customizable variable `treesit-font-lock-level`.
 
@@ -195,15 +195,14 @@ The mode has four levels of font-locking, which is controlled by customizable va
 
 Additionally to the usual faces, there are some extra custom faces:
 
-| Face Name                                 | Description                                           |
-|-------------------------------------------|-------------------------------------------------------|
-| `f90-ts-font-lock-intrinsic-face`         | intrinsic procedures and functions                    |
-| `f90-ts-font-lock-delimiter-face`         | delimiters such as commas and separators              |
-| `f90-ts-font-lock-bracket-face`           | brackets and parentheses                              |
-| `f90-ts-font-lock-operator-face`          | operators and assignments                             |
-| `f90-ts-font-lock-openmp-face`            | openmp directives                                     |
-| `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)               |
-| `f90-ts-font-lock-separator-comment-face` | separator comments (e.g. `!---------`, `! arguments`) |
+| Face Name                                 | Description                                             |
+|-------------------------------------------|---------------------------------------------------------|
+| `f90-ts-font-lock-delimiter-face`         | delimiters such as commas and separators                |
+| `f90-ts-font-lock-bracket-face`           | brackets and parentheses                                |
+| `f90-ts-font-lock-operator-face`          | operators and assignments                               |
+| `f90-ts-font-lock-openmp-face`            | openmp directives                                       |
+| `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)                 |
+| `f90-ts-font-lock-separator-comment-face` | separator comments like `!---------` and `! arguments`) |
 
 
 #### Special variables
@@ -212,7 +211,9 @@ Special variables are recognised by regexp matching with customizable variable `
 For matched variables `f90-ts-font-lock-special-var-face` is used.
 
 
-#### Comment keywords and rules
+#### Comment regexps and rules
+
+Comments can be classified with different syntax highlighting (and indentation) by rules and regexps.
 
 Keywords within comments can be coloured by `font-lock-warning-face` using customizable regexp
 `f90-ts-comment-keyword-regexp`. This is intended to highlight words like `TODO` or `FIXME`.

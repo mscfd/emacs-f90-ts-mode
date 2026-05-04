@@ -82,8 +82,16 @@
   :group 'languages)
 
 
+(defgroup f90-ts-font-lock nil
+  "Font-locking for Tree-sitter f90-ts mode.
+This group defines additional faces used for F90-specific syntax.
+Standard font-lock faces are used as well."
+  :prefix "f90-ts-"
+  :group  'f90-ts)
+
+
 (defgroup f90-ts-indent nil
-  "Indentation in free format Fortran for Tree-sitter f90-ts mode."
+  "Indentation for Tree-sitter f90-ts mode."
   :prefix "f90-ts-"
   :group  'f90-ts)
 
@@ -266,47 +274,41 @@ Value is a list of the form (TYPE VALUE) where TYPE is either:
 ;;;-----------------------------------------------------------------------------
 
 (defface f90-ts-font-lock-delimiter-face
-  '((t :foreground "Sienna4"
-       :weight medium))
-  "Font Lock mode face used to highlight delimiter symbols."
+  '((t :inherit default))
+  "Face used to highlight delimiter symbols (e.g. commas)."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-bracket-face
-  '((t :foreground "BlueViolet"
-       :weight bold))
-  "Font Lock mode face used to highlight brackets and parenthesis."
+  '((t :inherit default))
+  "Face used to highlight brackets and parenthesis."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-operator-face
-  '((t :foreground "Brown3"
-       :weight bold))
-  "Font Lock mode face used to highlight operators."
+  '((t :inherit default))
+  "Face used to highlight operators (e.g. +, -, *, /)."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-openmp-face
-  '((t :foreground "turquoise4"
-       :weight medium))
-  "Font Lock mode face used to highlight openmp statements."
+  '((t :inherit font-lock-preprocessor-face))
+  "Face used to highlight OpenMP statements.
+Openmp statements are determined by `f90-ts-special-comment-rules'."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-special-var-face
-  '((t :foreground "blue4"
-       :weight semi-bold))
-  "Font Lock mode face used to highlight special variables.
-The can be used for variables like \"self\" or \"this\".
+  '((t :inherit font-lock-keyword-face :slant italic))
+  "Face used to highlight special variables like \"self\" or \"this\".
 Special variables are determined by regexp custom variable
 `f90-ts-special-var-regexp'."
   :group 'f90-ts-font-lock)
 
 
 (defface f90-ts-font-lock-separator-comment-face
-  '((t :foreground "Sienna4"
-       :weight bold))
-  "Font Lock mode face used to highlight separator comments.
+  '((t :inherit font-lock-comment-face :weight bold))
+  "Face used to highlight separator comments.
 Special comments such as separators are determined by rules in
 `f90-ts-special-comment-rules'."
   :group 'f90-ts-font-lock)
@@ -337,7 +339,7 @@ Copied from prog mode `f90-mode'."
 
 
 (defcustom f90-ts-menu-show-navigate t
-  "Show navigate submenu in fortran menu if Non-nil.
+  "Show navigate submenu in fortran menu if non-nil.
 For large source files, the menu might not be useful and reduce performance."
   :type  'boolean
   :safe  'booleanp
