@@ -186,6 +186,91 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
+Name: join prev statement 13
+=-=
+subro|utine sub_1()
+end subroutine sub_1
+=-=
+|subroutine sub_1()
+end subroutine sub_1
+=-=-=
+
+
+Name: join prev statement 14
+=-=
+subroutine sub_1()
+     x =| 65
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     |x = 65
+end subroutine sub_1
+=-=-=
+
+Name: join prev empty 1
+=-=
+
+   
+
+|
+
+
+=-=
+|
+
+
+=-=-=
+
+Name: join prev empty 2
+=-=
+
+   
+
+|subroutine sub()
+end subroutine
+
+
+=-=
+|subroutine sub()
+end subroutine
+
+
+=-=-=
+
+Name: join prev empty 3
+=-=
+
+   
+
+subrouti|ne sub()
+end subroutine
+
+
+=-=
+|subroutine sub()
+end subroutine
+
+
+=-=-=
+
+Name: join prev empty 4
+=-=
+|subroutine sub()
+end subroutine
+=-=
+|subroutine sub()
+end subroutine
+=-=-=
+
+Name: join prev empty 5
+=-=
+subroutine sub()|
+end subroutine
+=-=
+|subroutine sub()
+end subroutine
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -297,8 +382,8 @@ end subroutine sub_1
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
-                ! comment      
-                |arg2)
+                ! comment|      
+                arg2)
 end subroutine sub_1
 =-=-=
 
@@ -314,8 +399,8 @@ end subroutine sub_1
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
-                ! comment      
-                |arg2)
+                ! comment|      
+                arg2)
 end subroutine sub_1
 =-=-=
 
@@ -339,8 +424,8 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     !!$ comment      
-     |! continued
+     !!$ comment|      
+     ! continued
 end subroutine sub_1
 =-=-=
 
@@ -354,8 +439,8 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-    x = 1
-    |y = 2
+    x = 1|
+    y = 2
 end subroutine sub_1
 =-=-=
 
@@ -374,6 +459,99 @@ subroutine sub_1()
     x = 1 |! y = 2
 end subroutine sub_1
 =-=-=
+
+Name: join next statement 13
+=-=
+subroutine sub_1()
+     x = |65
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     x = 65|
+end subroutine sub_1
+=-=-=
+
+Remark erts parses the expected block always adding a final newline for the last line, which cannot be stipped,
+so the point marker cannot be placed in the expected position; as a consequence, add newline and check point
+position in Code block
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-join-line-next)
+    (insert "\n")
+    (unless (= (point) (point-max))
+      (insert (format "POINT-WRONG: at=%s, expected=%s\n" (point) (point-max)))))
+
+Name: join next statement 14
+=-=
+subroutine sub_1()
+end s|ubroutine sub_1
+=-=
+subroutine sub_1()
+end subroutine sub_1
+=-=-=
+
+Name: join next empty 1
+=-=
+
+   
+|
+
+   
+
+=-=
+
+   
+
+=-=-=
+
+
+Name: join next empty 2
+=-=
+
+   
+
+subroutine sub()
+|end subroutine
+
+ 
+
+=-=
+
+   
+
+subroutine sub()
+end subroutine
+=-=-=
+
+Name: join next empty 3
+=-=
+subroutine sub()
+|end subroutine
+=-=
+subroutine sub()
+end subroutine
+=-=-=
+
+Name: join next empty 4
+=-=
+subroutine sub()
+end subro|utine
+=-=
+subroutine sub()
+end subroutine
+=-=-=
+
+Name: join next empty 5
+=-=
+subroutine sub()
+end subroutine|
+=-=
+subroutine sub()
+end subroutine
+=-=-=
+
 
 Code:
   (lambda ()
