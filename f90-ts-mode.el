@@ -3477,24 +3477,24 @@ Finally use VARIANT to select one pair to align with."
 ;;            in the list is used as primary/fallback position (for example
 ;;            in keep-or-primary option);
 ;;            if not provided, `f90-ts--align-list-other-default' is used
-(defconst f90-ts--align-list-context-config
-  (let ((expr-options '(:get-items-fn f90-ts--align-list-items-op-expr
-                        :get-other-fn f90-ts--align-list-other-op-expr))
-        (paren-options '(:get-items-fn f90-ts--align-list-items-children
-                        :get-other-fn f90-ts--align-list-other-paren))
-        (bind-options '(:get-items-fn f90-ts--align-list-items-children2)))
+(defconst f90-ts--align-list-context-properties
+  (let ((expr-prop  '(:get-items-fn f90-ts--align-list-items-op-expr
+                      :get-other-fn f90-ts--align-list-other-op-expr))
+        (paren-prop '(:get-items-fn f90-ts--align-list-items-children
+                      :get-other-fn f90-ts--align-list-other-paren))
+        (bind-prop  '(:get-items-fn f90-ts--align-list-items-children2)))
      (list
-      (cons "logical_expression"       expr-options)
-      (cons "math_expression"          expr-options)
-      (cons "relational_expression"    expr-options)
-      (cons "concatenation_expression" expr-options)
-      (cons "unary_expression"         expr-options)
-      (cons "binding_list"             bind-options)
-      (cons "final_statement"          bind-options)
-      (cons "parenthesized_expression" paren-options)
-      (cons "argument_list"            paren-options)
-      (cons "array_literal"            paren-options)
-      (cons "parameters"               paren-options)
+      (cons "logical_expression"       expr-prop)
+      (cons "math_expression"          expr-prop)
+      (cons "relational_expression"    expr-prop)
+      (cons "concatenation_expression" expr-prop)
+      (cons "unary_expression"         expr-prop)
+      (cons "binding_list"             bind-prop)
+      (cons "final_statement"          bind-prop)
+      (cons "parenthesized_expression" paren-prop)
+      (cons "argument_list"            paren-prop)
+      (cons "array_literal"            paren-prop)
+      (cons "parameters"               paren-prop)
       (cons "association_list"
             '(:get-items-fn f90-ts--align-list-items-assocation
               :get-other-fn f90-ts--align-list-other-association))
@@ -3512,10 +3512,10 @@ in particular for how to extract relevant alignment positions.")
 
 (defun f90-ts--get-list-context-prop (pkey context)
   "Lookup CONTEXT and return the property value for PKEY.
-Lookup is done in alist `f90-ts--align-list-context-config'."
+Lookup is done in alist `f90-ts--align-list-context-properties'."
   (let* ((list-context (car context))
          (properties (alist-get (treesit-node-type list-context)
-                                f90-ts--align-list-context-config
+                                f90-ts--align-list-context-properties
                                 nil
                                 nil
                                 #'string=)))
@@ -3537,7 +3537,7 @@ This is the maximal node for any further subtree searches."
        (and (<= (f90-ts--node-line n) line)
             (<= line (line-number-at-pos (treesit-node-end n)))
             (assoc (treesit-node-type n)
-                   f90-ts--align-list-context-config))))))
+                   f90-ts--align-list-context-properties))))))
 
 
 (defun f90-ts--align-list-context-op-expr (loc parent)
@@ -3590,7 +3590,7 @@ This function return nil as second auxiliary context node."
                         (lambda (n)
                           (and (< (f90-ts--node-line n) line)
                                (assoc (treesit-node-type n)
-                                      f90-ts--align-list-context-config)))
+                                      f90-ts--align-list-context-properties)))
                         t ; include node in search
                         )))
     ;; list-context might be of some operator expression type, but
