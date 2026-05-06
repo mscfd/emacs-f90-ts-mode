@@ -5123,8 +5123,10 @@ end subroutine sub
 If point is at |, then the smallest named no is the end_statement node
 for \"end if\".  However, treesit-node-on returns the subroutine node.
 Querying at POS-1 gives the expected answer."
-  (let* ((nodes (list (treesit-node-on pos      pos      nil named)
-                      (treesit-node-on (1- pos) (1- pos) nil named)))
+  (let* ((nodes (delq nil
+                      (list (treesit-node-on pos   pos   nil named)
+                            (when (< (point-min) pos)
+                              (treesit-node-on (1- pos) (1- pos) nil named)))))
          (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
                                                 (<= pos (treesit-node-end n))))
                                nodes))
