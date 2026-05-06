@@ -368,12 +368,13 @@ Special comments such as separators are determined by rules in
   "Determine whether and how to complete an end statement.
 If set to blink, perform completion and then jump to the opening clause of the
 completed statement.
-If set to no-blink perform completion without jumping.
+If set to no-blink perform completion without jumping, but print a message.
+If set to no-message just perform completion without jumping and any message.
 Value nil turns off smart end completion.
 
 Copied from prog mode `f90-mode'."
-  :type  '(choice (const blink) (const no-blink) (const nil))
-  :safe  (lambda (value) (memq value '(blink no-blink nil)))
+  :type  '(choice (const blink) (const no-blink) (const no-message) (const nil))
+  :safe  (lambda (value) (memq value '(blink no-blink complete nil)))
   :group 'f90-ts)
 
 
@@ -4248,18 +4249,19 @@ not happen, as `f90-ts--complete-end-structs' lists all supported structures."
 Either jump to the start of the structure or show opening statement in the
 message buffer.  Which action to perform depends on position and whether
 `blink' is set."
-  (let ((top-of-window (window-start))
-        (start-struct (treesit-node-start node-struct)))
-    (save-excursion
-      (goto-char start-struct)
-      (if (or (eq f90-ts-smart-end 'no-blink)
-              (< start-struct top-of-window))
-          (message "matches %s: %s"
-                   (what-line)
-                   (buffer-substring
-                    (line-beginning-position)
-                    (line-end-position)))
-        (sit-for blink-matching-delay)))))
+  (unless (eq f90-ts-smart-end 'no-message)
+    (let ((top-of-window (window-start))
+          (start-struct (treesit-node-start node-struct)))
+      (save-excursion
+        (goto-char start-struct)
+        (if (or (eq f90-ts-smart-end 'no-blink)
+                (< start-struct top-of-window))
+            (message "matches %s: %s"
+                     (what-line)
+                     (buffer-substring
+                      (line-beginning-position)
+                      (line-end-position)))
+          (sit-for blink-matching-delay))))))
 
 
 (defun f90-ts--complete-smart-end-end (node)
