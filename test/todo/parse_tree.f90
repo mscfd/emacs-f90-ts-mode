@@ -1,3 +1,12 @@
+! comment within a continued string is not yet supported by tree-sitter
+subroutine sub()
+   str = "012&
+         ! comment
+         &abc &
+         &uvw"
+end subroutine sub
+
+
 ! indent last line only, or do indent-region (which originally
 ! started smart end completion at last line)
 ! problem: parse tree is broken at this point (can/should we do anything about that)

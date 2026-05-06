@@ -905,12 +905,13 @@ If buffer was modified, insert `**' otherwise insert '--'."
  '(f90-ts-indent-and-complete-line))
 
 
-;; alignment tests, leave as is, the alignment variant to apply
-;; should be specified for each test header (default: keep-or-primary)
+;; alignment tests, leave as is, apply no preparation,
+;; (otherwise alignment might change depending on keep-or-primary etc. options)
 (f90-ts-mode-test--prep-act-register
  "f90-ts-mode-test-std"
  '("indent_region_align_misc.erts"
    "indent_region_align_expr.erts"
+   "indent_region_align_string.erts"
    "indent_region_leading_amp.erts")
  '(nil ; no preparation
    )

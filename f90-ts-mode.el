@@ -3840,6 +3840,11 @@ The main purpose is to fill the indentation cache for a new run.")
    ;; indent-region operations with buffering)
    (continued-line-cache-start parent 0)
 
+   ;; continued strings need special care, the ampersands do not appear as
+   ;; separate nodes, (treesit-node-at pos) at indentation position returns
+   ;; the string_literal, which starts at some previous line
+   ((n-p-gp nil "string_literal" nil) parent 0)
+
    ;; it is easy to see whether we are on a continued line (not the first line
    ;; of a multiline statement, only subsequent lines), but handling specific
    ;; cases is not possible with just some simple n-p-gp pattern,
