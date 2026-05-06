@@ -4351,12 +4351,18 @@ otherwise nil."
           (setq beg-marker (copy-marker beg t))
           (setq end-marker (copy-marker end t))
           (f90-ts--indent-and-complete-region-aux beg-marker end-marker)
-          (when (treesit-node-check node-struct 'outdated)
-            ;; remember that the region has been modified in case it was invoked
-            ;; by some line operation which wants to keep track of modifications
-            (setq f90-ts--indent-modified-outside-line t)
-            (setq node-struct-new (treesit-node-on (marker-position beg-marker)
-                                                   (marker-position end-marker)))))
+
+          ;; if something was modified, then treesit-node-on forces a reparse
+          ;; and node-probe /= node-struct, in this case set node-struct-new to node-probe
+          ;; otherwise leave node-struct-new at nil, signalling that the old node is still valid
+          (let ((node-probe (treesit-node-on (marker-position beg-marker)
+                                             (marker-position end-marker))))
+
+            (unless (treesit-node-eq node-struct node-probe)
+              (setq node-struct-new node-probe)
+              ;; signal that the region has been modified in case it was invoked
+              ;; by some line operation which wants to keep track of modifications
+              (setq f90-ts--indent-modified-outside-line t))))
       ;; revert to saved tab variant
       (setq f90-ts--align-continued-variant-tab variant-saved)
       (when beg-marker (set-marker beg-marker nil))

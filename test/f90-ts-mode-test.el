@@ -811,7 +811,7 @@ result region."
 
 
 (defun f90-ts-mode-test--modify-region (command)
-  "Setup region and apply COMMAND for modifying region.
+  "Setup pre-selected region and apply COMMAND for modifying region.
 Set up region from @ to | markers, then call COMMAND and reinsert @..| markers
 for modified region."
   (let ((pos (point)))
@@ -840,6 +840,28 @@ point at 1+end of region."
       (goto-char beg)
       (insert "@")
       (goto-char (1+ end)))))
+
+
+;;------------------------------------------------------------------------------
+;; modified bit helpers
+
+(defun f90-ts-mode-test--modified-check (modified command)
+  "Test function for adding a final symbol signalling final modified status.
+First set bit to MODIFIED, then execute COMMAND and finally insert the marker
+`**' for modified and `oo' for not modified."
+  (set-buffer-modified-p modified)
+  (funcall command)
+  (f90-ts-mode-test--insert-mod-marker))
+
+
+(defun f90-ts-mode-test--insert-mod-marker ()
+  "Query modified status of buffer and insert a marker at end of buffer.
+If buffer was modified, insert `**' otherwise insert '--'."
+  (save-excursion
+    (goto-char (point-max))
+    (if (buffer-modified-p)
+        (insert "**\n")
+      (insert "oo\n"))))
 
 
 ;;------------------------------------------------------------------------------
@@ -905,7 +927,8 @@ point at 1+end of region."
    "break_line.erts"
    "join_line.erts"
    "mark_region.erts"
-   "comment_region.erts"))
+   "comment_region.erts"
+   "modified_bit.erts"))
 
 
 ;; expensive tests
