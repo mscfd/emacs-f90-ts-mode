@@ -108,8 +108,8 @@
 !     ^^^^^ font-lock-keyword-face
 !           ^^^^^^^ font-lock-keyword-face
            error stop 'not supported'
-!          ^^^^^ nil
-!                ^^^^ nil
+!          ^^^^^ font-lock-keyword-face
+!                ^^^^ font-lock-keyword-face
 !                     ^^^^^^^^^^^^^^^ font-lock-string-face
       end select select_arg
 !     ^^^ font-lock-keyword-face
@@ -154,8 +154,8 @@
 !           ^ nil
 !            ^ f90-ts-font-lock-bracket-face
            error stop 'assumed-size input not supported (b)'
-!          ^^^^^ nil
-!                ^^^^ nil
+!          ^^^^^ font-lock-keyword-face
+!                ^^^^ font-lock-keyword-face
 !                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
       end select
 !     ^^^ font-lock-keyword-face
@@ -190,8 +190,8 @@
 !                                                        ^ nil
 !                                                         ^ f90-ts-font-lock-bracket-face
            error stop 'rank size combination of a and b not supported'
-!          ^^^^^ nil
-!                ^^^^ nil
+!          ^^^^^ font-lock-keyword-face
+!                ^^^^ font-lock-keyword-face
 !                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
       end if
 !     ^^^ font-lock-keyword-face
@@ -366,8 +366,8 @@
 !            ^ f90-ts-font-lock-bracket-face
 !              ^^^^^^ nil
            error stop 'assumed-size input not supported (a)'
-!          ^^^^^ nil
-!                ^^^^ nil
+!          ^^^^^ font-lock-keyword-face
+!                ^^^^ font-lock-keyword-face
 !                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
       end select rank_a
 !     ^^^ font-lock-keyword-face

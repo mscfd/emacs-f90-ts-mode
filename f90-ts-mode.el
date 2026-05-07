@@ -1552,6 +1552,10 @@ rule but not for matched keywords, which are enforced with override=t."
    :feature 'builtin
    `((call_expression
       (identifier) @font-lock-builtin-face
+      (:pred f90-ts-builtin-function-p @font-lock-builtin-face))
+     (subroutine_call
+      "call"
+      subroutine: (identifier) @font-lock-builtin-face
       (:pred f90-ts-builtin-function-p @font-lock-builtin-face)))))
 
 
@@ -1593,7 +1597,7 @@ rule but not for matched keywords, which are enforced with override=t."
    ;; not the keyword text itself, and these nodes are always stored lower-case
    ;; (hence no need to match case insensitive as is necessary with builtins)
    '((["program" "module" "submodule"
-      "function" "subroutine" "procedure"
+      "function" "subroutine" "procedure" "interface"
       "bind" "result" "end" "call"
       "public" "private" "protected" "contains"
       "use" "only" "import" "implicit" "none" "external"
@@ -1601,7 +1605,7 @@ rule but not for matched keywords, which are enforced with override=t."
       "type" "class" "is" "typeof" "classof"
       "if" "then" "else" "elseif" "endif"
       "do" "while"
-      "cycle" "exit"
+      "cycle" "exit" "error" "stop" "return"
       "associate" "block" "critical"
       "enum" "enumeration" "enumerator"
       "where" "elsewhere" "forall" "concurrent"
@@ -1610,7 +1614,6 @@ rule but not for matched keywords, which are enforced with override=t."
       "extends" "abstract"
       "pass" "nopass" "deferred"
       "operator" "assignment" "generic" "final"
-      "interface" "return"
       "allocate" "deallocate" "allocatable"
       "intent" "in" "out" "inout"
       "parameter" "save" "target" "pointer" "optional"
