@@ -18,38 +18,60 @@ ERTFLAGS = --eval '(setq ert-batch-print-length nil ert-batch-print-level nil)'
 
 SRCS = f90-ts-mode.el test/f90-ts-mode-test.el
 
-define run-ert
+# for single threaded execution (all tests with one emacs call)
+define run-ert-single
 	@$(EMACS) $(EMACSFLAGS) $(LOAD) $(ERTFLAGS) \
 		--eval '(ert-run-tests-batch-and-exit "$(1)")'
 endef
 
+# buffering and filtering for multithreaded execution, otherwise emacs
+# produces too much noise
+define run-ert-parallel
+	@out=$$($(EMACS) $(EMACSFLAGS) $(LOAD) $(ERTFLAGS) \
+		--eval '(ert-run-tests-batch-and-exit "^$(1)$$")' 2>&1); \
+	rc=$$?; \
+	if [ $$rc -ne 0 ]; then \
+		echo "$$out" | grep -v \
+			-e '^Running [0-9]' \
+			-e '^Ran [0-9]'; \
+	else \
+		echo "$$out" | grep '^ *passed'; \
+	fi; \
+	exit $$rc
+endef
+
+
 # ----------------------------------------------------------------------
-# test discovery
+# test discovery  (all tests, one target each)
 # ----------------------------------------------------------------------
 
-INDENT_BY_LINE_TESTS := $(shell \
+ALL_TESTS := $(shell \
 	set -e; \
 	tmp=$$(mktemp); \
 	if ! $(EMACS) $(EMACSFLAGS) $(LOAD) \
 	  --eval '(with-temp-file "'"$$tmp"'" \
 	            (mapc (lambda (s) (insert (format "%s\n" (ert-test-name s)))) \
-	                  (ert-select-tests "^f90-ts-mode-test-extra--indent-by-line--" t)))'; \
+	                  (ert-select-tests "^f90-ts-mode-test-" t)))'; \
 	then \
 	  echo "ERROR: test discovery failed (likely elisp syntax error)" >&2; \
 	  exit 1; \
 	fi; \
 	cat $$tmp; rm -f $$tmp )
 
-INDENT_BY_LINE_TARGETS := $(foreach t,$(INDENT_BY_LINE_TESTS),\
-	_test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(t))))
+# Mangle test names into make-safe target names:
+#   f90-ts-mode-test-std--foo  ->  _tp-std--foo
+#   f90-ts-mode-test-extra--bar--baz  ->  _tp-extra--bar--baz
+ALL_TEST_TARGETS := $(foreach t,$(ALL_TESTS),\
+	_tp-$(subst f90-ts-mode-test-,,$(t)))
 
-define make-indent-by-line-target
-.PHONY: _test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1)))
-_test-ert-p-ibl-$(subst --,-,$(subst f90-ts-mode-test-extra--indent-by-line--,,$(1))):
-	$$(call run-ert,^$(1)$$)
+# generated parallel targets use run-ert-parallel to filter out noise
+define make-test-target
+.PHONY: _tp-$(subst f90-ts-mode-test-,,$(1))
+_tp-$(subst f90-ts-mode-test-,,$(1)):
+	$$(call run-ert-parallel,$(1))
 endef
 
-$(foreach t,$(INDENT_BY_LINE_TESTS),$(eval $(call make-indent-by-line-target,$(t))))
+$(foreach t,$(ALL_TESTS),$(eval $(call make-test-target,$(t))))
 
 # ----------------------------------------------------------------------
 # checkdoc
@@ -105,36 +127,23 @@ test-byte-compile:
 
 .PHONY: test-ert-std
 test-ert-std:
-	$(call run-ert,^f90-ts-mode-test-std--)
+	$(call run-ert-single,^f90-ts-mode-test-std--)
 
 .PHONY: test-ert-extra
 test-ert-extra:
-	$(call run-ert,^f90-ts-mode-test-extra--)
+	$(call run-ert-single,^f90-ts-mode-test-extra--)
 
 .PHONY: test-ert-all
 test-ert-all:
-	$(call run-ert,^f90-ts-mode-test)
+	$(call run-ert-single,^f90-ts-mode-test)
 
 # ----------------------------------------------------------------------
-# parallel execution
+# parallel execution  (one job per test)
 # ----------------------------------------------------------------------
 
 .PHONY: test-ert-parallel
-test-ert-parallel:
-	@echo "Running ERT tests in parallel..."
-	@fail=0; \
-	targets="_test-ert-p-main \
-	         _test-ert-p-extra-font-lock \
-	         _test-ert-p-extra-indent-by-region \
-	         $(INDENT_BY_LINE_TARGETS)"; \
-	$(MAKE) -j $$targets || fail=1; \
-	if [ $$fail -ne 0 ]; then \
-	  echo "ERT RESULT: FAILURE"; \
-	  exit 1; \
-	else \
-	  echo "ERT RESULT: SUCCESS"; \
-	fi
-
+test-ert-parallel: $(ALL_TEST_TARGETS)
+	@echo "ERT RESULT: SUCCESS ($(words $(ALL_TEST_TARGETS)) tests)"
 # ----------------------------------------------------------------------
 # internal parallel targets
 # ----------------------------------------------------------------------
