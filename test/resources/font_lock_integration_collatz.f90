@@ -253,7 +253,7 @@
 !                   ^^^^^^^ nil
        call move_alloc(tmp, self%visitors)
 !      ^^^^ font-lock-keyword-face
-!           ^^^^^^^^^^ font-lock-function-name-face
+!           ^^^^^^^^^^ font-lock-builtin-face
 !                     ^ f90-ts-font-lock-bracket-face
 !                      ^^^ nil
 !                         ^ f90-ts-font-lock-delimiter-face
@@ -594,7 +594,7 @@
 !                                                 ^ f90-ts-font-lock-bracket-face
                       call move_alloc(tmp, seq)
 !                     ^^^^ font-lock-keyword-face
-!                          ^^^^^^^^^^ font-lock-function-name-face
+!                          ^^^^^^^^^^ font-lock-builtin-face
 !                                    ^ f90-ts-font-lock-bracket-face
 !                                     ^^^ nil
 !                                        ^ f90-ts-font-lock-delimiter-face

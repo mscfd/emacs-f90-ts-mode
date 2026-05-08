@@ -218,6 +218,7 @@ The entire popup can be bound to a different prefix by:
 - Comment region operations with configurable prefixes and indentation rules
 - Mark regions based on tree-sitter nodes
 - OpenMP and preprocessor directives
+- Coarray keywords and statements
 - `Imenu` and a `Fortran` menu in the menu bar
 - Navigation (defun, things, Xref, tree as submenu and as side panel buffer)
 
@@ -269,8 +270,8 @@ parsed as comments.
 
 ### Indentation
 
-Indentation supports most fortran statements. Coarrays are still missing. It also covers some error cases which
-frequently happen during typing. Lines within incomplete and unfinished blocks are mostly correctly inlined,
+Indentation supports most fortran statements. It also covers some error cases which frequently happen during typing.
+Lines within incomplete and unfinished blocks are mostly correctly inlined,
 but sometimes, the treesitter AST is just not usable.
 
 Customizable variables for indentations are:
