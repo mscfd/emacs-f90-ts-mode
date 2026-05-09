@@ -84,6 +84,31 @@ subroutine assoc()
 
 Name: if clause 1
 =-=
+! "if" type check with regular expression matches "identifier" (x is an identifier)
+subroutine foo()
+   if (condition) then
+        x = 1
+   |else
+=-=-=
+
+Name: if clause 2
+=-=
+subroutine foo()
+   if (condition) then
+        some_if = 2
+   |elseif (another) then
+=-=-=
+
+Name: if clause 3
+=-=
+subroutine foo()
+   if (condition) then
+        if_else = 2
+   |else if (another) then
+=-=-=
+
+Name: if clause 4
+=-=
 subroutine foo()
    if (condition) then
         return
@@ -91,7 +116,7 @@ subroutine foo()
         |
 =-=-=
 
-Name: if clause 2
+Name: if clause 5
 =-=
 subroutine foo()
    if (condition) then
@@ -100,7 +125,7 @@ subroutine foo()
         |
 =-=-=
 
-Name: if clause 3
+Name: if clause 6
 =-=
 ! my sub
 subroutine foo()
@@ -109,7 +134,7 @@ subroutine foo()
           |
 =-=-=
 
-Name: if clause 4
+Name: if clause 7
 =-=
 subroutine foo()
      if (condition) then
@@ -122,6 +147,7 @@ subroutine foo()
 
 Name: expression 1
 =-=
+! no identifier yet after "z,"
 function eval() result(w)
      call algorithm(fun1(a, b), fun2(x, y, &
                                      z, &
@@ -131,6 +157,7 @@ function eval() result(w)
               w))
 end function eval
 =-=
+! no identifier yet after "z,"
 function eval() result(w)
      call algorithm(fun1(a, b), fun2(x, y, &
                                      z, &
