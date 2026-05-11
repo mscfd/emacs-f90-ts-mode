@@ -84,6 +84,18 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
+Name: break comment 4
+=-=
+subroutine sub_noblank()
+     !>|
+end subroutine sub_noblank
+=-=
+subroutine sub_noblank()
+     !>
+     !>|
+end subroutine sub_noblank
+=-=-=
+
 
 Name: break openmp 1
 =-=
@@ -104,6 +116,19 @@ subroutine sub_1()
 !$omp end parallel
 end subroutine sub_1
 =-=-=
+
+Name: break openmp 2
+=-=
+subroutine sub_noblank()
+!$omp|
+end subroutine sub_noblank
+=-=
+subroutine sub_noblank()
+!$omp &
+!$omp|
+end subroutine sub_noblank
+=-=-=
+
 
 Name: break empty 1
 =-=

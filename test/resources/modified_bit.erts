@@ -1,0 +1,206 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t))
+      (f90-ts-mode-test--modified-check nil #'f90-ts-indent-and-complete-stmt)))
+
+Name: stmt unchanged-modified 1
+=-=
+subroutine sub()
+     if (x) then
+     do while (y)
+     end do
+|     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+     end if|
+end subroutine sub
+**
+=-=-=
+
+Name: stmt unchanged-modified 2
+=-=
+! ampersand are removed and reinsert, so buffer is temporarily modified
+subroutine sub()
+     call foo(x1, &
+       &     x2, &
+        &     x4, &
+        &     x5)|
+end subroutine sub
+=-=
+! ampersand are removed and reinsert, so buffer is temporarily modified
+subroutine sub()
+     call foo(x1, &
+        &     x2, &
+        &     x4, &
+        &     |x5)
+end subroutine sub
+**
+=-=-=
+
+Name: stmt unchanged-unchanged 1
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+|     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+     end if|
+end subroutine sub
+oo
+=-=-=
+
+Name: stmt unchanged-unchanged 2
+=-=
+! ampersand are removed and reinsert, so buffer is temporarily modified
+subroutine sub()
+     call foo(x1, &
+        &     x2, &
+        &     x4, &
+        &     x5)|
+end subroutine sub
+=-=
+! ampersand are removed and reinsert, so buffer is temporarily modified
+subroutine sub()
+     call foo(x1, &
+        &     x2, &
+        &     x4, &
+        &     x5)|
+end subroutine sub
+oo
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modified-check t #'f90-ts-indent-and-complete-stmt))
+
+Name: stmt modified-modified 1
+=-=
+subroutine sub()
+     if (x) then
+     do while (y)
+     end do
+|     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+     end if|
+end subroutine sub
+**
+=-=-=
+
+Name: stmt modified-unchanged 1
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+|     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+     end if|
+end subroutine sub
+**
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modified-check nil #'f90-ts-indent-and-complete-line))
+
+Name: line unchanged-modified 1
+=-=
+subroutine sub()
+     if (x) then
+     do while (y)
+     end do
+|     end
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+     do while (y)
+     end do
+     end if|
+end subroutine sub
+**
+=-=-=
+
+Name: line unchanged-unchanged 1
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+|     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+     end if|
+end subroutine sub
+oo
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modified-check t #'f90-ts-indent-and-complete-line))
+
+Name: line modified-modified 1
+=-=
+subroutine sub()
+     if (x) then
+     do while (y)
+     end do
+|     end
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+     do while (y)
+     end do
+     end if|
+end subroutine sub
+**
+=-=-=
+
+Name: line modified-unchanged 1
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+|     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (x) then
+          do while (y)
+          end do
+     end if|
+end subroutine sub
+**
+=-=-=
