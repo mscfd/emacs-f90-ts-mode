@@ -10,17 +10,20 @@ end module do_mod
 
 ! executing f90-ts-enlarge-region executed at |
 ! shows that the NEWLINE is part of the type node
-module mod_init_4()
-|   type, public :: t
+module mod
+   type, public :: t
       integer :: i
    end type t
-end module mod_init_4
+end module mod
 
 
 ! the if line itself does not have a named node for itself,
-! but the end line has, it bit strange when experimenting with mark region operations
-subroutine sub_init_3()
+! but the "end if" line has, it is bit strange when experimenting
+! with mark region operations:
+! executing enlarge region with point at if: whole statement
+! executing enlarge region with point at end if: just the line
+subroutine sub()
    if (cond(x,y)) then
       call other()
    end if
-end subroutine sub_init_3
+end subroutine sub

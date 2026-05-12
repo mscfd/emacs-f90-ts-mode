@@ -3942,28 +3942,29 @@ and in case of ERROR nodes with incomplete code.")
    ;; if-then-else statements
    ;; this must be first, as its parent is an if-statement
    ;; but node=nil/something and parent=if_statement is possible (some line after if)
-   ((n-p-gp     "end_if_statement" "if_statement"  nil)      parent 0)
-   ((n-p-gp     "elseif_clause"    "if_statement"  nil)      parent 0)
-   ((n-p-gp     "else_clause"      "if_statement"  nil)      parent 0)
-   ((n-p-pstmtk nil                "if_statement"  "if")     parent f90-ts-indent-block) ; line right after if
-   ((n-p-pstmtk nil                "if_statement"  "else")   parent f90-ts-indent-block) ; line right after else, with empty else block
-   ((n-p-pstmtk nil                "else_clause"   "else")   parent f90-ts-indent-block) ; line after else, with non-empty else block
-   ((n-p-pstmtk nil                "elseif_clause" "elseif") parent f90-ts-indent-block) ; line right after "elseif"
-   ((n-p-pstmtk nil                "elseif_clause" "else")   parent f90-ts-indent-block) ; line right after "else if"
+   ((n-p-gp     "end_if_statement" "if_statement"  nil)         parent 0)
+   ((n-p-gp     "elseif_clause"    "if_statement"  nil)         parent 0)
+   ((n-p-gp     "else_clause"      "if_statement"  nil)         parent 0)
+   ((n-p-pstmtk nil                "if_statement"  "^if$")      parent f90-ts-indent-block) ; line right after if
+   ((n-p-pstmtk nil                "if_statement"  "^else$")    parent f90-ts-indent-block) ; line right after else, with empty else block
+   ((n-p-pstmtk nil                "if_statement"  "^elseif$")  parent f90-ts-indent-block) ; line right after elseif, with empty elseif block
+   ((n-p-pstmtk nil                "else_clause"   "^else$")    parent f90-ts-indent-block) ; line after else, with non-empty else block
+   ((n-p-pstmtk nil                "elseif_clause" "^elseif$")  parent f90-ts-indent-block) ; line right after "elseif"
+   ((n-p-pstmtk nil                "elseif_clause" "^else$")    parent f90-ts-indent-block) ; line right after "else if"
 
-   ((n-p-pstmtk "elseif_clause"    "ERROR" "if") previous-stmt-anchor 0)
-   ((n-p-pstmtk "elseif"           "ERROR" "if") previous-stmt-anchor 0)
-   ((n-p-gp     "elseif_clause"    "ERROR" nil)  previous-stmt-anchor minus-block-offset) ; at elseif line, incomplete
+   ((n-p-pstmtk "elseif_clause"    "ERROR" "^if$") previous-stmt-anchor 0)
+   ((n-p-pstmtk "elseif"           "ERROR" "^if$") previous-stmt-anchor 0)
+   ((n-p-gp     "elseif_clause"    "ERROR" nil)    previous-stmt-anchor minus-block-offset) ; at elseif line, incomplete
 
-   ((n-p-pstmtk "else_clause"      "ERROR" "if")     previous-stmt-anchor 0)
-   ((n-p-pstmtk "else_clause"      "ERROR" "elseif") previous-stmt-anchor 0)
-   ((n-p-gp     "else_clause"      "ERROR" nil)      previous-stmt-anchor minus-block-offset) ; at else line, incomplete
-   ((n-p-pstmtk "else"             "ERROR" "if")     previous-stmt-anchor 0)
-   ((n-p-gp     "else"             "ERROR" nil)      previous-stmt-anchor minus-block-offset)
+   ((n-p-pstmtk "else_clause"      "ERROR" "^if$")     previous-stmt-anchor 0)
+   ((n-p-pstmtk "else_clause"      "ERROR" "^elseif$") previous-stmt-anchor 0)
+   ((n-p-gp     "else_clause"      "ERROR" nil)        previous-stmt-anchor minus-block-offset) ; at else line, incomplete
+   ((n-p-pstmtk "^else$"           "ERROR" "^if$")     previous-stmt-anchor 0)
+   ((n-p-gp     "^else$"           "ERROR" nil)        previous-stmt-anchor minus-block-offset)
 
-   ((n-p-pstmtk nil                "ERROR" "if")     previous-stmt-anchor f90-ts-indent-block) ; empty line after if
-   ((n-p-pstmtk nil                "ERROR" "elseif") previous-stmt-anchor f90-ts-indent-block) ; empty line after elseif
-   ((n-p-pstmtk nil                "ERROR" "else")   previous-stmt-anchor f90-ts-indent-block) ; empty line after else
+   ((n-p-pstmtk nil                "ERROR" "^if$")     previous-stmt-anchor f90-ts-indent-block) ; empty line after if
+   ((n-p-pstmtk nil                "ERROR" "^elseif$") previous-stmt-anchor f90-ts-indent-block) ; empty line after elseif
+   ((n-p-pstmtk nil                "ERROR" "^else$")   previous-stmt-anchor f90-ts-indent-block) ; empty line after else
    )
   "Indentation rules for if-then-else statements.")
 
