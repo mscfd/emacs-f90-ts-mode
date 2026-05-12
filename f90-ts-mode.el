@@ -680,7 +680,7 @@ seem to make much sense."
     ("I"   "Indent & complete region"          f90-ts-indent-and-complete-region)
     ("E"   "Complete end statements"           f90-ts-complete-smart-end-region)]
    ["Line & comments"
-    ("RET" "Break line"                        f90-ts-break-line)
+    ("b"   "Break line"                        f90-ts-break-line)
     ("j"   "Join with previous line"           f90-ts-join-line-prev)
     ("J"   "Join with next line"               f90-ts-join-line-next)
     ("c"   "Comment region (default)"          f90-ts-comment-region-default)
@@ -3477,24 +3477,24 @@ Finally use VARIANT to select one pair to align with."
 ;;            in the list is used as primary/fallback position (for example
 ;;            in keep-or-primary option);
 ;;            if not provided, `f90-ts--align-list-other-default' is used
-(defconst f90-ts--align-list-context-config
-  (let ((expr-options '(:get-items-fn f90-ts--align-list-items-op-expr
-                        :get-other-fn f90-ts--align-list-other-op-expr))
-        (paren-options '(:get-items-fn f90-ts--align-list-items-children
-                        :get-other-fn f90-ts--align-list-other-paren))
-        (bind-options '(:get-items-fn f90-ts--align-list-items-children2)))
+(defconst f90-ts--align-list-context-properties
+  (let ((expr-prop  '(:get-items-fn f90-ts--align-list-items-op-expr
+                      :get-other-fn f90-ts--align-list-other-op-expr))
+        (paren-prop '(:get-items-fn f90-ts--align-list-items-children
+                      :get-other-fn f90-ts--align-list-other-paren))
+        (bind-prop  '(:get-items-fn f90-ts--align-list-items-children2)))
      (list
-      (cons "logical_expression"       expr-options)
-      (cons "math_expression"          expr-options)
-      (cons "relational_expression"    expr-options)
-      (cons "concatenation_expression" expr-options)
-      (cons "unary_expression"         expr-options)
-      (cons "binding_list"             bind-options)
-      (cons "final_statement"          bind-options)
-      (cons "parenthesized_expression" paren-options)
-      (cons "argument_list"            paren-options)
-      (cons "array_literal"            paren-options)
-      (cons "parameters"               paren-options)
+      (cons "logical_expression"       expr-prop)
+      (cons "math_expression"          expr-prop)
+      (cons "relational_expression"    expr-prop)
+      (cons "concatenation_expression" expr-prop)
+      (cons "unary_expression"         expr-prop)
+      (cons "binding_list"             bind-prop)
+      (cons "final_statement"          bind-prop)
+      (cons "parenthesized_expression" paren-prop)
+      (cons "argument_list"            paren-prop)
+      (cons "array_literal"            paren-prop)
+      (cons "parameters"               paren-prop)
       (cons "association_list"
             '(:get-items-fn f90-ts--align-list-items-assocation
               :get-other-fn f90-ts--align-list-other-association))
@@ -3512,10 +3512,10 @@ in particular for how to extract relevant alignment positions.")
 
 (defun f90-ts--get-list-context-prop (pkey context)
   "Lookup CONTEXT and return the property value for PKEY.
-Lookup is done in alist `f90-ts--align-list-context-config'."
+Lookup is done in alist `f90-ts--align-list-context-properties'."
   (let* ((list-context (car context))
          (properties (alist-get (treesit-node-type list-context)
-                                f90-ts--align-list-context-config
+                                f90-ts--align-list-context-properties
                                 nil
                                 nil
                                 #'string=)))
@@ -3537,7 +3537,7 @@ This is the maximal node for any further subtree searches."
        (and (<= (f90-ts--node-line n) line)
             (<= line (line-number-at-pos (treesit-node-end n)))
             (assoc (treesit-node-type n)
-                   f90-ts--align-list-context-config))))))
+                   f90-ts--align-list-context-properties))))))
 
 
 (defun f90-ts--align-list-context-op-expr (loc parent)
@@ -3590,7 +3590,7 @@ This function return nil as second auxiliary context node."
                         (lambda (n)
                           (and (< (f90-ts--node-line n) line)
                                (assoc (treesit-node-type n)
-                                      f90-ts--align-list-context-config)))
+                                      f90-ts--align-list-context-properties)))
                         t ; include node in search
                         )))
     ;; list-context might be of some operator expression type, but
@@ -3843,16 +3843,7 @@ The main purpose is to fill the indentation cache for a new run.")
    ;; it is easy to see whether we are on a continued line (not the first line
    ;; of a multiline statement, only subsequent lines), but handling specific
    ;; cases is not possible with just some simple n-p-gp pattern,
-   ;;
-   ;; moreover, using previous line indentation for all but the first continued line
-   ;; does not work in conjunction with list alignment, if a statement has continued
-   ;; lines after a list part, for example:
-   ;;
-   ;; function fun(aa, x1, x2,&
-   ;;                  x3, x4, x5) &
-   ;;      result(val)
-   ;; by how much should result be indented? x3 is not a good anchor!
-   (continued-subsequent-line-is f90-ts--continued-line-anchor f90-ts--cached-offset))
+   (continued-subsequent-line-is f90-ts--continued-line-anchor cached-offset))
   "Indentation rules for continued lines.")
 
 
@@ -3861,8 +3852,8 @@ The main purpose is to fill the indentation cache for a new run.")
    ;; contains statements in modules, programs, subroutines or functions,
    ;; no indentation for contains
    ((node-is    "internal_procedures")         parent 0)
-   ((parent-is  "internal_procedures")         parent f90-ts--toplevel-offset)
-   ((n-p-gp nil "ERROR" "internal_procedures") parent f90-ts--toplevel-offset))
+   ((parent-is  "internal_procedures")         parent toplevel-offset)
+   ((n-p-gp nil "ERROR" "internal_procedures") parent toplevel-offset))
   "Indentation rules for internal_proc node.
 This node occurs in conjunction with \"contain\" statements.")
 
@@ -3873,18 +3864,18 @@ This node occurs in conjunction with \"contain\" statements.")
    ;; in all cases: first match node with end_xyz_statement, and then only
    ;; whether parent is xyz, as parent is xyz in both cases
    ((node-is    "end_program_statement")        parent 0)
-   ((parent-is      "program\\(_statement\\)?") parent f90-ts--toplevel-offset)
-   ((n-p-pstmtk nil "ERROR" "program")          parent f90-ts--toplevel-offset)
+   ((parent-is      "program\\(_statement\\)?") parent toplevel-offset)
+   ((n-p-pstmtk nil "ERROR" "program")          parent toplevel-offset)
 
    ;; parent-is uses regexp matching, thus use "^module" to avoid that it
    ;; matches "submodule"
    ((node-is        "end_module_statement")      parent 0)
-   ((parent-is      "^module\\(_statement\\)?$") parent f90-ts--toplevel-offset)
-   ((n-p-pstmtk nil "ERROR" "^module$")          parent f90-ts--toplevel-offset)
+   ((parent-is      "^module\\(_statement\\)?$") parent toplevel-offset)
+   ((n-p-pstmtk nil "ERROR" "^module$")          parent toplevel-offset)
 
    ((node-is        "end_submodule_statement")      parent 0)
-   ((parent-is      "^submodule\\(_statement\\)?$") parent f90-ts--toplevel-offset)
-   ((n-p-pstmtk nil "ERROR" "^submodule$")          parent f90-ts--toplevel-offset))
+   ((parent-is      "^submodule\\(_statement\\)?$") parent toplevel-offset)
+   ((n-p-pstmtk nil "ERROR" "^submodule$")          parent toplevel-offset))
   "Indentation rules for program and module nodes.")
 
 
@@ -4480,20 +4471,25 @@ continued statement plus the configured offset."
   "Handle a leading ampersand on the current line before indentation.
 If point is at an ampersand after moving to the indentation column,
 temporarily replace it with a space so that `treesit-indent' sees
-the first proper node on that line.  Returns non-nil if an ampersand was
-found (and replaced), nil otherwise."
+the first proper node on that line.  Returns blanked text if an
+ampersand was found (and replaced), nil otherwise."
   (unless (f90-ts--point-on-empty-line-p)
     (save-excursion
       (back-to-indentation)
-      (let ((node (treesit-node-at (point))))
-        (cl-assert (= (f90-ts--node-line node)
-                      (line-number-at-pos (point)))
-                   nil
-                   "internal error (f90-ts--indent-blank-leading-ampersand-line): node not on current line")
-        (when (f90-ts--node-type-p node "&")
-          (delete-char 1)
-          (insert " ")
-          t)))))
+      (let ((c (char-after (point))))
+        ;; pre-check: only consider lines starting with ampersand
+        ;; later on: (and (>= c ?0) (<= c ?9)) for including statement labels
+        (when (and c (eq c ?&))
+          (let ((node (treesit-node-at (point))))
+            ;; a continued string has a leading ampersand, but the node starts on
+            ;; a previous line, these ampersands need to be excluding and must not be blanked
+            (when (and node
+                       (= (point) (treesit-node-start node)))
+              (when (f90-ts--node-type-p node "&")
+                (let ((text (treesit-node-text node)))
+                  (delete-char 1)
+                  (insert " ")
+                  text)))))))))
 
 
 (defun f90-ts--indent-restore-leading-ampersand-line ()
@@ -4867,7 +4863,7 @@ The variant to be used can be customized.  Intended for use in key bindings."
   "For point on an empty line, remove all blank lines before point.
 After the operation point is after the last character on the non-blank line."
   (cl-assert (f90-ts--point-on-empty-line-p)
-             nil "internal error: f90-ts--join-line-empty requires point to be on an empty line")
+             nil "join-line-empty-prev requires point to be on an empty line")
   (let* ((prev (save-excursion
                  (skip-chars-backward "[ \t\n]")
                  (point)))
@@ -4879,7 +4875,7 @@ After the operation point is after the last character on the non-blank line."
   "For point on an empty line, remove all blank lines after point.
 Move point to first character on the line after it was originally placed."
   (cl-assert (f90-ts--point-on-empty-line-p)
-             nil "internal error: f90-ts--join-line-empty requires point to be on an empty line")
+             nil "join-line-empty-next requires point to be on an empty line")
   (let* ((next (save-excursion
                  (skip-chars-forward "[ \t\n]")
                  (line-beginning-position)))
@@ -4892,12 +4888,16 @@ Move point to first character on the line after it was originally placed."
 ;; does not seem possible easily, instead we should check and reconstruct the
 ;; (&, comment*, &) sequence of nodes and use it for navigation and changes,
 ;; and to unify the two join variants
-(defun f90-ts--join-line-aux (first secnd)
+(defun f90-ts--join-line-aux (first secnd is-prev)
   "Join lines between nodes FIRST and SECND.
 For continued lines without comments in between, FIRST and SECND are the two
 ampersand nodes (FIRST at end of line, SECND at beginning of next non-empty
 line).  This function joins the two lines where FIRST and SECND are located,
-and removes any empty lines in-between."
+and removes any empty lines in-between.
+
+If IS-PREV is non-nil, then this is called from `f90-ts-join-line-prev',
+otherwise from `f90-ts-join-line-next.'  This is used to place point after
+deleting intermediate empty lines or if nothing can be joined."
   (let* ((is-amp-1st (f90-ts--node-type-p first "&"))
          (is-amp-2nd (f90-ts--node-type-p secnd "&"))
          (is-comment-1st (f90-ts--node-type-p first "comment"))
@@ -4953,7 +4953,9 @@ and removes any empty lines in-between."
                 (save-excursion
                   (goto-char (treesit-node-start secnd))
                   (line-beginning-position))
-                (lambda () (skip-chars-forward "[ \t]")))))
+                (lambda () (if is-prev
+                               (skip-chars-forward "[ \t]")
+                               (skip-chars-backward "[ \t\n]"))))))
 
       (if (and beg end)
           (progn
@@ -4969,28 +4971,45 @@ and removes any empty lines in-between."
 This is (partially) a counterpart to `f90-ts-break-line'.
 If previous line has comments (at end, next line etc.) joining is not done."
   (interactive)
-  (if (f90-ts--point-on-empty-line-p)
-      (f90-ts--join-line-empty-prev)
-    (let* ((pos-1 (save-excursion
-                    (beginning-of-line)
-                    (skip-chars-backward "[ \t\n]")
-                    (point)))
-           (pos-2 (save-excursion
-                    (beginning-of-line)
-                    (skip-chars-forward "[ \t\n]")
-                    (point)))
-           (first (f90-ts--node-on-pos pos-1 nil))
-           (secnd (f90-ts--node-on-pos pos-2 nil)))
-      (cl-assert first nil "internal error (f90-ts-join-line-prev): first node is nil")
-      (cl-assert secnd nil "internal error (f90-ts-join-line-prev): secnd node is nil")
-      (cl-assert (or (= pos-1 (treesit-node-end first))
-                     (and (f90-ts--node-type-p first "comment")
-                          (string-blank-p (buffer-substring pos-1 (treesit-node-end first)))))
-                 nil "internal error (f90-ts-join-line-prev): first node has wrong end position")
-      (cl-assert (= pos-2 (treesit-node-start secnd))
-                 nil "internal error (f90-ts-join-line-prev): secnd node has wrong start position")
+  (cond
+   ((f90-ts--point-on-empty-line-p)
+    (f90-ts--join-line-empty-prev))
+   ((save-excursion
+      (back-to-indentation)
+      (bobp))
+    ;; on first line and not empty, just move to beginning of line
+    (beginning-of-line))
+   (t
+    (let* ((pos1 (save-excursion
+                   (beginning-of-line)
+                   (skip-chars-backward "[ \t\n]")
+                   (point)))
+           (pos2 (save-excursion
+                   (beginning-of-line)
+                   (skip-chars-forward "[ \t\n]")
+                   (point)))
+           (first (f90-ts--node-on-pos pos1 nil))
+           (secnd (f90-ts--node-on-pos pos2 nil)))
+      ;;(f90-ts-log :joinprev "pos1: %s, %s" pos1 first)
+      ;;(f90-ts-log :joinprev "pos2: %s, %s" pos2 secnd)
+      (cl-assert (or first (= pos1 (point-min)))
+                 nil "first node is nil with wrong pos1")
+      (cl-assert (or (null first)
+                     (or (= pos1 (treesit-node-end first))
+                         ;; note that a comment might have trailing blanks, hence pos1
+                         ;; might differ from node end position
+                         (and (f90-ts--node-type-p first "comment")
+                              (string-blank-p (buffer-substring pos1 (treesit-node-end first))))))
+                 nil "first node has wrong end position %s" first)
+      (cl-assert secnd nil "secnd node is nil")
+      (cl-assert (= pos2 (treesit-node-start secnd))
+                 nil "secnd node has wrong start position")
 
-      (f90-ts--join-line-aux first secnd))))
+      (if first
+          (f90-ts--join-line-aux first secnd t)
+        ;; all lines prior to point are empty, delete them
+        (back-to-indentation)
+        (delete-region pos1 (point)))))))
 
 
 (defun f90-ts-join-line-next ()
@@ -4998,28 +5017,48 @@ If previous line has comments (at end, next line etc.) joining is not done."
 This is (partially) a counterpart to `f90-ts-break-line'.
 If continued line has comments (at end, next line etc.) joining is not done."
   (interactive)
-  (if (f90-ts--point-on-empty-line-p)
-      (f90-ts--join-line-empty-next)
-    (let* ((pos-1 (save-excursion
-                    (end-of-line)
-                    (skip-chars-backward "[ \t\n]")
-                    (point)))
-           (pos-2 (save-excursion
-                    (end-of-line)
-                    (skip-chars-forward "[ \t\n]")
-                    (point)))
-           (first (f90-ts--node-on-pos pos-1 nil))
-           (secnd (f90-ts--node-on-pos pos-2 nil)))
-      (cl-assert first nil "internal error (f90-ts-join-line-next): first node is nil")
-      (cl-assert secnd nil "internal error (f90-ts-join-line-next): secnd node is nil")
-      (cl-assert (or (= pos-1 (treesit-node-end first))
+  (cond
+   ((f90-ts--point-on-empty-line-p)
+    (f90-ts--join-line-empty-next))
+   ((save-excursion
+      (end-of-line)
+      (eobp))
+    ;; on last line and not empty, just move to end of line
+    (end-of-line))
+   (t
+    (let* ((pos1 (save-excursion
+                   (end-of-line)
+                   (skip-chars-backward "[ \t\n]")
+                   (point)))
+           (pos2 (save-excursion
+                   (end-of-line)
+                   (skip-chars-forward "[ \t\n]")
+                   (point)))
+           (first (f90-ts--node-on-pos pos1 nil))
+           (secnd (f90-ts--node-on-pos pos2 nil)))
+      ;;(f90-ts-log :joinnext "pos1: %s, %s" pos1 first)
+      ;;(f90-ts-log :joinnext "pos2: %s, %s" pos2 secnd)
+      (cl-assert first nil "first node is nil")
+      (cl-assert (or (= pos1 (treesit-node-end first))
+                     ;; note that a comment might have trailing blanks, hence pos1
+                     ;; might differ from node end position
                      (and (f90-ts--node-type-p first "comment")
-                          (string-blank-p (buffer-substring pos-1 (treesit-node-end first)))))
-                 nil "internal error (f90-ts-join-line-next): first node has wrong end position")
-      (cl-assert (= pos-2 (treesit-node-start secnd))
-                 nil "internal error (f90-ts-join-line-next): secnd node has wrong start position")
-
-      (f90-ts--join-line-aux first secnd))))
+                          (string-blank-p (buffer-substring pos1 (treesit-node-end first)))))
+                 nil "first node has wrong end position")
+      ;; in contrast to join-line-prev, if there are only blank lines after point,
+      ;; pos2 is at point-max and secnd is the root node "translation_unit"
+      (cl-assert secnd nil "secnd node is nil")
+      (cl-assert (or (not (f90-ts--node-type-p secnd "translation_unit"))
+                     (= pos2 (point-max)))
+                 nil "secnd node is translation_unit with with wrong pos2")
+      (cl-assert (or (f90-ts--node-type-p secnd "translation_unit")
+                     (= pos2 (treesit-node-start secnd)))
+                 nil "secnd node has wrong start position")
+      (if (not (f90-ts--node-type-p secnd "translation_unit"))
+          (f90-ts--join-line-aux first secnd nil)
+        ;; all lines after point are empty, delete them
+        (end-of-line)
+        (delete-region (point) pos2))))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5127,8 +5166,10 @@ end subroutine sub
 If point is at |, then the smallest named no is the end_statement node
 for \"end if\".  However, treesit-node-on returns the subroutine node.
 Querying at POS-1 gives the expected answer."
-  (let* ((nodes (list (treesit-node-on pos      pos      nil named)
-                      (treesit-node-on (1- pos) (1- pos) nil named)))
+  (let* ((nodes (delq nil
+                      (list (treesit-node-on pos   pos   nil named)
+                            (when (< (point-min) pos)
+                              (treesit-node-on (1- pos) (1- pos) nil named)))))
          (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
                                                 (<= pos (treesit-node-end n))))
                                nodes))
