@@ -71,6 +71,45 @@ subroutine sub()
 end subroutine sub
 =-=-=
 
+Name: empty continued line 2
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+|            &
+             5
+end subroutine sub
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+      &      |&
+             5
+end subroutine sub
+=-=-=
+
+
+Name: empty continued line 3
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+|            &   ! comment
+             5
+end subroutine sub
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+      &      |&   ! comment
+             5
+end subroutine sub
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -80,6 +119,44 @@ Code:
       (funcall f90-ts-mode-test--action-fn)))
 
 Name: empty continued line 4
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+|            &   ! comment
+             5
+end subroutine sub
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+             |&   ! comment
+             5
+end subroutine sub
+=-=-=
+
+Name: empty continued line 5
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+|      &      &
+             5
+end subroutine sub
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+      &      |&
+             5
+end subroutine sub
+=-=-=
+
+Name: empty continued line 6
 =-=
 ! position point before final ampersand
 ! not valid code, but happens during typing

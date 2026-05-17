@@ -228,6 +228,6 @@ end subroutine sub_3
 subroutine sub_3()
      ! invalid code
      x = &
-&           ! number still to add
+            ! number still to add
 end subroutine sub_3
 =-=-=

@@ -36,3 +36,16 @@ subroutine sub()
       call other()
    end if
 end subroutine sub
+
+! tree for the assignment line:
+! (assignment_statement left: (identifier) =
+!   right: (math_expression left: (number_literal) operator: + & & right: (number_literal)))
+! should we rather generate four ampersand & & & &, two of which are virtual?
+! that would match the tree with leading ampersands and would be more consistent,
+! this would also help with correct indentation of the line containing 5 (which has no leading ampersand)
+! note: this is not valid code, but might easily occur during typing
+subroutine sub()
+   x123456 = 6 + &
+            &
+             5
+end subroutine sub

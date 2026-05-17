@@ -4543,13 +4543,17 @@ blanked."
         (cond
          ;; leading ampersand
          ((and c (eq c ?&))
-          (let ((node (treesit-node-at (point))))
-            (when (and node
-                       (= (point) (treesit-node-start node))
-                       (f90-ts--node-type-p node "&"))
-              (delete-char 1)
-              (insert " ")
-              '(amp))))
+          ;; if this line contains a single ampersand and optionally some comment,
+          ;; then we should considers this to be a trailing ampersand and keep it as is
+          (unless (looking-at  "&\\s-*\\(?:!\\|$\\)")
+            (let ((node (treesit-node-at (point))))
+              ;; this excludes string literals
+              (when (and node
+                         (= (point) (treesit-node-start node))
+                         (f90-ts--node-type-p node "&"))
+                (delete-char 1)
+                (insert " ")
+                '(amp)))))
          ;; statement label
          ((and c (>= c ?0) (<= c ?9))
           (let ((node (treesit-node-at (point))))
@@ -4958,9 +4962,11 @@ The variant to be used can be customized.  Intended for use in key bindings."
 
    (t
     (delete-horizontal-space)
+    ;; note that a leading ampersand (depend on f90-ts-leading-ampersand)
+    ;; is inserted by the indentation function, and thus does not need to
+    ;; be added here
     (f90-ts--break-line-insert-amp-at-end)
-    (newline 1)
-    (if f90-ts-leading-ampersand (insert "&"))))
+    (newline 1)))
   ;; finally indent the new line after insertion of the newline
   (indent-according-to-mode))
 
