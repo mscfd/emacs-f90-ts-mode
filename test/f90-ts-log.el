@@ -117,6 +117,20 @@ by CATEGORY and a time stamp."
 
 
 ;;;-----------------------------------------------------------------------------
+
+(defun f90-ts-log-line (category msg &optional pos)
+  "Write the line at POS or point to the log buffer.
+Use CATEGORY and MSG to prefix the log message."
+  (let ((p (or pos (point))))
+  (save-excursion
+    (goto-char p)
+    (let ((line (buffer-substring-no-properties (line-beginning-position)
+                                                (line-end-position))))
+      (f90-ts-log-msg category "%s: line at <pos:%d,line:%d> = %S"
+                      msg p (line-number-at-pos p) line)))))
+
+
+;;;-----------------------------------------------------------------------------
 ;; node inspection
 
 (defun f90-ts-log--treesit-inspect-node (node-inspect)

@@ -824,6 +824,13 @@ implementation when `f90-ts-log' is loaded."
   (error "Function f90-ts-log-msg not available: load f90-ts-log.el first"))
 
 
+(defun f90-ts-log-line (_category _msg &optional _pos)
+  "Logging stub.
+Load f90-ts-log.el to enable.  This function is replaced by the real
+implementation when `f90-ts-log' is loaded."
+  (error "Function f90-ts-log-line not available: load f90-ts-log.el first"))
+
+
 (defun f90-ts-log-inspect-node (_category _node _info)
   "Node inspection stub.
 Load f90-ts-log.el to enable.  This function is replaced by the real
@@ -4621,8 +4628,7 @@ Returns a vector (one entry per line) of values as returned by
        do (progn
             (cl-assert (= (line-number-at-pos (point)) line)
                        nil
-                       "f90-ts--indent-blank-leading-amp-or-label-region: \
-line mismatch at index %d: expected %d, got %d"
+                       "line mismatch at index %d: expected %d, got %d"
                        ix line (line-number-at-pos (point)))
             (aset vec ix (f90-ts--indent-blank-leading-amp-or-label-line))
             (forward-line 1)))
