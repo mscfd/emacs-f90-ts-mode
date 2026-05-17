@@ -1,6 +1,11 @@
 EMACS ?= emacs
 EMACSFLAGS = -batch -Q -L .
 
+# to allow log instructions (as no-ops) run with: make test-target-name DEV=1
+ifdef DEV
+EMACSFLAGS += --eval "(setq f90-ts-allow-log t)"
+endif
+
 LOAD = \
 	--eval "(setq debug-on-error t)" \
 	--eval "(progn \

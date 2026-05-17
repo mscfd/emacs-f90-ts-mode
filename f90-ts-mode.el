@@ -819,30 +819,46 @@ siblings with the correct parent.  So walking is just one step in general."
 
 (defun f90-ts-log-msg (_category _fmt &rest _args)
   "Logging stub.
-Load f90-ts-log.el to enable.  This function is replaced by the real
-implementation when `f90-ts-log' is loaded."
-  (error "Function f90-ts-log-msg not available: load f90-ts-log.el first"))
+Load f90-ts-log.el to enable logging.  This function is replaced by the real
+implementation when the logging package is loaded.
+
+Set `f90-ts-allow-log' to allow log instruction as no-op without `f90-ts-log'.
+This is used by the Makefile to run ert tests during development."
+  (unless (bound-and-true-p f90-ts-allow-log)
+  (error "Function f90-ts-log-msg not available: load f90-ts-log.el first")))
 
 
 (defun f90-ts-log-line (_category _msg &optional _pos)
   "Logging stub.
-Load f90-ts-log.el to enable.  This function is replaced by the real
-implementation when `f90-ts-log' is loaded."
-  (error "Function f90-ts-log-line not available: load f90-ts-log.el first"))
+Load f90-ts-log.el to enable logging.  This function is replaced by the real
+implementation when the logging package is loaded.
+
+Set `f90-ts-allow-log' to allow log instruction as no-op without `f90-ts-log'.
+This is used by the Makefile to run ert tests during development."
+  (unless (bound-and-true-p f90-ts-allow-log)
+    (error "Function f90-ts-log-line not available: load f90-ts-log.el first")))
 
 
 (defun f90-ts-log-inspect-node (_category _node _info)
   "Node inspection stub.
-Load f90-ts-log.el to enable.  This function is replaced by the real
-implementation when `f90-ts-log' is loaded."
-  (error "Function f90-ts-log-inspect-node not available: load f90-ts-log.el first"))
+Load f90-ts-log.el to enable logging.  This function is replaced by the real
+implementation when the logging package is loaded.
+
+Set `f90-ts-allow-log' to allow log instruction as no-op without `f90-ts-log'.
+This is used by the Makefile to run ert tests during development."
+  (unless (bound-and-true-p f90-ts-allow-log)
+    (error "Function f90-ts-log-inspect-node not available: load f90-ts-log.el first")))
 
 
 (defun f90-ts-log-indent-print-state (_msg)
   "Debug indent rule stub.
-Load f90-ts-log.el to enable.  This function is replaced by the real
-implementation when `f90-ts-log' is loaded."
-  (error "Function f90-ts-log-indent-print-state not available: load f90-ts-log.el first"))
+Load f90-ts-log.el to enable logging.  This function is replaced by the real
+implementation when the logging package is loaded.
+
+Set `f90-ts-allow-log' to allow log instruction as no-op without `f90-ts-log'.
+This is used by the Makefile to run ert tests during development."
+  (unless (bound-and-true-p f90-ts-allow-log)
+    (error "Function f90-ts-log-indent-print-state not available: load f90-ts-log.el first")))
 
 
 ;;;-----------------------------------------------------------------------------

@@ -36,12 +36,13 @@ for implementation.
     - [Joining lines](#joining-lines)
   - [Comment region](#comment-region)
   - [Mark regions based on tree-sitter nodes](#mark-regions-based-on-tree-sitter-nodes)
-- [Testing with ERT](#testing-with-ert)
-  - [Makefile](#makefile)
-  - [Indentation tests](#indentation-tests)
-  - [Font lock tests](#font-lock-tests)
-  - [Custom tests](#custom-tests)
-- [Logging and debugging](#logging-and-debugging)
+- [Development and Testing](#development-and-testing)
+  - [Logging](#logging)
+  - [Testing with ERT](#testing-with-ert)
+    - [Makefile](#makefile)
+    - [Indentation tests](#indentation-tests)
+    - [Font lock tests](#font-lock-tests)
+    - [Custom tests](#custom-tests)
 
 
 
@@ -629,59 +630,12 @@ Key bindings are provided in the transient popup (`C-c C-f`) under the Region se
 | `f90-ts-next-region`             | `]`       | Move selected region to next sibling                                     |
 
 
-## Testing with ERT
+## Development and Testing
 
-The mode comes with a number of tests in `test/resources`.
-Registering and running tests is done in `test/f90-ts-mode-test.el`
+In the `test` folder, two modules for testing and logging during development are provided.
+Tests are located in `test/resources`.
 
-Standard tests are named `f90-ts-mode-test-std--...`, whereas additional tests start with `f90-ts-mode-test-extra--...`.
-Registering of tests is done semi-automatic in `f90-ts-mode-test-indent-register`, `f90-ts-mode-test-font-lock-register`
-and other functions in `f90-ts-mode-test.el`.
-
-Tests are run with a prescribed set of custom variables. In particular, indentation values are chosen
-all differently, such that errors can be spotted more easily. Within erts files, custom variable can
-and sometimes are overwritten to allow testing various aspects of the mode.
-
-
-### Makefile
-
-There is a Makefile for running various tests. Relevant targets are:
-* test-checkdoc
-* test-byte-compile
-* test-ert-std
-* test-ert-extra
-* test-ert-all
-* test-ert-parallel (use with `make -j<N> test-ert-parallel` to run all ert tests in parallel)
-
-
-### Indentation tests
-
-Indentation tests are in erts file format. For indentation of an after part between `=-=` and `=-=-=`,
-function `f90-ts-mode-test-update-erts-after` can be used (first remove point char `|` if present) to
-help setting up a new test. Indentation tests have prep-fn preparation function (like remove indentation)
-and an action function (like indent-region, indent-line all/single line).
-The erts files are used to check various combinations.
-
-
-### Font lock tests
-
-Font lock tests are in f90 files, with caret assertion notation. This notation can be automatically
-generated for new files or updated by `f90-ts-mode-test-update-face-annotations`.
-The code is automatically indented by 1, as assertion lines start with a !, so that all faces
-including those which would be at column 0 can be checked properly.
-The generated annotations are exhaustive, including nil annotations to assert that part of the code
-is not highlighted.
-
-Note: fortran test code should NOT use the caret `^`, even in comments, as the ert parser gets confused.
-
-
-### Other tests
-
-There are a number of other tests, like tests for region and navigation operations, or with custom
-action blocks for testing specific aspects not easily covered by the whole-buffer operations.
-
-
-## Logging and debugging
+### Logging
 
 The following logging functions are provided by `test/f90-ts-log.el`.
 
@@ -708,3 +662,63 @@ All logging and inspection functions write into a dedicated log buffer `*f90-ts-
 with its own minor mode to allow some dedicated keybindings.
 
 By default nothing is logged and the buffer is empty.
+
+
+### Testing with ERT
+
+The mode comes with a number of tests in `test/resources`.
+Registering and running tests is done in `test/f90-ts-mode-test.el`
+
+Standard tests are named `f90-ts-mode-test-std--...`, whereas additional tests start with `f90-ts-mode-test-extra--...`.
+Registering of tests is done semi-automatic in `f90-ts-mode-test-indent-register`, `f90-ts-mode-test-font-lock-register`
+and other functions in `f90-ts-mode-test.el`.
+
+Tests are run with a prescribed set of custom variables. In particular, indentation values are chosen
+all differently, such that errors can be spotted more easily. Within erts files, custom variable can
+and sometimes are overwritten to allow testing various aspects of the mode.
+
+
+#### Makefile
+
+There is a Makefile for running various tests. Relevant targets are:
+* test-checkdoc
+* test-byte-compile
+* test-ert-std
+* test-ert-extra
+* test-ert-all
+* test-ert-parallel (use with `make -j<N> test-ert-parallel` to run all ert tests in parallel)
+
+During development if functions from `f90-ts-log.el` are used, testing fails as the log package
+is not loaded (see [Logging](#logging)). To avoid this and suppress logging, the make command should be invoked by
+```bash
+make test-target-name DEV=1
+```
+which turns the log functions into no-op operations.
+
+
+
+#### Indentation tests
+
+Indentation tests are in erts file format. For indentation of an after part between `=-=` and `=-=-=`,
+function `f90-ts-mode-test-update-erts-after` can be used (first remove point char `|` if present) to
+help setting up a new test. Indentation tests have prep-fn preparation function (like remove indentation)
+and an action function (like indent-region, indent-line all/single line).
+The erts files are used to check various combinations.
+
+
+#### Font lock tests
+
+Font lock tests are in f90 files, with caret assertion notation. This notation can be automatically
+generated for new files or updated by `f90-ts-mode-test-update-face-annotations`.
+The code is automatically indented by 1, as assertion lines start with a !, so that all faces
+including those which would be at column 0 can be checked properly.
+The generated annotations are exhaustive, including nil annotations to assert that part of the code
+is not highlighted.
+
+Note: fortran test code should NOT use the caret `^`, even in comments, as the ert parser gets confused.
+
+
+#### Other tests
+
+There are a number of other tests, like tests for region and navigation operations, or with custom
+action blocks for testing specific aspects not easily covered by the whole-buffer operations.
