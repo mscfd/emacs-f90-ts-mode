@@ -4688,10 +4688,7 @@ column determined by `f90-ts-leading-ampersand-style'."
     ;; (ampersand if there was already one or if f90-ts-leading-ampersand
     ;; is non-nil)
     (save-excursion
-      (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label))
-    ;; if at beginning of line and ampersand after point, we need to skip to
-    ;; indentation after save-excursion
-    (skip-chars-forward "& \t")))
+      (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label))))
 
 
 (defun f90-ts--indent-and-complete-line-aux (variant indent-struct)

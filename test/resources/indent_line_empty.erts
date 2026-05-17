@@ -43,3 +43,57 @@ subroutine empty2()
      (arg1, arg2) + arg3)
 end subroutine empty2
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand t))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: empty continued line 1
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+|      &      &
+             5
+end subroutine sub
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+      &      |&
+             5
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-leading-ampersand nil))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: empty continued line 4
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+|      &      &
+             5
+end subroutine sub
+=-=
+! position point before final ampersand
+! not valid code, but happens during typing
+subroutine sub()
+   x123456 = 6 + &
+      &      |&
+             5
+end subroutine sub
+=-=-=
