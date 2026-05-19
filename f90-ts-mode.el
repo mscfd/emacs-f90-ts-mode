@@ -280,6 +280,21 @@ Value is a list of the form (TYPE VALUE) where TYPE is either:
   :group 'f90-ts)
 
 
+(defcustom f90-ts-stmt-label-column '(left . 0)
+  "Column specification for Fortran statement labels.
+A cons cell (ADJUSTMENT . COLUMN) where ADJUSTMENT is either
+`right-adjusted' or `left-adjusted', and COLUMN is a 0-based column number.
+With `right', the label's last digit lands on COLUMN (right-adjusted),
+so (right . 4) fills columns 0-4, the classic Fortran label field.
+With `left', the label's first digit starts on COLUMN (left-adjusted)."
+  :type '(cons
+          (choice
+           (const :tag "Right-adjusted (last digit at column)" right)
+           (const :tag "Left-adjusted  (first digit at column)" left))
+          (integer :tag "Column (0-based)"))
+  :group 'f90-ts)
+
+
 ;;;-----------------------------------------------------------------------------
 
 (defface f90-ts-font-lock-delimiter-face
@@ -1853,7 +1868,8 @@ rule but not for matched keywords, which are enforced with override=t."
    :language 'fortran
    :feature 'constant
    '(((boolean_literal) @font-lock-constant-face)
-     ((null_literal) @font-lock-constant-face))))
+     ((null_literal) @font-lock-constant-face)
+     (statement_label) @font-lock-constant-face)))
 
 
 (defun f90-ts--font-lock-rules-delimiter ()
@@ -4473,29 +4489,35 @@ continued statement plus the configured offset."
               f90-ts-leading-ampersand-style))))
 
 
-(defun f90-ts--indent-blank-leading-ampersand-line ()
-  "Handle a leading ampersand on the current line before indentation.
-If point is at an ampersand after moving to the indentation column,
-temporarily replace it with a space so that `treesit-indent' sees
-the first proper node on that line.  Returns blanked text if an
-ampersand was found (and replaced), nil otherwise."
+(defun f90-ts--indent-blank-leading-amp-or-label-line ()
+  "Blank a leading ampersand or statement label on the current line.
+Returns nil if neither was found, \\='(amp) if an ampersand was
+blanked, or \\='(label . label-text) if a statement label was
+blanked."
   (unless (f90-ts--point-on-empty-line-p)
     (save-excursion
       (back-to-indentation)
       (let ((c (char-after (point))))
-        ;; pre-check: only consider lines starting with ampersand
-        ;; later on: (and (>= c ?0) (<= c ?9)) for including statement labels
-        (when (and c (eq c ?&))
+        (cond
+         ;; leading ampersand
+         ((and c (eq c ?&))
           (let ((node (treesit-node-at (point))))
-            ;; a continued string has a leading ampersand, but the node starts on
-            ;; a previous line, these ampersands need to be excluding and must not be blanked
             (when (and node
-                       (= (point) (treesit-node-start node)))
-              (when (f90-ts--node-type-p node "&")
-                (let ((text (treesit-node-text node)))
-                  (delete-char 1)
-                  (insert " ")
-                  text)))))))))
+                       (= (point) (treesit-node-start node))
+                       (f90-ts--node-type-p node "&"))
+              (delete-char 1)
+              (insert " ")
+              '(amp))))
+         ;; statement label
+         ((and c (>= c ?0) (<= c ?9))
+          (let ((node (treesit-node-at (point))))
+            (when (and node
+                       (= (point) (treesit-node-start node))
+                       (f90-ts--node-type-p node "statement_label"))
+              (let ((text (treesit-node-text node)))
+                (delete-char (length text))
+                (insert (make-string (length text) ?\s))
+                (cons 'label text))))))))))
 
 
 (defun f90-ts--indent-restore-leading-ampersand-line ()
@@ -4515,53 +4537,96 @@ positioned as it is."
       (insert "&"))))
 
 
-(defun f90-ts--indent-blank-leading-ampersand-region (beg end)
-  "Replace leading ampersands with blanks for each line in BEG..END.
-Returns a vector of booleans (one per line) indicating which lines
-had a leading ampersand.  BEG and END must be markers or positions
-that remain valid after buffer modifications."
+(defun f90-ts--indent-restore-label-line (label-text)
+  "Restore a statement_label after indentation.
+It moves to the column determined by `f90-ts-stmt-label-column',
+inserting blanks and moving code to the right if necessary.
+Then it pastes LABEL-TEXT at the determined column, leaving the code
+positioned as it is.  A blank is ensured after the label."
+  (let* ((adj (car f90-ts-stmt-label-column))
+         (col (cdr f90-ts-stmt-label-column))
+         (label-len (length label-text))
+         (label-col (if (eq adj 'right)
+                        (max 0 (- col (1- label-len)))
+                      col)))
+    (back-to-indentation)
+    (let* ((indent-col (current-column))
+           (delta (- indent-col label-col)))
+      (if (<= delta 0)
+          (insert (make-string (- delta) ?\s)
+                  label-text
+                  " ")
+        (backward-char delta)
+        (insert label-text)
+        ;; we need to remove label-len blank, currently are delta blanks,
+        ;; hence if label-len <= delta-1 we can just remove the blanks and still have at least one left
+        ;; otherwise we only can remove delta-1
+        (delete-char (min label-len (1- delta)))))))
+
+
+(defun f90-ts--indent-restore-leading-amp-or-label-line (amp-or-label)
+  "Restore a leading ampersand or statement label from AMP-OR-LABEL.
+AMP-OR-LABEL is a value previously returned by
+`f90-ts--indent-blank-leading-amp-or-label-line'."
+  (when (or amp-or-label
+            (and f90-ts-leading-ampersand
+                 (f90-ts--node-type-p
+                  (f90-ts--first-node-on-line (point)) "&")))
+    (pcase amp-or-label
+      ((or 'nil '(amp))
+       ;; if nil there was no ampersand but there is a virtual ampersand
+       ;; signalling a continued line and f90-ts-leading-ampersand is non-nil
+       (f90-ts--indent-restore-leading-ampersand-line))
+      (`(label . ,label-text)
+       (f90-ts--indent-restore-label-line label-text))
+      (_ (cl-assert nil nil "unexpected value %S" amp-or-label)))))
+
+
+(defun f90-ts--indent-blank-leading-amp-or-label-region (beg end)
+  "Blank leading ampersands and statement labels for each line in BEG..END.
+Returns a vector (one entry per line) of values as returned by
+`f90-ts--indent-blank-leading-amp-or-label-line'."
   (save-excursion
     (goto-char beg)
     (let* ((line-beg (line-number-at-pos beg))
            (line-end (line-number-at-pos end))
            (n-lines  (- line-end line-beg -1))
-           (has-amp-vec    (make-vector n-lines nil)))
+           (vec      (make-vector n-lines nil)))
+      ;; after blanking loop, each element of the vector vec will be one of:
+      ;;   nil               – no amp, no label on the line
+      ;;   (amp)             – had a leading & on the line
+      ;;   (label . "12345") – had a statement label on the line
       (cl-loop
-       for ix from 0
+       for ix   from 0
        for line from line-beg to line-end
-       ;; note ix is equal to (- line line-beg)
        do (progn
             (cl-assert (= (line-number-at-pos (point)) line)
                        nil
-                       "f90-ts--indent-blank-leading-ampersand-region: line mismatch at index %d: expected line %d, got %d"
+                       "f90-ts--indent-blank-leading-amp-or-label-region: \
+line mismatch at index %d: expected %d, got %d"
                        ix line (line-number-at-pos (point)))
-            (aset has-amp-vec ix (f90-ts--indent-blank-leading-ampersand-line))
+            (aset vec ix (f90-ts--indent-blank-leading-amp-or-label-line))
             (forward-line 1)))
-      ;; return the vector of flags for restoring the ampersands
-      has-amp-vec)))
+      vec)))
 
 
-(defun f90-ts--indent-restore-leading-ampersand-region (beg has-amp-vec)
-  "Restore leading ampersands for lines starting at BEG according to HAS-AMP-VEC.
-HAS-AMP-VEC is a boolean vector as returned by
-`f90-ts--indent-blank-leading-ampersand-region'."
+(defun f90-ts--indent-restore-leading-amp-or-label-region (beg vec)
+  "Restore leading ampersands and statement labels from BEG using VEC.
+VEC is a vector as returned by
+`f90-ts--indent-blank-leading-amp-or-label-region'."
   (save-excursion
     (goto-char beg)
     (let ((line-beg (line-number-at-pos beg)))
-     (cl-loop
-      for line from line-beg
-      for has-amp across has-amp-vec
-      do (progn
-           (cl-assert (= (line-number-at-pos (point)) line)
-                      nil
-                      "f90-ts--indent-restore-leading-ampersand-region: line mismatch at index %d: expected line %d, got %d"
-                      (- line line-beg) line (line-number-at-pos (point)))
-           (when (or has-amp
-                     (and f90-ts-leading-ampersand
-                          (let ((node-first (f90-ts--first-node-on-line (point))))
-                            (f90-ts--node-type-p node-first "&"))))
-             (f90-ts--indent-restore-leading-ampersand-line))
-           (forward-line 1))))))
+      (cl-loop
+       for line from line-beg
+       for amp-or-label across vec
+       do (progn
+            (cl-assert (= (line-number-at-pos (point)) line)
+                       nil
+                       "line mismatch at index %d: expected %d, got %d"
+                       (- line line-beg) line (line-number-at-pos (point)))
+            (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label)
+            (forward-line 1))))))
 
 
 (defun f90-ts--indent-line-aux (&optional variant)
@@ -4575,19 +4640,16 @@ removed before calling `treesit-indent' and then restored at the
 column determined by `f90-ts-leading-ampersand-style'."
   (let ((f90-ts--align-continued-variant-tab
          (or variant f90-ts-indent-list-line))
-        (has-amp (f90-ts--indent-blank-leading-ampersand-line)))
-    ;; do indentation without leading ampersand
+        (amp-or-label (f90-ts--indent-blank-leading-amp-or-label-line)))
+    ;; do indentation without leading ampersand and statement label
     (treesit-indent)
-    ;; where applicable insert leading ampersand if there was already
-    ;; one or if f90-ts-leading-ampersand is non-nil
+    ;; where applicable insert statement label or leading ampersand
+    ;; (ampersand if there was already one or if f90-ts-leading-ampersand
+    ;; is non-nil)
     (save-excursion
-      (when (or has-amp
-                (and f90-ts-leading-ampersand
-                     (let ((node-first (f90-ts--first-node-on-line (point))))
-                       (f90-ts--node-type-p node-first "&"))))
-        (f90-ts--indent-restore-leading-ampersand-line)))
+      (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label))
     ;; if at beginning of line and ampersand after point, we need to skip to
-    ;; indentation after save-excursion (whose marker does not help here)
+    ;; indentation after save-excursion
     (skip-chars-forward "& \t")))
 
 
@@ -4614,9 +4676,9 @@ changed)."
                    (goto-char end)
                    (line-end-position))))
     (let ((old-text (buffer-substring-no-properties beg-reg end-reg))
-          (has-amp-vec (f90-ts--indent-blank-leading-ampersand-region beg-reg end-reg)))
+          (vec (f90-ts--indent-blank-leading-amp-or-label-region beg-reg end-reg)))
       (treesit-indent-region beg-reg end-reg)
-      (f90-ts--indent-restore-leading-ampersand-region beg-reg has-amp-vec)
+      (f90-ts--indent-restore-leading-amp-or-label-region beg-reg vec)
       ;; place point properly on last line, but where does treesit-indent-region and
       ;; the restore function (which uses a save-excursion) put point?
       (skip-chars-forward "& \t")
@@ -4638,14 +4700,14 @@ completion for a region, like indent-stmt operations on an end struct line."
           (f90-ts--with-check-modified-region beg-marker end-marker
             (f90-ts-complete-smart-end-region beg-marker end-marker)
             ;; remove leading ampersands, saving which lines had them
-            (let ((has-amp-vec (f90-ts--indent-blank-leading-ampersand-region
-                                beg-marker end-marker)))
+            (let ((vec (f90-ts--indent-blank-leading-amp-or-label-region
+                        beg-marker end-marker)))
               (treesit-indent-region beg-marker end-marker)
-              ;; Restore ampersands.  beg-marker still points to the
+              ;; restore ampersands or labels: beg-marker still points to the
               ;; first line (insertion-type nil keeps it before any text
               ;; treesit-indent may have inserted at the start).
-              (f90-ts--indent-restore-leading-ampersand-region
-               beg-marker has-amp-vec))))
+              (f90-ts--indent-restore-leading-amp-or-label-region
+               beg-marker vec))))
       (when beg-marker (set-marker beg-marker nil))
       (when end-marker (set-marker end-marker nil)))))
 

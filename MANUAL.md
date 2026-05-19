@@ -26,6 +26,7 @@ for implementation.
   - [Smart end completion](#smart-end-completion)
   - [Indentation of continued statements with leading ampersand](#indentation-of-continued-statements-with-leading-ampersand)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
+  - [Indentation of statement labels](#indentation-of-statement-labels)
   - [Xref](#xref)
   - [Imenu](#imenu)
   - [Navigation menu](#navigation-menu)
@@ -410,6 +411,16 @@ Indentation of continued statements from begin of statement to line at point is 
 `f90-ts-indent-and-complete-stmt`, which is bound to `C-<tab>` and to `s` in the transient popup.
 
 This same function also indents a whole block if executed at its `end struct` line.
+
+
+### Indentation of statement labels
+
+Statements after statement labels are indented as if there is no label present.
+For the label itself there are two options. Either they are left-adjusted starting at a fixed
+column number, or right-adjusted with last digit of the label at the fixed column number.
+If there is not enough space, the statement itself is moved to the right to ensure at least one
+blank after the label.
+This is controlled by custom variable `f90-ts-stmt-label-column'.
 
 
 ### Xref
