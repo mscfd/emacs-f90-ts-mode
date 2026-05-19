@@ -507,11 +507,19 @@ One whitespace character is left after putting the second line at the end of the
 Comments at end of first line or in between the two lines are not allowed currently.
 (It is not quite clear what should be done with such comments.)
 
+Joining within a string literal is implemented. Currently comments within string literals are not supported
+by the tree-sitter grammar and hence do not work anyway.
+
+Joining of openmp statements is not yet implemented.
+
+If point is on an empty line (not necessarily within a continued statement),
+then previous (prev variant) or subsequent (next variant) empty lines are removed,
+but nothing is joined in any case.
+
+Intermediate empty lines are removed, if point is on a non-empty line.
+
 The `prev` variant joins current line with previous (non-empty) line.
 The `next` variant joins current line with next (non-empty) line.
-
-If point is on an empty line within a continued statement, then nothing is joined.
-Joining of comment lines or openmp statements is not yet implemented as well.
 
 
 

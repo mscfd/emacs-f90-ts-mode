@@ -673,7 +673,7 @@ seem to make much sense."
 
 
 (transient-define-prefix f90-ts-transient ()
-  "F90 Tree-sitter Mode"
+  "F90 Tree-sitter Mode."
   [["Indentation"
     ("TAB" "Indent line"                       f90-ts-indent-and-complete-line)
     ("s"   "Indent & complete statement"       f90-ts-indent-and-complete-stmt)
@@ -3840,6 +3840,11 @@ The main purpose is to fill the indentation cache for a new run.")
    ;; indent-region operations with buffering)
    (continued-line-cache-start parent 0)
 
+   ;; continued strings need special care, the ampersands do not appear as
+   ;; separate nodes, (treesit-node-at pos) at indentation position returns
+   ;; the string_literal, which starts at some previous line
+   ((n-p-gp nil "string_literal" nil) parent 0)
+
    ;; it is easy to see whether we are on a continued line (not the first line
    ;; of a multiline statement, only subsequent lines), but handling specific
    ;; cases is not possible with just some simple n-p-gp pattern,
@@ -4885,10 +4890,6 @@ Move point to first character on the line after it was originally placed."
     (back-to-indentation)))
 
 
-;; note: due to comments and empty lines, a simple forward-line or backward-line
-;; does not seem possible easily, instead we should check and reconstruct the
-;; (&, comment*, &) sequence of nodes and use it for navigation and changes,
-;; and to unify the two join variants
 (defun f90-ts--join-line-aux (first secnd is-prev)
   "Join lines between nodes FIRST and SECND.
 For continued lines without comments in between, FIRST and SECND are the two
@@ -4899,6 +4900,9 @@ and removes any empty lines in-between.
 If IS-PREV is non-nil, then this is called from `f90-ts-join-line-prev',
 otherwise from `f90-ts-join-line-next.'  This is used to place point after
 deleting intermediate empty lines or if nothing can be joined."
+  ;; note: due to comments and empty lines, a simple forward-line or backward-line
+  ;; does not seem possible easily, instead reconstruct the (&, comment*, &)
+  ;; sequence of nodes and use it for navigation and changes
   (let* ((is-amp-1st (f90-ts--node-type-p first "&"))
          (is-amp-2nd (f90-ts--node-type-p secnd "&"))
          (is-comment-1st (f90-ts--node-type-p first "comment"))
@@ -4967,6 +4971,22 @@ deleting intermediate empty lines or if nothing can be joined."
         (message "join failed: joining not possible")))))
 
 
+(defun f90-ts--join-line-string (node pos1 pos2)
+  "Join previous line with current line both belonging to a continued string.
+The string is provided by NODE, which is of type string_literal.
+Positions POS1 and POS2 are end of previous line and start of current line."
+  (cl-assert (f90-ts--node-type-p node "string_literal")
+             nil "node is not a string literal")
+  (cl-assert (eq (char-before pos1) ?&)
+             nil "character before pos1 is not an ampersand")
+  (cl-assert (eq (char-after pos2) ?&)
+             nil "character at pos2 is not an ampersand")
+  (let ((beg (1- pos1))
+        (end (1+ pos2)))
+    (delete-region beg end)
+    (goto-char beg)))
+
+
 (defun f90-ts-join-line-prev ()
   "Join previous line with the current one, if part of a continued statement.
 This is (partially) a counterpart to `f90-ts-break-line'.
@@ -4990,12 +5010,17 @@ If previous line has comments (at end, next line etc.) joining is not done."
                    (skip-chars-forward "[ \t\n]")
                    (point)))
            (first (f90-ts--node-on-pos pos1 nil))
-           (secnd (f90-ts--node-on-pos pos2 nil)))
+           (secnd (f90-ts--node-on-pos pos2 nil))
+           (is-cont-str (and (f90-ts--node-type-p first "string_literal")
+                             (f90-ts--node-type-p secnd "string_literal")
+                             (treesit-node-eq first secnd))))
       ;;(f90-ts-log :joinprev "pos1: %s, %s" pos1 first)
       ;;(f90-ts-log :joinprev "pos2: %s, %s" pos2 secnd)
+      ;;(f90-ts-log :joinprev "is-cont-str: %s" is-cont-str)
       (cl-assert (or first (= pos1 (point-min)))
                  nil "first node is nil with wrong pos1")
       (cl-assert (or (null first)
+                     is-cont-str
                      (or (= pos1 (treesit-node-end first))
                          ;; note that a comment might have trailing blanks, hence pos1
                          ;; might differ from node end position
@@ -5003,14 +5028,26 @@ If previous line has comments (at end, next line etc.) joining is not done."
                               (string-blank-p (buffer-substring pos1 (treesit-node-end first))))))
                  nil "first node has wrong end position %s" first)
       (cl-assert secnd nil "secnd node is nil")
-      (cl-assert (= pos2 (treesit-node-start secnd))
+      (cl-assert (or (= pos2 (treesit-node-start secnd))
+                     is-cont-str)
                  nil "secnd node has wrong start position")
 
-      (if first
-          (f90-ts--join-line-aux first secnd t)
-        ;; all lines prior to point are empty, delete them
-        (back-to-indentation)
-        (delete-region pos1 (point)))))))
+      (cond
+       (is-cont-str
+        ;; check that previous line is not a comment
+        ;; (within the string, not yet supported by tree-sitter grammar)
+        (if (eq (char-before pos1) ?&)
+            ;; first and secnd are equal (established in is-cont-str)
+            (f90-ts--join-line-string first pos1 pos2)
+          (message "join failed: joining not possible (comment within string literal)")))
+
+      (first
+       (f90-ts--join-line-aux first secnd t))
+
+      (t
+       ;; all lines prior to point are empty, delete them
+       (back-to-indentation)
+       (delete-region pos1 (point))))))))
 
 
 (defun f90-ts-join-line-next ()
@@ -5036,11 +5073,16 @@ If continued line has comments (at end, next line etc.) joining is not done."
                    (skip-chars-forward "[ \t\n]")
                    (point)))
            (first (f90-ts--node-on-pos pos1 nil))
-           (secnd (f90-ts--node-on-pos pos2 nil)))
+           (secnd (f90-ts--node-on-pos pos2 nil))
+           (is-cont-str (and (f90-ts--node-type-p first "string_literal")
+                             (f90-ts--node-type-p secnd "string_literal")
+                             (treesit-node-eq first secnd))))
       ;;(f90-ts-log :joinnext "pos1: %s, %s" pos1 first)
       ;;(f90-ts-log :joinnext "pos2: %s, %s" pos2 secnd)
+      ;;(f90-ts-log :joinnext "is-cont-str: %s" is-cont-str)
       (cl-assert first nil "first node is nil")
       (cl-assert (or (= pos1 (treesit-node-end first))
+                     is-cont-str
                      ;; note that a comment might have trailing blanks, hence pos1
                      ;; might differ from node end position
                      (and (f90-ts--node-type-p first "comment")
@@ -5053,13 +5095,24 @@ If continued line has comments (at end, next line etc.) joining is not done."
                      (= pos2 (point-max)))
                  nil "secnd node is translation_unit with with wrong pos2")
       (cl-assert (or (f90-ts--node-type-p secnd "translation_unit")
+                     is-cont-str
                      (= pos2 (treesit-node-start secnd)))
                  nil "secnd node has wrong start position")
-      (if (not (f90-ts--node-type-p secnd "translation_unit"))
-          (f90-ts--join-line-aux first secnd nil)
+      (cond
+       ((f90-ts--node-type-p secnd "translation_unit")
         ;; all lines after point are empty, delete them
         (end-of-line)
-        (delete-region (point) pos2))))))
+        (delete-region (point) pos2))
+
+       (is-cont-str
+        ;; check that previous line is not a comment
+        ;; (within the string, not yet supported by tree-sitter grammar)
+        (if (eq (char-after pos2) ?&)
+            ;; first and secnd are equal (established in is-cont-str)
+            (f90-ts--join-line-string first pos1 pos2)
+          (message "join failed: joining not possible (comment within string literal)")))
+       (t
+        (f90-ts--join-line-aux first secnd nil)))))))
 
 
 ;;;-----------------------------------------------------------------------------
