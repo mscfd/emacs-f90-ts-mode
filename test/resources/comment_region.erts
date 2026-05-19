@@ -488,3 +488,24 @@ subroutine sub_trailing_2()
 !!$
 |end subroutine sub_trailing_2
 =-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-comment-region-custom 18 51 "! "))
+
+Name: uncomment region trailing blank 1
+=-=
+subroutine xxx()
+|     ! x = 6
+     !
+     ! y = 5
+end subroutine xxx
+=-=
+subroutine xxx()
+     x = 6
+
+     y = 5
+|end subroutine xxx
+=-=-=

@@ -5276,7 +5276,10 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
     (cl-loop
      do (cond
          ((looking-at uncomment-re)
-          (delete-region (match-beginning 1) (match-end 1)))
+          (delete-region (match-beginning 1) (match-end 1))
+          (when (looking-at-p "[ \t]+$")
+            ;; after deletion, we have an empty line, remove trailing blanks
+            (delete-region (point) (line-end-position))))
          ((looking-at-p "[ \t]*$")
           ;; avoid trailing blanks on empty lines
           (insert prefix-trimmed))
