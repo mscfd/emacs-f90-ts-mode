@@ -77,7 +77,7 @@
        procedure :: print => print_result
 !      ^^^^^^^^^ font-lock-keyword-face
 !                ^^ f90-ts-font-lock-delimiter-face
-!                   ^^^^^ font-lock-function-name-face
+!                   ^^^^^ font-lock-keyword-face
 !                         ^^ f90-ts-font-lock-delimiter-face
 !                            ^^^^^^^^^^^^ font-lock-function-name-face
        procedure :: add_visitor
@@ -294,7 +294,7 @@
   ! ==========
 ! ^^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
        write(output_unit, '(A,I0)') 'Number: ', self%start_number
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -306,7 +306,7 @@
 !                                                   ^ f90-ts-font-lock-operator-face
 !                                                    ^^^^^^^^^^^^ nil
        write(output_unit, '(A,I0)') '  Sequence length: ', self%sequence_length
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -318,7 +318,7 @@
 !                                                              ^ f90-ts-font-lock-operator-face
 !                                                               ^^^^^^^^^^^^^^^ nil
        write(output_unit, '(A,I0)') '  Odd steps (3n+1): ', self%n_odd_steps
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -330,7 +330,7 @@
 !                                                               ^ f90-ts-font-lock-operator-face
 !                                                                ^^^^^^^^^^^ nil
        write(output_unit, '(A,I0)') '  Maximum value: ', self%max_value
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -342,7 +342,7 @@
 !                                                            ^ f90-ts-font-lock-operator-face
 !                                                             ^^^^^^^^^ nil
        write(output_unit, '(A,I0,A)') '  Visited by ', size(self%visitors), ' other numbers'
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -381,7 +381,7 @@
 !                                                                 ^ f90-ts-font-lock-bracket-face
 !                                                                   ^^^^ font-lock-keyword-face
             write(output_unit, '(A)', advance='no') '    Visitors: '
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                ^ f90-ts-font-lock-bracket-face
 !                 ^^^^^^^^^^^ nil
 !                            ^ f90-ts-font-lock-delimiter-face
@@ -405,7 +405,7 @@
 !                               ^^^^^^^^ nil
 !                                       ^ f90-ts-font-lock-bracket-face
                  write(output_unit, '(I0,1X)', advance='no') self%visitors(i)
-!                ^^^^^ font-lock-builtin-face
+!                ^^^^^ font-lock-keyword-face
 !                     ^ f90-ts-font-lock-bracket-face
 !                      ^^^^^^^^^^^ nil
 !                                 ^ f90-ts-font-lock-delimiter-face
@@ -425,7 +425,7 @@
 !           ^^^ font-lock-keyword-face
 !               ^^ font-lock-keyword-face
             write(output_unit, *)
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                ^ f90-ts-font-lock-bracket-face
 !                 ^^^^^^^^^^^ nil
 !                            ^ f90-ts-font-lock-delimiter-face
@@ -1186,7 +1186,7 @@
   ! ==========
 ! ^^^^^^^^^^^^ f90-ts-font-lock-separator-comment-face
        write(output_unit, '(/,A)') repeat('=', 60)
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1199,7 +1199,7 @@
 !                                              ^^ font-lock-number-face
 !                                                ^ f90-ts-font-lock-bracket-face
        write(output_unit, '(A,I0,A)') 'COLLATZ SEQUENCE ANALYSIS (N = 1 to ', self%n_max, ')'
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1213,7 +1213,7 @@
 !                                                                                       ^ f90-ts-font-lock-delimiter-face
 !                                                                                         ^^^ font-lock-string-face
        write(output_unit, '(A)') repeat('=', 60)
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1272,7 +1272,7 @@
 !                                                                  ^ f90-ts-font-lock-bracket-face
 
        write(output_unit, '(/,A)') 'Summary Statistics:'
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1280,7 +1280,7 @@
 !                                ^ f90-ts-font-lock-bracket-face
 !                                  ^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
        write(output_unit, '(A,F8.2)') '  Average sequence length: ', avg_length
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1290,7 +1290,7 @@
 !                                                                  ^ f90-ts-font-lock-delimiter-face
 !                                                                    ^^^^^^^^^^ nil
        write(output_unit, '(A,F8.2)') '  Average odd steps (3n+1): ', avg_odd
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1310,7 +1310,7 @@
 !                         ^^^^^^^^^^^^^^^^^^^^^ nil
 !                                              ^^ f90-ts-font-lock-bracket-face
        write(output_unit, '(/,A)') 'Longest Sequence:'
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1326,7 +1326,7 @@
 !                        ^^^^^^^^^^^ nil
 !                                   ^ f90-ts-font-lock-bracket-face
 !                                    ^ f90-ts-font-lock-operator-face
-!                                     ^^^^^ nil
+!                                     ^^^^^ font-lock-keyword-face
 !                                          ^^ f90-ts-font-lock-bracket-face
 
        ! Most visited (first result must be idx=1)
@@ -1359,7 +1359,7 @@
                    exit
 !                  ^^^^ font-lock-keyword-face
             write(output_unit, '(/,A,I0,A)') 'Most visited number with at most ', max_visits, ' visits:'
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                ^ f90-ts-font-lock-bracket-face
 !                 ^^^^^^^^^^^ nil
 !                            ^ f90-ts-font-lock-delimiter-face
@@ -1379,7 +1379,7 @@
 !                             ^^^^^^^^^^^^^^^^ nil
 !                                             ^ f90-ts-font-lock-bracket-face
 !                                              ^ f90-ts-font-lock-operator-face
-!                                               ^^^^^ nil
+!                                               ^^^^^ font-lock-keyword-face
 !                                                    ^^ f90-ts-font-lock-bracket-face
             max_visits = size(self%results(most_visited_idx)%visitors) / 2
 !           ^^^^^^^^^^ nil
@@ -1402,7 +1402,7 @@
 !          ^^ font-lock-keyword-face
 
        write(output_unit, '(/,A)') repeat('=', 60)
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !           ^ f90-ts-font-lock-bracket-face
 !            ^^^^^^^^^^^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
@@ -1461,7 +1461,7 @@
 !            ^ nil
 
   write(output_unit, *) 'Enter maximum number:'
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !      ^ f90-ts-font-lock-bracket-face
 !       ^^^^^^^^^^^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
@@ -1469,7 +1469,7 @@
 !                     ^ f90-ts-font-lock-bracket-face
 !                       ^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
   read(input_unit, *) n
-! ^^^^ font-lock-builtin-face
+! ^^^^ font-lock-keyword-face
 !     ^ f90-ts-font-lock-bracket-face
 !      ^^^^^^^^^^ nil
 !                ^ f90-ts-font-lock-delimiter-face

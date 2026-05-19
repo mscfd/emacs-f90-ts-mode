@@ -1541,13 +1541,6 @@ rule but not for matched keywords, which are enforced with override=t."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'builtin
-   `((print_statement
-      "print" @font-lock-builtin-face)
-     (read_statement
-      "read" @font-lock-builtin-face)
-     (write_statement
-      "write" @font-lock-builtin-face))
-
    :language 'fortran
    :feature 'builtin
    `((call_expression
@@ -1597,31 +1590,35 @@ rule but not for matched keywords, which are enforced with override=t."
    ;; not the keyword text itself, and these nodes are always stored lower-case
    ;; (hence no need to match case insensitive as is necessary with builtins)
    '((["program" "module" "submodule"
-      "function" "subroutine" "procedure" "interface"
-      "bind" "result" "end" "call"
-      "public" "private" "protected" "contains"
-      "use" "only" "import" "implicit" "none" "external"
-      "pure" "impure" "elemental" "recursive"
-      "type" "class" "is" "typeof" "classof"
-      "if" "then" "else" "elseif" "endif"
-      "do" "while"
-      "cycle" "exit" "error" "stop" "return"
-      "associate" "block" "critical"
-      "enum" "enumeration" "enumerator"
-      "where" "elsewhere" "forall" "concurrent"
-      "select" "case" "rank" "default"
-      "shared" "local" "local_init" "reduce"
-      "extends" "abstract"
-      "pass" "nopass" "deferred"
-      "operator" "assignment" "generic" "final"
-      "allocate" "deallocate" "allocatable"
-      "intent" "in" "out" "inout"
-      "parameter" "save" "target" "pointer" "optional"
-      "dimension" "contiguous" "volatile"
-      "sync" "all" "images" "memory"
-      "form" "team" "change"
-      "lock" "unlock"
-      "fail" "image"]
+       "function" "subroutine" "procedure" "interface"
+       "bind" "result" "end" "call"
+       "public" "private" "protected" "contains"
+       "use" "include" "only" "import"
+       "implicit" "none" "external" "intrinsic" "non_intrinsic"
+       "pure" "impure" "elemental" "recursive" ; "non_recursive" not yet included in grammar
+       "type" "class" "is" "typeof" "classof"
+       "if" "then" "else" "elseif" "endif"
+       "do" "while"
+       "cycle" "exit" "error" "stop" "return" "entry"
+       "associate" "block" "critical"
+       "enum" "enumeration" "enumerator"
+       "where" "elsewhere" "forall" "concurrent"
+       "select" "case" "rank" "default"
+       "shared" "local" "local_init" "reduce"
+       "extends" "abstract"
+       "pass" "nopass" "deferred" "non_overridable"
+       "operator" "assignment" "generic" "final"
+       "allocatable"
+       "intent" "in" "out" "inout" "optional"
+       "parameter" "save" "target" "pointer" "value"
+       "dimension" "codimension" "contiguous" "volatile" "asynchronous"
+       "open" "close" "print" "read" "write" "format"
+       "inquire" "wait" "backspace" "endfile" "rewind" "flush"
+       "nullify" "allocate" "deallocate"
+       "sync" "all" "images" "memory"
+       "form" "team" "change"
+       "lock" "unlock"
+       "fail" "image"]
       @font-lock-keyword-face))))
 
 
