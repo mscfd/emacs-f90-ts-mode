@@ -186,6 +186,160 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
+Name: join prev statement 13
+=-=
+subro|utine sub_1()
+end subroutine sub_1
+=-=
+|subroutine sub_1()
+end subroutine sub_1
+=-=-=
+
+Name: join prev statement 14
+=-=
+subroutine sub_1()
+     x =| 65
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     |x = 65
+end subroutine sub_1
+=-=-=
+
+Name: join prev string 1
+=-=
+subroutine str1()
+     str = "012&
+           |&345"
+end subroutine str1
+=-=
+subroutine str1()
+     str = "012|345"
+end subroutine str1
+=-=-=
+
+Name: join prev string 2
+=-=
+subroutine str2()
+     str = "012&
+           &345"|
+end subroutine str2
+=-=
+subroutine str2()
+     str = "012|345"
+end subroutine str2
+=-=-=
+
+Name: join prev string 3
+=-=
+subroutine str3()
+     str = "012&
+
+
+|           &345"
+end subroutine str3
+=-=
+subroutine str3()
+     str = "012|345"
+end subroutine str3
+=-=-=
+
+Name: join prev string 4
+=-=
+subroutine str4()
+     str = "012  &
+
+
+           & |  345"
+end subroutine str4
+=-=
+subroutine str4()
+     str = "012  |   345"
+end subroutine str4
+=-=-=
+
+Name: join prev string 5
+=-=
+subroutine str5()
+     str = "012  &
+
+
+|
+
+           &   345"
+end subroutine str5
+=-=
+subroutine str5()
+     str = "012  &|
+
+           &   345"
+end subroutine str5
+=-=-=
+
+Name: join prev empty 1
+=-=
+
+   
+
+|
+
+
+=-=
+|
+
+
+=-=-=
+
+Name: join prev empty 2
+=-=
+
+   
+
+|subroutine sub()
+end subroutine
+
+
+=-=
+|subroutine sub()
+end subroutine
+
+
+=-=-=
+
+Name: join prev empty 3
+=-=
+
+   
+
+subrouti|ne sub()
+end subroutine
+
+
+=-=
+|subroutine sub()
+end subroutine
+
+
+=-=-=
+
+Name: join prev empty 4
+=-=
+|subroutine sub()
+end subroutine
+=-=
+|subroutine sub()
+end subroutine
+=-=-=
+
+Name: join prev empty 5
+=-=
+subroutine sub()|
+end subroutine
+=-=
+|subroutine sub()
+end subroutine
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -297,8 +451,8 @@ end subroutine sub_1
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
-                ! comment      
-                |arg2)
+                ! comment|      
+                arg2)
 end subroutine sub_1
 =-=-=
 
@@ -314,8 +468,8 @@ end subroutine sub_1
 =-=
 subroutine sub_1()
      call sub_2(arg1, &
-                ! comment      
-                |arg2)
+                ! comment|      
+                arg2)
 end subroutine sub_1
 =-=-=
 
@@ -339,8 +493,8 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-     !!$ comment      
-     |! continued
+     !!$ comment|      
+     ! continued
 end subroutine sub_1
 =-=-=
 
@@ -354,8 +508,8 @@ subroutine sub_1()
 end subroutine sub_1
 =-=
 subroutine sub_1()
-    x = 1
-    |y = 2
+    x = 1|
+    y = 2
 end subroutine sub_1
 =-=-=
 
@@ -374,6 +528,170 @@ subroutine sub_1()
     x = 1 |! y = 2
 end subroutine sub_1
 =-=-=
+
+Name: join next statement 13
+=-=
+subroutine sub_1()
+     x = |65
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     x = 65|
+end subroutine sub_1
+=-=-=
+
+Name: join next string 1
+=-=
+subroutine str1()
+     str = "012&|
+           &345"
+end subroutine str1
+=-=
+subroutine str1()
+     str = "012|345"
+end subroutine str1
+=-=-=
+
+Name: join next string 2
+=-=
+subroutine str2()
+|     str = "012&
+           &345"
+end subroutine str2
+=-=
+subroutine str2()
+     str = "012|345"
+end subroutine str2
+=-=-=
+
+Name: join next string 3
+=-=
+subroutine str3()
+     str = |"012&
+
+
+           &345"
+end subroutine str3
+=-=
+subroutine str3()
+     str = "012|345"
+end subroutine str3
+=-=-=
+
+Name: join next string 4
+=-=
+subroutine str4()
+     str = "012  &|
+
+
+           &   345"
+end subroutine str4
+=-=
+subroutine str4()
+     str = "012  |   345"
+end subroutine str4
+=-=-=
+
+Name: join next string 5
+=-=
+subroutine str5()
+     str = "012  &
+
+
+|
+
+           &   345"
+end subroutine str5
+=-=
+subroutine str5()
+     str = "012  &
+
+
+           |&   345"
+end subroutine str5
+=-=-=
+
+erts functions parse the expected block always adding a final newline for the last line, which cannot be stripped.
+So the point marker cannot be placed in the expected position; as a consequence, check point position in Code block.
+This is done for the final join statement and some empty checks.
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-join-line-next)
+    (insert "\n")
+    (unless (= (point) (point-max))
+      (insert (format "POINT-WRONG: at=%s, expected=%s\n" (point) (point-max)))))
+
+Name: join next statement 14
+=-=
+subroutine sub_1()
+end s|ubroutine sub_1
+=-=
+subroutine sub_1()
+end subroutine sub_1
+=-=-=
+
+Name: join next empty 1
+=-=
+
+   
+|
+
+   
+
+=-=
+
+   
+
+=-=-=
+
+
+Name: join next empty 2
+=-=
+
+   
+
+subroutine sub()
+|end subroutine
+
+ 
+
+=-=
+
+   
+
+subroutine sub()
+end subroutine
+=-=-=
+
+Name: join next empty 3
+=-=
+subroutine sub()
+|end subroutine
+=-=
+subroutine sub()
+end subroutine
+=-=-=
+
+Name: join next empty 4
+=-=
+subroutine sub()
+end subro|utine
+=-=
+subroutine sub()
+end subroutine
+=-=-=
+
+Name: join next empty 5
+=-=
+subroutine sub()
+end subroutine|
+=-=
+subroutine sub()
+end subroutine
+=-=-=
+
 
 Code:
   (lambda ()

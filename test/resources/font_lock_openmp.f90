@@ -26,14 +26,14 @@
 !             ^ f90-ts-font-lock-bracket-face
 !               ^^^^ font-lock-keyword-face
            print *,"openmp"
-!          ^^^^^ font-lock-builtin-face
+!          ^^^^^ font-lock-keyword-face
 !                ^ nil
 !                 ^ f90-ts-font-lock-delimiter-face
 !                  ^^^^^^^^ font-lock-string-face
       else
 !     ^^^^ font-lock-keyword-face
            print *,"no openmp"
-!          ^^^^^ font-lock-builtin-face
+!          ^^^^^ font-lock-keyword-face
 !                ^ nil
 !                 ^ f90-ts-font-lock-delimiter-face
 !                  ^^^^^^^^^^^ font-lock-string-face

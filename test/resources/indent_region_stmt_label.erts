@@ -1,0 +1,92 @@
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (let ((f90-ts-stmt-label-column '(left . 0)))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: stmt label left 1
+=-=
+subroutine sub()
+     read(file_unit, 1, err=200) x, y, z
+     return
+1    format(3F12.5)
+200  print 30000, "error"
+     error stop
+3000 format(2x,a10)
+30000 format(2x,a10)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (let ((f90-ts-stmt-label-column '(left . 3)))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: stmt label left 2
+=-=
+subroutine sub()
+     read(file_unit, 1, err=200) x, y, z
+     return
+   1 format(3F12.5)
+   200 print 30000, "error"
+     error stop
+   3000 format(2x,a10)
+   30000 format(2x,a10)
+   99999 end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (let ((f90-ts-stmt-label-column '(right . 4)))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: stmt label right 1
+=-=
+subroutine sub()
+     read(file_unit, 1, err=200) x, y, z
+     return
+    1 format(3F12.5)
+  200 print 30000, "error"
+     error stop
+ 3000 format(2x,a10)
+30000 format(2x,a10)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (let ((f90-ts-stmt-label-column '(right . 4))
+          (f90-ts-indent-toplevel 6))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: stmt label right 2
+=-=
+module mod
+contains
+      subroutine sub()
+           read(file_unit, 1, err=200) x, y, z
+           return
+    1      format(3F12.5)
+  200      print 30000, "error"
+           error stop
+ 3000      format(2x,a10)
+30000      format(2x,a10)
+      end subroutine sub
+end module mod
+=-=-=

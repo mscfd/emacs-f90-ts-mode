@@ -145,6 +145,7 @@ without final newline."
     (f90-ts-smart-end . no-message)
     (f90-ts-leading-ampersand . nil)
     (f90-ts-leading-ampersand-style . (indent . 3))
+    (f90-ts-stmt-label-column . (left . 0))
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*\\(\\s-+\\|$\\)")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\(\\s-+\\|$\\)")
@@ -879,7 +880,8 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "indent_region_constructs.erts"
    "indent_region_select.erts"
    "indent_region_preproc.erts"
-   "indent_region_openmp.erts")
+   "indent_region_openmp.erts"
+   "indent_region_stmt_label.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)
@@ -905,12 +907,13 @@ If buffer was modified, insert `**' otherwise insert '--'."
  '(f90-ts-indent-and-complete-line))
 
 
-;; alignment tests, leave as is, the alignment variant to apply
-;; should be specified for each test header (default: keep-or-primary)
+;; alignment tests, leave as is, apply no preparation,
+;; (otherwise alignment might change depending on keep-or-primary etc. options)
 (f90-ts-mode-test--prep-act-register
  "f90-ts-mode-test-std"
  '("indent_region_align_misc.erts"
    "indent_region_align_expr.erts"
+   "indent_region_align_string.erts"
    "indent_region_leading_amp.erts")
  '(nil ; no preparation
    )
@@ -942,10 +945,8 @@ If buffer was modified, insert `**' otherwise insert '--'."
  '(f90-ts-mode-test--indent-by-region
    f90-ts-mode-test--indent-by-line))
 
-;; expensive test variant of tests already registered
-;; with indent-by-region action;
-;; note that indent-by-line requires reparsing of the treesitter AST
-;; after each line, which is very expensive
+;; more expensive test variant of tests already registered
+;; with indent-by-region action
 (f90-ts-mode-test--prep-act-register
  "f90-ts-mode-test-extra"
  '("indent_region_progmod.erts"
@@ -953,7 +954,8 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "indent_region_interface.erts"
    "indent_region_constructs.erts"
    "indent_region_select.erts"
-   "indent_region_preproc.erts")
+   "indent_region_preproc.erts"
+   "indent_region_stmt_label.erts")
  '(nil ; no modification
    f90-ts-mode-test--remove-indent
    f90-ts-mode-test--add-indent)
@@ -984,6 +986,7 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "font_lock_forall.f90"
    "font_lock_openmp.f90"
    "font_lock_coarray.f90"
+   "font_lock_value.f90"
    "font_lock_special_var.f90"))
 
 

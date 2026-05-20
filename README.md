@@ -100,17 +100,8 @@ Here is a small setup for the mode:
 There are a number of features still missing or incomplete.
 The following list provides features planned for implementation (somewhat ordered by priority):
 
-- Add support for strings on continued lines.
-  Those need specific placement of ampersand at start of continued line.
-  This concerns indentation as well as break and join operations.
-- Add support for statement labels. Example:
-```
-100 format(A, I8)
-    if (x < 0) goto 200
-    write(*, 100) "Negative value is expected: ", x
-    stop 1
-200 continue
-```
+- Complement alignment options for strings on continued lines.
+  (Also allow comments within continued strings. This is not yet supported by the fortran grammar.)
 - Fill operations similar to `f90-fill-region` and `f90-fill-paragraph`.
 - Support for (context-aware) `completion-at-point-function` (capf).
 - More list contexts. There is a number of list like contexts, which are not yet supported,
@@ -121,5 +112,3 @@ The following list provides features planned for implementation (somewhat ordere
 - `undo-boundary` to group internal changes to blocks of changes for undo.
   This mainly concerns complex indentation operations (like indentation of statements or region).
 - Electric insert similar to `f90-electric-insert`.
-
-

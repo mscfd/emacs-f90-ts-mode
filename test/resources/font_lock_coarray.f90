@@ -97,19 +97,19 @@
   ! intrinsics
 ! ^^^^^^^^^^^^ font-lock-comment-face
   print *, num_images()
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !       ^ nil
 !        ^ f90-ts-font-lock-delimiter-face
 !          ^^^^^^^^^^ font-lock-builtin-face
 !                    ^^ f90-ts-font-lock-bracket-face
   print *, this_image()
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !       ^ nil
 !        ^ f90-ts-font-lock-delimiter-face
 !          ^^^^^^^^^^ font-lock-builtin-face
 !                    ^^ f90-ts-font-lock-bracket-face
   print *, image_index(arr, [1, 2])
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !       ^ nil
 !        ^ f90-ts-font-lock-delimiter-face
 !          ^^^^^^^^^^^ font-lock-builtin-face
@@ -197,7 +197,7 @@
 !                       ^^^^^^^^^^ nil
 !                                 ^ f90-ts-font-lock-bracket-face
        print *, "in team, image:", this_image()
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -222,7 +222,7 @@
   use, intrinsic :: iso_fortran_env, only: lock_type
 ! ^^^ font-lock-keyword-face
 !    ^ f90-ts-font-lock-delimiter-face
-!      ^^^^^^^^^ nil
+!      ^^^^^^^^^ font-lock-keyword-face
 !                ^^ f90-ts-font-lock-delimiter-face
 !                   ^^^^^^^^^^^^^^^ nil
 !                                  ^ f90-ts-font-lock-delimiter-face
@@ -305,7 +305,7 @@
 !                                   ^ f90-ts-font-lock-bracket-face
 !                                     ^^^^ font-lock-keyword-face
             print *,"Failed images: ", failed_images()
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                 ^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
 !                   ^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -322,7 +322,7 @@
 !                                         ^ f90-ts-font-lock-bracket-face
 !                                           ^^^^ font-lock-keyword-face
             print *,"Stopped images: ", stopped_images()
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                 ^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
 !                   ^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -332,7 +332,7 @@
        else
 !      ^^^^ font-lock-keyword-face
             print *,"Unforseen error, aborting"
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                 ^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
 !                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -409,7 +409,7 @@
 !                        ^ font-lock-number-face
 !                         ^ f90-ts-font-lock-bracket-face
   print *, this_image(), ssq
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !       ^ nil
 !        ^ f90-ts-font-lock-delimiter-face
 !          ^^^^^^^^^^ font-lock-builtin-face
@@ -456,7 +456,7 @@
 !                           ^ f90-ts-font-lock-bracket-face
 
   print *, this_image(), co_min(ssq), co_max(ssq)
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !       ^ nil
 !        ^ f90-ts-font-lock-delimiter-face
 !          ^^^^^^^^^^ font-lock-builtin-face
@@ -481,7 +481,7 @@
 !                      ^ f90-ts-font-lock-bracket-face
 !                        ^^^^ font-lock-keyword-face
        print *, this_image(), co_sum(ssq, result_image=1)
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^ font-lock-builtin-face
@@ -555,7 +555,7 @@
 !             ^^ f90-ts-font-lock-operator-face
 !                ^ font-lock-number-face
 !                 ^ f90-ts-font-lock-bracket-face
-!                   ^^^^^ font-lock-builtin-face
+!                   ^^^^^ font-lock-keyword-face
 !                         ^ nil
 !                          ^ f90-ts-font-lock-delimiter-face
 !                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -574,7 +574,7 @@
 !            ^ f90-ts-font-lock-bracket-face
 !              ^^^^ font-lock-keyword-face
        print *, "image 1 waiting for TWO events..."
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -593,7 +593,7 @@
 !                                        ^ f90-ts-font-lock-bracket-face
 
        print *, "image 1 received 2 events!"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -608,7 +608,7 @@
 !                 ^ f90-ts-font-lock-bracket-face
 !                   ^^^^ font-lock-keyword-face
        print *, "image 2 posting events..."
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -622,7 +622,7 @@
 !                          ^ font-lock-number-face
 !                           ^^ f90-ts-font-lock-bracket-face
        print *, "Posted first event"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -636,7 +636,7 @@
 !                          ^ font-lock-number-face
 !                           ^^ f90-ts-font-lock-bracket-face
        print *, "Posted second event"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -720,7 +720,7 @@
 !             ^^ f90-ts-font-lock-operator-face
 !                ^ font-lock-number-face
 !                 ^ f90-ts-font-lock-bracket-face
-!                   ^^^^^ font-lock-builtin-face
+!                   ^^^^^ font-lock-keyword-face
 !                         ^ nil
 !                          ^ f90-ts-font-lock-delimiter-face
 !                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -741,7 +741,7 @@
        ! producer (image 2)
 !      ^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
        print *, "image 2: starting work"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -758,7 +758,7 @@
 !                                  ^^ font-lock-number-face
 !                                    ^ f90-ts-font-lock-bracket-face
        print *, "image 2: wrote value"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -772,7 +772,7 @@
 !                          ^ font-lock-number-face
 !                           ^^ f90-ts-font-lock-bracket-face
        print *, "image 2: notified image 1"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -780,7 +780,7 @@
        ! simulate failure after notifying
 !      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
        print *, "image 2: failing now"
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -800,7 +800,7 @@
        ! consumer (image 1)
 !      ^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
        print *, "image 1: waiting for notification..."
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -843,7 +843,7 @@
 !                                                           ^ f90-ts-font-lock-bracket-face
 !                                                             ^^^^ font-lock-keyword-face
                  print *, "image 1: detected a failed image"
-!                ^^^^^ font-lock-builtin-face
+!                ^^^^^ font-lock-keyword-face
 !                      ^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
 !                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -863,7 +863,7 @@
 !                                    ^ f90-ts-font-lock-bracket-face
 
             print *, "image 1: received value =", val
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                 ^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
 !                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face

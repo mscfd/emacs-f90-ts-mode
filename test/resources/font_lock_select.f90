@@ -16,7 +16,7 @@
 !           ^^^^^^^^^^ font-lock-string-face
 !                     ^ f90-ts-font-lock-bracket-face
            print *, 'version1'
-!          ^^^^^ font-lock-builtin-face
+!          ^^^^^ font-lock-keyword-face
 !                ^ nil
 !                 ^ f90-ts-font-lock-delimiter-face
 !                   ^^^^^^^^^^ font-lock-string-face
@@ -175,7 +175,7 @@
 !                         ^^ f90-ts-font-lock-bracket-face
 !                            ^^^^ font-lock-keyword-face
            print *, 'rank(a), rank(b) = ', rank(a), rank(b)
-!          ^^^^^ font-lock-builtin-face
+!          ^^^^^ font-lock-keyword-face
 !                ^ nil
 !                 ^ f90-ts-font-lock-delimiter-face
 !                   ^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
@@ -350,7 +350,7 @@
 !               ^^^^^^^ font-lock-keyword-face
 !                       ^^^^^^ nil
                 print *, 'rank combination not yet implemented'
-!               ^^^^^ font-lock-builtin-face
+!               ^^^^^ font-lock-keyword-face
 !                     ^ nil
 !                      ^ f90-ts-font-lock-delimiter-face
 !                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face

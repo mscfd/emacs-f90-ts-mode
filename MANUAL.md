@@ -26,6 +26,7 @@ for implementation.
   - [Smart end completion](#smart-end-completion)
   - [Indentation of continued statements with leading ampersand](#indentation-of-continued-statements-with-leading-ampersand)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
+  - [Indentation of statement labels](#indentation-of-statement-labels)
   - [Xref](#xref)
   - [Imenu](#imenu)
   - [Navigation menu](#navigation-menu)
@@ -412,6 +413,16 @@ Indentation of continued statements from begin of statement to line at point is 
 This same function also indents a whole block if executed at its `end struct` line.
 
 
+### Indentation of statement labels
+
+Statements after statement labels are indented as if there is no label present.
+For the label itself there are two options. Either they are left-adjusted starting at a fixed
+column number, or right-adjusted with last digit of the label at the fixed column number.
+If there is not enough space, the statement itself is moved to the right to ensure at least one
+blank after the label.
+This is controlled by custom variable `f90-ts-stmt-label-column'.
+
+
 ### Xref
 
 The mode provides a minimal buffer local implementation of xref functions. In particular, the following
@@ -507,11 +518,19 @@ One whitespace character is left after putting the second line at the end of the
 Comments at end of first line or in between the two lines are not allowed currently.
 (It is not quite clear what should be done with such comments.)
 
+Joining within a string literal is implemented. Currently comments within string literals are not supported
+by the tree-sitter grammar and hence do not work anyway.
+
+Joining of openmp statements is not yet implemented.
+
+If point is on an empty line (not necessarily within a continued statement),
+then previous (prev variant) or subsequent (next variant) empty lines are removed,
+but nothing is joined in any case.
+
+Intermediate empty lines are removed, if point is on a non-empty line.
+
 The `prev` variant joins current line with previous (non-empty) line.
 The `next` variant joins current line with next (non-empty) line.
-
-If point is on an empty line within a continued statement, then nothing is joined.
-Joining of comment lines or openmp statements is not yet implemented as well.
 
 
 

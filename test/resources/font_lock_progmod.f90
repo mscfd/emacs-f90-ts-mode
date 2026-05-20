@@ -2,7 +2,7 @@
 !^^^^^^^ font-lock-keyword-face
 !        ^^^^^^^^ font-lock-function-name-face
   write(*,'(a)') 'hello'
-! ^^^^^ font-lock-builtin-face
+! ^^^^^ font-lock-keyword-face
 !      ^ f90-ts-font-lock-bracket-face
 !       ^ nil
 !        ^ f90-ts-font-lock-delimiter-face
@@ -32,7 +32,7 @@
 !         ^ f90-ts-font-lock-delimiter-face
 !          ^^ font-lock-number-face
        print *,'i = ', i
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !              ^^^^^^ font-lock-string-face
@@ -92,7 +92,7 @@
 !                          ^^ f90-ts-font-lock-delimiter-face
 !                             ^ nil
        print *,k
-!      ^^^^^ font-lock-builtin-face
+!      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
 !              ^ nil
@@ -273,7 +273,7 @@
 !                      ^ font-lock-number-face
 !                       ^ f90-ts-font-lock-bracket-face
             print '(10a,i4)', 'done ', n
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                 ^^^^^^^^^^ font-lock-string-face
 !                           ^ f90-ts-font-lock-delimiter-face
 !                             ^^^^^^^ font-lock-string-face
@@ -333,7 +333,7 @@
 !                               ^ nil
 !                                ^ f90-ts-font-lock-bracket-face
             print *, i
-!           ^^^^^ font-lock-builtin-face
+!           ^^^^^ font-lock-keyword-face
 !                 ^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
 !                    ^ nil
