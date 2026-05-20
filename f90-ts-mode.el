@@ -68,6 +68,8 @@
 ;; See the README at https://github.com/mscfd/emacs-f90-ts-mode for full
 ;; documentation on indentation options, keybindings, and testing.
 
+;;; Code:
+
 (require 'cl-lib)
 (require 'treesit)
 (require 'xref)
@@ -77,8 +79,6 @@
 (require 'hl-line)
 
 ;;;-----------------------------------------------------------------------------
-
-;;; Code:
 
 (defgroup f90-ts nil
   "Fortran (F90+) major mode using Tree-sitter."
@@ -108,14 +108,14 @@ Standard font-lock faces are used as well."
 (defcustom f90-ts-indent-toplevel 0
   "Extra indentation applied to contain sections at toplevel."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
 (defcustom f90-ts-indent-contain 3
   "Extra indentation applied to contain sections."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -124,14 +124,14 @@ Standard font-lock faces are used as well."
 These are function and subroutine bodies, control statements (do, if,
 associate ...) etc."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
 (defcustom f90-ts-indent-continued 5
   "Extra indentation applied to continued lines."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -192,7 +192,7 @@ Example:
 Primary alignment column for the second line column of parenthesis plus
 `f90-ts-indent-paren-default'."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -208,7 +208,7 @@ Example:
 Primary alignment column for the closing parenthesis is column of
 opening parenthesis plus `f90-ts-indent-paren-close'."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -224,7 +224,7 @@ x =      & ! some comment
 Primary alignment column for the second line column of assignment plus
 `f90-ts-indent-expr-assign-default' for non-operators."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -240,7 +240,7 @@ x = value1 &
 Primary alignment column for the second line column of assignment plus
 `f90-ts-indent-expr-assign-assoc-op' for associative operators."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -261,7 +261,7 @@ integer ! offset of \"x\" is end position of type specifier + 3 - 2
 Primary alignment column for the second line of a declaration plus
 `f90-ts-indent-declaration'."
   :type  'integer
-  :safe  'integerp
+  :safe  #'integerp
   :group 'f90-ts-indent)
 
 
@@ -405,7 +405,7 @@ Copied from prog mode `f90-mode'."
 (defcustom f90-ts-leading-ampersand nil
   "Non-nil gives automatic insertion of leading `&' at a continued line."
   :type  'boolean
-  :safe  'booleanp
+  :safe  #'booleanp
   :group 'f90-ts)
 
 
@@ -413,7 +413,7 @@ Copied from prog mode `f90-mode'."
   "Show navigate submenu in fortran menu if non-nil.
 For large source files, the menu might not be useful and reduce performance."
   :type  'boolean
-  :safe  'booleanp
+  :safe  #'booleanp
   :group 'f90-ts)
 
 
@@ -422,7 +422,7 @@ For large source files, the menu might not be useful and reduce performance."
 This is used for syntax highlighting of variables like \"self\" and \"this\".
 For matching identifiers the face `f90-ts-font-lock-special-var' is used."
   :type  'regexp
-  :safe  'stringp
+  :safe  #'stringp
   :group 'f90-ts)
 
 
@@ -435,7 +435,7 @@ OpenMP prefix is matched by `f90-ts-openmp-prefix-regexp'.
 The variable should also add trailing whitespace characters to
 preserve indentation within comments with `f90-ts-break-line'."
   :type  'regexp
-  :safe  'stringp
+  :safe  #'stringp
   :group 'f90-ts)
 
 
@@ -468,7 +468,7 @@ indentation."
   "Mark region operations place point at end of region.
 If this option is set, then point is placed at start of region."
   :type  'boolean
-  :safe  'booleanp
+  :safe  #'booleanp
   :group 'f90-ts)
 
 
@@ -479,7 +479,7 @@ continuation symbols.
 The defcustom should also add trailing whitespace characters to preserve
 indentation within OpenMP statements."
   :type  'regexp
-  :safe  'stringp
+  :safe  #'stringp
   :group 'f90-ts)
 
 
