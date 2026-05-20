@@ -5909,13 +5909,13 @@ and itself SPARSE-NODES."
 
 (defvar f90-ts-nav-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "RET") #'f90-ts--nav-buffer-jump)
-    (define-key map (kbd "SPC") #'f90-ts--nav-buffer-preview)
+    (define-key map (kbd "RET") #'f90-ts-nav-buffer-jump)
+    (define-key map (kbd "SPC") #'f90-ts-nav-buffer-preview)
     (define-key map (kbd "n")   #'next-line)
     (define-key map (kbd "p")   #'previous-line)
-    (define-key map (kbd "g")   #'f90-ts--nav-buffer-refresh)
-    (define-key map (kbd "q")   #'f90-ts--nav-buffer-quit)
-    (define-key map (kbd "C-g") #'f90-ts--nav-buffer-quit)
+    (define-key map (kbd "g")   #'f90-ts-nav-buffer-refresh)
+    (define-key map (kbd "q")   #'f90-ts-nav-buffer-quit)
+    (define-key map (kbd "C-g") #'f90-ts-nav-buffer-quit)
     map)
   "Keymap for `f90-ts-nav-mode'.")
 
@@ -6020,7 +6020,7 @@ This is used to avoid excessive syncing.")
   (get-text-property (line-beginning-position) 'f90-ts-nav-marker))
 
 
-(defun f90-ts--nav-buffer-jump ()
+(defun f90-ts-nav-buffer-jump ()
   "Jump to the entry on the current line and close the nav buffer."
   (interactive)
   (when-let ((marker (f90-ts--nav-buffer-marker-at-point)))
@@ -6031,7 +6031,7 @@ This is used to avoid excessive syncing.")
     (recenter)))
 
 
-(defun f90-ts--nav-buffer-preview ()
+(defun f90-ts-nav-buffer-preview ()
   "Preview the entry at point without leaving the nav buffer."
   (interactive)
   (when-let ((marker (f90-ts--nav-buffer-marker-at-point)))
@@ -6052,11 +6052,11 @@ buffer being idle."
     (cancel-timer f90-ts--nav-buffer-idle-timer))
   (setq f90-ts--nav-buffer-idle-timer
         (run-with-idle-timer f90-ts-nav-buffer-idle-delay nil
-                             #'f90-ts--nav-buffer-refresh-from-timer
+                             #'f90-ts-nav-buffer-refresh-from-timer
                              (current-buffer))))
 
 
-(defun f90-ts--nav-buffer-refresh-from-timer (src-buf)
+(defun f90-ts-nav-buffer-refresh-from-timer (src-buf)
   "Refresh the nav buffer for SRC-BUF if it is still live."
   (when (buffer-live-p src-buf)
     (with-current-buffer src-buf
@@ -6168,7 +6168,7 @@ This is done for the current f90-ts source buffer."
             #'f90-ts--nav-buffer-after-change nil t))
 
 
-(defun f90-ts--nav-buffer-refresh ()
+(defun f90-ts-nav-buffer-refresh ()
   "Rebuild the nav buffer from the source buffer."
   (interactive)
   (let ((src (or f90-ts--nav-buffer-source
@@ -6234,7 +6234,7 @@ This is done for the current f90-ts source buffer."
 
 
 ;;;###autoload
-(defun f90-ts--nav-buffer-quit ()
+(defun f90-ts-nav-buffer-quit ()
   "Quit the nav buffer."
   (interactive)
   (remove-hook 'window-buffer-change-functions
@@ -6245,12 +6245,12 @@ This is done for the current f90-ts source buffer."
 (easy-menu-define f90-ts-nav-mode-menu f90-ts-nav-mode-map
   "Menu for the F90 navigation side buffer."
   '("F90-TS-Nav"
-    ["Jump to entry"    f90-ts--nav-buffer-jump    :active t]
-    ["Preview entry"    f90-ts--nav-buffer-preview :active t]
+    ["Jump to entry"    f90-ts-nav-buffer-jump    :active t]
+    ["Preview entry"    f90-ts-nav-buffer-preview :active t]
     "---"
-    ["Refresh"          f90-ts--nav-buffer-refresh :active t]
+    ["Refresh"          f90-ts-nav-buffer-refresh :active t]
     "---"
-    ["Quit"             f90-ts--nav-buffer-quit    :active t]))
+    ["Quit"             f90-ts-nav-buffer-quit    :active t]))
 
 
 ;;;-----------------------------------------------------------------------------
