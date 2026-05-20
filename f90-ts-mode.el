@@ -6134,7 +6134,7 @@ which also captures positions before it on that line."
               (set-window-point nav-win (point))
               (with-selected-window nav-win
                 (recenter)
-                (hl-line-move hl-line-overlay)))))))))
+                (hl-line-highlight)))))))))
 
 
 (defun f90-ts--nav-buffer-sync ()
