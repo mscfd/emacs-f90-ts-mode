@@ -5517,7 +5517,7 @@ If called interactively, prompt for a prefix from
 ;;;-----------------------------------------------------------------------------
 ;;; Imenu and navigation: queries and further properties
 
-(defvar f90-ts--nav-queries
+(defconst f90-ts--nav-queries
   `(("program"
      :label   "program"
      :face    f90-ts-nav-module-face
