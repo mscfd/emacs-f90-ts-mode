@@ -796,6 +796,30 @@ siblings with the correct parent.  So walking is just one step in general."
 
 
 ;;;-----------------------------------------------------------------------------
+;;; debug: load f90-ts-log if these are required for development or debugging
+
+(defun f90-ts-log-msg (_category _fmt &rest _args)
+  "Logging stub.
+Load f90-ts-log.el to enable.  This function is replaced by the real
+implementation when `f90-ts-log' is loaded."
+  (error "Function f90-ts-log-msg not available: load f90-ts-log.el first"))
+
+
+(defun f90-ts-log-inspect-node (_category _node _info)
+  "Node inspection stub.
+Load f90-ts-log.el to enable.  This function is replaced by the real
+implementation when `f90-ts-log' is loaded."
+  (error "Function f90-ts-log-inspect-node not available: load f90-ts-log.el first"))
+
+
+(defun f90-ts-log-indent-print-state (_msg)
+  "Debug indent rule stub.
+Load f90-ts-log.el to enable.  This function is replaced by the real
+implementation when `f90-ts-log' is loaded."
+  (error "Function f90-ts-log-indent-print-state not available: load f90-ts-log.el first"))
+
+
+;;;-----------------------------------------------------------------------------
 ;;; auxiliary predicates
 
 (defun f90-ts--node-type-p (node type)
@@ -1740,7 +1764,7 @@ rule but not for matched keywords, which are enforced with override=t."
 
      (import_statement
       "import"
-      (identifier)                @font-lock-type-face)
+      (identifier)               @font-lock-type-face)
 
      (end_type_statement
       (name)                     @font-lock-type-face)
@@ -1748,9 +1772,9 @@ rule but not for matched keywords, which are enforced with override=t."
    ;; special declarations (e.g. within allocate statements)
    ;; TODO: should the grammar use type_name instead of identifier as done elsewhere?
    ((allocate_statement
-      type: (identifier)        @font-lock-type-face))
+      type: (identifier)         @font-lock-type-face))
      (type_statement
-      type: (identifier)        @font-lock-type-face))))
+      type: (identifier)         @font-lock-type-face))))
 
 
 (defun f90-ts--font-lock-rules-function ()
@@ -1768,12 +1792,12 @@ rule but not for matched keywords, which are enforced with override=t."
       (identifier)                 @default)
      (subroutine_call
       subroutine: [
-                   ((identifier)     @font-lock-function-name-face)
+                   ((identifier)   @font-lock-function-name-face)
                    ((derived_type_member_expression
                     [(identifier)
                      (derived_type_member_expression)]
                     "%"
-                    (type_member) @font-lock-function-name-face))
+                    (type_member)  @font-lock-function-name-face))
                    ])
 
      ;; within derived type declarations
@@ -2184,20 +2208,6 @@ lines, the node itself is nil.")
 (defconst f90-ts--indent-slot-offset             7)
 
 
-(defun f90-ts--indent-cache-print ()
-  "Print out current cache state."
-  (if (null f90-ts--indent-cache)
-      (f90-ts-log :indent "cache: nil" f90-ts--indent-cache)
-    (f90-ts-inspect-node :indent (f90-ts--indent-cached-node)        "node@cache")
-    (f90-ts-inspect-node :indent (f90-ts--indent-cached-parent)      "parent@cache")
-    (f90-ts-inspect-node :indent (f90-ts--indent-child0)             "child0@cache")
-    (f90-ts-inspect-node :indent (f90-ts--indent-prev-sib-by-parent) "psibp@cache")
-    (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-first)    "pstmt-1@cache")
-    (f90-ts-inspect-node :indent (f90-ts--indent-prev-stmt-keyword)  "pstmt-k@cache")
-    (f90-ts-log :indent "anchor@cache = %s" (f90-ts--indent-cached-anchor))
-    (f90-ts-log :indent "offset@cache = %s" (f90-ts--indent-cached-offset))))
-
-
 (defmacro f90-ts--indent-with-cache (slot query)
   "Return cache value at SLOT if value is present.
 If SLOT is not populated, compute value using QUERY, store the result and
@@ -2436,8 +2446,8 @@ otherwise return column as is."
              (bol-col (car entry))
              (bol-current (f90-ts--indentation-at-pos pos)))
 
-        ;;(f90-ts-log :cachecol "line, entry, delta = %s, %s, %s" line entry delta)
-        ;;(f90-ts-log :cachecol "bol col, current = %s, %s" bol-col bol-current)
+        ;;(f90-ts-log-msg :cachecol "line, entry, delta = %s, %s, %s" line entry delta)
+        ;;(f90-ts-log-msg :cachecol "bol col, current = %s, %s" bol-col bol-current)
 
         (cl-assert entry nil "no entry for line in cache, line=%s, cache=%s" line f90-ts--continued-line-cache)
         (if (= bol-col bol-current)
@@ -3044,10 +3054,10 @@ ITEMS is not asssumed to be sorted.
 Currently an item must be a node.  It is assumed that anchor is a node (in
 general it is a node or a buffer position) and offset is 0.
 Pairs anoff=(anchor offset) are not yet implemented so far."
-  ;;(f90-ts-log :smallcol "cache = %s" f90-ts--continued-line-cache)
+  ;;(f90-ts-log-msg :smallcol "cache = %s" f90-ts--continued-line-cache)
   ;;(cl-loop
   ;; for node in items
-  ;; do (f90-ts-log :smallcol "node col = %s, %s" node (f90-ts--continued-line-cache-get-col node)))
+  ;; do (f90-ts-log-msg :smallcol "node col = %s, %s" node (f90-ts--continued-line-cache-get-col node)))
   (cl-loop
    for node in items
    minimize (f90-ts--continued-line-cache-get-col node)))
@@ -3478,10 +3488,10 @@ Finally use VARIANT to select one pair to align with."
                                                             context))
          (anoff-items-sym (plist-get anoff-items-plist :sym))
          ;;(_ (progn
-         ;;     (f90-ts-log :anoff "items-sym = %s"  (plist-get anoff-items-plist :sym))
-         ;;     (f90-ts-log :anoff "items-prev = %s" (plist-get anoff-items-plist :prev))
-         ;;     (f90-ts-log :anoff "items-head = %s" (plist-get anoff-items-plist :head))
-         ;;     (f90-ts-log :anoff "items-tail = %s" (plist-get anoff-items-plist :tail))))
+         ;;     (f90-ts-log-msg :anoff "items-sym = %s"  (plist-get anoff-items-plist :sym))
+         ;;     (f90-ts-log-msg :anoff "items-prev = %s" (plist-get anoff-items-plist :prev))
+         ;;     (f90-ts-log-msg :anoff "items-head = %s" (plist-get anoff-items-plist :head))
+         ;;     (f90-ts-log-msg :anoff "items-tail = %s" (plist-get anoff-items-plist :tail))))
          (anoff-other (f90-ts--align-list-anoff-other loc
                                                       anoff-items-plist
                                                       context))
@@ -3495,8 +3505,8 @@ Finally use VARIANT to select one pair to align with."
          (anoff-final (append (and anoff-extra (list anoff-extra))
                               anoff-other
                               anoff-items-sym)))
-    ;;(f90-ts-log :anoff "items-other = %s" anoff-other)
-    ;;(f90-ts-log :anoff "item-primary = %s" anoff-primary)
+    ;;(f90-ts-log-msg :anoff "items-other = %s" anoff-other)
+    ;;(f90-ts-log-msg :anoff "item-primary = %s" anoff-primary)
     (f90-ts--align-list-select variant
                                (alist-get 'col loc)
                                anoff-primary
@@ -3668,9 +3678,9 @@ be determined or variant prescribes the default continued line indentation."
   (unless (or (eq variant 'continued-line)
               (not pstmt-1))
     (when-let ((context (f90-ts--align-list-context loc parent)))
-      ;;(f90-ts-log :anoff "loc = %s" loc)
-      ;;(f90-ts-log :anoff "context=%s" context)
-      ;;(f90-ts-log :anoff "parent = %s" parent)
+      ;;(f90-ts-log-msg :anoff "loc = %s" loc)
+      ;;(f90-ts-log-msg :anoff "context=%s" context)
+      ;;(f90-ts-log-msg :anoff "parent = %s" parent)
       (cl-assert (< (f90-ts--node-line (or (cdr context)
                                            (car context)))
                     (alist-get 'line loc))
@@ -3727,35 +3737,6 @@ the continued line matcher."
 
 
 ;;++++++++++++++
-;; debug stuff
-
-(defun f90-ts--fail-info-is (msg)
-  "Always fail as indentation matcher, but print a separator line.
-Additionally if MSG=\"start\" or \"catch all\" print detailed data of position
-and nodes for debugging purposes into the exclusive log buffer."
-  (lambda (node parent bol &rest _)
-    (f90-ts-log :indent "---------info %s--------------" msg)
-    (when (or (string= msg "start") (string= msg "catch all"))
-      (let* ((grandparent (and parent (treesit-node-parent parent)))
-             (psibp (f90-ts--indent-prev-sib-by-parent))
-             (pstmt-k (f90-ts--indent-prev-stmt-keyword))
-             (child0 (f90-ts--indent-child0)))
-
-        (f90-ts-log :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
-                    (point) bol (line-beginning-position) (line-number-at-pos))
-        (let ((tttttt (format "types n-p-gp-psibp-pstmtk-ch = %s, %s, %s, %s, %s, %s"
-                              (and node (treesit-node-type node))
-                              (and parent (treesit-node-type parent))
-                              (and grandparent (treesit-node-type grandparent))
-                              (and psibp (treesit-node-type psibp))
-                              (and pstmt-k (treesit-node-type pstmt-k))
-                              (and child0 (treesit-node-type child0)))))
-          (f90-ts-log :indent (propertize tttttt 'face '(:foreground "brown2")))
-          (f90-ts--indent-cache-print))))
-    nil))
-
-
-;;++++++++++++++
 ;; simple indentation rules: expansion with f90-ts-- prefix
 
 (defmacro f90-ts--map-rule (matcher anchor offset)
@@ -3807,11 +3788,11 @@ passed through unchanged."
 Each element of TRIPLES is a (MATCHER ANCHOR OFFSET) form as accepted
 by `f90-ts--map-rule'.  Returns a list of all expanded triples suitable for
 use as the body of a `defvar' ruleset.
-As a special case, (fail-info-is MSG) is expanded to the
-triple ((f90-ts--fail-info-is MSG) parent 0) directly."
+As a special case, (log-state MSG) is expanded to the
+triple ((f90-ts-log-indent-print-state MSG) parent 0) directly."
   `(list ,@(mapcar (lambda (triple)
-                     (if (eq (car triple) 'fail-info)
-                         `(list '(f90-ts--fail-info-is ,(nth 1 triple)) 'parent 0)
+                     (if (eq (car triple) 'log-state)
+                         `(list '(f90-ts-log-indent-print-state ,(nth 1 triple)) 'parent 0)
                        `(f90-ts--map-rule ,(nth 0 triple)
                                           ,(nth 1 triple)
                                           ,(nth 2 triple))))
@@ -3826,7 +3807,7 @@ triple ((f90-ts--fail-info-is MSG) parent 0) directly."
    ;; populate cache and then always fail
    (populate-cache parent 0)
    ;; info rules needs populated cache
-   ;;(fail-info "start")
+   ;;(log-state "start")
    )
   "Indentation rules executed at start.
 The main purpose is to fill the indentation cache for a new run.")
@@ -4102,7 +4083,7 @@ These are do loops, block statements, associate construct and forall statements.
 (defvar f90-ts-indent-rules-catch-all
   (f90-ts--with-map-rules
    ;; final catch-all rule
-   ;;(fail-info "catch all")
+   ;;(log-state "catch all")
    (catch-all catch-all-anchor 0))
   "Final indentation rule to handle unmatched cases.")
 
@@ -5095,9 +5076,9 @@ If previous line has comments (at end, next line etc.) joining is not done."
            (is-cont-str (and (f90-ts--node-type-p first "string_literal")
                              (f90-ts--node-type-p secnd "string_literal")
                              (treesit-node-eq first secnd))))
-      ;;(f90-ts-log :joinprev "pos1: %s, %s" pos1 first)
-      ;;(f90-ts-log :joinprev "pos2: %s, %s" pos2 secnd)
-      ;;(f90-ts-log :joinprev "is-cont-str: %s" is-cont-str)
+      ;;(f90-ts-log-msg :joinprev "pos1: %s, %s" pos1 first)
+      ;;(f90-ts-log-msg :joinprev "pos2: %s, %s" pos2 secnd)
+      ;;(f90-ts-log-msg :joinprev "is-cont-str: %s" is-cont-str)
       (cl-assert (or first (= pos1 (point-min)))
                  nil "first node is nil with wrong pos1")
       (cl-assert (or (null first)
@@ -5158,9 +5139,9 @@ If continued line has comments (at end, next line etc.) joining is not done."
            (is-cont-str (and (f90-ts--node-type-p first "string_literal")
                              (f90-ts--node-type-p secnd "string_literal")
                              (treesit-node-eq first secnd))))
-      ;;(f90-ts-log :joinnext "pos1: %s, %s" pos1 first)
-      ;;(f90-ts-log :joinnext "pos2: %s, %s" pos2 secnd)
-      ;;(f90-ts-log :joinnext "is-cont-str: %s" is-cont-str)
+      ;;(f90-ts-log-msg :joinnext "pos1: %s, %s" pos1 first)
+      ;;(f90-ts-log-msg :joinnext "pos2: %s, %s" pos2 secnd)
+      ;;(f90-ts-log-msg :joinnext "is-cont-str: %s" is-cont-str)
       (cl-assert first nil "first node is nil")
       (cl-assert (or (= pos1 (treesit-node-end first))
                      is-cont-str
@@ -6548,150 +6529,6 @@ and keyword are sometimes equal.  But we only want the structure node."
 
   ;; provide a simple mode name in the modeline
   (setq-local mode-name "F90-TS"))
-
-
-;;;-----------------------------------------------------------------------------
-;; debug: log buffer
-
-(defconst f90-ts-log-buffer "*f90-ts-log*"
-  "Buffer name used for f90 tree-sitter logging.")
-
-
-(defun f90-ts--log-get-buffer ()
-  "Return the log buffer and if it does not yet exists, create a new one."
-  (or (get-buffer f90-ts-log-buffer)
-      (with-current-buffer (get-buffer-create f90-ts-log-buffer)
-        (f90-ts-log-mode)
-        (current-buffer))))
-
-
-(defun f90-ts-log (category fmt &rest args)
-  "Insert a message into the dedicated *f90-ts-log* log buffer.
-The message is computed from FMT and ARGS (using `format') and prefixed
-by CATEGORY and a time stamp."
-  (let ((buf (f90-ts--log-get-buffer)))
-    (with-current-buffer buf
-      (let ((inhibit-read-only t))
-        (goto-char (point-max))
-        ;; insert time stamp
-        (let* ((time (current-time))
-               (microseconds (nth 2 time))
-               (centiseconds (/ microseconds 10000))
-               (time-string (format-time-string "%H:%M:%S" time)))
-          (insert (format "[%s.%02d] " time-string centiseconds)))
-
-        ;; insert coloured category keyword
-        (let* (;; remove initial ':' from category keyword
-               (cat-name (substring (symbol-name category) 1))
-               ;; fixed width (default 10)
-               (cat-fix (format "%-10s" cat-name)))
-          (insert (propertize cat-fix 'face '(:foreground "blue"))))
-
-        (insert (apply #'format fmt args))
-        (insert "\n")
-        (goto-char (point-max))))
-
-    ;; scroll window if buffer is displayed
-    (when-let ((win (get-buffer-window buf t))) ; visible in any frame
-      (with-selected-window win
-        (goto-char (point-max))))))
-
-
-(defun f90-ts-log-clear ()
-  "Clear the f90-ts log buffer."
-  (interactive)
-  (when (get-buffer f90-ts-log-buffer)
-    (with-current-buffer f90-ts-log-buffer
-      (let ((inhibit-read-only t))
-        (erase-buffer)))))
-
-
-;;;###autoload
-(defun f90-ts-log-show ()
-  "Show the f90-ts log buffer in the current frame."
-  (interactive)
-  (let ((buf (f90-ts--log-get-buffer)))
-    (with-selected-frame (selected-frame)
-      (switch-to-buffer buf))))
-
-
-(defvar f90-ts-log-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "C-k") #'f90-ts-log-clear)
-    (define-key map (kbd "q") #'quit-window)
-    map)
-  "Keymap for `f90-ts-log-mode'.")
-
-
-(define-derived-mode f90-ts-log-mode special-mode "F90-TS-Log"
-  "Major mode for the f90-ts log buffer."
-  (setq-local truncate-lines t)
-  (setq-local buffer-read-only t)
-  (buffer-disable-undo))
-
-
-;;;-----------------------------------------------------------------------------
-;; debug: node inspection and other stuff
-
-(defun f90-ts-treesit-inspect-node (node-inspect)
-  "Construct a descriptive node name for NODE-INSPECT.
-This is mostly a copy of `treesit-inspect-node-at-point', but this variation
-highlights provided NODE-INSPECT and uses its start position as point."
-  ;; NODE-LIST contains all the node that starts at point.
-  (let* ((node-start (treesit-node-start node-inspect))
-         (node-list
-          (cl-loop
-           for node = (treesit-node-at node-start)
-           then (treesit-node-parent node)
-           while node
-           if (eq (treesit-node-start node)
-                  node-start)
-           collect node))
-         (largest-node (car (last node-list)))
-         (parent (treesit-node-parent largest-node))
-         ;; node-list-ascending contains all the node bottom-up, then
-         ;; the parent.
-         (node-list-ascending
-          (if (null largest-node)
-              ;; If there are no nodes that start at point, just show
-              ;; the node at point and its parent.
-              (list (treesit-node-at node-start)
-                    (treesit-node-parent
-                     (treesit-node-at node-start)))
-            (append node-list (list parent))))
-         (name ""))
-    ;; We draw nodes like (parent field-name: (node)) recursively,
-    ;; so it could be (node1 field-name: (node2 field-name: (node3))).
-    (dolist (node node-list-ascending)
-      (setq
-       name
-       (concat
-        (if (treesit-node-field-name node)
-            (format " %s: " (treesit-node-field-name node))
-          " ")
-        (if (treesit-node-check node 'named) "(" "\"")
-        (propertize (or (treesit-node-type node) "N/A")
-                    'face
-                    (if (treesit-node-eq node node-inspect)
-                        'bold nil))
-        name
-        (if (treesit-node-check node 'named) ")" "\""))))
-    name))
-
-
-(defun f90-ts-inspect-node (category node info)
-  "Show inspect info of treesitter NODE as a one-liner in the log buffer.
-Prefix the line with CATEGORY and `inspect<info>' using INFO."
-  (if node
-      (let* ((type  (treesit-node-type node))
-             (start (treesit-node-start node))
-             (end   (treesit-node-end node))
-             (len   (- end start))
-             (line  (f90-ts--node-line node))
-             (inspect-name  (f90-ts-treesit-inspect-node node)))
-        (f90-ts-log category "inspect<%s>: type= %s  -  name= %s - start=%d  end=%d  len=%d  line=%d"
-                    info type inspect-name start end len line))
-    (f90-ts-log category "inspect<%s>: nil" info)))
 
 
 ;;;-----------------------------------------------------------------------------
