@@ -115,7 +115,7 @@
 !           ^^^^^^^^^^^ font-lock-function-name-face
 !                      ^^ f90-ts-font-lock-bracket-face
       print *, 6<5, 6>5, 6<=5, 6>=5, 6==5, 6/=5
-!     ^^^^^ font-lock-builtin-face
+!     ^^^^^ font-lock-keyword-face
 !           ^ nil
 !            ^ f90-ts-font-lock-delimiter-face
 !              ^ font-lock-number-face
