@@ -6233,7 +6233,6 @@ This is done for the current f90-ts source buffer."
     (select-window nav-win)))
 
 
-;;;###autoload
 (defun f90-ts-nav-buffer-quit ()
   "Quit the nav buffer."
   (interactive)
