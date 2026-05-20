@@ -1,4 +1,4 @@
-name: emacs f90-mode extra
+name: emacs f90-mode
 
 on:
   workflow_dispatch:
