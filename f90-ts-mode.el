@@ -44,6 +44,9 @@
 ;;   - Imenu
 ;;   - Fortran menu and transient keybindings
 ;;
+;; Features can be found by the fortran menu or a transient popup bound
+;; to the key C-c C-f.
+;;
 ;; Installation requires the tree-sitter Fortran grammar, which can be found at
 ;;   https://github.com/stadelmanma/tree-sitter-fortran
 ;;

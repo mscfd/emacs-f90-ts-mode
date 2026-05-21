@@ -52,20 +52,20 @@ This mode requires **Emacs 30+** and a compatible Tree-sitter Fortran grammar.
 Detailed technical requirements and troubleshooting can be found in [MANUAL.md](MANUAL.md#installation)
 
 
-1.  Install a compatible Tree-sitter Fortran grammar.
-The mode relies on the tree-sitter-fortran grammar, which can be cloned by:
+1. Install a compatible Tree-sitter Fortran grammar.
 
-```
-git clone https://github.com/stadelmanma/tree-sitter-fortran
-```
+The mode relies on the `tree-sitter-fortran` grammar.
+Register the grammar repository in Emacs:
 
-The grammar can be registered and installed directly within Emacs:
 ```elisp
 (setq treesit-language-source-alist
-      '((fortran "https://github.com/stadelmanma/tree-sitter-fortran")))
+      '((fortran "https://github.com/mscfd/tree-sitter-fortran")))
+```
 
-;; Run this command once to compile the grammar:
-;; M-x treesit-install-language-grammar RET fortran RET
+Then compile and install it once with:
+
+```elisp
+M-x treesit-install-language-grammar RET fortran RET
 ```
 
 
