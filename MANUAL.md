@@ -578,12 +578,13 @@ Key bindings are provided in the transient popup (`C-c C-f`) under the Region se
 The mode comes with a number of tests in `test/resources`.
 Registering and running tests is done in `test/f90-ts-mode-test.el`
 
-Standard tests are named `f90-ts-mode-test-std--...`, whereas expensive tests start with `f90-ts-mode-test-extra--...`.
+Standard tests are named `f90-ts-mode-test-std--...`, whereas additional tests start with `f90-ts-mode-test-extra--...`.
 Registering of tests is done semi-automatic in `f90-ts-mode-test-indent-register`, `f90-ts-mode-test-font-lock-register`
 and other functions in `f90-ts-mode-test.el`.
 
 Tests are run with a prescribed set of custom variables. In particular, indentation values are chosen
-all differently, such that errors can be spotted more easily.
+all differently, such that errors can be spotted more easily. Within erts files, custom variable can
+and sometimes are overwritten to allow testing various aspects of the mode.
 
 
 ### Makefile
@@ -626,16 +627,28 @@ action blocks for testing specific aspects not easily covered by the whole-buffe
 
 ## Logging and debugging
 
-The following logging functions are available:
+The following logging functions are provided by `test/f90-ts-log.el`.
 
-* `f90-ts-inspect-node`
-* `f90-ts-log`
+* `f90-ts-log-msg`
 * `f90-ts-log-clear`
 * `f90-ts-log-show`
-* `f90-ts--indent-cache-print`
-* `f90-ts-indent-rules-info` (using `fail-info-is`)
+* `f90-ts-log-inspect-node`
+* `f90-ts-log-indent-print-state` (used by `log-state` in indentation rules)
 
-All write into a dedicated log buffer `*f90-ts-log*` with its own minor mode to allow some
-dedicated keybindings.
+These can be loaded and used by adding the load path to the test direction in `use-package`
+and add a require in the config section:
+```
+  ...
+  :init
+  (require 'treesit)
+  (add-to-list 'load-path "path_to/emacs-f90-ts-mode/test")
+  ...
+  :config
+  (require 'f90-ts-log)
+  ...
+```
+
+All logging and inspection functions write into a dedicated log buffer `*f90-ts-log*`
+with its own minor mode to allow some dedicated keybindings.
 
 By default nothing is logged and the buffer is empty.
