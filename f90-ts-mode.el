@@ -77,7 +77,7 @@
 ;;     :mode ("\\.f90\\'" . f90-ts-mode))
 ;;
 ;; See the README and MANUAL at https://github.com/mscfd/emacs-f90-ts-mode
-;; for full documentation on indentation options, keybindings, and testing.
+;; for full documentation on options, keybindings, etc.
 ;;
 ;; Bugs and features:
 ;;   https://github.com/mscfd/emacs-f90-ts-mode/issues
