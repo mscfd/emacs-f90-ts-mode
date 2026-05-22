@@ -49,46 +49,65 @@ for implementation.
 
 ### Tree-sitter grammar
 
-Currently, the mode relies on a recent tree-sitter grammar version of fortran at
+Currently, the mode relies on a recent tree-sitter grammar version of Fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
-There is also an upstream treesitter grammar fork, which might contain some fixes not yet merged
+There is also an upstream Tree-sitter grammar fork, which might contain fixes not yet merged:
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
 
-**NOTE**:
-If official branch has not yet merged some relevant PR, the current master branch
-of mscfd/tree-sitter-fortran is mandatory. It contains the generated parsers and can directly be used in emacs.
-For tagged releases of f90-ts-mode, mscfd/tree-sitter-fortran contains tags corresponding to
-compatible f90-ts-mode release version.
 
-**NOTE**: The fortran grammar should be compiled with treesitter version 0.25.x, as emacs (including 30.2)
-does not yet support the 0.26 branch.
-For example, queries are not translated as expected by the 0.26 branch.
-The master branch at mscfd/tree-sitter-fortran mentioned above provides the parser generated with 0.25.10.
+#### Installing the grammar in Emacs
+
+Register the grammar repository in `treesit-language-source-alist`:
+
+```elisp
+(setq treesit-language-source-alist
+      (append treesit-language-source-alist
+              '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
+```
+
+Then compile and install the grammar once with:
+
+```elisp
+M-x treesit-install-language-grammar RET fortran RET
+```
+
+The installation can be verified with:
+
+```elisp
+(treesit-ready-p 'fortran)
+```
+
+**NOTE**:
+The Fortran grammar should be compiled with Tree-sitter version `0.25.x`, as Emacs
+(including 30.2) does not yet support the `0.26` branch correctly.
+For example, queries are not translated as expected by the `0.26` branch.
+
+The master branch at `mscfd/tree-sitter-fortran` mentioned above provides the parser generated with `0.25.10`.
+
 The following can be used to check whether versions are correct:
 
 (`M-:` = `eval-expression`)
-* with `M-:` `(treesit-library-abi-version)` should be 15
-* with `M-:` `(treesit-language-abi-version 'fortran)` should be 15
+
+* with `M-:` `(treesit-library-abi-version)` should be `15`
+* with `M-:` `(treesit-language-abi-version 'fortran)` should be `15`
 * `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25`
 
-(It should be noted that the parser generator step `tree-sitter generate` of 0.26,
-seems to be compatible with emacs, but the library and ABI versions listed above must match.
-This generator step is not necessary in general, as the parser source files are already provided in
-the grammar repositories.)
-
-Both grammar repositories provide the generated parser files. It can be directly
-compiled with `treesitter-install-language-grammar`. Make sure that emacs can find the folder
-with the grammar repository (`treesit-language-source-alist`, see use-package configuration below).
+**Note**:
+The parser generator step `tree-sitter generate` done with Tree-Sitter `0.26` seems to be
+compatible with Emacs, but the library and ABI versions listed above must match.
+This generator step of creating the parser source files is not necessary in general, as the
+parser source files are already provided in the grammar repositories.
 
 
 ### Tree-sitter based mode
 
-Currently, f90-ts-mode.el is not provided as a package. It needs to be copied into a folder,
-where emacs can find it (e.g. via use-package).
+`f90-ts-mode` can be installed from MELPA using `package-install` or `use-package`.
 
-The repository can be cloned by:
+For development, the repository can also be cloned manually:
 
-`git clone https://github.com/mscfd/emacs-f90-ts-mode.git path_to/emacs_f90_ts_mode`
+```bash
+git clone https://github.com/mscfd/emacs-f90-ts-mode.git path_to/emacs-f90-ts-mode
+```
 
 
 ### Setup
@@ -96,10 +115,43 @@ The repository can be cloned by:
 The mode itself and optionally the testing module can be loaded with `use-package`
 placed somewhere in `init.el` (or elsewhere).
 
+#### Standard installation (package manager)
 
 ```elisp
 (use-package f90-ts-mode
-  ;; :ensure nil tells use-package NOT to try installing this from MELPA/ELPA.
+  :ensure t
+  :mode ("\\.f90\\'" . f90-ts-mode)
+  :commands (f90-ts-mode)
+
+  :init
+  (require 'treesit)
+
+  ;; uncomment if Imenu entry in menu bar is desired
+  ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
+
+  :config
+  (message "f90-ts-mode loaded")
+
+  :bind (;; mode-specific bindings, adjust to your needs
+         :map f90-ts-mode-map
+         ;; transient popup
+         ("A-<up>"        . #'f90-ts-transient)
+         ;; shortcuts
+         ("A-<return>"    . #'f90-ts-break-line)
+         ("A-<backspace>" . #'f90-ts-join-line-prev)
+         ("A-<delete>"    . #'f90-ts-join-line-next)
+         ("A-\\"          . #'f90-ts-enlarge-region)
+         ("A-0"           . #'f90-ts-child0-region)
+         ("A-["           . #'f90-ts-prev-region)
+         ("A-]"           . #'f90-ts-next-region)))
+```
+
+#### Development setup (local clone)
+
+First clone the repository of `f90-ts-mode` as mentioned above.
+
+```elisp
+(use-package f90-ts-mode
   :ensure nil
   :load-path "path_to/emacs-f90-ts-mode"
   :mode ("\\.f90\\'" . f90-ts-mode)
@@ -107,33 +159,38 @@ placed somewhere in `init.el` (or elsewhere).
 
   :init
   (require 'treesit)
-  (setq treesit-language-source-alist
-        (append treesit-language-source-alist
-                '((fortran "path_to/tree-sitter-fortran"))))
 
   ;; uncomment if Imenu entry in menu bar is desired
-  ;;:hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
+  ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
   :config
+  ;; only required for development
+  ;;(require 'f90-ts-log)
+
   (message "f90-ts-mode loaded")
 
-  :bind (;; global binding that triggers the load
-         ;; replaces the currently active frame with the log buffer,
-         ;; should work in any buffer
-         ("A-h k" . f90-ts-mode)
-         ("A-h l" . f90-ts-log-show)
-
-         ;; mode-specific bindings
+  :bind (;; mode-specific bindings, adjust to your needs
          :map f90-ts-mode-map
-         ("A-h m" . treesit-explore-mode)
-         ("A-h P" . treesit-inspect-node-at-point)
-         ("A-h p" . f90-ts-inspect-node-at-point)
-         )
-  )
+         ;; transient popup
+         ("A-<up>"        . #'f90-ts-transient)
+         ;; shortcuts
+         ("A-<return>"    . #'f90-ts-break-line)
+         ("A-<backspace>" . #'f90-ts-join-line-prev)
+         ("A-<delete>"    . #'f90-ts-join-line-next)
+         ("A-\\"          . #'f90-ts-enlarge-region)
+         ("A-0"           . #'f90-ts-child0-region)
+         ("A-["           . #'f90-ts-prev-region)
+         ("A-]"           . #'f90-ts-next-region)))
+```
 
-;; only required for testing
+#### Testing module
+
+The testing helpers are only required for development and repository testing.
+
+```elisp
 (use-package f90-ts-mode-test
   :ensure nil
+
   ;; add the test subdirectory specifically for test related stuff
   :load-path "path_to/emacs-f90-ts-mode/test"
 
@@ -144,21 +201,20 @@ placed somewhere in `init.el` (or elsewhere).
   :config
   (message "f90-ts-mode-test loaded")
 
-  :bind (;; global test commands
-         ("A-h i" . f90-ts-mode-switch-custom)
-         ("A-h t" . (lambda () (interactive)
-                      (f90-ts-mode-test-run "^f90-ts-mode/")))
-         ("A-h d" . (lambda () (interactive)
-                      (f90-ts-mode-test-run "^f90-ts-mode/"
-                                            f90-ts-mode-test-diff-command))))
-
   :init
   (require 'f90-ts-mode)
-  (define-key f90-ts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-face-annotations)
+
+  (define-key f90-ts-mode-map
+              (kbd "A-h u")
+              #'f90-ts-mode-test-update-face-annotations)
+
   (require 'erts-mode)
-  (define-key erts-mode-map (kbd "A-h u") #'f90-ts-mode-test-update-erts-after)
-  )
+
+  (define-key erts-mode-map
+              (kbd "A-h u")
+              #'f90-ts-mode-test-update-erts-after))
 ```
+
 
 
 ### Keybindings
