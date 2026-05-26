@@ -4,7 +4,7 @@ Tree-sitter based major mode for editing Fortran (Fortran 90 / 2003 and
 newer) in free source form in Emacs. It requires Emacs 30+.
 The mode is inspired by f90-mode in emacs core.
 
-This project is under active development, see [Roadmap](#roadmap)
+This project is under active [development](#roadmap).
 For a comprehensive overview see [MANUAL.md](MANUAL.md).
 
 ## Overview
