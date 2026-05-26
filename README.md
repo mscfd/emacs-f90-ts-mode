@@ -130,6 +130,5 @@ The following list provides features planned for implementation (somewhat ordere
 - More list contexts. There is a number of list like contexts, which are not yet supported,
   but for which proper alignment would be nice.
 - Enlarge and shrink region operations:
-   * Handle comment regions with same prefix as virtual nodes. This helps with comment region operations.
    * Add other child selection options (select last child, search child, etc.)
 - Electric insert similar to `f90-electric-insert`.

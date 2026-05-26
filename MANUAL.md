@@ -607,6 +607,11 @@ any blanks to keep original indentation of commented code.
 ### Mark region based on tree-sitter nodes
 
 Regions can be selected, enlarged, shrunk or moved based on tree-sitter nodes.
+Blocks of comments with the same comment prefix are identified and dealt with like
+the block would be represented by a node (which they are not).
+This is particularly useful in conjunction with comment prefixes and
+comment region operations.
+
 Key bindings are provided in the transient popup (`C-c C-f`) under the Region section:
 
 | Function                         | Popup key | Description                                                              |
