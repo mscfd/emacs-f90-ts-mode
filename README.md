@@ -4,7 +4,7 @@ Tree-sitter based major mode for editing Fortran (Fortran 90 / 2003 and
 newer) in free source form in Emacs. It requires Emacs 30+.
 The mode is inspired by f90-mode in emacs core.
 
-This project is under active development, see [Roadmap](#roadmap)
+This project is under active [development](#roadmap).
 For a comprehensive overview see [MANUAL.md](MANUAL.md).
 
 ## Overview
@@ -112,7 +112,7 @@ It will automatically be loaded when opening a file with extension `.f90`.
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
          ("A-\\"          . #'f90-ts-enlarge-region)
-         ("A-0"           . #'f90-ts-child0-region)
+         ("A-0"           . #'f90-ts-shrink-region-child0)
          ("A-["           . #'f90-ts-prev-region)
          ("A-]"           . #'f90-ts-next-region)))
 ```
@@ -130,8 +130,5 @@ The following list provides features planned for implementation (somewhat ordere
 - More list contexts. There is a number of list like contexts, which are not yet supported,
   but for which proper alignment would be nice.
 - Enlarge and shrink region operations:
-   * Handle comment regions with same prefix as virtual nodes. This helps with comment region operations.
    * Add other child selection options (select last child, search child, etc.)
-- `undo-boundary` to group internal changes to blocks of changes for undo.
-  This mainly concerns complex indentation operations (like indentation of statements or region).
 - Electric insert similar to `f90-electric-insert`.

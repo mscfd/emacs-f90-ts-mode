@@ -46,13 +46,28 @@ subroutine sub_init_3()
 end subroutine sub_init_3
 =-=-=
 
+Name: mark initial enlarge region 4
+=-=
+subroutine sub_init_3()
+   i = 6
+   !!$ |i = i + m
+   j = 5
+end subroutine sub_init_3
+=-=
+subroutine sub_init_3()
+   i = 6
+   @!!$ i = i + m|
+   j = 5
+end subroutine sub_init_3
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-reversed t))
       (f90-ts-mode-test--mark-region #'f90-ts-enlarge-region)))
 
-Name: mark initial enlarge region 4
+Name: mark initial enlarge region 5
 =-=
 module mod_init_4
 |   type, public :: t
@@ -85,10 +100,37 @@ end subroutine sub_ext_1
 |
 =-=-=
 
+Name: mark extend enlarge region 2
+=-=
+subroutine sub_ext_2()
+   i = 6
+   ! comment
+   !!$ i = i + m1
+   !!$ i = i + m2
+
+   @!!$ i = i + m3|
+   !!$ i = i + m4
+   ! comment
+   j = 5
+end subroutine sub_ext_2
+=-=
+subroutine sub_ext_2()
+   i = 6
+   ! comment
+   @!!$ i = i + m1
+   !!$ i = i + m2
+
+   !!$ i = i + m3
+   !!$ i = i + m4|
+   ! comment
+   j = 5
+end subroutine sub_ext_2
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-child0-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-shrink-region-child0))
 
 Name: mark child0 region 1
 =-=
@@ -105,6 +147,31 @@ subroutine sub_child0_1()
       end do
    end if
 end subroutine sub_child0_1
+=-=-=
+
+Name: mark child0 region 2
+=-=
+subroutine sub_child0_2()
+   i = 6
+   ! comment
+   @!!$ i = i + m1
+   !!$ i = i + m2
+   !!$ i = i + m3
+   !!$ i = i + m4|
+   ! comment
+   j = 5
+end subroutine sub_child0_2
+=-=
+subroutine sub_child0_2()
+   i = 6
+   ! comment
+   @!!$ i = i + m1|
+   !!$ i = i + m2
+   !!$ i = i + m3
+   !!$ i = i + m4
+   ! comment
+   j = 5
+end subroutine sub_child0_2
 =-=-=
 
 Code:

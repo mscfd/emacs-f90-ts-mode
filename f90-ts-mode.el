@@ -677,7 +677,7 @@ seem to make much sense."
 
 ;; ;; region
 ;; (define-key f90-ts-prefix-map (kbd "r") #'f90-ts-enlarge-region)
-;; (define-key f90-ts-prefix-map (kbd "0") #'f90-ts-child0-region)
+;; (define-key f90-ts-prefix-map (kbd "0") #'f90-ts-shrink-region-child0)
 ;; (define-key f90-ts-prefix-map (kbd "[") #'f90-ts-prev-region)
 ;; (define-key f90-ts-prefix-map (kbd "]") #'f90-ts-next-region)
 
@@ -729,7 +729,7 @@ seem to make much sense."
     ("C"   "Comment region (custom)"           f90-ts-comment-region-custom)]
    ["Region"
     ("r"   "Enlarge region"                    f90-ts-enlarge-region)
-    ("0"   "Child-0 region"                    f90-ts-child0-region)
+    ("0"   "Child-0 region"                    f90-ts-shrink-region-child0)
     ("["   "Previous region"                   f90-ts-prev-region)
     ("]"   "Next region"                       f90-ts-next-region)]]
   [["Procedure navigation"
@@ -887,6 +887,18 @@ is matched by TYPE-RX."
       (and node
            (let ((type-n (treesit-node-type node)))
              (string-match-p type-rx type-n)))))
+
+
+(defun f90-ts--node-same-span-p (node1 node2)
+  "Return non-nil if NODE1 and NODE2 have the same span."
+  (and (= (treesit-node-start node1) (treesit-node-start node2))
+       (= (treesit-node-end node1)   (treesit-node-end node2))))
+
+
+(defun f90-ts--node-has-span-p (node beg end)
+  "Return non-nil if NODE has the span BEG..END."
+  (and (= beg (treesit-node-start node))
+       (= end (treesit-node-end node))))
 
 
 (defun f90-ts--comment-prefix (node)
@@ -2491,7 +2503,10 @@ otherwise return column as is."
         ;;(f90-ts-log-msg :cachecol "line, entry, delta = %s, %s, %s" line entry delta)
         ;;(f90-ts-log-msg :cachecol "bol col, current = %s, %s" bol-col bol-current)
 
-        (cl-assert entry nil "no entry for line in cache, line=%s, cache=%s" line f90-ts--continued-line-cache)
+        (cl-assert entry
+                   nil
+                   "no entry for line in cache, line=%s, cache=%s"
+                   line f90-ts--continued-line-cache)
         (if (= bol-col bol-current)
             ;; not yet flushed
             (+ col delta)
@@ -5255,18 +5270,23 @@ Otherwise return POS."
      (t             pos))))
 
 
+(defun f90-ts--mark-region (beg end &optional reversed)
+  "Mark region BEG..END.
+If REVERSED is non-nil, then mark region from END..BEG,
+which places point at start of region."
+  (push-mark beg t t)
+  (goto-char end)
+  (when reversed
+    (exchange-point-and-mark)))
+
+
 (defun f90-ts--mark-region-node (node &optional reversed)
   "Mark the region spanned by NODE.
 If REVERSED is non-nil, then put point at start of region, otherwise point
 is at end of region."
   (let ((beg (treesit-node-start node))
         (end (treesit-node-end node)))
-    (if reversed
-        (progn
-          (goto-char beg)
-          (push-mark end t t))
-      (push-mark beg t t)
-      (goto-char end))))
+    (f90-ts--mark-region beg end reversed)))
 
 
 (defun f90-ts--smallest-child0-same-span (node)
@@ -5274,8 +5294,7 @@ is at end of region."
   (cl-loop for current = node then child
            for child = (treesit-node-child current 0 t)
            while (and child
-                      (= (treesit-node-start child) (treesit-node-start current))
-                      (= (treesit-node-end child) (treesit-node-end current)))
+                      (f90-ts--node-same-span-p child current))
            finally return current))
 
 
@@ -5287,8 +5306,7 @@ same bounds, which is the contains_statement node."
   (treesit-parent-while
    node
    (lambda (n)
-     (and (= (treesit-node-start n) (treesit-node-start node))
-          (= (treesit-node-end n) (treesit-node-end node))))))
+     (f90-ts--node-same-span-p n node))))
 
 
 (defun f90-ts--smallest-named-node-containing-region (beg end)
@@ -5341,44 +5359,142 @@ Querying at POS-1 gives the expected answer."
     (car sorted)))
 
 
+(defun f90-ts--comment-block-extent (node)
+  "Return (FIRST . LAST) comment nodes for the block containing NODE.
+Comments are grouped by prefix as extracted by `f90-ts--comment-prefix'.
+NODE must be of type comment."
+  (cl-assert (f90-ts--node-type-p node "comment")
+             nil "comment node expected")
+  (let* ((prefix (f90-ts--comment-prefix node))
+         (same-p (lambda (n)
+                   (and (f90-ts--node-type-p n "comment")
+                        (equal (f90-ts--comment-prefix n)
+                               prefix))))
+
+         (first  (cl-loop
+                  for cur = node then next
+                  for next = (treesit-node-prev-sibling cur)
+                  while (and next (funcall same-p next))
+                  finally return cur))
+         (last   (cl-loop
+                  for cur = node then next
+                  for next = (treesit-node-next-sibling cur)
+                  while (and next (funcall same-p next))
+                  finally return cur)))
+    (cons first last)))
+
+
+(defun f90-ts--comment-block-region (beg end)
+  "Classify type of region BEG..END with respect to comment blocks.
+Returns a list:
+  ('single NODE)   region is exactly one comment node
+  ('block  FN LN)  region is exactly the full block from first node FN
+                   to last node LN
+  ('partial FN LN) region is within block but neither single nor full,
+                   whole block is starts and end with nodes FN and LN
+  nil              not within a uniform comment block"
+  (let* ((node-beg (treesit-node-at beg))
+         (node-end (treesit-node-at (max beg (1- end)))))
+    (when (and (f90-ts--node-type-p node-beg "comment")
+               (f90-ts--node-type-p node-end "comment")
+               (equal (f90-ts--comment-prefix node-beg)
+                      (f90-ts--comment-prefix node-end)))
+      (let* ((extent (f90-ts--comment-block-extent node-beg))
+             (node-first (car extent))
+             (node-last  (cdr extent))
+             (first-beg (treesit-node-start node-first))
+             (last-end  (treesit-node-end   node-last)))
+        (cond
+         ((and (= beg (treesit-node-start node-beg))
+               (= end (treesit-node-end   node-end))
+               (treesit-node-eq node-beg node-end))
+          (list 'single node-beg))
+
+         ((and (= beg first-beg) (= end last-end))
+          (list 'block node-first node-last))
+
+         (t
+          (list 'partial node-first node-last)))))))
+
+
+(defun f90-ts-enlarge-region-active ()
+  "Expand active region to next larger node."
+  (cl-assert (use-region-p)
+             nil
+             "active region required")
+
+  (let* ((beg (region-beginning))
+         (end (region-end))
+         (comment-kind (f90-ts--comment-block-region beg end)))
+    (cl-destructuring-bind (&optional ck reg-first _) comment-kind
+      (if (eq ck 'single)
+          ;; single comment line: expand to full block
+          (let* ((extent  (f90-ts--comment-block-extent reg-first))
+                 (ext-first   (car extent))
+                 (ext-last    (cdr extent)))
+            (if (treesit-node-eq ext-first ext-last)
+                ;; block is just one line, fall through to tree-sitter ascent
+                (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
+                    (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
+                  (message "no tree-sitter node found enlarging current region"))
+              (f90-ts--mark-region (treesit-node-start ext-first)
+                                   (treesit-node-end ext-last)
+                                   f90-ts-mark-region-reversed)))
+        (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
+            (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
+          (message "no tree-sitter node found enlarging current region"))))))
+
+
+(defun f90-ts-enlarge-region-initial ()
+  "Mark region of smallest named node at point.
+This operation assumes that no region is active."
+  (cl-assert (not (use-region-p))
+             nil
+             "active region already present")
+
+  (let* ((pos     (f90-ts--pos-nonspace (point)))
+         (node-at (treesit-node-at pos)))
+    (if (f90-ts--node-type-p node-at "comment")
+        (f90-ts--mark-region-node node-at f90-ts-mark-region-reversed)
+      (if-let* ((node-on (f90-ts--node-on-pos pos 'named))
+                (node    (f90-ts--largest-node-same-span node-on)))
+          (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
+        (message "no tree-sitter node found at point")))))
+
+
 (defun f90-ts-enlarge-region ()
   "Expand region to next larger node.
 If no region is active, select the smallest named node at point.
 If region is active, expand to the smallest named node that is larger
-than current region."
+than current region.
+If current node is a comment belonging to a block of comments all
+starting with the same comment prefix enlarge to the block of comments.
+The comment prefix is matched by `f90-ts-openmp-prefix-regexp' and
+`f90-ts-comment-prefix-regexp'."
   (interactive)
   (if (use-region-p)
-      (let* ((beg (region-beginning))
-             (end (region-end))
-             (node (f90-ts--smallest-named-node-containing-region beg end)))
-        (if node
-            (f90-ts--mark-region-node node
-                                      f90-ts-mark-region-reversed)
-          (message "no tree-sitter node found enlarging current region")))
-    ;; no active region, select smallest named node at point
-    ;; (but move point to nonspace part first)
-    (if-let* ((pos (f90-ts--pos-nonspace (point)))
-              (node-on (f90-ts--node-on-pos pos 'named))
-              (node (f90-ts--largest-node-same-span node-on)))
-        (f90-ts--mark-region-node node
-                                  f90-ts-mark-region-reversed)
-      (message "no tree-sitter node found at point"))))
+      (f90-ts-enlarge-region-active)
+    (f90-ts-enlarge-region-initial)))
 
 
-(defun f90-ts-child0-region ()
+(defun f90-ts-shrink-region-child0 ()
   "Find smallest node covering region.
 Then reduce region to its first child.  If there are further first child with
 same region, return the smallest of these grandchildren."
   (interactive)
   (if (use-region-p)
-      (if-let* ((beg (region-beginning))
-                (end (region-end))
-                (node-on (treesit-node-on beg end))
-                (node (f90-ts--smallest-child0-same-span node-on))
-                (child0 (treesit-node-child node 0 t)))
-          (f90-ts--mark-region-node child0
-                                    f90-ts-mark-region-reversed)
-        (message "no tree-sitter child0 found for current region"))
+      (let* ((beg (region-beginning))
+             (end (region-end))
+             (comment-kind (f90-ts--comment-block-region beg end)))
+        (cl-destructuring-bind (&optional ck first _) comment-kind
+          (if (eq ck 'block)
+              ;; full block: shrink to first comment node
+              (f90-ts--mark-region-node first f90-ts-mark-region-reversed)
+            (if-let* ((node-on (treesit-node-on beg end))
+                      (node    (f90-ts--smallest-child0-same-span node-on))
+                      (child0  (treesit-node-child node 0 t)))
+                (f90-ts--mark-region-node child0 f90-ts-mark-region-reversed)
+              (message "no tree-sitter child0 found for current region")))))
     (message "no active region")))
 
 
@@ -5392,8 +5508,7 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
-                (node-mark (if (and (= beg (treesit-node-start node))
-                                    (= end (treesit-node-end node)))
+                (node-mark (if (f90-ts--node-has-span-p node beg end)
                                (treesit-node-prev-sibling node t)
                              node)))
           (f90-ts--mark-region-node node-mark
@@ -5412,8 +5527,7 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
-                (node-mark (if (and (= beg (treesit-node-start node))
-                                    (= end (treesit-node-end node)))
+                (node-mark (if (f90-ts--node-has-span-p node beg end)
                                (treesit-node-next-sibling node t)
                              node)))
           (f90-ts--mark-region-node node-mark
@@ -6472,10 +6586,10 @@ and keyword are sometimes equal.  But we only want the structure node."
      ["Comment/uncomment region (default prefix)" f90-ts-comment-region-default :active (region-active-p)]
      ["Comment/uncomment region (custom prefix)"  f90-ts-comment-region-custom  :active (region-active-p)])
     ("Region"
-     ["Enlarge region"  f90-ts-enlarge-region :active t]
-     ["Child-0 region"  f90-ts-child0-region  :active (region-active-p)]
-     ["Previous region" f90-ts-prev-region    :active (region-active-p)]
-     ["Next region"     f90-ts-next-region    :active (region-active-p)])
+     ["Enlarge region"          f90-ts-enlarge-region       :active t]
+     ["Shrink region [child-0]" f90-ts-shrink-region-child0 :active (region-active-p)]
+     ["Previous region"         f90-ts-prev-region          :active (region-active-p)]
+     ["Next region"             f90-ts-next-region          :active (region-active-p)])
     "---"
     ("Defun & Thing"
      ["Beginning of defun" beginning-of-defun :active t]
