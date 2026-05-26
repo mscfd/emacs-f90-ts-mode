@@ -2,8 +2,8 @@
 
 ;; Copyright (C) 2025-2026 Martin Stein
 
-;; Author: Martin Stein
-;; Maintainer: Martin Stein
+;; Author: Martin Stein <mscfd@gmx.net>
+;; Maintainer: Martin Stein <mscfd@gmx.net>
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
 ;; Keywords: languages, treesitter, fortran
 ;; Version: 0.2.1
@@ -38,7 +38,7 @@
 ;;   - Smart end completion
 ;;   - Breaking and joining continued lines
 ;;   - (Un)commenting regions with configurable prefixes
-;;   - OpenMP and preprocessor directive handling
+;;   - OpenMP and preprocessor directives
 ;;   - Region selection based on tree-sitter nodes
 ;;   - Xref (buffer local)
 ;;   - Imenu

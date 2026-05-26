@@ -3,7 +3,7 @@
 This manual provides a comprehensive overview and technical documentation for **f90-ts-mode**,
 a major mode for editing **Fortran 90 / Fortran 2003** (and newer) based on Emacs's built-in **Tree-sitter** support.
 
-The mode is still under **development**. The [Roadmap](READEME.md#roadmap) lists missing or incomplete feature planned
+The mode is still under **development**. The [Roadmap](README.md#roadmap) lists missing or incomplete feature planned
 for implementation.
 
 [Back to README](README.md)
@@ -102,7 +102,8 @@ parser source files are already provided in the grammar repositories.
 
 ### Tree-sitter based mode
 
-`f90-ts-mode` can be installed from MELPA using `package-install` or `use-package`.
+`f90-ts-mode` can be installed and enabled from MELPA using
+`package-install` and `use-package`.
 
 For development, the repository can also be cloned manually:
 
@@ -122,7 +123,6 @@ placed somewhere in `init.el` (or elsewhere).
 (use-package f90-ts-mode
   :ensure t
   :mode ("\\.f90\\'" . f90-ts-mode)
-  :commands (f90-ts-mode)
 
   :init
   (require 'treesit)
@@ -156,7 +156,6 @@ First clone the repository of `f90-ts-mode` as mentioned above.
   :ensure nil
   :load-path "path_to/emacs-f90-ts-mode"
   :mode ("\\.f90\\'" . f90-ts-mode)
-  :commands (f90-ts-mode)
 
   :init
   (require 'treesit)
@@ -240,7 +239,7 @@ The mode sets the following default mode-local keybindings:
 
 #### Transient popup (`C-c C-f`)
 
-Pressing `C-c C-f` opens a transient keymap window. listing all major
+Pressing `C-c C-f` opens a transient keymap window, which lists all major
 commands grouped by category.
 
 The popup is defined as `f90-ts-transient` and covers:
@@ -346,29 +345,9 @@ Customizable variables for indentations are:
 *Remarks*
 - statement blocks are features such as `functions`, `subroutines`, control statements (`do`, `if`, `select`)
   and other block structures (`associate`, `block` etc.)
-- `f90-ts-indent-toplevel` is used to reduce the indentation of anything which is right below the program
+- `f90-ts-indent-toplevel` is intended to reduce the indentation of anything which is right below the program
   or (sub)module level. This is done as this indentation level usually does not improve readability,
   as almost everything except for very few lines (like `module`, `contains` and `end` line) is indented.
-
-
-Currently implemented rules are:
-
-| Rule Set                | Description                                                                                     |
-|-------------------------|-------------------------------------------------------------------------------------------------|
-| preproc                 | indentation of and at preprocessor directives                                                   |
-| comments                | for sequences of regular comment and for special comments (openmp, separator, documentation     |
-| continued lines         | multi-line statements, column alignment for lists (like variable declarations, arguments, etc.) |
-| internal procedures     | `contains` sections and internal procedures in `programs`, `(sub)modules`, `functions` and `subroutines` |
-| program / module        | `program`, `module`, and `submodule` bodies                                                     |
-| functions               | `function` and `subroutine` bodies, including `end function` / `end subroutine`                 |
-| translation unit        | some rules concerning toplevel translation unit and related ERROR cases                         |
-| interfaces              | (abstract) interface blocks                                                                     |
-| derived types, enums    | derived `type`, `enum` and `enumeration type` definitions                                       |
-| if / then / else        | `if`, `elseif`, and `else` constructs                                                           |
-| where                   | `where`-´elsewhere` statements                                                                  |
-| single block statements | `do`, `block`, `associate` and `forall` constructs                                              |
-| select statements       | `select case` and `select type` statements                                                      |
-| catch-all               | final fallback rule for unmatched cases                                                         |
 
 
 #### Indentation of multiline statement
@@ -395,16 +374,15 @@ used by functions bound to `<backtab>` (S-`TAB`) and `C-S-<iso-lefttab>` / `C-<b
 
 Also check out [Continued statements and blocks](#indentation-of-continued-statements-and-blocks).
 
-Remark: currently options and variants are intended to experiment with and see what might work
-and is worth keeping. The additional keybindings for variant 2 and 3 also help with testing various
-variants.
+Remark: three variants are offerend to allow selection of primary and continued line offset additionally
+to the rotation option. The current setup offers keybindings for all three variants.
 
 
 
 #### OpenMP and other special comments
 
 For special comments such as openmp statements, separator comments and documentation (like ford
-and doxygen documentatio with comment starters like `!>` and `!<` or similar)
+and doxygen documentation with comment starters like `!>` and `!<` or similar)
 the customizable list `f90-ts-special-comment-rules` can be used to specify indentation
 and faces for such comments.
 A list entry looks like
@@ -422,7 +400,7 @@ rule matches, then comments are indented with `indented` and highlighted with `f
 
 For example, if there is an entry
 ```
-(:name "openmp rule"
+(:name "separator comment rule"
  :match "\\(!\\( arguments\|===\\)$\\)"
  :indent context
  :face font-lock-comment-face)
@@ -461,13 +439,13 @@ This is controlled by `f90-ts-leading-ampersand-style`.
 
 ### Indentation of continued statements and blocks
 
-For incomplete statements on continued lines or incomplete structure blocks,
-indentation is sometimes not correct, due to an incomplete AST produced by the parser.
+If at an end statement of a block like a subroutine, control statement etc., the whole block can be indented
+automatically much like indent region.
+If within a multiline statement, the continued statement from its first line up to point can also be intended
+like an indent region.
 
-Indentation of continued statements from begin of statement to line at point is done by
-`f90-ts-indent-and-complete-stmt`, which is bound to `C-<tab>` and to `s` in the transient popup.
+This is done by `f90-ts-indent-and-complete-stmt`, which is bound to `C-<tab>` and to `s` in the transient popup.
 
-This same function also indents a whole block if executed at its `end struct` line.
 
 
 ### Indentation of statement labels
@@ -512,7 +490,9 @@ with submenus for structures that contain other items.
 ### Navigation buffer
 
 The navigation buffer provides a persistent side panel showing the structure of the current
-Fortran source buffer. It is based on the same tree as offered in the [Navigation menu](#navigation-menu).
+Fortran source buffer. It is based on the same tree as offered in
+the [Navigation menu](#navigation-menu) and a sparse version of the tree-sitter tree.
+
 It can be opened with `f90-ts-nav-buffer-open` (`b` in the transient popup) and focused with
 `f90-ts-nav-buffer-focus` (`f` in the transient popup).
 
@@ -544,15 +524,21 @@ Keybindings in the navigation buffer:
 | `q`/`C-g` | Quit the navigation buffer    |
 
 
+Note: the navigation buffer is still missing some features to be really useful.
+
+
 
 ### Breaking and joining lines
 
-Inspired by the legacy f90 mode as well. Continued lines can be created by breaking a line or reduced
+Continued lines can be created by breaking a line or reduced
 by joining two consecutive lines connected by continuation symbol `&`.
+Break and join operations are also useful for deleting empty lines and
+breaking or joining comments with a common comment starter.
+
 The line break function is bound to `C-<return>`.
 All break and join functions are available via the transient popup (`C-c C-f`)
 under keys `RET`, `j` and `J`.
-
+These operations are inspired by the legacy f90 mode, but behave a bit differently.
 
 #### Breaking lines
 
@@ -568,27 +554,28 @@ Whether a leading ampersand at the start of the new line is inserted is controll
 
 #### Joining lines
 
-Two consecutives lines (skipping empty lines) connected by continuation symbol `&` can be joined by
+Two consecutive lines connected by continuation symbol `&` can be joined by
 `f90-ts-join-line-prev` and `f90-ts-join-line-next`.
-The ampersand(s) and empty lines in between are removed.
+The ampersand(s) in between are removed.
 One whitespace character is left after putting the second line at the end of the first line.
-Comments at end of first line or in between the two lines are not allowed currently.
-(It is not quite clear what should be done with such comments.)
 
-Joining within a string literal is implemented. Currently comments within string literals are not supported
-by the tree-sitter grammar and hence do not work anyway.
+If there are empty lines, then only the empty lines are removed, without joining the lines.
+A second join operation can be used to actually join the lines. 
 
-Joining of openmp statements is not yet implemented.
+If there are comments at end of first line or in between the two lines, joining is not possible,
+as it is not quite clear what should be done with such comments.
 
 If point is on an empty line (not necessarily within a continued statement),
 then previous (prev variant) or subsequent (next variant) empty lines are removed,
 but nothing is joined in any case.
 
-Intermediate empty lines are removed, if point is on a non-empty line.
-
 The `prev` variant joins current line with previous (non-empty) line.
 The `next` variant joins current line with next (non-empty) line.
 
+Current limitations are:
+* Comments within string literals are not supported by the tree-sitter grammar itself.
+Thus joining such strings is not possible anyway. Continued strings can be joined.
+* Joining of openmp statements is not yet implemented.
 
 
 ### Comment region
@@ -613,7 +600,7 @@ Indentation of prefixes can be controlled by special comment rules,
 see [Special comments](#openmp-and-other-special-comments).
 With `f90-ts-comment-prefix-keep-indent` it is possible to control
 whether indentation of commented code should be kept,
-or wether the prefix should be inserted at the proper column without removing
+or whether the prefix should be inserted at the proper column without removing
 any blanks to keep original indentation of commented code.
 
 
