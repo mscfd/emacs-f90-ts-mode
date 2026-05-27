@@ -17,7 +17,7 @@ contains
 end module do_mod
 
 
-! executing f90-ts-enlarge-region executed at |
+! using f90-ts-mark-region-enlarge
 ! shows that the NEWLINE is part of the type node
 module mod
    type, public :: t
@@ -48,4 +48,14 @@ subroutine sub()
    x123456 = 6 + &
             &
              5
+end subroutine sub
+
+
+! preprocessor in if-statement
+subroutine sub()
+   if (cond) then
+#ifdef _FLAG_
+   elseif (cond2) then
+#endif
+   end if
 end subroutine sub

@@ -659,45 +659,45 @@ seem to make much sense."
 (transient-define-prefix f90-ts-transient ()
   "F90 Tree-sitter Mode."
   [["Indentation"
-    ("TAB" "Indent line"                       f90-ts-indent-and-complete-line)
-    ("s"   "Indent & complete statement"       f90-ts-indent-and-complete-stmt)
-    ("I"   "Indent & complete region"          f90-ts-indent-and-complete-region)
-    ("E"   "Complete end statements"           f90-ts-complete-smart-end-region)]
+    ("TAB" "Indent line"                  f90-ts-indent-and-complete-line)
+    ("s"   "Indent & complete statement"  f90-ts-indent-and-complete-stmt)
+    ("I"   "Indent & complete region"     f90-ts-indent-and-complete-region)
+    ("E"   "Complete end statements"      f90-ts-complete-smart-end-region)]
    ["Line & comments"
-    ("b"   "Break line"                        f90-ts-break-line)
-    ("j"   "Join with previous line"           f90-ts-join-line-prev)
-    ("J"   "Join with next line"               f90-ts-join-line-next)
-    ("c"   "Comment region (default)"          f90-ts-comment-region-default)
-    ("C"   "Comment region (custom)"           f90-ts-comment-region-custom)]
-   ["Region"
-    ("r"   "Enlarge region"                    f90-ts-enlarge-region)
-    ("0"   "Child-0 region"                    f90-ts-shrink-region-child0)
-    ("["   "Previous region"                   f90-ts-prev-region)
-    ("]"   "Next region"                       f90-ts-next-region)]]
+    ("b"   "Break line"                   f90-ts-break-line)
+    ("j"   "Join with previous line"      f90-ts-join-line-prev)
+    ("J"   "Join with next line"          f90-ts-join-line-next)
+    ("c"   "Comment region (default)"     f90-ts-comment-region-default)
+    ("C"   "Comment region (custom)"      f90-ts-comment-region-custom)]
+   ["Mark region"
+    ("r"   "Enlarge"                      f90-ts-mark-region-enlarge)
+    ("0"   "First child"                  f90-ts-mark-region-shrink-child-first)
+    ("["   "Previous sibling"             f90-ts-mark-region-prev-sibling)
+    ("]"   "Next sibling"                 f90-ts-mark-region-next-sibling)]]
   [["Procedure navigation"
-    ("a"   "Beginning"                         f90-ts-thing-beginning-of-procedure)
-    ("e"   "End"                               f90-ts-thing-end-of-procedure)
-    ("p"   "Previous"                          f90-ts-thing-prev-procedure)
-    ("n"   "Next"                              f90-ts-thing-next-procedure)]
+    ("a"   "Beginning"                    f90-ts-thing-beginning-of-procedure)
+    ("e"   "End"                          f90-ts-thing-end-of-procedure)
+    ("p"   "Previous"                     f90-ts-thing-prev-procedure)
+    ("n"   "Next"                         f90-ts-thing-next-procedure)]
    ["Type navigation"
-    ("M-a" "Beginning"                         f90-ts-thing-beginning-of-type)
-    ("M-e" "End"                               f90-ts-thing-end-of-type)
-    ("M-p" "Previous"                          f90-ts-thing-prev-type)
-    ("M-n" "Next"                              f90-ts-thing-next-type)]
+    ("M-a" "Beginning"                    f90-ts-thing-beginning-of-type)
+    ("M-e" "End"                          f90-ts-thing-end-of-type)
+    ("M-p" "Previous"                     f90-ts-thing-prev-type)
+    ("M-n" "Next"                         f90-ts-thing-next-type)]
    ["Interface navigation"
-    ("C-M-a" "Beginning"                       f90-ts-thing-beginning-of-interface)
-    ("C-M-e" "End"                             f90-ts-thing-end-of-interface)
-    ("C-M-p" "Previous"                        f90-ts-thing-prev-interface)
-    ("C-M-n" "Next"                            f90-ts-thing-next-interface)]
+    ("C-M-a" "Beginning"                  f90-ts-thing-beginning-of-interface)
+    ("C-M-e" "End"                        f90-ts-thing-end-of-interface)
+    ("C-M-p" "Previous"                   f90-ts-thing-prev-interface)
+    ("C-M-n" "Next"                       f90-ts-thing-next-interface)]
    ["Xref"
-    ("."   "Find definition"                   xref-find-definitions)
-    (","   "Find references"                   xref-find-references)
-    ("/"   "Find apropos"                      xref-find-apropos)
-    ("<"   "Go back"                           xref-go-back)
-    (">"   "Go forward"                        xref-go-forward)]
+    ("."   "Find definition"              xref-find-definitions)
+    (","   "Find references"              xref-find-references)
+    ("/"   "Find apropos"                 xref-find-apropos)
+    ("<"   "Go back"                      xref-go-back)
+    (">"   "Go forward"                   xref-go-forward)]
    ["Navigation panel"
-    ("b"   "Open nav buffer"                   f90-ts-nav-buffer-open)
-    ("f"   "Focus nav buffer"                  f90-ts-nav-buffer-focus)]])
+    ("b"   "Open nav buffer"              f90-ts-nav-buffer-open)
+    ("f"   "Focus nav buffer"             f90-ts-nav-buffer-focus)]])
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5359,7 +5359,7 @@ Returns a list:
           (list 'partial node-first node-last)))))))
 
 
-(defun f90-ts-enlarge-region-active ()
+(defun f90-ts-mark-region-enlarge-active ()
   "Expand active region to next larger node."
   (cl-assert (use-region-p)
              nil
@@ -5387,7 +5387,7 @@ Returns a list:
           (message "no tree-sitter node found enlarging current region"))))))
 
 
-(defun f90-ts-enlarge-region-initial ()
+(defun f90-ts-mark-region-enlarge-initial ()
   "Mark region of smallest named node at point.
 This operation assumes that no region is active."
   (cl-assert (not (use-region-p))
@@ -5404,7 +5404,7 @@ This operation assumes that no region is active."
         (message "no tree-sitter node found at point")))))
 
 
-(defun f90-ts-enlarge-region ()
+(defun f90-ts-mark-region-enlarge ()
   "Expand region to next larger node.
 If no region is active, select the smallest named node at point.
 If region is active, expand to the smallest named node that is larger
@@ -5415,11 +5415,11 @@ The comment prefix is matched by `f90-ts-openmp-prefix-regexp' and
 `f90-ts-comment-prefix-regexp'."
   (interactive)
   (if (use-region-p)
-      (f90-ts-enlarge-region-active)
-    (f90-ts-enlarge-region-initial)))
+      (f90-ts-mark-region-enlarge-active)
+    (f90-ts-mark-region-enlarge-initial)))
 
 
-(defun f90-ts-shrink-region-child0 ()
+(defun f90-ts-mark-region-shrink-child-first ()
   "Find smallest node covering region.
 Then reduce region to its first child.  If there are further first child with
 same region, return the smallest of these grandchildren."
@@ -5440,7 +5440,7 @@ same region, return the smallest of these grandchildren."
     (message "no active region")))
 
 
-(defun f90-ts-prev-region ()
+(defun f90-ts-mark-region-prev-sibling ()
   "Find smallest node covering current marked region.
 If the node spans the current region, then mark its previous sibling.
 Otherwise mark the region spanned by the node itself (like enlarge-region)."
@@ -5459,7 +5459,7 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
     (message "no active region")))
 
 
-(defun f90-ts-next-region ()
+(defun f90-ts-mark-region-next-sibling ()
   "Find smallest node covering current marked region.
 If the node spans the current region, then mark its next sibling.
 Otherwise mark the region spanned by the node itself (like enlarge-region)."
@@ -6527,11 +6527,11 @@ and keyword are sometimes equal.  But we only want the structure node."
     ("Comment"
      ["Comment/uncomment region (default prefix)" f90-ts-comment-region-default :active (region-active-p)]
      ["Comment/uncomment region (custom prefix)"  f90-ts-comment-region-custom  :active (region-active-p)])
-    ("Region"
-     ["Enlarge region"          f90-ts-enlarge-region       :active t]
-     ["Shrink region [child-0]" f90-ts-shrink-region-child0 :active (region-active-p)]
-     ["Previous region"         f90-ts-prev-region          :active (region-active-p)]
-     ["Next region"             f90-ts-next-region          :active (region-active-p)])
+    ("Mark region"
+     ["Enlarge"               f90-ts-mark-region-enlarge            :active t]
+     ["Shrink to first child" f90-ts-mark-region-shrink-child-first :active (region-active-p)]
+     ["Previous sibling"      f90-ts-mark-region-prev-sibling       :active (region-active-p)]
+     ["Next sibling"          f90-ts-mark-region-next-sibling       :active (region-active-p)])
     "---"
     ("Defun & Thing"
      ["Beginning of defun" beginning-of-defun :active t]
