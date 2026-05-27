@@ -114,8 +114,10 @@ It will automatically be loaded when opening a file with extension `.f90`.
          ("A-\\"          . #'f90-ts-mark-region-enlarge)
          ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
          ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
          ("A-["           . #'f90-ts-mark-region-prev-sibling)
-         ("A-]"           . #'f90-ts-mark-region-next-sibling)))
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 

@@ -144,8 +144,10 @@ placed somewhere in `init.el` (or elsewhere).
          ("A-\\"          . #'f90-ts-mark-region-enlarge)
          ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
          ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
          ("A-["           . #'f90-ts-mark-region-prev-sibling)
-         ("A-]"           . #'f90-ts-mark-region-next-sibling)))
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 #### Development setup (local clone)
@@ -172,16 +174,19 @@ First clone the repository of `f90-ts-mode` as mentioned above.
 
   :bind (;; mode-specific bindings, adjust to your needs
          :map f90-ts-mode-map
-         ;; transient popup
+         ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts
+         ;; shortcuts (examples)
          ("A-<return>"    . #'f90-ts-break-line)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
          ("A-\\"          . #'f90-ts-mark-region-enlarge)
          ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
+         ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
          ("A-["           . #'f90-ts-mark-region-prev-sibling)
-         ("A-]"           . #'f90-ts-mark-region-next-sibling)))
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 #### Testing module
@@ -620,8 +625,10 @@ Key bindings are provided in the transient popup (`C-c C-f`) under the Region se
 | `f90-ts-mark-region-enlarge`            | `r`       | Find smallest parent node of existing region which is strictly larger    |
 | `f90-ts-mark-region-shrink-child-first` | `0`       | Shrink region to a first (grand)child which is strictly smaller          |
 | `f90-ts-mark-region-shrink-child-last`  | `9`       | Shrink region to a last (grand)child which is strictly smaller           |
+| `f90-ts-mark-region-first-sibling`      | `{`       | Move selected region to first sibling                                    |
 | `f90-ts-mark-region-prev-sibling`       | `[`       | Move selected region to previous sibling                                 |
 | `f90-ts-mark-region-next-sibling`       | `]`       | Move selected region to next sibling                                     |
+| `f90-ts-mark-region-last-sibling`       | `}`       | Move selected region to last sibling                                     |
 
 
 ## Development and Testing

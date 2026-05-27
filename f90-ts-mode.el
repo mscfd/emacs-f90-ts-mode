@@ -673,8 +673,10 @@ seem to make much sense."
     ("r"   "Enlarge"                      f90-ts-mark-region-enlarge)
     ("0"   "First child"                  f90-ts-mark-region-shrink-child-first)
     ("9"   "Last child"                   f90-ts-mark-region-shrink-child-last)
+    ("{"   "First sibling"                f90-ts-mark-region-first-sibling)
     ("["   "Previous sibling"             f90-ts-mark-region-prev-sibling)
-    ("]"   "Next sibling"                 f90-ts-mark-region-next-sibling)]]
+    ("]"   "Next sibling"                 f90-ts-mark-region-next-sibling)
+    ("}"   "Last sibling"                 f90-ts-mark-region-last-sibling)]]
   [["Procedure navigation"
     ("a"   "Beginning"                    f90-ts-thing-beginning-of-procedure)
     ("e"   "End"                          f90-ts-thing-end-of-procedure)
@@ -5468,42 +5470,66 @@ grandchild in the tree."
   (f90-ts--mark-region-shrink-child #'cdr -1 "no tree-sitter child9 found for current region"))
 
 
-(defun f90-ts-mark-region-prev-sibling ()
-  "Find smallest node covering current marked region.
-If the node spans the current region, then mark its previous sibling.
+(defun f90-ts--mark-region-relative (get-relative)
+  "Mark relative of node determined by current active region and GET-RELATIVE.
+First find smallest node covering currently active region.
+If the node spans the current region, then mark its relative determined
+by GET-RELATIVE.
 Otherwise mark the region spanned by the node itself (like enlarge-region)."
-  (interactive)
   (if (use-region-p)
       (if-let* ((beg (region-beginning))
                 (end (region-end))
                 (node-on (treesit-node-on beg end))
                 (node (f90-ts--largest-node-same-span node-on))
                 (node-mark (if (f90-ts--node-has-span-p node beg end)
-                               (treesit-node-prev-sibling node t)
+                               (funcall get-relative node)
                              node)))
           (f90-ts--mark-region-node node-mark
                                     f90-ts-mark-region-reversed)
-        (message "no tree-sitter previous sibling found for current region"))
+        (message "tree-sitter relative not found for current region"))
     (message "no active region")))
+
+
+(defun f90-ts-mark-region-first-sibling ()
+  "Mark first sibling of node determined by current active region.
+If the node spans the current region, then mark its first sibling.
+Otherwise mark the region spanned by the node itself (like enlarge-region)."
+  (interactive)
+  (f90-ts--mark-region-relative
+   (lambda (node)
+     (when-let ((parent (treesit-node-parent node)))
+       (treesit-node-child parent 0 t)))))
+
+
+(defun f90-ts-mark-region-prev-sibling ()
+  "Mark prev sibling of node determined by current active region.
+If the node spans the current region, then mark its prev sibling.
+Otherwise mark the region spanned by the node itself (like enlarge-region)."
+  (interactive)
+  (f90-ts--mark-region-relative
+   (lambda (node)
+     (treesit-node-prev-sibling node t))))
 
 
 (defun f90-ts-mark-region-next-sibling ()
-  "Find smallest node covering current marked region.
+  "Mark next sibling of node determined by current active region.
 If the node spans the current region, then mark its next sibling.
 Otherwise mark the region spanned by the node itself (like enlarge-region)."
   (interactive)
-  (if (use-region-p)
-      (if-let* ((beg (region-beginning))
-                (end (region-end))
-                (node-on (treesit-node-on beg end))
-                (node (f90-ts--largest-node-same-span node-on))
-                (node-mark (if (f90-ts--node-has-span-p node beg end)
-                               (treesit-node-next-sibling node t)
-                             node)))
-          (f90-ts--mark-region-node node-mark
-                                    f90-ts-mark-region-reversed)
-        (message "no tree-sitter next sibling found for current region"))
-    (message "no active region")))
+  (f90-ts--mark-region-relative
+   (lambda (node)
+     (treesit-node-next-sibling node t))))
+
+
+(defun f90-ts-mark-region-last-sibling ()
+  "Mark last sibling of node determined by current active region.
+If the node spans the current region, then mark its last sibling.
+Otherwise mark the region spanned by the node itself (like enlarge-region)."
+  (interactive)
+  (f90-ts--mark-region-relative
+   (lambda (node)
+     (when-let ((parent (treesit-node-parent node)))
+       (treesit-node-child parent -1 t)))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -6559,8 +6585,10 @@ and keyword are sometimes equal.  But we only want the structure node."
      ["Enlarge"               f90-ts-mark-region-enlarge            :active t]
      ["Shrink to first child" f90-ts-mark-region-shrink-child-first :active (region-active-p)]
      ["Shrink to last child"  f90-ts-mark-region-shrink-child-last  :active (region-active-p)]
+     ["First sibling"         f90-ts-mark-region-first-sibling      :active (region-active-p)]
      ["Previous sibling"      f90-ts-mark-region-prev-sibling       :active (region-active-p)]
-     ["Next sibling"          f90-ts-mark-region-next-sibling       :active (region-active-p)])
+     ["Next sibling"          f90-ts-mark-region-next-sibling       :active (region-active-p)]
+     ["Last sibling"          f90-ts-mark-region-last-sibling       :active (region-active-p)])
     "---"
     ("Defun & Thing"
      ["Beginning of defun" beginning-of-defun :active t]

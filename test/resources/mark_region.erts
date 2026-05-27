@@ -225,6 +225,29 @@ end subroutine sub_child9_2
 Code:
   (lambda ()
     (f90-ts-mode)
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-first-sibling))
+
+Name: mark first region 1
+=-=
+subroutine sub_first_1()
+   if (cond) then
+      do i = 1,10
+      end do
+   @end if|
+end subroutine sub_first_1
+=-=
+subroutine sub_first_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_first_1
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
     (f90-ts-mode-test--modify-region #'f90-ts-mark-region-prev-sibling))
 
 Name: mark prev region 1
@@ -264,5 +287,27 @@ subroutine sub_next_1()
       end do|
    end if
 end subroutine sub_next_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-last-sibling))
+
+Name: mark last region 1
+=-=
+subroutine sub_last_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_last_1
+=-=
+subroutine sub_last_1()
+   if (cond) then
+      do i = 1,10
+      end do
+   @end if|
+end subroutine sub_last_1
 =-=-=
 
