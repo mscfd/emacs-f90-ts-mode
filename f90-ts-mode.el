@@ -637,64 +637,6 @@ seem to make much sense."
 ;;;-----------------------------------------------------------------------------
 ;;; keymap
 
-
-;; transient is used instead (but keep it for a while)
-;;
-;; (define-prefix-command 'f90-ts-prefix-map)
-;; ;; indentation
-;; (define-key f90-ts-prefix-map (kbd "<tab>") #'f90-ts-indent-and-complete-line)
-;; (define-key f90-ts-prefix-map (kbd "s")     #'f90-ts-indent-and-complete-stmt)
-;; (define-key f90-ts-prefix-map (kbd "I")     #'f90-ts-indent-and-complete-region)
-;; (define-key f90-ts-prefix-map (kbd "E")     #'f90-ts-complete-smart-end-region)
-
-;; ;; line editing
-;; (define-key f90-ts-prefix-map (kbd "RET") #'f90-ts-break-line)
-;; (define-key f90-ts-prefix-map (kbd "j")   #'f90-ts-join-line-prev)
-;; (define-key f90-ts-prefix-map (kbd "J")   #'f90-ts-join-line-next)
-
-;; ;; comment region
-;; (define-key f90-ts-prefix-map (kbd "c") #'f90-ts-comment-region-default)
-;; (define-key f90-ts-prefix-map (kbd "C") #'f90-ts-comment-region-custom)
-
-;; ;; navigation
-;; ;; procedure
-;; (define-key f90-ts-prefix-map (kbd "a") #'f90-ts-thing-beginning-of-procedure)
-;; (define-key f90-ts-prefix-map (kbd "e") #'f90-ts-thing-end-of-procedure)
-;; (define-key f90-ts-prefix-map (kbd "p") #'f90-ts-thing-prev-procedure)
-;; (define-key f90-ts-prefix-map (kbd "n") #'f90-ts-thing-next-procedure)
-
-;; ;; type
-;; (define-key f90-ts-prefix-map (kbd "M-a") #'f90-ts-thing-beginning-of-type)
-;; (define-key f90-ts-prefix-map (kbd "M-e") #'f90-ts-thing-end-of-type)
-;; (define-key f90-ts-prefix-map (kbd "M-p") #'f90-ts-thing-prev-type)
-;; (define-key f90-ts-prefix-map (kbd "M-n") #'f90-ts-thing-next-type)
-
-;; ;; interface
-;; (define-key f90-ts-prefix-map (kbd "C-M-a") #'f90-ts-thing-beginning-of-interface)
-;; (define-key f90-ts-prefix-map (kbd "C-M-e") #'f90-ts-thing-end-of-interface)
-;; (define-key f90-ts-prefix-map (kbd "C-M-p") #'f90-ts-thing-prev-interface)
-;; (define-key f90-ts-prefix-map (kbd "C-M-n") #'f90-ts-thing-next-interface)
-
-;; ;; region
-;; (define-key f90-ts-prefix-map (kbd "r") #'f90-ts-enlarge-region)
-;; (define-key f90-ts-prefix-map (kbd "0") #'f90-ts-shrink-region-child0)
-;; (define-key f90-ts-prefix-map (kbd "[") #'f90-ts-prev-region)
-;; (define-key f90-ts-prefix-map (kbd "]") #'f90-ts-next-region)
-
-;; ;; xref
-;; (define-key f90-ts-prefix-map (kbd ".") #'xref-find-definitions)
-;; (define-key f90-ts-prefix-map (kbd ",") #'xref-find-references)
-;; (define-key f90-ts-prefix-map (kbd "/") #'xref-find-apropos)
-
-;; ;; navigation side panel
-;; (define-key f90-ts-prefix-map (kbd "b")   #'f90-ts-nav-buffer-open)
-;; (define-key f90-ts-prefix-map (kbd "f")   #'f90-ts-nav-buffer-focus)
-
-;; ;; transient popup itself (? or C-c C-f C-f / SPC to open)
-;; (define-key f90-ts-prefix-map (kbd "?")   #'f90-ts-transient)
-;; (define-key f90-ts-prefix-map (kbd "SPC") #'f90-ts-transient)
-
-
 (defvar f90-ts-mode-map
   (let ((map (make-sparse-keymap)))
     ;; TAB commands
