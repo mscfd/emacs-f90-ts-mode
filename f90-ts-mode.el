@@ -5309,62 +5309,83 @@ Querying at POS-1 gives the expected answer."
     (car sorted)))
 
 
-(defun f90-ts--comment-block-extent (node)
-  "Return (FIRST . LAST) comment nodes for the block containing NODE.
-Comments are grouped by prefix as extracted by `f90-ts--comment-prefix'.
-NODE must be of type comment."
-  (cl-assert (f90-ts--node-type-p node "comment")
-             nil "comment node expected")
-  (let* ((prefix (f90-ts--comment-prefix node))
-         (same-p (lambda (n)
-                   (and (f90-ts--node-type-p n "comment")
-                        (equal (f90-ts--comment-prefix n)
-                               prefix))))
+(defun f90-ts--node-same-group-p (node1 node2)
+  "Return non-nil if NODE1 and NODE2 belong to the same navigation group.
 
-         (first  (cl-loop
-                  for cur = node then next
-                  for next = (treesit-node-prev-sibling cur)
-                  while (and next (funcall same-p next))
-                  finally return cur))
-         (last   (cl-loop
-                  for cur = node then next
-                  for next = (treesit-node-next-sibling cur)
-                  while (and next (funcall same-p next))
-                  finally return cur)))
+Currently this predicate groups comment nodes sharing the same comment prefix."
+  ;; even if not belonging to any kind of group, a node is at least grouped with itself,
+  ;; this avoids any additional branches in other functions
+  (or (treesit-node-eq node1 node2)
+      (and (f90-ts--node-type-p node1 "comment")
+           (f90-ts--node-type-p node2 "comment")
+           (equal (f90-ts--comment-prefix node1)
+                  (f90-ts--comment-prefix node2)))))
+
+
+(defun f90-ts--group-block-extent (node)
+  "Return (FIRST . LAST) nodes for the group containing NODE."
+  (let* ((first (cl-loop
+                 for cur = node then next
+                 for next = (treesit-node-prev-sibling cur)
+                 while (and next (f90-ts--node-same-group-p next node))
+                 finally return cur))
+         (last  (cl-loop
+                 for cur = node then next
+                 for next = (treesit-node-next-sibling cur)
+                 while (and next (f90-ts--node-same-group-p next node))
+                 finally return cur)))
     (cons first last)))
 
 
-(defun f90-ts--comment-block-region (beg end)
-  "Classify type of region BEG..END with respect to comment blocks.
+(defun f90-ts--named-node-aligned-at-beg (beg end)
+  "Return the largest named node starting exactly at BEG and ending before END."
+  (when-let* ((node (f90-ts--node-on-pos beg 'named)))
+    (treesit-parent-while
+     node
+     (lambda (n) (and (=  beg (treesit-node-start n))
+                      (<= (treesit-node-end n) end))))))
+
+
+(defun f90-ts--named-node-aligned-at-end (beg end)
+  "Return the largest named node ending exactly at END and starting after END."
+  (when-let* ((node (f90-ts--node-on-pos end 'named)))
+    (treesit-parent-while
+     node
+     (lambda (n) (and (<= beg (treesit-node-start n))
+                      (= (treesit-node-end n) end))))))
+
+
+(defun f90-ts--group-block-region (beg end)
+  "Classify type of region BEG..END with respect to groups of nodes.
 Returns a list:
-  ('single NODE)   region is exactly one comment node
-  ('block  FN LN)  region is exactly the full block from first node FN
-                   to last node LN
-  ('partial FN LN) region is within block but neither single nor full,
-                   whole block is starts and end with nodes FN and LN
-  nil              not within a uniform comment block"
-  (let* ((node-beg (treesit-node-at beg))
-         (node-end (treesit-node-at (max beg (1- end)))))
-    (when (and (f90-ts--node-type-p node-beg "comment")
-               (f90-ts--node-type-p node-end "comment")
-               (equal (f90-ts--comment-prefix node-beg)
-                      (f90-ts--comment-prefix node-end)))
-      (let* ((extent (f90-ts--comment-block-extent node-beg))
+  ('single NODE)   region is exactly one node
+  ('block  FN LN)  region is exactly the full group from FN to LN
+  ('partial FN LN) region is within group but neither single nor full
+  nil              not within a uniform group"
+  (let* ((node-beg (f90-ts--named-node-aligned-at-beg beg end))
+         (node-end (f90-ts--named-node-aligned-at-end beg end)))
+    (when (and node-beg
+               node-end
+               (treesit-node-eq (treesit-node-parent node-beg)
+                                (treesit-node-parent node-end))
+               (f90-ts--node-same-group-p node-beg node-end)
+               (cl-loop for cur = node-beg then (treesit-node-next-sibling cur t)
+                        while (and cur (not (treesit-node-eq cur node-end)))
+                        always (f90-ts--node-same-group-p cur node-beg)))
+      (let* ((extent     (f90-ts--group-block-extent node-beg))
              (node-first (car extent))
              (node-last  (cdr extent))
-             (first-beg (treesit-node-start node-first))
-             (last-end  (treesit-node-end   node-last)))
+             (first-beg  (treesit-node-start node-first))
+             (last-end   (treesit-node-end   node-last)))
         (cond
-         ((and (= beg (treesit-node-start node-beg))
-               (= end (treesit-node-end   node-end))
-               (treesit-node-eq node-beg node-end))
+         ((and (treesit-node-eq node-beg node-end)
+               (= beg first-beg)
+               (= end last-end))
           (list 'single node-beg))
-
          ((and (= beg first-beg) (= end last-end))
           (list 'block node-first node-last))
-
          (t
-          (list 'partial node-first node-last)))))))
+          (list 'partial node-beg node-end)))))))
 
 
 (defun f90-ts-mark-region-enlarge-active ()
@@ -5375,13 +5396,13 @@ Returns a list:
 
   (let* ((beg (region-beginning))
          (end (region-end))
-         (comment-kind (f90-ts--comment-block-region beg end)))
-    (cl-destructuring-bind (&optional ck reg-first _) comment-kind
-      (if (eq ck 'single)
+         (group (f90-ts--group-block-region beg end)))
+    (cl-destructuring-bind (&optional gkind reg-first _) group
+      (if (eq gkind 'partial)
           ;; single comment line: expand to full block
-          (let* ((extent  (f90-ts--comment-block-extent reg-first))
-                 (ext-first   (car extent))
-                 (ext-last    (cdr extent)))
+          (let* ((extent (f90-ts--group-block-extent reg-first))
+                 (ext-first (car extent))
+                 (ext-last  (cdr extent)))
             (if (treesit-node-eq ext-first ext-last)
                 ;; block is just one line, fall through to tree-sitter ascent
                 (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
@@ -5439,9 +5460,9 @@ which is used for an error message if the child is not found."
   (if (use-region-p)
       (let* ((beg (region-beginning))
              (end (region-end))
-             (comment-kind (f90-ts--comment-block-region beg end)))
-        (cl-destructuring-bind (&optional ck first last) comment-kind
-          (if (eq ck 'block)
+             (group (f90-ts--group-block-region beg end)))
+        (cl-destructuring-bind (&optional gkind first last) group
+          (if (eq gkind 'block)
               (f90-ts--mark-region-node (funcall comment-selector (cons first last))
                                         f90-ts-mark-region-reversed)
             (if-let* ((node-on (treesit-node-on beg end))
