@@ -3,6 +3,23 @@ Point-Char: |
 Code:
   (lambda ()
     (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'start))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge)))
+
+Name: mark extend enlarge region 3
+=-=
+subroutine sub_ext_3()
+  @print *,'hello'|
+end subroutine sub_ext_3
+=-=
+|subroutine sub_ext_3()
+  print *,'hello'
+end subroutine sub_ext_3@
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
     (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge))
 
 Name: mark initial enlarge region 1
@@ -64,7 +81,7 @@ end subroutine sub_init_3
 Code:
   (lambda ()
     (f90-ts-mode)
-    (let ((f90-ts-mark-region-reversed t))
+    (let ((f90-ts-mark-region-order 'start))
       (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge)))
 
 Name: mark initial enlarge region 5
@@ -77,6 +94,28 @@ end module mod_init_4
 =-=
 module mod_init_4
    |type, public :: t@
+      integer :: i
+   end type t
+end module mod_init_4
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'preserve))
+      (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge)))
+
+Name: mark initial enlarge region 6
+=-=
+module mod_init_4
+|   type, public :: t
+      integer :: i
+   end type t
+end module mod_init_4
+=-=
+module mod_init_4
+   @type, public :: t|
       integer :: i
    end type t
 end module mod_init_4
@@ -130,6 +169,23 @@ end subroutine sub_ext_2
 Code:
   (lambda ()
     (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'preserve))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge)))
+
+Name: mark extend enlarge region 4
+=-=
+subroutine sub_ext_4()
+  |print *,'hello'@
+end subroutine sub_ext_4
+=-=
+|subroutine sub_ext_4()
+  print *,'hello'
+end subroutine sub_ext_4@
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
     (f90-ts-mode-test--modify-region #'f90-ts-mark-region-shrink-child-first))
 
 Name: mark child0 region 1
@@ -142,7 +198,7 @@ subroutine sub_child0_1()
 end subroutine sub_child0_1
 =-=
 subroutine sub_child0_1()
-   if @(cond)| then
+   if |(cond)@ then
       do i = 1,10
       end do
    end if
@@ -174,7 +230,6 @@ subroutine sub_child0_2()
 end subroutine sub_child0_2
 =-=-=
 
-
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -193,7 +248,7 @@ subroutine sub_child9_1()
    if (cond) then
       do i = 1,10
       end do
-   @end if|
+   |end if@
 end subroutine sub_child9_1
 =-=-=
 
@@ -764,5 +819,85 @@ subroutine sub_last_1()
       end do
    @end if|
 end subroutine sub_last_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'preserve))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling)))
+
+Name: mark sibling region preserve 1
+=-=
+subroutine sub_preverse_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_preverse_1
+=-=
+subroutine sub_preverse_1()
+   if (cond) then
+      @do i = 1,10
+      end do|
+   end if
+end subroutine sub_preverse_1
+=-=-=
+
+Name: mark sibling region preserve 2
+=-=
+subroutine sub_preverse_2()
+   if |(cond)@ then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_preverse_2
+=-=
+subroutine sub_preverse_2()
+   if (cond) then
+      |do i = 1,10
+      end do@
+   end if
+end subroutine sub_preverse_2
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'start))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling)))
+
+Name: mark sibling region start 1
+=-=
+subroutine sub_start_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_start_1
+=-=
+subroutine sub_start_1()
+   if (cond) then
+      |do i = 1,10
+      end do@
+   end if
+end subroutine sub_start_1
+=-=-=
+
+Name: mark sibling region start 2
+=-=
+subroutine sub_start_2()
+   if |(cond)@ then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_start_2
+=-=
+subroutine sub_start_2()
+   if (cond) then
+      |do i = 1,10
+      end do@
+   end if
+end subroutine sub_start_2
 =-=-=
 

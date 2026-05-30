@@ -483,11 +483,16 @@ indentation."
   :group 'f90-ts)
 
 
-(defcustom f90-ts-mark-region-reversed nil
-  "Mark region operations place point at end of region.
-If this option is set, then point is placed at start of region."
-  :type  'boolean
-  :safe  #'booleanp
+(defcustom f90-ts-mark-region-order 'preserve
+  "Mark region operations need to place point at beginning or end of region.
+If `start', point is placed at start of region.
+If `end', point is placed at end of region.
+If `preserve', the point/mark order of the active region is preserved,
+defaulting to end of region if there is no active region present."
+  :type  '(choice (const :tag "Point at start" start)
+                  (const :tag "Point at end" end)
+                  (const :tag "Preserve order" preserve))
+  :safe  (lambda (v) (memq v '(start end preserve)))
   :group 'f90-ts)
 
 
@@ -5260,37 +5265,48 @@ If continued line has comments (at end, next line etc.) joining is not done."
 ;;;-----------------------------------------------------------------------------
 ;;; treesitter based region functions
 
-(defun f90-ts--mark-region (beg end &optional reversed)
+(defun f90-ts--mark-region-reversed-p (region-order)
+  "Return non-nil if region should be marked with point at start.
+REGION-ORDER is as provided by `f90-ts-mark-region-order'."
+  (pcase region-order
+    ('start    t)
+    ('end      nil)
+    ('preserve (and (use-region-p) (> (mark) (point))))
+    (_         nil)))
+
+
+(defun f90-ts--mark-region (beg end &optional region-order)
   "Mark region BEG..END.
-If REVERSED is non-nil, then mark region from END..BEG,
-which places point at start of region."
-  (push-mark beg t t)
-  (goto-char end)
-  (when reversed
-    (exchange-point-and-mark)))
+REGION-ORDER controls where point is placed after marking,
+see `f90-ts-mark-region-order'."
+  (let ((order (f90-ts--mark-region-reversed-p region-order)))
+    (push-mark beg t t)
+    (goto-char end)
+    (when order
+      (exchange-point-and-mark))))
 
 
-(defun f90-ts--mark-region-node (node &optional reversed)
+(defun f90-ts--mark-region-node (node &optional region-order)
   "Mark the region spanned by NODE, trimmed of leading and trailing whitespace.
-If REVERSED is non-nil, then put point at start of region, otherwise point
+If REGION-ORDER is non-nil, then put point at start of region, otherwise point
 is at end of region."
   (let ((beg (f90-ts--node-start-trimmed node))
         (end (f90-ts--node-end-trimmed   node)))
-    (f90-ts--mark-region beg end reversed)))
+    (f90-ts--mark-region beg end region-order)))
 
 
-(defun f90-ts--mark-region-node-or-extent (node-or-extent &optional reversed)
+(defun f90-ts--mark-region-node-or-extent (node-or-extent &optional region-order)
   "Mark region given by NODE-OR-EXTENT, trimmed of leading and trailing whitespace.
 It is either a single NODE or a pair (FIRST . LAST).
 If it is a pair, mark the whole region from start of FIRST to end of LAST.
 
-If REVERSED is non-nil, then put point at start of region, otherwise point
+If REGION-ORDER is non-nil, then put point at start of region, otherwise point
 is at end of region."
   (if (consp node-or-extent)
       (f90-ts--mark-region (f90-ts--node-start-trimmed (car node-or-extent))
                            (f90-ts--node-end-trimmed   (cdr node-or-extent))
-                           reversed)
-    (f90-ts--mark-region-node node-or-extent reversed)))
+                           region-order)
+    (f90-ts--mark-region-node node-or-extent region-order)))
 
 
 (defun f90-ts--smallest-named-node-containing-region (beg end)
@@ -5444,13 +5460,13 @@ If at least one group is nil, return value is nil as well."
             (if (treesit-node-eq ext-first ext-last)
                 ;; block is just one line, fall through to tree-sitter ascent
                 (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
-                    (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
+                    (f90-ts--mark-region-node node f90-ts-mark-region-order)
                   (message "no tree-sitter node found enlarging current region"))
               (f90-ts--mark-region (f90-ts--node-start-trimmed ext-first)
                                    (f90-ts--node-end-trimmed   ext-last)
-                                   f90-ts-mark-region-reversed)))
+                                   f90-ts-mark-region-order)))
         (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
-            (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
+            (f90-ts--mark-region-node node f90-ts-mark-region-order)
           (message "no tree-sitter node found enlarging current region"))))))
 
 
@@ -5464,10 +5480,10 @@ This operation assumes that no region is active."
   (let* ((pos     (f90-ts--pos-nonspace (point)))
          (node-at (treesit-node-at pos)))
     (if (f90-ts--node-type-p node-at "comment")
-        (f90-ts--mark-region-node node-at f90-ts-mark-region-reversed)
+        (f90-ts--mark-region-node node-at f90-ts-mark-region-order)
       (if-let* ((node-on (f90-ts--node-on-pos pos 'named))
                 (node    (f90-ts--largest-node-same-span node-on)))
-          (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
+          (f90-ts--mark-region-node node f90-ts-mark-region-order)
         (message "no tree-sitter node found at point")))))
 
 
@@ -5503,11 +5519,11 @@ which is used for an error message if the child is not found."
         (cl-destructuring-bind (&optional gkind first last) group
           (if (eq gkind 'block)
               (f90-ts--mark-region-node (funcall comment-selector (cons first last))
-                                        f90-ts-mark-region-reversed)
+                                        f90-ts-mark-region-order)
             (if-let* ((node-on (treesit-node-on beg end))
                       (node    (f90-ts--smallest-node-same-span node-on))
                       (child   (treesit-node-child node child-index t)))
-                (f90-ts--mark-region-node child f90-ts-mark-region-reversed)
+                (f90-ts--mark-region-node child f90-ts-mark-region-order)
               (message "no tree-sitter %S child found for current region" child-name)))))
     (message "no active region")))
 
@@ -5584,7 +5600,7 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
                 (anchor (f90-ts--group-block-anchor group direction)))
           (let ((node-mark (or (f90-ts--relative-or-group anchor get-relative)
                                node)))
-            (f90-ts--mark-region-node-or-extent node-mark f90-ts-mark-region-reversed))
+            (f90-ts--mark-region-node-or-extent node-mark f90-ts-mark-region-order))
         (message "tree-sitter relative not found for current region"))
     (message "no active region")))
 

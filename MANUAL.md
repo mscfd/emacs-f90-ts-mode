@@ -613,6 +613,9 @@ any blanks to keep original indentation of commented code.
 ### Mark region based on tree-sitter nodes
 
 Marked regions can be selected, enlarged, shrunk or moved based on the tree-sitter node structure.
+Defcustom variable `f90-ts-mark-region-order' can be used to configure whether the point after
+a marked region operation should be placed at start, at end or if order of active region should
+be preserved (defaulting to end position if no active region is present).
 
 Blocks of nodes of the same kind are grouped and and dealt with like
 the block would be represented by a node in the tree (which they are not).
