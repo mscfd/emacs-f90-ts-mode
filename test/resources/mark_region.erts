@@ -76,8 +76,8 @@ module mod_init_4
 end module mod_init_4
 =-=
 module mod_init_4
-   |type, public :: t
-@      integer :: i
+   |type, public :: t@
+      integer :: i
    end type t
 end module mod_init_4
 =-=-=
@@ -96,8 +96,8 @@ end subroutine sub_ext_1
 =-=
 @subroutine sub_ext_1()
   print *,'hello'
-end subroutine sub_ext_1
-|
+end subroutine sub_ext_1|
+
 =-=-=
 
 Name: mark extend enlarge region 2
@@ -418,8 +418,8 @@ subro@utine su|b()
 end subroutine sub
 =-=
 ! neither single commit nor whole group
-@subroutine sub()
-|   x = 1
+@subroutine sub()|
+   x = 1
    !: x = 2
    !: x = 3
    !: x = 4
@@ -465,6 +465,29 @@ subroutine sub()
 end subroutine sub
 =-=
 ! neither single commit nor whole group
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region trimmed 1
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   x = 1
+@   !: x = 2
+   !: x = 3
+   !: x = 4
+|   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
 subroutine sub()
    @x = 1|
    !: x = 2
@@ -646,8 +669,8 @@ subro@utine su|b()
    x = 6
 end subroutine sub
 =-=
-@subroutine sub()
-|   x = 1
+@subroutine sub()|
+   x = 1
    !: x = 2
    !: x = 3
    !: x = 4
@@ -677,7 +700,6 @@ subroutine sub()
 end subroutine sub
 =-=-=
 
-
 Name: mark next region partial 3
 =-=
 subroutine sub()
@@ -695,6 +717,29 @@ subroutine sub()
    !: x = 3
    @!: x = 4|
    ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region trimmed 1
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   x = 1
+@   !: x = 2
+   !: x = 3
+   !: x = 4
+|   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   @! x = 5|
    x = 6
 end subroutine sub
 =-=-=

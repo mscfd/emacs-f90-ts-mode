@@ -808,7 +808,7 @@ This is used by the Makefile to run ert tests during development."
 
 
 ;;;-----------------------------------------------------------------------------
-;;; auxiliary predicates
+;;; auxiliary predicates, walk and query functions
 
 (defun f90-ts--node-type-p (node type)
   "If TYPE is nil, return true and ignore NODE.
@@ -1069,9 +1069,6 @@ expression, even if operating on booleans (for example: .imply.  operator).")
           f90-ts--node-op-expr-types))
 
 
-;;;-----------------------------------------------------------------------------
-;;; auxiliary walk and query functions
-
 (defun f90-ts--comment-matching-rule (node)
   "Return the first rule in `f90-ts-special-comment-rules' which matches.
 A rule matches if text of NODE matches the regexp or the predicate of the rule.
@@ -1088,45 +1085,63 @@ NODE is assumed to be of type comment."
      f90-ts-special-comment-rules)))
 
 
-;; currently not used, but might be useful
-(defun f90-ts--search-subtree (root pred &optional start end prune reversed)
-  "Collect nodes within subtree of ROOT for which PRED shall return non-nil.
-ROOT can be any node and is not necessarily the root node of the tree.
-If START and END are non-nil, only visit nodes overlapping that region.
-If PRUNE is non-nil, do not descend into children of nodes that satisfy PRED.
-If REVERSED is non-nil, return in reversed order."
-  (let (nodes)
-    (cl-labels
-        ((traverse (node)
-           (when (or (null start)
-                     (null end)
-                     (f90-ts-node-overlap-region-p node start end))
-             (let ((match (funcall pred node)))
-               (when match
-                 (push node nodes))
-               (unless (and match prune)
-                 (mapc #'traverse (treesit-node-children node)))))))
-      (traverse root))
-    (if reversed
-        nodes
-      (nreverse nodes))))
+(defun f90-ts--node-on-pos (pos named)
+  "Return the smallest node covering position POS.
+If NAMED is non-nil, consider only named nodes, otherwise include anonymous
+nodes as well.
+
+Function `treesit-node-on' works on half-open regions.
+It returns a node spanning the half-open region [beg, end).
+If POS is at end position of node, then the region [POS,POS) is empty and
+`treesit-node-on' returns a larger node.
+This function queries at POS and at POS-1, and selects the smallest node
+containing POS in the closed interval logic.
+Example
+subroutine sub()
+   if (cond) then
+   end if|
+end subroutine sub
+If point is at |, then the smallest named no is the end_statement node
+for \"end if\".  However, treesit-node-on returns the subroutine node.
+Querying at POS-1 gives the expected answer."
+  (let* ((nodes (delq nil
+                      (list (treesit-node-on pos   pos   nil named)
+                            (when (< (point-min) pos)
+                              (treesit-node-on (1- pos) (1- pos) nil named)))))
+         (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
+                                                (<= pos (treesit-node-end n))))
+                               nodes))
+         (sorted (seq-sort (lambda (n1 n2) (< (- (treesit-node-end n1)
+                                                 (treesit-node-start n1))
+                                              (- (treesit-node-end n2)
+                                                 (treesit-node-start n2))))
+                           filtered)))
+    (car sorted)))
 
 
-;; currently not used, but might be useful
-(defun f90-ts--statement-at-node (node)
-  "Find the most relevant ancestor node starting at the same position as NODE.
-This is done by ascending to parent nodes until start position becomes different
-or some ERROR or translation_unit node is encountered."
-  ;; ascend as long as parent starts at the same position and is not an ERROR node
-  (cl-loop
-   for current = node then parent
-   for parent = (treesit-node-parent current)
-   while (and parent
-              (= (treesit-node-start parent)
-                 (treesit-node-start current))
-              (not (f90-ts--node-type-p parent
-                                        '("ERROR" "translation_unit"))))
-   finally return current))
+(defun f90-ts--smallest-node-same-span (node)
+  "Find the smallest named descendant of NODE which spans the same region."
+  (let* ((beg (treesit-node-start node))
+         (end (treesit-node-end node))
+         (sparse (treesit-induce-sparse-tree
+                  node
+                  (lambda (n) (and (treesit-node-check n 'named)
+                                   (f90-ts--node-has-span-p n beg end))))))
+    ;; get the first leaf, descend the first child until a leaf is reached
+    (cl-loop for current = sparse then (car (cdr current))
+             while (cdr current)
+             finally return (car current))))
+
+
+(defun f90-ts--largest-node-same-span (node)
+  "Find the largest ancestor of NODE which spans the same region.
+Example: for (contains_statement \"contains\") `treesit-node-on' returns
+\"contains\", but for navigation, we usually want the largest node with
+same bounds, which is the contains_statement node."
+  (treesit-parent-while
+   node
+   (lambda (n)
+     (f90-ts--node-same-span-p n node))))
 
 
 (defun f90-ts--siblings-between (node1 node2 &optional named)
@@ -1549,6 +1564,66 @@ If NODE is non-nil, return line number at which start position is
 located, otherwise return line number of current point position."
   (or (and node (f90-ts--node-line node))
       (line-number-at-pos)))
+
+
+(defun f90-ts--node-start-trimmed (node)
+  "Return the position of the first non-blank character of NODE."
+  (save-excursion
+    (goto-char (treesit-node-start node))
+    (skip-chars-forward " \t\n")
+    (point)))
+
+
+(defun f90-ts--node-end-trimmed (node)
+  "Return the position of the last non-blank character of NODE."
+  (save-excursion
+    (goto-char (treesit-node-end node))
+    (skip-chars-backward " \t\n")
+    (point)))
+
+
+(defun f90-ts--region-trimmed ()
+  "Return (BEG . END) of trimmed active region.
+The trimming removes leading and trailing whitespace."
+  (cons (save-excursion
+          (goto-char (region-beginning))
+          (skip-chars-forward " \t\n")
+          (point))
+        (save-excursion
+          (goto-char (region-end))
+          (skip-chars-backward " \t\n")
+          (point))))
+
+
+(defun f90-ts--pos-first-nonspace (pos)
+  "Determine position of first non-space character of line at POS."
+  (save-excursion
+    (goto-char pos)
+    (beginning-of-line)
+    (skip-chars-forward " \t")
+    (point)))
+
+
+(defun f90-ts--pos-last-nonspace (pos)
+  "Determine position right after last non-space character of line at POS."
+  (save-excursion
+    (goto-char pos)
+    (end-of-line)
+    (skip-chars-backward " \t")
+    (point)))
+
+
+(defun f90-ts--pos-nonspace (pos)
+  "Move point to first or last non-space character on current line.
+If POS is before the first non-space character, move to it.
+If POS is after the last non-space character, move to just after it.
+Otherwise return POS."
+  (let ((first (f90-ts--pos-first-nonspace pos))
+        (last (f90-ts--pos-last-nonspace pos)))
+    (cond
+     ((< pos first) first)
+     ((> pos last)  last)
+     (t             pos))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5185,37 +5260,6 @@ If continued line has comments (at end, next line etc.) joining is not done."
 ;;;-----------------------------------------------------------------------------
 ;;; treesitter based region functions
 
-(defun f90-ts--pos-first-nonspace (pos)
-  "Determine position of first non-space character of line at POS."
-  (save-excursion
-    (goto-char pos)
-    (beginning-of-line)
-    (skip-chars-forward " \t")
-    (point)))
-
-
-(defun f90-ts--pos-last-nonspace (pos)
-  "Determine position right after last non-space character of line at POS."
-  (save-excursion
-    (goto-char pos)
-    (end-of-line)
-    (skip-chars-backward " \t")
-    (point)))
-
-
-(defun f90-ts--pos-nonspace (pos)
-  "Move point to first or last non-space character on current line.
-If POS is before the first non-space character, move to it.
-If POS is after the last non-space character, move to just after it.
-Otherwise return POS."
-  (let ((first (f90-ts--pos-first-nonspace pos))
-        (last (f90-ts--pos-last-nonspace pos)))
-    (cond
-     ((< pos first) first)
-     ((> pos last)  last)
-     (t             pos))))
-
-
 (defun f90-ts--mark-region (beg end &optional reversed)
   "Mark region BEG..END.
 If REVERSED is non-nil, then mark region from END..BEG,
@@ -5227,51 +5271,26 @@ which places point at start of region."
 
 
 (defun f90-ts--mark-region-node (node &optional reversed)
-  "Mark the region spanned by NODE.
+  "Mark the region spanned by NODE, trimmed of leading and trailing whitespace.
 If REVERSED is non-nil, then put point at start of region, otherwise point
 is at end of region."
-  (let ((beg (treesit-node-start node))
-        (end (treesit-node-end node)))
+  (let ((beg (f90-ts--node-start-trimmed node))
+        (end (f90-ts--node-end-trimmed   node)))
     (f90-ts--mark-region beg end reversed)))
 
 
 (defun f90-ts--mark-region-node-or-extent (node-or-extent &optional reversed)
-  "Mark region given by NODE-OR-EXTENT.
+  "Mark region given by NODE-OR-EXTENT, trimmed of leading and trailing whitespace.
 It is either a single NODE or a pair (FIRST . LAST).
 If it is a pair, mark the whole region from start of FIRST to end of LAST.
 
 If REVERSED is non-nil, then put point at start of region, otherwise point
 is at end of region."
   (if (consp node-or-extent)
-      (f90-ts--mark-region (treesit-node-start (car node-or-extent))
-                           (treesit-node-end   (cdr node-or-extent))
+      (f90-ts--mark-region (f90-ts--node-start-trimmed (car node-or-extent))
+                           (f90-ts--node-end-trimmed   (cdr node-or-extent))
                            reversed)
     (f90-ts--mark-region-node node-or-extent reversed)))
-
-
-(defun f90-ts--smallest-node-same-span (node)
-  "Find the smallest named descendant of NODE which spans the same region."
-  (let* ((beg (treesit-node-start node))
-         (end (treesit-node-end node))
-         (sparse (treesit-induce-sparse-tree
-                  node
-                  (lambda (n) (and (treesit-node-check n 'named)
-                                   (f90-ts--node-has-span-p n beg end))))))
-    ;; get the first leaf, descend the first child until a leaf is reached
-    (cl-loop for current = sparse then (car (cdr current))
-             while (cdr current)
-             finally return (car current))))
-
-
-(defun f90-ts--largest-node-same-span (node)
-  "Find the largest ancestor of NODE which spans the same region.
-Example: for (contains_statement \"contains\") `treesit-node-on' returns
-\"contains\", but for navigation, we usually want the largest node with
-same bounds, which is the contains_statement node."
-  (treesit-parent-while
-   node
-   (lambda (n)
-     (f90-ts--node-same-span-p n node))))
 
 
 (defun f90-ts--smallest-named-node-containing-region (beg end)
@@ -5288,40 +5307,6 @@ The node must be strictly larger than the region (BEG END)."
                                 (- (treesit-node-end n) (treesit-node-start n)))))
                       t)))
     (f90-ts--largest-node-same-span cover)))
-
-
-(defun f90-ts--node-on-pos (pos named)
-  "Return the smallest node covering position POS.
-If NAMED is non-nil, consider only named nodes, otherwise include anonymous
-nodes as well.
-
-Function `treesit-node-on' works on half-open regions.
-It returns a node spanning the half-open region [beg, end).
-If POS is at end position of node, then the region [POS,POS) is empty and
-`treesit-node-on' returns a larger node.
-This function queries at POS and at POS-1, and selects the smallest node
-containing POS in the closed interval logic.
-Example
-subroutine sub()
-   if (cond) then
-   end if|
-end subroutine sub
-If point is at |, then the smallest named no is the end_statement node
-for \"end if\".  However, treesit-node-on returns the subroutine node.
-Querying at POS-1 gives the expected answer."
-  (let* ((nodes (delq nil
-                      (list (treesit-node-on pos   pos   nil named)
-                            (when (< (point-min) pos)
-                              (treesit-node-on (1- pos) (1- pos) nil named)))))
-         (filtered (seq-filter (lambda (n) (and (<= (treesit-node-start n) pos)
-                                                (<= pos (treesit-node-end n))))
-                               nodes))
-         (sorted (seq-sort (lambda (n1 n2) (< (- (treesit-node-end n1)
-                                                 (treesit-node-start n1))
-                                              (- (treesit-node-end n2)
-                                                 (treesit-node-start n2))))
-                           filtered)))
-    (car sorted)))
 
 
 (defun f90-ts--node-same-group-p (node1 node2)
@@ -5358,7 +5343,7 @@ If NAMED is non-nil, consider only named nodes."
   (when-let* ((node (f90-ts--node-on-pos beg named)))
     (treesit-parent-while
      node
-     (lambda (n) (and (=  beg (treesit-node-start n))
+     (lambda (n) (and (=  beg (f90-ts--node-start-trimmed n))
                       (<= (treesit-node-end n) end))))))
 
 
@@ -5369,7 +5354,7 @@ If NAMED is non-nil, consider only named nodes."
     (treesit-parent-while
      node
      (lambda (n) (and (<= beg (treesit-node-start n))
-                      (= (treesit-node-end n) end))))))
+                      (= (f90-ts--node-end-trimmed n) end))))))
 
 
 (defun f90-ts--group-block-p (node-beg node-end)
@@ -5389,11 +5374,11 @@ nodes also belong to the same group."
 
 (defun f90-ts--group-block-region-classify (beg end node-beg node-end)
   "Classify BEG..END within a confirmed group from NODE-BEG to NODE-END."
-  (let* ((extent     (f90-ts--group-block-extent node-beg))
+  (let* ((extent (f90-ts--group-block-extent node-beg))
          (node-first (car extent))
-         (node-last  (cdr extent))
-         (first-beg  (treesit-node-start node-first))
-         (last-end   (treesit-node-end   node-last)))
+         (node-last (cdr extent))
+         (first-beg (f90-ts--node-start-trimmed node-first))
+         (last-end (f90-ts--node-end-trimmed node-last)))
     (cond
      ((and (treesit-node-eq node-beg node-end)
            (= beg first-beg)
@@ -5446,8 +5431,9 @@ If at least one group is nil, return value is nil as well."
              nil
              "active region required")
 
-  (let* ((beg (region-beginning))
-         (end (region-end))
+  (let* ((region (f90-ts--region-trimmed))
+         (beg (car region))
+         (end (cdr region))
          (group (f90-ts--group-block-region beg end)))
     (cl-destructuring-bind (&optional gkind reg-first _) group
       (if (eq gkind 'partial)
@@ -5460,8 +5446,8 @@ If at least one group is nil, return value is nil as well."
                 (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
                     (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
                   (message "no tree-sitter node found enlarging current region"))
-              (f90-ts--mark-region (treesit-node-start ext-first)
-                                   (treesit-node-end ext-last)
+              (f90-ts--mark-region (f90-ts--node-start-trimmed ext-first)
+                                   (f90-ts--node-end-trimmed   ext-last)
                                    f90-ts-mark-region-reversed)))
         (if-let ((node (f90-ts--smallest-named-node-containing-region beg end)))
             (f90-ts--mark-region-node node f90-ts-mark-region-reversed)
@@ -5510,9 +5496,10 @@ comment nodes.  CHILD-INDEX is passed to `treesit-node-child' (0 for first
 and -1 for last).  CHILD-NAME is a name like \"first\" or \"last\"
 which is used for an error message if the child is not found."
   (if (use-region-p)
-      (let* ((beg (region-beginning))
-             (end (region-end))
-             (group (f90-ts--group-block-region beg end)))
+      (let* ((region (f90-ts--region-trimmed))
+             (beg    (car region))
+             (end    (cdr region))
+             (group  (f90-ts--group-block-region beg end)))
         (cl-destructuring-bind (&optional gkind first last) group
           (if (eq gkind 'block)
               (f90-ts--mark-region-node (funcall comment-selector (cons first last))
@@ -5588,16 +5575,15 @@ Otherwise mark the region spanned by the node itself (like enlarge-region)."
   (cl-assert (member direction '(backward forward))
              nil "direction is not backward or forward")
   (if (use-region-p)
-      (if-let* ((beg       (region-beginning))
-                (end       (region-end))
-                (node-on   (treesit-node-on beg end))
-                (node      (f90-ts--largest-node-same-span node-on))
-                (group     (f90-ts--group-block-region beg end))
-                (anchor    (f90-ts--group-block-anchor group direction)))
-          (let ((node-mark (if anchor
-                               (or (f90-ts--relative-or-group anchor get-relative)
-                                   node)
-                             node)))
+      (if-let* ((region (f90-ts--region-trimmed))
+                (beg (car region))
+                (end (cdr region))
+                (node-on (treesit-node-on beg end))
+                (node (f90-ts--largest-node-same-span node-on))
+                (group (f90-ts--group-block-region beg end))
+                (anchor (f90-ts--group-block-anchor group direction)))
+          (let ((node-mark (or (f90-ts--relative-or-group anchor get-relative)
+                               node)))
             (f90-ts--mark-region-node-or-extent node-mark f90-ts-mark-region-reversed))
         (message "tree-sitter relative not found for current region"))
     (message "no active region")))
