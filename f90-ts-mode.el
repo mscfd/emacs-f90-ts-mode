@@ -154,7 +154,7 @@ associate ...) etc."
   :group 'f90-ts-indent)
 
 
-(defconst f90-ts-indent-list-options
+(defconst f90-ts--indent-options-alist
   '(("keep if aligned or align to primary column" . keep-or-primary)
     ("keep if aligned or rotate to next column" . keep-or-rotate)
     ("align with primary column" . primary)
@@ -163,17 +163,35 @@ associate ...) etc."
   "Options for indentation of list like structures on continued lines.")
 
 
-(defconst f90-ts--indent-list-radio
+(defconst f90-ts--indent-region-options-alist
+  (cl-remove-if (lambda (x)
+                  (memq (cdr x) '(rotate keep-or-rotate)))
+                f90-ts--indent-options-alist)
+  "Options for region indentation (excludes rotation).")
+
+
+(defconst f90-ts--indent-values
+  (mapcar #'cdr f90-ts--indent-options-alist)
+  "List of valid symbols for single-line indentation.")
+
+
+(defconst f90-ts--indent-region-values
+  (mapcar #'cdr f90-ts--indent-region-options-alist)
+  "List of valid symbols for region indentation (excludes rotation).")
+
+
+(defun f90-ts--indent-make-radio-type (options)
+  "Generate a customize radio type from an alist of indent OPTIONS."
   `(radio ,@(mapcar (lambda (x)
                       `(const :tag ,(car x) ,(cdr x)))
-                    f90-ts-indent-list-options))
-  "Prepared options list for defcustoms.")
+                    options)))
 
 
 (defcustom f90-ts-indent-list-region 'keep-or-primary
   "Select indentation column for continued lines in list-like context.
 Used as default setting in `indent-region' and similar operations."
-  :type  f90-ts--indent-list-radio
+  :type (f90-ts--indent-make-radio-type f90-ts--indent-region-options-alist)
+  :safe (lambda (val) (memq val f90-ts--indent-region-values))
   :group 'f90-ts-indent)
 
 
@@ -181,7 +199,8 @@ Used as default setting in `indent-region' and similar operations."
   "Select indentation column for continued lines in list-like context.
 Used as default setting in `indent-for-tab-command' and similar
 operations (indentation of a single line)."
-  :type  f90-ts--indent-list-radio
+  :type (f90-ts--indent-make-radio-type f90-ts--indent-options-alist)
+  :safe (lambda (val) (memq val f90-ts--indent-values))
   :group 'f90-ts-indent)
 
 
@@ -189,7 +208,8 @@ operations (indentation of a single line)."
   "Select indentation column for continued lines in list-like context.
 Used as secondary setting in `indent-for-tab-command'.  Can be be bound
 to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
-  :type  f90-ts--indent-list-radio
+  :type (f90-ts--indent-make-radio-type f90-ts--indent-options-alist)
+  :safe (lambda (val) (memq val f90-ts--indent-values))
   :group 'f90-ts-indent)
 
 
@@ -197,13 +217,14 @@ to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
   "Select indentation column for continued lines in list-like context.
 Used as ternary setting in `indent-for-tab-command'.  Can be be bound
 to <backtab> (S-<tab>), A-<tab>, C-S-<tab> or other."
-  :type  f90-ts--indent-list-radio
+  :type (f90-ts--indent-make-radio-type f90-ts--indent-options-alist)
+  :safe (lambda (val) (memq val f90-ts--indent-values))
   :group 'f90-ts-indent)
 
 
 (defcustom f90-ts-indent-paren-default 1
   "Additional offset applied for alignment with opening parenthesis.
-The default is for all items except the closing parenthesis.
+The default is used for all items except the closing parenthesis.
 
 Example:
    call sub(       arg1, &
