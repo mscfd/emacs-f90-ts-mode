@@ -135,16 +135,19 @@ placed somewhere in `init.el` (or elsewhere).
 
   :bind (;; mode-specific bindings, adjust to your needs
          :map f90-ts-mode-map
-         ;; transient popup
+         ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts
+         ;; shortcuts (just some examples)
          ("A-<return>"    . #'f90-ts-break-line)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
-         ("A-\\"          . #'f90-ts-enlarge-region)
-         ("A-0"           . #'f90-ts-shrink-region-child0)
-         ("A-["           . #'f90-ts-prev-region)
-         ("A-]"           . #'f90-ts-next-region)))
+         ("A-\\"          . #'f90-ts-mark-region-enlarge)
+         ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
+         ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
+         ("A-["           . #'f90-ts-mark-region-prev-sibling)
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 #### Development setup (local clone)
@@ -171,16 +174,19 @@ First clone the repository of `f90-ts-mode` as mentioned above.
 
   :bind (;; mode-specific bindings, adjust to your needs
          :map f90-ts-mode-map
-         ;; transient popup
+         ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts
+         ;; shortcuts (examples)
          ("A-<return>"    . #'f90-ts-break-line)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
-         ("A-\\"          . #'f90-ts-enlarge-region)
-         ("A-0"           . #'f90-ts-shrink-region-child0)
-         ("A-["           . #'f90-ts-prev-region)
-         ("A-]"           . #'f90-ts-next-region)))
+         ("A-\\"          . #'f90-ts-mark-region-enlarge)
+         ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
+         ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
+         ("A-["           . #'f90-ts-mark-region-prev-sibling)
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 #### Testing module
@@ -606,20 +612,30 @@ any blanks to keep original indentation of commented code.
 
 ### Mark region based on tree-sitter nodes
 
-Regions can be selected, enlarged, shrunk or moved based on tree-sitter nodes.
-Blocks of comments with the same comment prefix are identified and dealt with like
-the block would be represented by a node (which they are not).
-This is particularly useful in conjunction with comment prefixes and
-comment region operations.
+Marked regions can be selected, enlarged, shrunk or moved based on the tree-sitter node structure.
+Defcustom variable `f90-ts-mark-region-order' can be used to configure whether the point after
+a marked region operation should be placed at start, at end or if order of active region should
+be preserved (defaulting to end position if no active region is present).
+
+Blocks of nodes of the same kind are grouped and and dealt with like
+the block would be represented by a node in the tree (which they are not).
+Currently comments with the same comment prefix extracted by `f90-ts-comment-prefix-regexp`
+are recognised. (Other groups like use statements or public statements could be added in the future.)
+
+Identifying comments with the same comment prefix and including those in mark region operations
+is particularly useful in conjunction with comment region operations.
 
 Key bindings are provided in the transient popup (`C-c C-f`) under the Region section:
 
-| Function                      | Popup key | Description                                                              |
-|-------------------------------|-----------|--------------------------------------------------------------------------|
-| `f90-ts-enlarge-region`       | `r`       | Find smallest parent node of existing region which is strictly larger    |
-| `f90-ts-shrink-region-child0` | `0`       | Shrink region to a first (grand)child which is strictly smaller          |
-| `f90-ts-prev-region`          | `[`       | Move selected region to previous sibling                                 |
-| `f90-ts-next-region`          | `]`       | Move selected region to next sibling                                     |
+| Function                                | Popup key | Description                                                              |
+|-----------------------------------------|-----------|--------------------------------------------------------------------------|
+| `f90-ts-mark-region-enlarge`            | `r`       | Find smallest parent node of existing region which is strictly larger    |
+| `f90-ts-mark-region-shrink-child-first` | `0`       | Shrink region to a first (grand)child which is strictly smaller          |
+| `f90-ts-mark-region-shrink-child-last`  | `9`       | Shrink region to a last (grand)child which is strictly smaller           |
+| `f90-ts-mark-region-first-sibling`      | `{`       | Move selected region to first sibling                                    |
+| `f90-ts-mark-region-prev-sibling`       | `[`       | Move selected region to previous sibling                                 |
+| `f90-ts-mark-region-next-sibling`       | `]`       | Move selected region to next sibling                                     |
+| `f90-ts-mark-region-last-sibling`       | `}`       | Move selected region to last sibling                                     |
 
 
 ## Development and Testing

@@ -154,7 +154,7 @@ without final newline."
     (f90-ts-comment-region-prefix . "!!$ ")
     (f90-ts-extra-comment-prefixes . ("!!!" "! " "!> "))
     (f90-ts-comment-prefix-keep-indent . t)
-    (f90-ts-mark-region-reversed . nil)
+    (f90-ts-mark-region-order . preserve)
     (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
                                         ; also needs treesit-font-lock-recompute-features
     (indent-tabs-mode . nil)
@@ -818,6 +818,7 @@ for modified region."
   (let ((pos (point)))
     (goto-char (point-min))
     (search-forward "@")
+    ;; point is after marker @, so delete before
     (delete-char -1)
     (push-mark (point) t t)
     (if (< (point) pos)

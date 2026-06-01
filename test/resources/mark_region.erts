@@ -3,7 +3,24 @@ Point-Char: |
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--mark-region #'f90-ts-enlarge-region))
+    (let ((f90-ts-mark-region-order 'start))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge)))
+
+Name: mark extend enlarge region 3
+=-=
+subroutine sub_ext_3()
+  @print *,'hello'|
+end subroutine sub_ext_3
+=-=
+|subroutine sub_ext_3()
+  print *,'hello'
+end subroutine sub_ext_3@
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge))
 
 Name: mark initial enlarge region 1
 =-=
@@ -64,8 +81,8 @@ end subroutine sub_init_3
 Code:
   (lambda ()
     (f90-ts-mode)
-    (let ((f90-ts-mark-region-reversed t))
-      (f90-ts-mode-test--mark-region #'f90-ts-enlarge-region)))
+    (let ((f90-ts-mark-region-order 'start))
+      (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge)))
 
 Name: mark initial enlarge region 5
 =-=
@@ -76,8 +93,30 @@ module mod_init_4
 end module mod_init_4
 =-=
 module mod_init_4
-   |type, public :: t
-@      integer :: i
+   |type, public :: t@
+      integer :: i
+   end type t
+end module mod_init_4
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'preserve))
+      (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge)))
+
+Name: mark initial enlarge region 6
+=-=
+module mod_init_4
+|   type, public :: t
+      integer :: i
+   end type t
+end module mod_init_4
+=-=
+module mod_init_4
+   @type, public :: t|
+      integer :: i
    end type t
 end module mod_init_4
 =-=-=
@@ -85,7 +124,7 @@ end module mod_init_4
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-enlarge-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge))
 
 Name: mark extend enlarge region 1
 =-=
@@ -96,8 +135,8 @@ end subroutine sub_ext_1
 =-=
 @subroutine sub_ext_1()
   print *,'hello'
-end subroutine sub_ext_1
-|
+end subroutine sub_ext_1|
+
 =-=-=
 
 Name: mark extend enlarge region 2
@@ -130,7 +169,24 @@ end subroutine sub_ext_2
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-shrink-region-child0))
+    (let ((f90-ts-mark-region-order 'preserve))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge)))
+
+Name: mark extend enlarge region 4
+=-=
+subroutine sub_ext_4()
+  |print *,'hello'@
+end subroutine sub_ext_4
+=-=
+|subroutine sub_ext_4()
+  print *,'hello'
+end subroutine sub_ext_4@
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-shrink-child-first))
 
 Name: mark child0 region 1
 =-=
@@ -142,7 +198,7 @@ subroutine sub_child0_1()
 end subroutine sub_child0_1
 =-=
 subroutine sub_child0_1()
-   if @(cond)| then
+   if |(cond)@ then
       do i = 1,10
       end do
    end if
@@ -177,7 +233,77 @@ end subroutine sub_child0_2
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-prev-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-shrink-child-last))
+
+Name: mark child9 region 1
+=-=
+subroutine sub_child9_1()
+   |if (cond) then
+      do i = 1,10
+      end do
+   end if@
+end subroutine sub_child9_1
+=-=
+subroutine sub_child9_1()
+   if (cond) then
+      do i = 1,10
+      end do
+   |end if@
+end subroutine sub_child9_1
+=-=-=
+
+Name: mark child9 region 2
+=-=
+subroutine sub_child9_2()
+   i = 6
+   ! comment
+   @!!$ i = i + m1
+   !!$ i = i + m2
+   !!$ i = i + m3
+   !!$ i = i + m4|
+   ! comment
+   j = 5
+end subroutine sub_child9_2
+=-=
+subroutine sub_child9_2()
+   i = 6
+   ! comment
+   !!$ i = i + m1
+   !!$ i = i + m2
+   !!$ i = i + m3
+   @!!$ i = i + m4|
+   ! comment
+   j = 5
+end subroutine sub_child9_2
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-first-sibling))
+
+Name: mark first region 1
+=-=
+subroutine sub_first_1()
+   if (cond) then
+      do i = 1,10
+      end do
+   @end if|
+end subroutine sub_first_1
+=-=
+subroutine sub_first_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_first_1
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-prev-sibling))
 
 Name: mark prev region 1
 =-=
@@ -196,10 +322,241 @@ subroutine sub_prev_1()
 end subroutine sub_prev_1
 =-=-=
 
+Name: mark prev region group 1
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   @! x = 5|
+   x = 6
+end subroutine sub
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x = 3
+   !: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region group 2
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x = 3
+   !: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region group 3
+=-=
+! single comment within a group, ignore group
+subroutine sub()
+   x = 1
+   !: x = 2
+   @!: x = 3|
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! single comment within a group, ignore group
+subroutine sub()
+   x = 1
+   @!: x = 2|
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region group 4
+=-=
+! last comment within a group, ignore group
+subroutine sub()
+   x = 1
+   @!: x = 2|
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! last comment within a group, ignore group
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region group 5
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   !: x = 2
+   @!: x = 3
+   !: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   @!: x = 2|
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region group 6
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x = 3|
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region partial 1
+=-=
+! neither single commit nor whole group
+subro@utine su|b()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+@subroutine sub()|
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region partial 2
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   !: @x =| 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+
+Name: mark prev region partial 3
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x |= 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark prev region trimmed 1
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   x = 1
+@   !: x = 2
+   !: x = 3
+   !: x = 4
+|   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-next-region))
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling))
 
 Name: mark next region 1
 =-=
@@ -216,5 +573,331 @@ subroutine sub_next_1()
       end do|
    end if
 end subroutine sub_next_1
+=-=-=
+
+Name: mark next region group 1
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   @x = 1|
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x = 3
+   !: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region group 2
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x = 3
+   !: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! recognise comment block as virtual node
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   @! x = 5|
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region group 3
+=-=
+! single comment within a group, ignore group
+subroutine sub()
+   x = 1
+   @!: x = 2|
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! single comment within a group, ignore group
+subroutine sub()
+   x = 1
+   !: x = 2
+   @!: x = 3|
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region group 4
+=-=
+! last comment within a group, ignore group
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   @!: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! last comment within a group, ignore group
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   @! x = 5|
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region group 5
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x = 3|
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   @!: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region group 6
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   !: x = 2
+   @!: x = 3
+   !: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! neither single commit nor whole group
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   @! x = 5|
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region partial 1
+=-=
+subro@utine su|b()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+@subroutine sub()|
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region partial 2
+=-=
+subroutine sub()
+   x = 1
+   !: @x =| 2
+   !: x = 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   !: x = 2
+   @!: x = 3|
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region partial 3
+=-=
+subroutine sub()
+   x = 1
+   @!: x = 2
+   !: x |= 3
+   !: x = 4
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   @!: x = 4|
+   ! x = 5
+   x = 6
+end subroutine sub
+=-=-=
+
+Name: mark next region trimmed 1
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   x = 1
+@   !: x = 2
+   !: x = 3
+   !: x = 4
+|   ! x = 5
+   x = 6
+end subroutine sub
+=-=
+! this needs region trimming, otherwise the whole subroutine node becomes the anchor
+subroutine sub()
+   x = 1
+   !: x = 2
+   !: x = 3
+   !: x = 4
+   @! x = 5|
+   x = 6
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-last-sibling))
+
+Name: mark last region 1
+=-=
+subroutine sub_last_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_last_1
+=-=
+subroutine sub_last_1()
+   if (cond) then
+      do i = 1,10
+      end do
+   @end if|
+end subroutine sub_last_1
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'preserve))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling)))
+
+Name: mark sibling region preserve 1
+=-=
+subroutine sub_preverse_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_preverse_1
+=-=
+subroutine sub_preverse_1()
+   if (cond) then
+      @do i = 1,10
+      end do|
+   end if
+end subroutine sub_preverse_1
+=-=-=
+
+Name: mark sibling region preserve 2
+=-=
+subroutine sub_preverse_2()
+   if |(cond)@ then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_preverse_2
+=-=
+subroutine sub_preverse_2()
+   if (cond) then
+      |do i = 1,10
+      end do@
+   end if
+end subroutine sub_preverse_2
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'start))
+      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling)))
+
+Name: mark sibling region start 1
+=-=
+subroutine sub_start_1()
+   if @(cond)| then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_start_1
+=-=
+subroutine sub_start_1()
+   if (cond) then
+      |do i = 1,10
+      end do@
+   end if
+end subroutine sub_start_1
+=-=-=
+
+Name: mark sibling region start 2
+=-=
+subroutine sub_start_2()
+   if |(cond)@ then
+      do i = 1,10
+      end do
+   end if
+end subroutine sub_start_2
+=-=
+subroutine sub_start_2()
+   if (cond) then
+      |do i = 1,10
+      end do@
+   end if
+end subroutine sub_start_2
 =-=-=
 
