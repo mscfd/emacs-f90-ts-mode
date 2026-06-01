@@ -14,16 +14,23 @@ including syntax highlighting, indentation, navigation, and structural editing f
 
 ### Features
 
+- Almost all statements up to F2023
 - Syntax highlighting (font lock faces)
 - Indentation of lines, regions, multiline statements and structure blocks
+- Alignment for multiline statements with rotation and other options
 - Smart end completion
-- Break lines with automatic continuation and comment starters for comment lines
-- Join lines
-- Comment region operations with configurable prefixes and indentation rules
-- Mark regions based on tree-sitter nodes
+- Configurable leading ampersand and statement label positions
+- Break line with automatic continuation and comment starters for comment lines
+- Join with previous and next line
+- (Un)commenting regions with configurable prefixes and indentation rules
+- Special comments like doc strings and separators
+  (syntax highlighting and indentation options)
+- Keyword highlighting in comments (like TODO, Remark etc.)
 - OpenMP and preprocessor directives
 - Coarray keywords and statements
-- `Imenu` and a `Fortran` menu in the menu bar
+- Region selection based on tree-sitter nodes
+- Xref (buffer local)
+- Imenu and a Fortran menu in the menu bar
 - Navigation (defun, things, Xref, tree as submenu and as side panel buffer)
 
 

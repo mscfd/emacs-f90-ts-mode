@@ -32,17 +32,23 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Features:
+;;   - Almost all statements up to F2023
 ;;   - Syntax highlighting
-;;   - Indentation
-;;   - Alignment for multiline statements where applicable
+;;   - Indentation of lines, regions, multiline statements and structure blocks
+;;   - Alignment for multiline statements with rotation and other options
 ;;   - Smart end completion
+;;   - Configurable leading ampersand and statement label positions
 ;;   - Breaking and joining continued lines
-;;   - (Un)commenting regions with configurable prefixes
+;;   - (Un)commenting regions with configurable prefixes and indentation rules
+;;   - Special comments like doc strings and separators
+;;     (syntax highlighting and indentation options)
+;;   - Keyword highlighting in comments (like TODO, Remark etc.)
 ;;   - OpenMP and preprocessor directives
+;;   - Coarray keywords and statements
 ;;   - Region selection based on tree-sitter nodes
 ;;   - Xref (buffer local)
-;;   - Imenu
-;;   - Fortran menu and transient keybindings
+;;   - Imenu and a Fortran menu in the menu bar
+;;   - Navigation (defun, things, Xref, tree as submenu and as side panel buffer)
 ;;
 ;; Features can be found by the fortran menu or a transient popup bound
 ;; to the key C-c C-f.
@@ -4925,16 +4931,18 @@ determined by `f90-ts-leading-ampersand-style'."
 
 (defun f90-ts-indent-and-complete-stmt ()
   "Perform indentation and smart end completion for a whole statement.
-In general, this just calls `f90-ts--indent-and-complete-line-aux'
-with non-nil for argument `indent-struct' to trigger indentation of a
-whole structure if at end of some structure.
+In most cases, this just behaves like `f90-ts--indent-and-complete-line'.
+However, in two cases this indents and complete a region associated with
+the statement or block at point.
 
-However, if within a continued line region, it determines the first line of
-the current statement and performs indent region from this first line up to
-and including the current line.  If indentation of current line has not
-changed, then it indents the current line by invoking
-`f90-ts--indent-and-complete' to apply rules like rotation of list context
-items.  Otherwise it indents with default line choice.
+If point is on an \"end\" statement of some structure like a \"subroutine\",
+a \"do\" or an \"if\" block, then the whole structure is indented as a region.
+
+If point is on a line within a continued statement, it first indents the
+statement starting at its first up to the current line as a region.
+If the operation has not changed anything, then and only then it indents
+the current line by invoking `f90-ts--indent-and-complete' to apply rules
+like rotation of list context items.
 
 If a region is active, then just invoke `f90-ts-indent-and-complete-region'"
   (interactive)
