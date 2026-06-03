@@ -3589,13 +3589,13 @@ Finally use VARIANT to select one pair to align with."
                                                       anoff-items-plist
                                                       context))
          ;; always add default continued offset position as anchor
-         (anoff-extra (f90-ts--align-list-pstmt1-anoff))
+         (anoff-continued (f90-ts--align-list-pstmt1-anoff))
          ;; anoff-primary is used as 'primary' in keep-or-primary, primary etc.
-         ;; if anoff-other is empty (should not happen), then use anoff-extra as fallback
+         ;; if anoff-other is empty (should not happen), then use anoff-continued as fallback
          (anoff-primary (or (car anoff-other)
-                            anoff-extra))
+                            anoff-continued))
          ;; final list of anchors (which are nodes or pairs (position offset))
-         (anoff-final (append (and anoff-extra (list anoff-extra))
+         (anoff-final (append (and anoff-continued (list anoff-continued))
                               anoff-other
                               anoff-items-sym)))
     ;;(f90-ts-log-msg :anoff "items-other = %s" anoff-other)
