@@ -170,6 +170,8 @@ The following list provides features planned for implementation (somewhat ordere
   See issues [Continued strings at grammar repo](https://github.com/stadelmanma/tree-sitter-fortran/issues/193)
   and [Continued strings at mode repo](https://github.com/mscfd/emacs-f90-ts-mode/issues/127)
 - Fill operations similar to `f90-fill-region` and `f90-fill-paragraph`.
+- Rebalance operation as a combination of join-prev/next with break: join lines and break
+  at point to apply a rebalancing (this requires the refactoring and improvements of the fill operations)
 - Support for (context-aware) `completion-at-point-function` (capf).
 - More list contexts for alignment in continued lines.
   There are a number of list like contexts, which are not yet supported, but for which proper

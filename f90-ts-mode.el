@@ -5411,7 +5411,7 @@ After the operation point is after the last character on the non-blank line."
   (cl-assert (f90-ts--point-on-empty-line-p)
              nil "join-line-empty-prev requires point to be on an empty line")
   (let* ((prev (save-excursion
-                 (skip-chars-backward "[ \t\n]")
+                 (skip-chars-backward " \t\n")
                  (point)))
          (end (line-end-position)))
     (delete-region prev end)))
@@ -5423,93 +5423,11 @@ Move point to first character on the line after it was originally placed."
   (cl-assert (f90-ts--point-on-empty-line-p)
              nil "join-line-empty-next requires point to be on an empty line")
   (let* ((next (save-excursion
-                 (skip-chars-forward "[ \t\n]")
+                 (skip-chars-forward " \t\n")
                  (line-beginning-position)))
          (beg (line-beginning-position)))
     (delete-region beg next)
     (back-to-indentation)))
-
-
-(defun f90-ts--join-line-aux (first secnd is-prev)
-  "Join lines between nodes FIRST and SECND.
-For continued lines without comments in between, FIRST and SECND are the two
-ampersand nodes (FIRST at end of line, SECND at beginning of next non-empty
-line).  This function joins the two lines where FIRST and SECND are located,
-and removes any empty lines in-between.
-
-If IS-PREV is non-nil, then this is called from `f90-ts-join-line-prev',
-otherwise from `f90-ts-join-line-next.'  This is used to place point after
-deleting intermediate empty lines or if nothing can be joined."
-  ;; note: due to comments and empty lines, a simple forward-line or backward-line
-  ;; does not seem possible easily, instead reconstruct the (&, comment*, &)
-  ;; sequence of nodes and use it for navigation and changes
-  (let* ((is-amp-1st (f90-ts--node-type-p first "&"))
-         (is-amp-2nd (f90-ts--node-type-p secnd "&"))
-         (is-comment-1st (f90-ts--node-type-p first "comment"))
-         (is-comment-2nd (f90-ts--node-type-p secnd "comment")))
-    (cl-destructuring-bind (beg end post)
-        (cond
-         ((and is-amp-1st is-amp-2nd)
-          ;; chose start and end positions such that the two ampersand are
-          ;; removed as well
-          (list (treesit-node-start first)
-                (treesit-node-end secnd)
-                (lambda ()
-                  (fixup-whitespace)
-                  (skip-chars-forward "[ \t]"))))
-
-         ((and is-amp-1st is-comment-2nd)
-          ;; append comment after ampersand
-          (list (treesit-node-end first)
-                (treesit-node-start secnd)
-                (lambda () (insert " "))))
-
-         ((and is-comment-1st
-               is-comment-2nd
-               (string= (f90-ts--comment-prefix first 'trimmed)
-                        (f90-ts--comment-prefix secnd 'trimmed)))
-          ;; two comments with same comment prefix, join comments
-          (list (save-excursion
-                  ;; if the first comment has trailing blanks, remove them
-                  (goto-char (treesit-node-end first))
-                  (skip-chars-backward "[ \t]")
-                  (point))
-                (+ (treesit-node-start secnd)
-                   ;; if the second has leading blanks, remove them
-                   (length (f90-ts--comment-prefix secnd 'with-blanks)))
-                (lambda () (insert " "))))
-
-         ((and (null is-comment-1st)
-               is-comment-2nd)
-          ;; some command and a comment, append comment
-          (list (save-excursion
-                  ;; if the node end position does not correspond with last non-blank characters
-                  ;; (can happen for comments, but any other node, maybe), remove trailing blanks
-                  (goto-char (treesit-node-end first))
-                  (skip-chars-backward "[ \t]")
-                  (point))
-                (treesit-node-start secnd)
-                (lambda () (insert " "))))
-
-         (t
-          ;; only delete intermediate empty lines
-          (list (save-excursion
-                  (goto-char (treesit-node-end first))
-                  (line-beginning-position 2))
-                (save-excursion
-                  (goto-char (treesit-node-start secnd))
-                  (line-beginning-position))
-                (lambda () (if is-prev
-                               (skip-chars-forward "[ \t]")
-                               (skip-chars-backward "[ \t\n]"))))))
-
-      (if (and beg end)
-          (progn
-            (delete-region beg end)
-            (goto-char beg)
-            (when post
-              (funcall post)))
-        (message "join failed: joining not possible")))))
 
 
 (defun f90-ts--join-line-string (node pos1 pos2)
@@ -5528,27 +5446,109 @@ Positions POS1 and POS2 are end of previous line and start of current line."
     (goto-char beg)))
 
 
-(defun f90-ts-join-line-prev ()
+(defun f90-ts--join-line-action-common (first secnd is-prev)
+  "Compute an action pair for joining lines at FIRST and SECND.
+The pair (THUNK . ACTION) provides a THUNK to perform the join and an ACTION
+symbol describing what is done.
+
+The ACTION symbol is used by the caller to decide whether to execute the thunk,
+for example in a `fill-region' loop context.
+
+Argument IS-PREV has the same meaning as in `f90-ts--join-line-prev-aux'."
+  (let ((is-amp-1st     (f90-ts--node-type-p first "&"))
+        (is-amp-2nd     (f90-ts--node-type-p secnd "&"))
+        (is-comment-1st (f90-ts--node-type-p first "comment"))
+        (is-comment-2nd (f90-ts--node-type-p secnd "comment")))
+    (cond
+     ((and is-amp-1st
+           is-amp-2nd)
+      (let ((beg (treesit-node-start first))
+            (end (treesit-node-end secnd)))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (fixup-whitespace)
+                (skip-chars-forward " \t"))
+              'join-continued-lines)))
+
+     ((and is-amp-1st
+           is-comment-2nd)
+      (let ((beg (treesit-node-end first))
+            (end (treesit-node-start secnd)))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (insert " "))
+              'append-comment-after-amp)))
+
+     ((and is-comment-1st
+           is-comment-2nd
+           (string= (f90-ts--comment-prefix first 'trimmed)
+                    (f90-ts--comment-prefix secnd 'trimmed)))
+      (let ((beg (save-excursion
+                   (goto-char (treesit-node-end first))
+                   (skip-chars-backward " \t")
+                   (point)))
+            (end (+ (treesit-node-start secnd)
+                    (length (f90-ts--comment-prefix secnd 'with-blanks)))))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (insert " "))
+              'join-comments-same-prefix)))
+
+     ((and (null is-comment-1st)
+           is-comment-2nd)
+      (let ((beg (save-excursion
+                   (goto-char (treesit-node-end first))
+                   (skip-chars-backward " \t")
+                   (point)))
+            (end (treesit-node-start secnd)))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (insert " "))
+              'append-comment-after-stmt)))
+
+     (t
+      (let ((beg (save-excursion
+                   (goto-char (treesit-node-end first))
+                   (line-beginning-position 2)))
+            (end (save-excursion
+                   (goto-char (treesit-node-start secnd))
+                   (line-beginning-position))))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (if is-prev
+                    (skip-chars-forward " \t")
+                  (skip-chars-backward " \t\n")))
+              'remove-blank-lines-between))))))
+
+
+(defun f90-ts--join-line-prev-aux ()
   "Join previous line with the current one, if part of a continued statement.
-This is (partially) a counterpart to `f90-ts-break-line'.
-If previous line has comments (at end, next line etc.) joining is not done."
-  (interactive)
+Returns a cons (THUNK . ACTION); the caller is responsible for executing
+THUNK and for messaging on failure."
   (cond
    ((f90-ts--point-on-empty-line-p)
-    (f90-ts--join-line-empty-prev))
+    (cons (lambda () (f90-ts--join-line-empty-prev))
+          'empty-line))
+
    ((save-excursion
       (back-to-indentation)
       (bobp))
-    ;; on first line and not empty, just move to beginning of line
-    (beginning-of-line))
+    (cons (lambda () (beginning-of-line))
+          'beg-of-buffer))
+
    (t
     (let* ((pos1 (save-excursion
                    (beginning-of-line)
-                   (skip-chars-backward "[ \t\n]")
+                   (skip-chars-backward " \t\n")
                    (point)))
            (pos2 (save-excursion
                    (beginning-of-line)
-                   (skip-chars-forward "[ \t\n]")
+                   (skip-chars-forward " \t\n")
                    (point)))
            (first (f90-ts--node-on-pos pos1 'left))
            (secnd (f90-ts--node-on-pos pos2 'right))
@@ -5563,8 +5563,6 @@ If previous line has comments (at end, next line etc.) joining is not done."
       (cl-assert (or (null first)
                      is-cont-str
                      (or (= pos1 (treesit-node-end first))
-                         ;; note that a comment might have trailing blanks, hence pos1
-                         ;; might differ from node end position
                          (and (f90-ts--node-type-p first "comment")
                               (string-blank-p (buffer-substring pos1 (treesit-node-end first))))))
                  nil "first node has wrong end position %s" first)
@@ -5572,46 +5570,71 @@ If previous line has comments (at end, next line etc.) joining is not done."
       (cl-assert (or (= pos2 (treesit-node-start secnd))
                      is-cont-str)
                  nil "secnd node has wrong start position")
-
       (cond
        (is-cont-str
-        ;; check that previous line is not a comment
-        ;; (within the string, not yet supported by tree-sitter grammar)
         (if (eq (char-before pos1) ?&)
-            ;; first and secnd are equal (established in is-cont-str)
-            (f90-ts--join-line-string first pos1 pos2)
-          (message "join failed: joining not possible (comment within string literal)")))
+            (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
+                  'join-continued-string)
+          (cons (lambda () (back-to-indentation))
+                'failed-comment-within-string)))
 
-      (first
-       (f90-ts--join-line-aux first secnd t))
+       (first
+        (f90-ts--join-line-action-common first secnd t))
 
-      (t
-       ;; all lines prior to point are empty, delete them
-       (back-to-indentation)
-       (delete-region pos1 (point))))))))
+       (t
+        (cons (lambda ()
+                (back-to-indentation)
+                (delete-region pos1 (point)))
+              'beg-of-buffer)))))))
 
 
-(defun f90-ts-join-line-next ()
-  "Join current line with the next one, if part of a continued statement.
+(defun f90-ts-join-line-prev ()
+  "Join previous line with the current one, if part of a continued statement.
 This is (partially) a counterpart to `f90-ts-break-line'.
-If continued line has comments (at end, next line etc.) joining is not done."
+If previous line has comments (at end, next line etc.) joining is not done."
   (interactive)
+  (let* ((pair (f90-ts--join-line-prev-aux))
+         (process-fn (car pair))
+         (action (cdr pair)))
+    (cl-assert (member action '(empty-line
+                                beg-of-buffer
+                                remove-blank-lines-between
+                                join-continued-lines
+                                join-continued-string
+                                join-comments-same-prefix
+                                append-comment-after-amp
+                                append-comment-after-stmt
+                                failed-comment-within-string))
+               nil "invalid action from f90-ts--join-line-prev-aux, got %s" action)
+    (funcall process-fn)
+    (when (and (called-interactively-p 'interactive)
+               (eq action 'failed-comment-within-string))
+      (message "join failed: joining not possible"))))
+
+
+(defun f90-ts--join-line-next-aux ()
+  "Join current line with the next one, if part of a continued statement.
+Returns a cons (THUNK . ACTION); the caller is responsible for executing
+THUNK and for messaging on failure."
   (cond
    ((f90-ts--point-on-empty-line-p)
-    (f90-ts--join-line-empty-next))
+    (cons (lambda () (f90-ts--join-line-empty-next))
+          'empty-line))
+
    ((save-excursion
       (end-of-line)
       (eobp))
-    ;; on last line and not empty, just move to end of line
-    (end-of-line))
+    (cons (lambda () (end-of-line))
+          'end-of-buffer))
+
    (t
     (let* ((pos1 (save-excursion
                    (end-of-line)
-                   (skip-chars-backward "[ \t\n]")
+                   (skip-chars-backward " \t\n")
                    (point)))
            (pos2 (save-excursion
                    (end-of-line)
-                   (skip-chars-forward "[ \t\n]")
+                   (skip-chars-forward " \t\n")
                    (point)))
            (first (f90-ts--node-on-pos pos1 'left))
            (secnd (f90-ts--node-on-pos pos2 'right))
@@ -5624,36 +5647,57 @@ If continued line has comments (at end, next line etc.) joining is not done."
       (cl-assert first nil "first node is nil")
       (cl-assert (or (= pos1 (treesit-node-end first))
                      is-cont-str
-                     ;; note that a comment might have trailing blanks, hence pos1
-                     ;; might differ from node end position
                      (and (f90-ts--node-type-p first "comment")
                           (string-blank-p (buffer-substring pos1 (treesit-node-end first)))))
                  nil "first node has wrong end position")
-      ;; in contrast to join-line-prev, if there are only blank lines after point,
-      ;; pos2 is at point-max and secnd is the root node "translation_unit"
       (cl-assert secnd nil "secnd node is nil")
       (cl-assert (or (not (f90-ts--node-type-p secnd "translation_unit"))
                      (= pos2 (point-max)))
-                 nil "secnd node is translation_unit with with wrong pos2")
+                 nil "secnd node is translation_unit with wrong pos2")
       (cl-assert (or (f90-ts--node-type-p secnd "translation_unit")
                      is-cont-str
                      (= pos2 (treesit-node-start secnd)))
                  nil "secnd node has wrong start position")
       (cond
        ((f90-ts--node-type-p secnd "translation_unit")
-        ;; all lines after point are empty, delete them
-        (end-of-line)
-        (delete-region (point) pos2))
+        (cons (lambda ()
+                (end-of-line)
+                (delete-region (point) pos2))
+              'end-of-buffer))
 
        (is-cont-str
-        ;; check that previous line is not a comment
-        ;; (within the string, not yet supported by tree-sitter grammar)
         (if (eq (char-after pos2) ?&)
-            ;; first and secnd are equal (established in is-cont-str)
-            (f90-ts--join-line-string first pos1 pos2)
-          (message "join failed: joining not possible (comment within string literal)")))
+            (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
+                  'join-continued-string)
+          (cons (lambda () (end-of-line))
+                'failed-comment-within-string)))
+
        (t
-        (f90-ts--join-line-aux first secnd nil)))))))
+        (f90-ts--join-line-action-common first secnd nil)))))))
+
+
+(defun f90-ts-join-line-next ()
+  "Join current line with the next one, if part of a continued statement.
+This is (partially) a counterpart to `f90-ts-break-line'.
+If continued line has comments (at end, next line etc.) joining is not done."
+  (interactive)
+  (let* ((pair (f90-ts--join-line-next-aux))
+         (process-fn (car pair))
+         (action (cdr pair)))
+    (cl-assert (member action '(empty-line
+                                end-of-buffer
+                                remove-blank-lines-between
+                                join-continued-lines
+                                join-continued-string
+                                join-comments-same-prefix
+                                append-comment-after-amp
+                                append-comment-after-stmt
+                                failed-comment-within-string))
+               nil "invalid action from f90-ts--join-line-next-aux, got %s" action)
+    (funcall process-fn)
+    (when (and (called-interactively-p 'interactive)
+               (eq action 'failed-comment-within-string))
+      (message "join failed: joining not possible"))))
 
 
 ;;;-----------------------------------------------------------------------------
