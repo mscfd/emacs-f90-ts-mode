@@ -384,7 +384,7 @@ can be observed and checked."
                                                    update-fn-choices nil t)
                                   update-fn-choices)))
           (indent-variant-choices (mapcar (lambda (x) (cons (symbol-name (cdr x)) (cdr x)))
-                                          f90-ts-indent-list-options))
+                                          f90-ts--indent-region-options-alist))
           (chosen-indent-variant
            (unless chosen-update-fn  ; chosen-update-fn=nil is option indent-region
              (cdr (assoc
