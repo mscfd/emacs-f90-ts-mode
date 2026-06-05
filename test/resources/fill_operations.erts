@@ -1,0 +1,421 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40))
+      (f90-ts-mode-test--mark-region-pre #'f90-ts-fill-region)))
+
+Name: fill region 1
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+@ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ public :: alpha1, &
+        alpha2, &
+        alpha3, &
+        alpha4, &
+        alpha5, &
+        alpha6, &
+        alpha7, &
+        alpha8, &
+        alpha9|
+
+ ! comment1 comment2 comment3 comment4 comment5 comment6 comment7 comment8 comment9 commentA commentB commentC
+ type :: test
+ contains
+      procedure :: beta1, &
+             beta2, &
+             beta3, &
+             beta4, &
+             beta5, &
+             beta6, &
+             beta7, &
+             beta8, &
+             beta9
+ end type test
+
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, &
+                               x2 = 2, &
+                               x3 = 3, &
+                               x4 = 4, &
+                               x5 = 5, &
+                               x6 = 6, &
+                               x7 = 7, &
+                               x8 = 8, &
+                               x9 = 9
+ public :: alpha1, alpha2, alpha3, &
+        alpha4, alpha5, alpha6, &
+        alpha7, alpha8, alpha9|
+
+ ! comment1 comment2 comment3 comment4 comment5 comment6 comment7 comment8 comment9 commentA commentB commentC
+ type :: test
+ contains
+      procedure :: beta1, &
+             beta2, &
+             beta3, &
+             beta4, &
+             beta5, &
+             beta6, &
+             beta7, &
+             beta8, &
+             beta9
+ end type test
+
+end module fill_var_decl
+=-=-=
+
+Name: fill region 2
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: @x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ public :: alpha1, &
+        alpha2, &
+        alpha3, &
+        alpha4, &
+        alpha5,| &
+        alpha6, &
+        alpha7, &
+        alpha8, &
+        alpha9
+
+ ! comment1 comment2 comment3 comment4 comment5 comment6 comment7 comment8 comment9 commentA commentB commentC
+ type :: test
+ contains
+      procedure :: beta1, &
+             beta2, &
+             beta3, &
+             beta4, &
+             beta5, &
+             beta6, &
+             beta7, &
+             beta8, &
+             beta9
+ end type test
+
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, &
+                               x2 = 2, &
+                               x3 = 3, &
+                               x4 = 4, &
+                               x5 = 5, &
+                               x6 = 6, &
+                               x7 = 7, &
+                               x8 = 8, &
+                               x9 = 9
+ public :: alpha1, alpha2, alpha3, &
+        alpha4, alpha5,| &
+        alpha6, &
+        alpha7, &
+        alpha8, &
+        alpha9
+
+ ! comment1 comment2 comment3 comment4 comment5 comment6 comment7 comment8 comment9 commentA commentB commentC
+ type :: test
+ contains
+      procedure :: beta1, &
+             beta2, &
+             beta3, &
+             beta4, &
+             beta5, &
+             beta6, &
+             beta7, &
+             beta8, &
+             beta9
+ end type test
+
+end module fill_var_decl
+=-=-=
+
+Name: fill region 3
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ public :: alpha1, &
+        alpha2, &
+        alpha3, &
+        alpha4, &
+        alpha5, &
+        alpha6, &
+        alpha7, &
+        alpha8, &
+        alpha9
+
+@ ! comment1 comment2 comment3 comment4 comment5 comment6 comment7 comment8 comment9 commentA commentB commentC
+ type :: test
+ contains
+      procedure :: beta1, &
+|             beta2, &
+             beta3, &
+             beta4, &
+             beta5, &
+             beta6, &
+             beta7, &
+             beta8, &
+             beta9
+ end type test
+
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ public :: alpha1, &
+        alpha2, &
+        alpha3, &
+        alpha4, &
+        alpha5, &
+        alpha6, &
+        alpha7, &
+        alpha8, &
+        alpha9
+
+ ! comment1 comment2 comment3 comment4
+ ! comment5 comment6 comment7 comment8
+ ! comment9 commentA commentB commentC
+ type :: test
+ contains
+      procedure :: beta1, &
+|             beta2, &
+             beta3, &
+             beta4, &
+             beta5, &
+             beta6, &
+             beta7, &
+             beta8, &
+             beta9
+ end type test
+
+end module fill_var_decl
+=-=-=
+
+Name: fill comment region 1
+=-=
+subroutine |sub()
+     ! very long comment header with lots and lots of gibberish
+     !    content 1
+     !    content 2 content 3 content 4 content 5 content 6
+     !    content 3 content 4 content 5 content 6 content 7
+     ! another header
+     !    content 110
+     !    content 123 content 234 content 345 content 456 content 567
+     !    more content 123 more content 234 more content 345 more content 456 more content 567
+end subroutine sub@
+=-=
+subroutine |sub()
+     ! very long comment header with
+     ! lots and lots of gibberish
+     !    content 1 content 2 content
+     !    3 content 4 content 5 content
+     !    6 content 3 content 4 content
+     !    5 content 6 content 7
+     ! another header
+     !    content 110 content 123
+     !    content 234 content 345
+     !    content 456 content 567 more
+     !    content 123 more content 234
+     !    more content 345 more content
+     !    456 more content 567
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 15))
+      (f90-ts-mode-test--mark-region-pre #'f90-ts-fill-region)))
+
+Name: fill comment region 1
+=-=
+! fill not possible, do not join,
+! test that no infinite loop or other
+! problems happen
+subroutine sub()
+|     ! comment11
+     ! comment22
+     ! comment33@
+end subroutine sub
+=-=
+! fill not possible, do not join,
+! test that no infinite loop or other
+! problems happen
+subroutine sub()
+|     ! comment11
+     ! comment22
+     ! comment33
+end subroutine sub
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40))
+      (f90-ts-fill-at-line)))
+
+Name: fill line 1
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ integer, public, parameter :: y1 = 1, y2 = 2, y3 = 3,| y4 = 4, y5 = 5, y6 = 6, y7 = 7, y8 = 8, y9 = 9
+ integer, public, parameter :: z1 = 1, z2 = 2, z3 = 3, z4 = 4, z5 = 5, z6 = 6, z7 = 7, z8 = 8, z9 = 9
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ integer, public, parameter :: y1 = 1, &
+                               y2 = 2, &
+                               y3 = 3,| &
+                               y4 = 4, &
+                               y5 = 5, &
+                               y6 = 6, &
+                               y7 = 7, &
+                               y8 = 8, &
+                               y9 = 9
+ integer, public, parameter :: z1 = 1, z2 = 2, z3 = 3, z4 = 4, z5 = 5, z6 = 6, z7 = 7, z8 = 8, z9 = 9
+end module fill_var_decl
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40))
+      (f90-ts-fill-prev-line)))
+
+Name: fill prev-line 1
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: &
+        x1 = 1, x2 = 2, x3 = 3,| x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ integer, public, parameter :: y1 = 1, y2 = 2, y3 = 3, y4 = 4, y5 = 5, y6 = 6, y7 = 7, y8 = 8, y9 = 9
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, &
+                               x2 = 2, &
+                               x3 = 3,| &
+                               x4 = 4, &
+                               x5 = 5, &
+                               x6 = 6, &
+                               x7 = 7, &
+                               x8 = 8, &
+                               x9 = 9
+ integer, public, parameter :: y1 = 1, y2 = 2, y3 = 3, y4 = 4, y5 = 5, y6 = 6, y7 = 7, y8 = 8, y9 = 9
+end module fill_var_decl
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40))
+      (f90-ts-fill-next-line)))
+
+Name: fill next-line 1
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ integer, public,| parameter :: &
+      y1 = 1, y2 = 2, y3 = 3, y4 = 4, y5 = 5, y6 = 6, y7 = 7, y8 = 8, y9 = 9
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ integer, public,| parameter :: y1 = 1, &
+                               y2 = 2, &
+                               y3 = 3, &
+                               y4 = 4, &
+                               y5 = 5, &
+                               y6 = 6, &
+                               y7 = 7, &
+                               y8 = 8, &
+                               y9 = 9
+end module fill_var_decl
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40)
+          (f90-ts-fill-select-breakpoint-by 'interactive))
+      (f90-ts-mode-test--with-mocked-keys
+       '[left return right backspace end left left left left left left return space delete home right right right right right right delete left left delete left left return backspace return right return ?q]
+        (call-interactively #'f90-ts-fill-at-line))))
+
+Name: fill line interactive 1
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter| :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+ integer, public, parameter :: &
+        y1 = 1, y2 = 2, y3 = 3, y4 = 4, y5 = 5, y6 = 6, y7 = 7, y8 = 8, y9 = 9
+end module fill_var_decl
+=-=
+module fill_var_decl
+
+ implicit none(type, external)
+ private
+
+ integer, public, parameter| :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, &
+                               x8 = 8, x9 = 9
+ integer, public, parameter :: &
+        y1 = 1, y2 = 2, y3 = 3, y4 = 4, &
+        y5 = 5, y6 = 6, y7 = 7, y8 = 8, y9 = 9
+end module fill_var_decl
+=-=-=

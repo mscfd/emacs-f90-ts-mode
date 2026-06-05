@@ -1,0 +1,611 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux (point-min) (point-max) 40))
+
+Name: fill all join 1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+                arg2, &
+&               arg3)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, arg2, arg3)
+end subroutine sub_1
+=-=-=
+
+Name: fill all join 2
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+
+                arg2, &
+&               arg3)
+end subroutine sub_1
+=-=
+subroutine sub_1()
+     call sub_2(arg1, &
+
+                arg2, arg3)
+end subroutine sub_1
+=-=-=
+
+Name: fill all join 3
+=-=
+subroutine comments_prefix()
+     ! comment 1
+     !!$ comment 2
+     !!$ comment 3
+     ! comment 4
+     ! comment 5
+
+     ! comment 6
+end subroutine comments_prefix
+=-=
+subroutine comments_prefix()
+     ! comment 1
+     !!$ comment 2 comment 3
+     ! comment 4 comment 5
+
+     ! comment 6
+end subroutine comments_prefix
+=-=-=
+
+Name: fill all join 4
+=-=
+! todo: align second comment line with first trailing comment line
+subroutine comment_after()
+     x = x + 1 ! increment by 1,
+               ! should we rather increment by two?
+end subroutine comment_after
+=-=
+! todo: align second comment line with
+! first trailing comment line
+subroutine comment_after()
+     x = x + 1 ! increment by 1, should
+     ! we rather increment by two?
+end subroutine comment_after
+=-=-=
+
+Name: fill all join 5
+=-=
+! preserve empty comment lines
+subroutine sub()
+     !!$ comment 1
+     !!$ comment 2
+     !!$
+     !!$ comment 3
+     !!$ comment 4
+
+     !!$
+     !!$ comment 5
+     !!$ comment 6
+     !!$
+end subroutine sub
+=-=
+! preserve empty comment lines
+subroutine sub()
+     !!$ comment 1 comment 2
+     !!$
+     !!$ comment 3 comment 4
+
+     !!$
+     !!$ comment 5 comment 6
+     !!$
+end subroutine sub
+=-=-=
+
+
+Name: fill all break 1
+=-=
+! do not break if there is no position
+subroutine sub_1()
+     x01234567890123456789012345678901234567890 = 0
+end subroutine sub_1
+=-=
+! do not break if there is no position
+subroutine sub_1()
+     x01234567890123456789012345678901234567890 = 0
+end subroutine sub_1
+=-=-=
+
+Name: fill all break 2
+=-=
+! do not break before comma (breaking after arg4 and before comma would be possible)
+subroutine sub_1()
+     call sub_2(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, argA, argB, argC, argD, argE, argF)
+end subroutine sub_1
+=-=
+! do not break before comma (breaking
+! after arg4 and before comma would be
+! possible)
+subroutine sub_1()
+     call sub_2(arg1, arg2, arg3, &
+                arg4, arg5, arg6, &
+                arg7, arg8, arg9, &
+                argA, argB, argC, &
+                argD, argE, argF)
+end subroutine sub_1
+=-=-=
+
+Name: fill all break 3
+=-=
+! do not break before opening parenthesis
+subroutine sub()
+     very_long_name = long_fun_name39(arg1, arg2, arg3)
+     very_long_name = long_fun_name_40(arg1, arg2, arg3)
+end subroutine sub
+=-=
+! do not break before opening
+! parenthesis
+subroutine sub()
+     very_long_name = long_fun_name39( &
+            arg1, arg2, arg3)
+     very_long_name = &
+            long_fun_name_40(arg1, &
+                             arg2, arg3)
+end subroutine sub
+=-=-=
+
+Name: fill all break 4
+=-=
+!1 do not break after "call", there is no gain
+!2 do break before parenthesis, as no other reasonable break point is available
+subroutine sub()
+     call very_long_name_till_column40(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9, argA, argB, argC, argD, argE, argF)
+end subroutine sub
+=-=
+!1 do not break after "call", there is
+!1 no gain
+!2 do break before parenthesis, as no
+!2 other reasonable break point is
+!2 available
+subroutine sub()
+     call very_long_name_till_column40 &
+            (arg1, arg2, arg3, arg4, &
+             arg5, arg6, arg7, arg8, &
+             arg9, argA, argB, argC, &
+             argD, argE, argF)
+end subroutine sub
+=-=-=
+
+Name: fill all break 5
+=-=
+!1 do not break before or after "%"
+subroutine sub()
+     some_val%xyz0123 = other_val%xyz0123
+end subroutine sub
+=-=
+!1 do not break before or after "%"
+subroutine sub()
+     some_val%xyz0123 = &
+            other_val%xyz0123
+end subroutine sub
+=-=-=
+
+Name: fill all break 6
+=-=
+! do break before or after "%" if not possible otherwise
+subroutine sub()
+     call some_value_0123456789%method_name()
+     call some_value_01234567890123456%method_name()
+end subroutine sub
+=-=
+! do break before or after "%" if not
+! possible otherwise
+subroutine sub()
+     call some_value_0123456789% &
+            method_name()
+     call some_value_01234567890123456 &
+            %method_name()
+end subroutine sub
+=-=-=
+
+Name: fill all break 7
+=-=
+subroutine code()
+     check_break_at_40 = a+b+c+d+e+f+g
+     check_break_at_40 = a1+b+c+d+e+f+g
+     check_break_at_40 = a12+b+c+d+e+f+g
+     check_break_at_40 = a123+b+c+d+e+f+g
+     check_break_at_40 = a1234+b+c+d+e+f+g
+end subroutine code
+=-=
+subroutine code()
+     check_break_at_40 = a+b+c+d+e+f+g
+     check_break_at_40 = a1+b+c+d+e+f+g
+     check_break_at_40 = a12+b+c+d+e+f+g
+     check_break_at_40 = a123+b+c+d+e+ &
+                         f+g
+     check_break_at_40 = a1234+b+c+d+e &
+                              +f+g
+end subroutine code
+=-=-=
+
+Name: fill all break 8
+=-=
+subroutine comments()
+     !1 check break at 40: aaa bbb ccc
+     !2 check break at 40: aaa bbb cccc
+     !3 check break at 40: aaa bbb ccccc
+     !4 check break at 40: aaa bbb cccccc
+end subroutine comments
+=-=
+subroutine comments()
+     !1 check break at 40: aaa bbb ccc
+     !2 check break at 40: aaa bbb cccc
+     !3 check break at 40: aaa bbb ccccc
+     !4 check break at 40: aaa bbb
+     !4 cccccc
+end subroutine comments
+=-=-=
+
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux 62 162 40))
+
+Name: fill region partial 1
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, &
+                              x2 = 2, &
+                              x3 = 3, &
+                              x4 = 4, &
+                              x5 = 5, &
+                              x6 = 6, &
+                              x7 = 7, &
+                              x8 = 8, &
+                              x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux 62 163 40))
+
+Name: fill region partial 2
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, &
+                              x2 = 2, &
+                              x3 = 3, &
+                              x4 = 4, &
+                              x5 = 5, &
+                              x6 = 6, &
+                              x7 = 7, &
+                              x8 = 8, &
+                              x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux 62 164 40))
+
+Name: fill region partial 3
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, &
+                              x2 = 2, &
+                              x3 = 3, &
+                              x4 = 4, &
+                              x5 = 5, &
+                              x6 = 6, &
+                              x7 = 7, &
+                              x8 = 8, &
+                              x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux 62 190 40))
+
+Name: fill region partial 4
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, &
+                              x2 = 2, &
+                              x3 = 3, &
+                              x4 = 4, &
+                              x5 = 5, &
+                              x6 = 6, &
+                              x7 = 7, &
+                              x8 = 8, &
+                              x9 = 9
+real, public :: alpha1, alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux 62 269 40))
+
+Name: fill region partial 5
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, x2 = 2, x3 = 3, x4 = 4, x5 = 5, x6 = 6, x7 = 7, x8 = 8, x9 = 9
+real, public :: alpha1, &
+      alpha2, &
+      alpha3, &
+      alpha4, &
+      alpha5, &
+      alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=
+module fill_var_decl
+
+implicit none(type, external)
+private
+
+integer, public, parameter :: x1 = 1, &
+                              x2 = 2, &
+                              x3 = 3, &
+                              x4 = 4, &
+                              x5 = 5, &
+                              x6 = 6, &
+                              x7 = 7, &
+                              x8 = 8, &
+                              x9 = 9
+real, public :: alpha1, alpha2, &
+                alpha3, alpha4, &
+                alpha5, alpha6, &
+      alpha7, &
+      alpha8, &
+      alpha9
+end module mod
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux 33 41 40))
+
+Name: fill region partial 4
+=-=
+program prog
+ print *, 12, 123, |234, 345, 456, 567, 678, 789, 890, 901
+end program prog
+=-=
+program prog
+ print *, 12, 123, |234, 345, 456, 567, &
+        678, 789, 890, 901
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-col 15)
+          (end-marker (copy-marker (line-end-position))))
+      (f90-ts--join-line-fill fill-col end-marker)))
+
+Name: fill comment do not join line 1
+=-=
+! do not even join in fill region operations,
+! line is too long already
+subroutine sub()
+|     ! comment11
+     ! comment22
+     ! comment33
+end subroutine sub
+=-=-=
+
+Name: fill comment do not join line 2
+=-=
+! do not join: next line is empty
+subroutine sub()
+|     ! comment
+
+     ! comment
+     ! comment
+end subroutine sub
+=-=-=
+
+Name: fill comment do not join line 3
+=-=
+! do not join: next line is empty comment (trailing blanks)
+subroutine sub()
+|     ! comment
+     !    
+     ! comment
+     ! comment
+end subroutine sub
+=-=-=
+
+Name: fill comment do not join line 4
+=-=
+! do not join: next line is empty comment (no trailing blanks)
+subroutine sub()
+|     ! comment
+     !
+     ! comment
+     ! comment
+end subroutine sub
+=-=-=
+
+Name: fill comment do not join line 4
+=-=
+! do not join: current line is empty comment (trailing blanks)
+subroutine sub()
+|     !   
+     ! comment
+     ! comment
+     ! comment
+end subroutine sub
+=-=-=
+
+Name: fill comment do not join line 5
+=-=
+! do not join: current line is empty comment (no trailing blanks)
+subroutine sub()
+|     !
+     ! comment
+     ! comment
+     ! comment
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-col 18)
+          (end-marker (copy-marker (line-end-position))))
+      (f90-ts--join-line-fill fill-col end-marker)))
+
+Name: fill comment join line 1
+=-=
+! fill-line should only handle the single line,
+! check that f90-ts--join-line-fill does not pull in the next line
+subroutine sub()
+|     ! comment11
+     ! comment22
+     ! comment33
+end subroutine sub
+=-=
+! fill-line should only handle the single line,
+! check that f90-ts--join-line-fill does not pull in the next line
+subroutine sub()
+|     ! comment11
+     ! comment22
+     ! comment33
+end subroutine sub
+=-=-=

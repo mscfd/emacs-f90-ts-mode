@@ -145,6 +145,7 @@ without final newline."
     (f90-ts-smart-end . no-message)
     (f90-ts-leading-ampersand . nil)
     (f90-ts-leading-ampersand-style . (indent . 3))
+    (f90-ts-fill-select-breakpoint-by . rightmost)
     (f90-ts-stmt-label-column . (left . 0))
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*")
@@ -289,7 +290,6 @@ mark region functions etc. are possible as well.")
   "Show diff between ACTUAL and EXPECTED external tool DIFF."
   (let* ((actual-file (make-temp-file "f90-ts-mode-actual-"))
          (expected-file (make-temp-file "f90-ts-mode-expected-")))
-
     (with-temp-file actual-file
       (insert actual))
     (with-temp-file expected-file
@@ -357,6 +357,33 @@ This is intended for testing smart end completion."
     (when (looking-at "\\(\\s-*end\\)[^!\n]*?\\(\\s-*[!\n]\\)")
       (replace-match "\\1\\2"))
     (forward-line 1)))
+
+
+(defmacro f90-ts-mode-test--with-mocked-keys (keys &rest body)
+  "Execute BODY while mocking `read-key' to return elements from KEYS.
+KEYS is a vector of keys as returned by `read-key', with the following
+readable aliases accepted: `space' -> ?\\s, `return' -> ?\\r,
+`backspace' -> ?\\d.  Exhausting the sequence defaults to `keyboard-quit'."
+  (declare (indent 1))
+  `(let ((key-list (mapcar (lambda (k)
+                             ;; some symbol names are not recognised, so map them
+                             ;; (home, end, abort=C-g do not need mapping)
+                             (pcase k
+                               ('space     ?\s)
+                               ('return    ?\r)
+                               ('delete    'deletechar)
+                               ('backspace ?\d)
+                               (_          k)))
+                           (append ,keys nil)))
+         (idx 0))
+     (cl-letf (((symbol-function 'read-key)
+                (lambda (&optional _prompt)
+                  (if (< idx (length key-list))
+                      (let ((k (elt key-list idx)))
+                        (cl-incf idx)
+                        k)
+                    ?\C-g))))
+       ,@body)))
 
 
 ;;------------------------------------------------------------------------------
@@ -945,6 +972,8 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "indent_stmt_misc.erts"
    "break_line.erts"
    "join_line.erts"
+   "fill_region_aux.erts"
+   "fill_operations.erts"
    "mark_region.erts"
    "comment_region.erts"
    "comment_prefix.erts"
