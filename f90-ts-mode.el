@@ -426,7 +426,7 @@ Value nil turns off smart end completion.
 
 Copied from prog mode `f90-mode'."
   :type  '(choice (const blink) (const no-blink) (const no-message) (const nil))
-  :safe  (lambda (value) (memq value '(blink no-blink complete nil)))
+  :safe  (lambda (value) (memq value '(blink no-blink no-message nil)))
   :group 'f90-ts)
 
 
