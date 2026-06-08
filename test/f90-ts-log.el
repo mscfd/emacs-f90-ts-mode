@@ -203,6 +203,8 @@ Prefix the line with CATEGORY and `inspect<info>' using INFO."
       (f90-ts-log-msg :indent "cache: nil")
     (f90-ts-log-inspect-node :indent (f90-ts--indent-cached-node)        "node@cache")
     (f90-ts-log-inspect-node :indent (f90-ts--indent-cached-parent)      "parent@cache")
+    (f90-ts-log-inspect-node :indent (f90-ts--indent-parent-nopp)        "nopp-p@cache")
+    (f90-ts-log-inspect-node :indent (f90-ts--indent-grandparent-nopp)   "nopp-gp@cache")
     (f90-ts-log-inspect-node :indent (f90-ts--indent-child0)             "child0@cache")
     (f90-ts-log-inspect-node :indent (f90-ts--indent-prev-sib-by-parent) "psibp@cache")
     (f90-ts-log-inspect-node :indent (f90-ts--indent-prev-stmt-first)    "pstmt-1@cache")
@@ -222,8 +224,9 @@ and nodes for debugging purposes into the exclusive log buffer."
       (let* ((grandparent (and parent (treesit-node-parent parent)))
              (psibp (f90-ts--indent-prev-sib-by-parent))
              (pstmt-k (f90-ts--indent-prev-stmt-keyword))
-             (child0 (f90-ts--indent-child0)))
-
+             (child0 (f90-ts--indent-child0))
+             (parent-nopp (f90-ts--parent-no-preproc parent))
+             (grandparent-nopp (f90-ts--grandparent-no-preproc parent)))
         (f90-ts-log-msg :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
                     (point) bol (line-beginning-position) (line-number-at-pos))
         (let ((tttttt (format "types n-p-gp-psibp-pstmtk-ch = %s, %s, %s, %s, %s, %s"
@@ -232,8 +235,12 @@ and nodes for debugging purposes into the exclusive log buffer."
                               (and grandparent (treesit-node-type grandparent))
                               (and psibp (treesit-node-type psibp))
                               (and pstmt-k (treesit-node-type pstmt-k))
-                              (and child0 (treesit-node-type child0)))))
+                              (and child0 (treesit-node-type child0))))
+              (nopp-tt (format "types nopp p-gp = %s, %s"
+                               (and parent-nopp (treesit-node-type parent-nopp))
+                               (and grandparent-nopp (treesit-node-type grandparent-nopp)))))
           (f90-ts-log-msg :indent (propertize tttttt 'face '(:foreground "brown2")))
+          (f90-ts-log-msg :indent (propertize nopp-tt 'face '(:foreground "brown2")))
           (f90-ts-log--indent-cache-print))))
     nil))
 

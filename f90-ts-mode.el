@@ -1104,6 +1104,17 @@ work with lambda expressions."
   (not (f90-ts--node-type-p node '("comment" "ERROR"))))
 
 
+(defconst f90-ts--preproc-block-regexp
+  "^#\\(ifdef\\|ifndef\\|elifdef\\|elifndef\\|elif\\|else\\|endif\\|if\\)$"
+  "Regexp for matching preprocessor nodes of block type (if block).")
+
+
+(defun f90-ts--node-type-preproc-block-p (node)
+  "Match type of NODE against block type preprocessor keywords.
+This uses `f90-ts--preproc-block-regexp' as a regexp for the matching."
+  (f90-ts--node-type-match-p node f90-ts--preproc-block-regexp))
+
+
 (defconst f90-ts--node-op-expr-types
   '("logical_expression"
     "math_expression"
@@ -1262,6 +1273,66 @@ Nodes of type comments and ampersand are not considered \"proper\"."
      (not (f90-ts--node-type-p n '("comment" "&"))))))
 
 
+(defun f90-ts--previous-stmt-first-line (node line-num)
+  "Return previous statement determined by NODE.
+First search for any reasonable (leaf) node, which is before line with
+line number LINE-NUM, and then go to start of line.  If on a continued line,
+follow it to the start of the statement.
+If current point is within a continued line, then previous leaf node
+belongs to the continued line as well, and previous-stmt return the
+node at the start of the continued line.
+
+In order to find the most previous leaf node start at node and ascend
+the tree until a previous sibling on a previous line can be found.  Just
+taking a sibling of node is not possible, as node might be nil (empty
+line), or node is part of an expression tree with deep nesting or
+similar.  We really want to go to previous line with a proper node on
+it.  Once we have a proper node, descend the previous sibling to further
+narrow it down among its children.
+Finally return the leaf node at the start of the line.  Follow continued
+lines to first line of continued statement.
+
+Ignore nodes which do not satisfy the predicate
+`f90-ts--node-not-comment-or-error-p' during ascend or descend,
+for example comment nodes."
+  (let* ((predicate #'f90-ts--node-not-comment-or-error-p)
+         ;; ascend until a previous ancestor is found
+         (prev-sib-of-anc
+          (cl-loop for ancestor = node then (treesit-node-parent ancestor)
+                   while ancestor
+                   for relative = (f90-ts--before-child ancestor line-num predicate)
+                   when relative return relative))
+         ;; descend prev-sib-of-anc to find the deepest node still before current line
+         (prev-descend
+          (and prev-sib-of-anc
+               (cl-loop for sib = prev-sib-of-anc then next
+                        for next = (and (> (treesit-node-child-count sib) 0)
+                                        (f90-ts--before-child sib line-num predicate))
+                        ;; if there is a next, continue and shift next to sib
+                        ;; with for sib=next in the first line
+                        while next
+                        finally return sib))))
+    ;; take continuation lines into account and go to beginning of statement
+    (and prev-descend
+         (f90-ts--first-node-of-stmt prev-descend))))
+
+
+(defun f90-ts--previous-stmt-first (node parent)
+  "Return previous non-preproc statement determined by NODE and PARENT.
+It uses `f90-ts--previous-stmt-first' to step back statement by statement,
+until a non-preprocessor statement is found.
+
+It starts at NODE, and if it is nil, it uses PARENT.  The function is used by
+the indent engine, which does not have a NODE but always has a PARENT (for
+example on empty lines)."
+  (cl-loop for ancestor = (or node parent) then pstmt-1
+           for cur-line =    (f90-ts--line-number-at-node-or-pos node)
+                        then (f90-ts--node-line pstmt-1)
+           for pstmt-1 = (f90-ts--previous-stmt-first-line ancestor cur-line)
+           while pstmt-1
+           when (not (f90-ts--node-type-preproc-block-p pstmt-1)) return pstmt-1))
+
+
 (defun f90-ts--previous-stmt-keyword-by-first (first)
   "Return keyword of previous statement.
 Use node FIRST which provides the very first leaf node of previous statement.
@@ -1334,51 +1405,6 @@ Keyword nodes become relevant for incomplete code with ERROR nodes."
   ;; next sibling is a keyword like if or do
   (let ((first (f90-ts--previous-stmt-first node parent)))
     (f90-ts--previous-stmt-keyword-by-first first)))
-
-
-(defun f90-ts--previous-stmt-first (node parent)
-  "Return previous statement determined by NODE and PARENT.
-First search for any reasonable (leaf) node, which is before current
-line, and then go to start of line.  If on a continued line, follow it
-to the start of the statement.
-If current point is within a continued line, then previous leaf node
-belongs to the continued line as well, and previous-stmt return the
-node at the start of the continued line.
-
-In order to find the most previous leaf node start at node and ascend
-the tree until a previous sibling on a previous line can be found.  Just
-taking a sibling of node is not possible, as node might be nil (empty
-line), or node is part of an expression tree with deep nesting or
-similar.  We really want to go to previous line with a proper node on
-it.  Once we have a proper node, descend the previous sibling to further
-narrow it down among its children.
-Finally return the leaf node at the start of the line.  Follow continued
-lines to first line of continued statement.
-
-Ignore nodes which do not satisfy the predicate
-`f90-ts--node-not-comment-or-error-p' during ascend or descend,
-for example comment nodes."
-  (let* ((cur-line (f90-ts--line-number-at-node-or-pos node))
-         (predicate #'f90-ts--node-not-comment-or-error-p)
-         ;; ascend until a previous ancestor is found
-         (prev-sib-of-anc
-          (cl-loop for ancestor = (or node parent) then (treesit-node-parent ancestor)
-                   while ancestor
-                   for relative = (f90-ts--before-child ancestor cur-line predicate)
-                   when relative return relative))
-         ;; descend prev-sib-of-anc to find the deepest node still before current line
-         (prev-descend
-          (and prev-sib-of-anc
-               (cl-loop for sib = prev-sib-of-anc then next
-                        for next = (and (> (treesit-node-child-count sib) 0)
-                                        (f90-ts--before-child sib cur-line predicate))
-                        ;; if there is a next, continue and shift next to sib
-                        ;; with for sib=next in the first line
-                        while next
-                        finally return sib))))
-    ;; take continuation lines into account and go to beginning of statement
-    (and prev-descend
-         (f90-ts--first-node-of-stmt prev-descend))))
 
 
 (defun f90-ts--prev-sib-by-parent (parent)
@@ -1572,6 +1598,22 @@ beginning of statement is found."
    for next-namp = (f90-ts--find-first-ampersand first)
    while next-namp
    finally return first))
+
+
+(defun f90-ts--parent-no-preproc (parent)
+  "Ascend until a non-preproc ancestor PARENT is found.
+If PARENT is a normal node, then return PARENT."
+  (treesit-parent-until parent
+                        (lambda (n) (not (f90-ts--node-type-match-p n "preproc.*")))
+                        t))
+
+
+(defun f90-ts--grandparent-no-preproc (parent)
+  "Ascend until a non-preproc ancestor PARENT is found.
+If PARENT is a normal node, then return PARENT."
+  (when-let* ((parent-nopp (f90-ts--parent-no-preproc parent))
+              (gp (treesit-node-parent parent-nopp)))
+    (f90-ts--parent-no-preproc gp)))
 
 
 (defun f90-ts--after-stmt-line1-p (node pos)
@@ -2350,25 +2392,27 @@ Value nil means that this node does not exist.  For example, on empty
 lines, the node itself is nil.")
 
 
-(defconst f90-ts--indent-cache-size 8
+(defconst f90-ts--indent-cache-size 10
   "Fixed size for `f90-ts--indent-cache'.")
 
 
 ;; slot indices of indent cache
-;; nodes
+;; (node,parent) and various related nodes
 (defconst f90-ts--indent-slot-node               0)
 (defconst f90-ts--indent-slot-parent             1)
-(defconst f90-ts--indent-slot-child0             2)
-(defconst f90-ts--indent-slot-prev-sib-by-parent 3)
-(defconst f90-ts--indent-slot-prev-stmt-first    4)
-(defconst f90-ts--indent-slot-prev-stmt-keyword  5)
+(defconst f90-ts--indent-slot-parent-nopp        2)
+(defconst f90-ts--indent-slot-gparent-nopp       3)
+(defconst f90-ts--indent-slot-child0             4)
+(defconst f90-ts--indent-slot-prev-sib-by-parent 5)
+(defconst f90-ts--indent-slot-prev-stmt-first    6)
+(defconst f90-ts--indent-slot-prev-stmt-keyword  7)
 ;; anchor and/or offset data
 ;; note: matcher or anchor can sometimes determine anchor/offset
 ;; in more complex rules, like for continued lines, and it is not
 ;; possible to pass any results from matcher to anchor to offset
 ;; in simple indent rules machinery
-(defconst f90-ts--indent-slot-anchor             6)
-(defconst f90-ts--indent-slot-offset             7)
+(defconst f90-ts--indent-slot-anchor             8)
+(defconst f90-ts--indent-slot-offset             9)
 
 
 (defmacro f90-ts--indent-with-cache (slot query)
@@ -2401,6 +2445,27 @@ return it."
   (aset f90-ts--indent-cache f90-ts--indent-slot-node   node)
   (aset f90-ts--indent-cache f90-ts--indent-slot-parent parent)
   f90-ts--indent-cache)
+
+
+(defun f90-ts--indent-parent-nopp ()
+  "Return no-preproc parent of node.
+Use cached value or compute using cached node.
+The no-preproc parent is parent if it is a normal non-preproc node,
+otherwise it is the first such ancestor of parent."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-parent-nopp
+   (let ((parent (f90-ts--indent-cached-parent)))
+     (and parent (f90-ts--parent-no-preproc parent)))))
+
+
+(defun f90-ts--indent-grandparent-nopp ()
+  "Return no-preproc grandparent of node.
+Use cached value or compute using cached node.
+It is the no-preproc parent of the no-preproc parent of the (node,parent) pair."
+  (f90-ts--indent-with-cache
+   f90-ts--indent-slot-gparent-nopp
+   (let ((parent (f90-ts--indent-cached-parent)))
+     (and parent (f90-ts--grandparent-no-preproc parent)))))
 
 
 (defun f90-ts--indent-child0 ()
@@ -2772,7 +2837,32 @@ for possible caching of anchor and offset values."
           t)))))
 
 
-(defun f90-ts--n-p-pstmtk (type-n type-p type-pstmtk)
+(defun f90-ts--nopp-parent-is (type-p)
+  "Provide patched matcher `parent-is' as used by `treesit-simple-indent'.
+TYPE-P is expected to be a regular expressions.  It is matched against type
+of the parent of node, in general.
+However, if parent is a preprocessor node, then ascend the tree until
+a normal node is encountered."
+  (lambda (_node parent _bol &rest _)
+    (let ((parent-nopp (f90-ts--parent-no-preproc parent)))
+      (f90-ts--node-type-match-p parent-nopp type-p))))
+
+
+(defun f90-ts--nopp-n-p-gp (type-n type-p type-gp)
+  "Provide patched matcher `n-p-gp' as used by `treesit-simple-indent'.
+TYPE-N, TYPE-P and TYPE-GP are expected to be a regular expressions.
+They are matched against type of node, its parent and grandparent, in general.
+However, if parent or grand-parent are preprocessor node, then ascend the
+tree until normal nodes are encountered."
+  (lambda (node parent _bol &rest _)
+    (let* ((parent-nopp (f90-ts--parent-no-preproc parent))
+           (grandparent-nopp (f90-ts--grandparent-no-preproc parent)))
+      (and (f90-ts--node-type-match-p node type-n)
+           (f90-ts--node-type-match-p parent-nopp type-p)
+           (f90-ts--node-type-match-p grandparent-nopp type-gp)))))
+
+
+(defun f90-ts--nopp-n-p-pstmtk (type-n type-p type-pstmtk)
   "Succeed if types of nodes match provided types.
 TYPE-N, TYPE-P and TYPE-PSTMTK are expected to be regular expressions
 or nil.  If nil, everything is matched, hence the type of the corresponding
@@ -2782,9 +2872,10 @@ TYPE-P is matched against type of no-preproc parent and
 TYPE-PSTMTK is matched against type of (cached) pstmtk, which is
 the previous statement keyword node."
   (lambda (node parent _bol &rest _)
-    (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword)))
+    (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword))
+          (parent-nopp (f90-ts--parent-no-preproc parent)))
       (and (f90-ts--node-type-match-p node type-n)
-           (f90-ts--node-type-match-p parent type-p)
+           (f90-ts--node-type-match-p parent-nopp type-p)
            (f90-ts--node-type-match-p pstmt-k type-pstmtk)))))
 
 
@@ -2808,6 +2899,23 @@ TYPE-PSIBP is matched against type of (cached) previous sibling by parent."
 
 ;;++++++++++++++
 ;; anchors
+
+(defun f90-ts--nopp-parent (_node _parent bol &rest _)
+  "Return anchor position determine by start of no-preproc PARENT.
+If PARENT is not available, return BOL."
+  (if-let* ((nopp-parent (f90-ts--indent-parent-nopp)))
+      (treesit-node-start nopp-parent)
+    bol))
+
+
+(defun f90-ts--nopp-grandparent (_node _parent bol &rest _)
+  "Return anchor position determine by start of no-preproc grandparaent.
+The grandparent is determined by PARENT.  If PARENT is not available,
+return BOL."
+  (if-let* ((nopp-gparent (f90-ts--indent-grandparent-nopp)))
+      (treesit-node-start nopp-gparent)
+    bol))
+
 
 (defun f90-ts--previous-stmt-anchor (_node _parent bol &rest _rest)
   "Return anchor at previous statements indentation or BOL.
@@ -2856,14 +2964,16 @@ anchor (and possibly offset)."
   (- f90-ts-indent-block))
 
 
-(defun f90-ts--toplevel-offset (_node parent _bol &rest _rest)
+(defun f90-ts--toplevel-offset (_node _parent _bol &rest _rest)
   "Return offset for stuff right below top level nodes.
 If inside module, submodule or program then return `f90-ts-indent-toplevel',
 otherwise return `f90-ts-indent-contain'.
 Deciding which of the two cases is present requires to access grandparent as
 well as grand-grandparent, which are obtained via PARENT."
-  (let* ((grandparent (treesit-node-parent parent))
-         (ggparent    (and grandparent (treesit-node-parent grandparent))))
+  ;; skip preprocessor nodes in ancestor line
+  (let* ((grandparent (f90-ts--indent-grandparent-nopp))
+         (ggparent    (and grandparent
+                           (f90-ts--grandparent-no-preproc grandparent))))
     ;; before 'contains' statement, grandparent is translation_unit,
     ;; after 'contains' it is module or program
     (if (or (f90-ts--node-type-p grandparent '("module" "submodule" "program" "translation_unit"))
@@ -3912,7 +4022,9 @@ whose car is a constructor name.  ANCHOR and OFFSET are bare symbols or
 literals.  Any symbol present in an internal list are prefixed, the rest is
 passed through unchanged."
   (let ((prefix-syms '(;; matcher constructor
-                       n-p-pstmtk
+                       nopp-parent-is
+                       nopp-n-p-gp
+                       nopp-n-p-pstmtk
                        n-p-ch-psibp
                        ;; dummy matcher (always fail, but do preparations)
                        populate-cache
@@ -3925,6 +4037,8 @@ passed through unchanged."
                        special-comment-is
                        comment-region-is
                        ;; anchor
+                       nopp-parent
+                       nopp-grandparent
                        continued-line-anchor
                        previous-stmt-anchor
                        catch-all-anchor
@@ -4005,13 +4119,11 @@ The main purpose is to fill the indentation cache for a new run.")
 
 (defvar f90-ts--indent-rules-preproc
   (f90-ts--with-map-rules
-   ;; indent preprocessor directive.
+   ;; indent preprocessor directive
    ;; directive itself: no indent
-   (preproc-node-is column-0 0)
-   ;; directive with preproc parent at toplevel
-   (preproc-at-toplevel-is grand-parent f90-ts-indent-toplevel)
-   ;; other
-   ((n-p-gp nil "preproc_.*" nil) grand-parent f90-ts-indent-block))
+   ;; otherwise, skip preproc nodes as if they are not present
+   ;; (this is done by the nopp=no-preproc mechanics)
+   (preproc-node-is column-0 0))
   "Indentation rules for preprocessor directives.")
 
 
@@ -4027,7 +4139,7 @@ The main purpose is to fill the indentation cache for a new run.")
    ;; continued strings need special care, the ampersands do not appear as
    ;; separate nodes, (treesit-node-at pos) at indentation position returns
    ;; the string_literal, which starts at some previous line
-   ((n-p-gp nil "string_literal" nil) parent 0)
+   ((nopp-n-p-gp nil "string_literal" nil) nopp-parent 0)
 
    ;; it is easy to see whether we are on a continued line (not the first line
    ;; of a multiline statement, only subsequent lines), but handling specific
@@ -4040,9 +4152,9 @@ The main purpose is to fill the indentation cache for a new run.")
   (f90-ts--with-map-rules
    ;; contains statements in modules, programs, subroutines or functions,
    ;; no indentation for contains
-   ((node-is    "internal_procedures")         parent 0)
-   ((parent-is  "internal_procedures")         parent toplevel-offset)
-   ((n-p-gp nil "ERROR" "internal_procedures") parent toplevel-offset))
+   ((node-is         "internal_procedures")         nopp-parent 0)
+   ((nopp-parent-is  "internal_procedures")         nopp-parent toplevel-offset)
+   ((nopp-n-p-gp nil "ERROR" "internal_procedures") nopp-parent toplevel-offset))
   "Indentation rules for internal_proc node.
 This node occurs in conjunction with \"contain\" statements.")
 
@@ -4052,34 +4164,34 @@ This node occurs in conjunction with \"contain\" statements.")
    ;; program or module interface part (before contains) and end statement
    ;; in all cases: first match node with end_xyz_statement, and then only
    ;; whether parent is xyz, as parent is xyz in both cases
-   ((node-is    "end_program_statement")        parent 0)
-   ((parent-is      "program\\(_statement\\)?") parent toplevel-offset)
-   ((n-p-pstmtk nil "ERROR" "program")          parent toplevel-offset)
+   ((node-is             "end_program_statement")    nopp-parent 0)
+   ((nopp-parent-is      "program\\(_statement\\)?") nopp-parent toplevel-offset)
+   ((nopp-n-p-pstmtk nil "ERROR" "program")          nopp-parent toplevel-offset)
 
    ;; parent-is uses regexp matching, thus use "^module" to avoid that it
    ;; matches "submodule"
-   ((node-is        "end_module_statement")      parent 0)
-   ((parent-is      "^module\\(_statement\\)?$") parent toplevel-offset)
-   ((n-p-pstmtk nil "ERROR" "^module$")          parent toplevel-offset)
+   ((node-is             "end_module_statement")      nopp-parent 0)
+   ((nopp-parent-is      "^module\\(_statement\\)?$") nopp-parent toplevel-offset)
+   ((nopp-n-p-pstmtk nil "ERROR" "^module$")          nopp-parent toplevel-offset)
 
-   ((node-is        "end_submodule_statement")      parent 0)
-   ((parent-is      "^submodule\\(_statement\\)?$") parent toplevel-offset)
-   ((n-p-pstmtk nil "ERROR" "^submodule$")          parent toplevel-offset))
+   ((node-is             "end_submodule_statement")      nopp-parent 0)
+   ((nopp-parent-is      "^submodule\\(_statement\\)?$") nopp-parent toplevel-offset)
+   ((nopp-n-p-pstmtk nil "ERROR" "^submodule$")          nopp-parent toplevel-offset))
   "Indentation rules for program and module nodes.")
 
 
 (defvar f90-ts--indent-rules-function
   (f90-ts--with-map-rules
    ;; functions and subroutine bodies
-   ((node-is    "end_subroutine_statement")       parent 0)
-   ((node-is    "end_function_statement")         parent 0)
-   ((node-is    "end_module_procedure_statement") parent 0)
-   ((parent-is  "subroutine")                     parent f90-ts-indent-block)
-   ((parent-is  "function")                       parent f90-ts-indent-block)
-   ((parent-is  "module_procedure")               parent f90-ts-indent-block)
-   ((n-p-pstmtk nil nil "subroutine")             parent f90-ts-indent-block)
-   ((n-p-pstmtk nil nil "function")               parent f90-ts-indent-block)
-   ((n-p-pstmtk nil nil "module_procedure")       parent f90-ts-indent-block))
+   ((node-is         "end_subroutine_statement")         nopp-parent 0)
+   ((node-is         "end_function_statement")           nopp-parent 0)
+   ((node-is         "end_module_procedure_statement")   nopp-parent 0)
+   ((nopp-parent-is  "subroutine")                       nopp-parent f90-ts-indent-block)
+   ((nopp-parent-is  "function")                         nopp-parent f90-ts-indent-block)
+   ((nopp-parent-is  "module_procedure")                 nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil nil "subroutine")               nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil nil "function")                 nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil nil "module_procedure")         nopp-parent f90-ts-indent-block))
   "Indentation rules for functions and subroutines.")
 
 
@@ -4087,14 +4199,15 @@ This node occurs in conjunction with \"contain\" statements.")
   (f90-ts--with-map-rules
    ;; statements related to toplevel subroutine or function statements,
    ;; and ERROR cases (might or might not be toplevel)
-   ((n-p-ch-psibp nil "translation_unit" nil "subroutine_statement") parent f90-ts-indent-block)
-   ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") parent f90-ts-indent-block)
-   ((n-p-ch-psibp nil "translation_unit" nil "function_statement") parent f90-ts-indent-block)
-   ((n-p-ch-psibp nil "ERROR"            nil "function_statement") parent f90-ts-indent-block)
+   ;; TODO: it seems that these might not be relevant anymore???
+   ((n-p-ch-psibp nil "translation_unit" nil "subroutine_statement") nopp-parent f90-ts-indent-block)
+   ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") nopp-parent f90-ts-indent-block)
+   ((n-p-ch-psibp nil "translation_unit" nil "function_statement")   nopp-parent f90-ts-indent-block)
+   ((n-p-ch-psibp nil "ERROR"            nil "function_statement")   nopp-parent f90-ts-indent-block)
    ;; rule for translation_unit and module_procedure_statement does not seem possible,
    ;; as module procedure statements are only allowed within contains section
-   ((n-p-ch-psibp nil "ERROR"            nil "module_procedure_statement") parent f90-ts-indent-block)
-   ((parent-is "translation_unit") column-0 0))
+   ((n-p-ch-psibp nil "ERROR"            nil "module_procedure_statement") nopp-parent f90-ts-indent-block)
+   ((nopp-parent-is "translation_unit") column-0 0))
   "Indentation rules related to root node translation_unit.
 These occur for functions and subroutines not within a \"contains\" section,
 and in case of ERROR nodes with incomplete code.")
@@ -4103,26 +4216,26 @@ and in case of ERROR nodes with incomplete code.")
 (defvar f90-ts--indent-rules-interface
   (f90-ts--with-map-rules
    ;; (abstract) interface bodies
-   ((node-is    "end_interface_statement") parent 0)
-   ((parent-is  "interface")               parent f90-ts-indent-block)
-   ((n-p-pstmtk nil "ERROR" "interface")   parent f90-ts-indent-block))
+   ((node-is         "end_interface_statement") nopp-parent 0)
+   ((nopp-parent-is  "interface")               nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil "ERROR" "interface")   nopp-parent f90-ts-indent-block))
   "Indentation rules for interface blocks.")
 
 
 (defvar f90-ts--indent-rules-dtype-enum
   (f90-ts--with-map-rules
    ;; derived type definitions
-   ((n-p-gp       "end_type_statement"      "derived_type_definition" nil)                      parent 0)
-   ((n-p-ch-psibp "derived_type_procedures" "derived_type_definition" "contains_statement" nil) parent 0)
-   ((n-p-ch-psibp "ERROR"                   "derived_type_definition" "contains_statement" nil) parent 0)
-   ((parent-is    "derived_type_procedures") parent f90-ts-indent-block)
-   ((parent-is    "derived_type_definition") parent f90-ts-indent-block)
+   ((nopp-n-p-gp       "end_type_statement"      "derived_type_definition" nil)                      nopp-parent 0)
+   ((n-p-ch-psibp      "derived_type_procedures" "derived_type_definition" "contains_statement" nil) nopp-parent 0)
+   ((n-p-ch-psibp      "ERROR"                   "derived_type_definition" "contains_statement" nil) nopp-parent 0)
+   ((nopp-parent-is    "derived_type_procedures") nopp-parent f90-ts-indent-block)
+   ((nopp-parent-is    "derived_type_definition") nopp-parent f90-ts-indent-block)
 
    ;; enumeration types: enum and enumeration
-   ((node-is    "end_enum_statement")                    parent 0)
-   ((node-is    "end_enumeration_type_statement")        parent 0)
-   ((parent-is  "^enum\\(eration_type\\)?$")             parent f90-ts-indent-block)
-   ((n-p-pstmtk nil "ERROR" "^enum\\(eration_type\\)?$") parent f90-ts-indent-block))
+   ((node-is         "end_enum_statement")                    nopp-parent 0)
+   ((node-is         "end_enumeration_type_statement")        nopp-parent 0)
+   ((nopp-parent-is  "^enum\\(eration_type\\)?$")             nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil "ERROR" "^enum\\(eration_type\\)?$") nopp-parent f90-ts-indent-block))
   "Indentation rules for derived type and enumeration type statements.")
 
 
@@ -4131,29 +4244,29 @@ and in case of ERROR nodes with incomplete code.")
    ;; if-then-else statements
    ;; this must be first, as its parent is an if-statement
    ;; but node=nil/something and parent=if_statement is possible (some line after if)
-   ((n-p-gp     "end_if_statement" "if_statement"  nil)         parent 0)
-   ((n-p-gp     "elseif_clause"    "if_statement"  nil)         parent 0)
-   ((n-p-gp     "else_clause"      "if_statement"  nil)         parent 0)
-   ((n-p-pstmtk nil                "if_statement"  "^if$")      parent f90-ts-indent-block) ; line right after if
-   ((n-p-pstmtk nil                "if_statement"  "^else$")    parent f90-ts-indent-block) ; line right after else, with empty else block
-   ((n-p-pstmtk nil                "if_statement"  "^elseif$")  parent f90-ts-indent-block) ; line right after elseif, with empty elseif block
-   ((n-p-pstmtk nil                "else_clause"   "^else$")    parent f90-ts-indent-block) ; line after else, with non-empty else block
-   ((n-p-pstmtk nil                "elseif_clause" "^elseif$")  parent f90-ts-indent-block) ; line right after "elseif"
-   ((n-p-pstmtk nil                "elseif_clause" "^else$")    parent f90-ts-indent-block) ; line right after "else if"
+   ((nopp-n-p-gp     "end_if_statement" "if_statement"  nil)         nopp-parent 0)
+   ((nopp-n-p-gp     "elseif_clause"    "if_statement"  nil)         nopp-parent 0)
+   ((nopp-n-p-gp     "else_clause"      "if_statement"  nil)         nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                "if_statement"  "^if$")      nopp-parent f90-ts-indent-block) ; line right after if
+   ((nopp-n-p-pstmtk nil                "if_statement"  "^else$")    nopp-parent f90-ts-indent-block) ; line right after else, with empty else block
+   ((nopp-n-p-pstmtk nil                "if_statement"  "^elseif$")  nopp-parent f90-ts-indent-block) ; line right after elseif, with empty elseif block
+   ((nopp-n-p-pstmtk nil                "else_clause"   "^else$")    nopp-parent f90-ts-indent-block) ; line after else, with non-empty else block
+   ((nopp-n-p-pstmtk nil                "elseif_clause" "^elseif$")  nopp-parent f90-ts-indent-block) ; line right after "elseif"
+   ((nopp-n-p-pstmtk nil                "elseif_clause" "^else$")    nopp-parent f90-ts-indent-block) ; line right after "else if"
 
-   ((n-p-pstmtk "elseif_clause"    "ERROR" "^if$") previous-stmt-anchor 0)
-   ((n-p-pstmtk "elseif"           "ERROR" "^if$") previous-stmt-anchor 0)
-   ((n-p-gp     "elseif_clause"    "ERROR" nil)    previous-stmt-anchor minus-block-offset) ; at elseif line, incomplete
+   ((nopp-n-p-pstmtk "elseif_clause"    "ERROR" "^if$") previous-stmt-anchor 0)
+   ((nopp-n-p-pstmtk "elseif"           "ERROR" "^if$") previous-stmt-anchor 0)
+   ((nopp-n-p-gp     "elseif_clause"    "ERROR" nil)    previous-stmt-anchor minus-block-offset) ; at elseif line, incomplete
 
-   ((n-p-pstmtk "else_clause"      "ERROR" "^if$")     previous-stmt-anchor 0)
-   ((n-p-pstmtk "else_clause"      "ERROR" "^elseif$") previous-stmt-anchor 0)
-   ((n-p-gp     "else_clause"      "ERROR" nil)        previous-stmt-anchor minus-block-offset) ; at else line, incomplete
-   ((n-p-pstmtk "^else$"           "ERROR" "^if$")     previous-stmt-anchor 0)
-   ((n-p-gp     "^else$"           "ERROR" nil)        previous-stmt-anchor minus-block-offset)
+   ((nopp-n-p-pstmtk "else_clause"      "ERROR" "^if$")     previous-stmt-anchor 0)
+   ((nopp-n-p-pstmtk "else_clause"      "ERROR" "^elseif$") previous-stmt-anchor 0)
+   ((nopp-n-p-gp     "else_clause"      "ERROR" nil)        previous-stmt-anchor minus-block-offset) ; at else line, incomplete
+   ((nopp-n-p-pstmtk "^else$"           "ERROR" "^if$")     previous-stmt-anchor 0)
+   ((nopp-n-p-gp     "^else$"           "ERROR" nil)        previous-stmt-anchor minus-block-offset)
 
-   ((n-p-pstmtk nil                "ERROR" "^if$")     previous-stmt-anchor f90-ts-indent-block) ; empty line after if
-   ((n-p-pstmtk nil                "ERROR" "^elseif$") previous-stmt-anchor f90-ts-indent-block) ; empty line after elseif
-   ((n-p-pstmtk nil                "ERROR" "^else$")   previous-stmt-anchor f90-ts-indent-block) ; empty line after else
+   ((nopp-n-p-pstmtk nil                "ERROR" "^if$")     previous-stmt-anchor f90-ts-indent-block) ; empty line after if
+   ((nopp-n-p-pstmtk nil                "ERROR" "^elseif$") previous-stmt-anchor f90-ts-indent-block) ; empty line after elseif
+   ((nopp-n-p-pstmtk nil                "ERROR" "^else$")   previous-stmt-anchor f90-ts-indent-block) ; empty line after else
    )
   "Indentation rules for if-then-else statements.")
 
@@ -4161,20 +4274,20 @@ and in case of ERROR nodes with incomplete code.")
 (defvar f90-ts--indent-rules-where
   (f90-ts--with-map-rules
    ;; where-elsewhere statements
-   ((n-p-gp     "end_where_statement" "where_statement"  nil)         parent 0)
-   ((n-p-gp     "elsewhere_clause"    "where_statement"  nil)         parent 0)
-   ((n-p-gp     "else_clause"         "where_statement"  nil)         parent 0)
-   ((n-p-pstmtk nil                   "where_statement"  "where")     parent f90-ts-indent-block) ; line right after where
-   ((n-p-pstmtk nil                   "where_statement"  "elsewhere") parent f90-ts-indent-block) ; line right after elsewhere
-   ((n-p-pstmtk nil                   "elsewhere_clause" "elsewhere") parent f90-ts-indent-block) ; line after else, with non-empty else block
+   ((nopp-n-p-gp     "end_where_statement" "where_statement"  nil)         nopp-parent 0)
+   ((nopp-n-p-gp     "elsewhere_clause"    "where_statement"  nil)         nopp-parent 0)
+   ((nopp-n-p-gp     "else_clause"         "where_statement"  nil)         nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                   "where_statement"  "where")     nopp-parent f90-ts-indent-block) ; line right after where
+   ((nopp-n-p-pstmtk nil                   "where_statement"  "elsewhere") nopp-parent f90-ts-indent-block) ; line right after elsewhere
+   ((nopp-n-p-pstmtk nil                   "elsewhere_clause" "elsewhere") nopp-parent f90-ts-indent-block) ; line after else, with non-empty else block
 
-   ((n-p-pstmtk "elsewhere_clause"    "ERROR" "where") previous-stmt-anchor 0)
-   ((n-p-pstmtk "elsewhere"           "ERROR" "where") previous-stmt-anchor 0)
-   ((n-p-gp     "elsewhere_clause"    "ERROR" nil)     previous-stmt-anchor minus-block-offset) ; at elsewhere line, incomplete
-   ((n-p-gp     "elsewhere"           "ERROR" nil)     previous-stmt-anchor minus-block-offset)
+   ((nopp-n-p-pstmtk "elsewhere_clause"    "ERROR" "where") previous-stmt-anchor 0)
+   ((nopp-n-p-pstmtk "elsewhere"           "ERROR" "where") previous-stmt-anchor 0)
+   ((nopp-n-p-gp     "elsewhere_clause"    "ERROR" nil)     previous-stmt-anchor minus-block-offset) ; at elsewhere line, incomplete
+   ((nopp-n-p-gp     "elsewhere"           "ERROR" nil)     previous-stmt-anchor minus-block-offset)
 
-   ((n-p-pstmtk nil                "ERROR" "where")     previous-stmt-anchor f90-ts-indent-block) ; empty line after where
-   ((n-p-pstmtk nil                "ERROR" "elsewhere") previous-stmt-anchor f90-ts-indent-block) ; empty line after elsewhere
+   ((nopp-n-p-pstmtk nil                "ERROR" "where")     previous-stmt-anchor f90-ts-indent-block) ; empty line after where
+   ((nopp-n-p-pstmtk nil                "ERROR" "elsewhere") previous-stmt-anchor f90-ts-indent-block) ; empty line after elsewhere
    )
   "Indentation rules for else-elsewhere statements.")
 
@@ -4182,22 +4295,22 @@ and in case of ERROR nodes with incomplete code.")
 (defvar f90-ts--indent-rules-single-region
   (f90-ts--with-map-rules
    ;; structures with a single region block and linear execution
-   ((n-p-gp     "end_do_loop" "do_loop" nil)  parent 0)
-   ((n-p-pstmtk nil           "do_loop" "do") parent f90-ts-indent-block)  ;; proper do block (with or without while)
-   ((n-p-pstmtk nil           "ERROR"   "do") previous-stmt-anchor f90-ts-indent-block)
+   ((nopp-n-p-gp     "end_do_loop" "do_loop"      nil)  nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                "do_loop" "do") nopp-parent f90-ts-indent-block)  ;; proper do block (with or without while)
+   ((nopp-n-p-pstmtk nil                "ERROR"   "do") previous-stmt-anchor f90-ts-indent-block)
 
-   ((n-p-gp     "end_block_construct_statement" "block_construct" nil)     parent 0)
-   ((n-p-pstmtk nil                             "block_construct" "block") parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                             "ERROR"           "block") previous-stmt-anchor f90-ts-indent-block)
+   ((nopp-n-p-gp     "end_block_construct_statement" "block_construct" nil)     nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                             "block_construct" "block") nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                             "ERROR"           "block") previous-stmt-anchor f90-ts-indent-block)
 
-   ((n-p-gp "end_associate_statement" "associate_statement" nil)         parent 0)
-   ((n-p-pstmtk nil                       "association"         "associate") parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                       "associate_statement" "associate") parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                       "ERROR"               "associate") previous-stmt-anchor f90-ts-indent-block)
+   ((nopp-n-p-gp     "end_associate_statement" "associate_statement" nil)         nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                       "association"         "associate") nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                       "associate_statement" "associate") nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                       "ERROR"               "associate") previous-stmt-anchor f90-ts-indent-block)
 
-   ((n-p-gp "end_forall_statement"        "forall_statement" nil)      parent               0)
-   ((n-p-pstmtk nil                       "forall_statement" "forall") parent               f90-ts-indent-block)
-   ((n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block))
+   ((nopp-n-p-gp "end_forall_statement"        "forall_statement" nil)      nopp-parent          0)
+   ((nopp-n-p-pstmtk nil                       "forall_statement" "forall") nopp-parent          f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                       "ERROR"            "forall") previous-stmt-anchor f90-ts-indent-block))
   "Indentation rules for single region structures.
 These are do loops, block statements, associate construct and forall statements.")
 
@@ -4205,44 +4318,44 @@ These are do loops, block statements, associate construct and forall statements.
 (defvar f90-ts--indent-rules-select
   (f90-ts--with-map-rules
    ;; control statements
-   ((n-p-gp     "end_select_statement" "select_case_statement" nil)              parent 0)
-   ((n-p-pstmtk "case_statement"       "select_case_statement" nil)              parent 0)
-   ((n-p-pstmtk nil                    "select_case_statement" "case")           parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                    "case_statement"        "case")           parent f90-ts-indent-block)
-   ((n-p-gp     "ERROR"                "select_case_statement" nil)              parent f90-ts-indent-block)
-   ((n-p-gp     nil                    "ERROR"                 "case_statement") grand-parent f90-ts-indent-block)
-   ((parent-is                         "select_case_statement")                  parent 0)
+   ((nopp-n-p-gp     "end_select_statement" "select_case_statement" nil)              nopp-parent 0)
+   ((nopp-n-p-pstmtk "case_statement"       "select_case_statement" nil)              nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                    "select_case_statement" "case")           nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                    "case_statement"        "case")           nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp     "ERROR"                "select_case_statement" nil)              nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp     nil                    "ERROR"                 "case_statement") nopp-grandparent f90-ts-indent-block)
+   ((nopp-parent-is                         "select_case_statement")                  nopp-parent 0)
 
-   ((n-p-gp     "end_select_statement" "select_type_statement" nil)              parent 0)
-   ((n-p-pstmtk "type_statement"       "select_type_statement" nil)              parent 0)
-   ((n-p-pstmtk nil                    "select_type_statement" "type")           parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                    "select_type_statement" "class")          parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                    "type_statement"        "type")           parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                    "type_statement"        "class")          parent f90-ts-indent-block)
-   ((n-p-gp     "ERROR"                "select_type_statement" nil)              parent f90-ts-indent-block)
-   ((n-p-gp     nil                    "ERROR"                 "type_statement") grand-parent f90-ts-indent-block)
-   ((parent-is                         "select_type_statement")                  parent 0)
+   ((nopp-n-p-gp     "end_select_statement" "select_type_statement" nil)              nopp-parent 0)
+   ((nopp-n-p-pstmtk "type_statement"       "select_type_statement" nil)              nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                    "select_type_statement" "type")           nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                    "select_type_statement" "class")          nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                    "type_statement"        "type")           nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                    "type_statement"        "class")          nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp     "ERROR"                "select_type_statement" nil)              nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp     nil                    "ERROR"                 "type_statement") nopp-grandparent f90-ts-indent-block)
+   ((nopp-parent-is                         "select_type_statement")                  nopp-parent 0)
 
-   ((n-p-gp     "end_select_statement" "select_rank_statement" nil)              parent 0)
-   ((n-p-pstmtk "rank_statement"       "select_rank_statement" nil)              parent 0)
-   ((n-p-pstmtk nil                    "select_rank_statement" "rank")           parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                    "rank_statement"        "rank")           parent f90-ts-indent-block)
-   ((n-p-gp     "ERROR"                "select_rank_statement" nil)              parent f90-ts-indent-block)
-   ((n-p-gp     nil                    "ERROR"                 "rank_statement") grand-parent f90-ts-indent-block)
-   ((parent-is                         "select_rank_statement")                  parent 0))
+   ((nopp-n-p-gp     "end_select_statement" "select_rank_statement" nil)              nopp-parent 0)
+   ((nopp-n-p-pstmtk "rank_statement"       "select_rank_statement" nil)              nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                    "select_rank_statement" "rank")           nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                    "rank_statement"        "rank")           nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp     "ERROR"                "select_rank_statement" nil)              nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp     nil                    "ERROR"                 "rank_statement") nopp-grandparent f90-ts-indent-block)
+   ((nopp-parent-is                         "select_rank_statement")                  nopp-parent 0))
   "Indentation rules for select statements (case and type).")
 
 
 (defvar f90-ts--indent-rules-coarray
   (f90-ts--with-map-rules
    ;; structures with a single region block and linear execution
-   ((n-p-gp     "end_coarray_critical_statement" "coarray_critical_statement" nil)        parent 0)
-   ((n-p-pstmtk nil                              "coarray_critical_statement" "critical") parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                              "ERROR"                      "critical") previous-stmt-anchor f90-ts-indent-block)
+   ((nopp-n-p-gp     "end_coarray_critical_statement" "coarray_critical_statement" nil)        nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                              "coarray_critical_statement" "critical") nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                              "ERROR"                      "critical") previous-stmt-anchor f90-ts-indent-block)
 
-   ((n-p-gp     "end_coarray_team_statement" "coarray_team_statement" nil)        parent 0)
-   ((n-p-pstmtk nil                          "coarray_team_statement" "change") parent f90-ts-indent-block)
-   ((n-p-pstmtk nil                          "ERROR"                  "change") previous-stmt-anchor f90-ts-indent-block))
+   ((nopp-n-p-gp     "end_coarray_team_statement" "coarray_team_statement" nil)      nopp-parent 0)
+   ((nopp-n-p-pstmtk nil                          "coarray_team_statement" "change") nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-pstmtk nil                          "ERROR"                  "change") previous-stmt-anchor f90-ts-indent-block))
   "Indentation rules for coarray statements.")
 
 

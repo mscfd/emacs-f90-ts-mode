@@ -5,9 +5,9 @@ Code:
       (funcall f90-ts-mode-test--prepare-fn))
     (funcall f90-ts-mode-test--action-fn))
 
-Point-Char: |
+Point-Char: ^
 
-Name: Preproc1
+Name: preproc1
 =-=
 module my_mod
  public :: foo
@@ -18,7 +18,7 @@ module my_mod
 end module my_mod
 =-=-=
 
-Name: Preproc2
+Name: preproc2
 =-=
 subroutine test_sub
      integer :: i
@@ -31,7 +31,7 @@ subroutine test_sub
 end subroutine test_sub
 =-=-=
 
-Name: Preproc3
+Name: preproc3
 =-=
 program main
 #ifdef A
@@ -43,4 +43,49 @@ program main
 #endif
 #endif
 end program main
+=-=-=
+
+Name: preproc4
+=-=
+subroutine sub()
+     block
+#ifdef __A__
+          x = 1
+#elifdef __B__
+          x = 2
+#else
+          x = 3
+#endif
+     end block
+end subroutine sub
+=-=-=
+
+Name: preproc5
+=-=
+subroutine sub()
+     block
+#ifndef __A__
+          x = 1
+#elifndef __B__
+          x = 2
+#else
+          x = 3
+#endif
+     end block
+end subroutine sub
+=-=-=
+
+Name: preproc6
+=-=
+subroutine sub()
+     block
+#if defined(__SOME_COMPILER) || defined(__OTHER_COMPILER)
+          x = 1
+#elif __EXTRA_COMPILER && (__VERSION__ >= 123)
+          x = 2
+#else
+          x = 3
+#endif
+     end block
+end subroutine sub
 =-=-=
