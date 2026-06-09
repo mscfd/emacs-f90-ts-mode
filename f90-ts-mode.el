@@ -849,8 +849,11 @@ implementation when the logging package is loaded.
 
 Set `f90-ts-allow-log' to allow log instruction as no-op without `f90-ts-log'.
 This is used by the Makefile to run ert tests during development."
-  (unless (bound-and-true-p f90-ts-allow-log)
-    (error "Function f90-ts-log-indent-print-state not available: load f90-ts-log.el first")))
+  (lambda (_node _parent _bol &rest _)
+    (unless (bound-and-true-p f90-ts-allow-log)
+      (error "Function f90-ts-log-indent-print-state not available: load f90-ts-log.el first"))
+    ;; return nil to ensure that the dummy rule fails (as the real log function also does)
+    nil))
 
 
 ;;;-----------------------------------------------------------------------------
