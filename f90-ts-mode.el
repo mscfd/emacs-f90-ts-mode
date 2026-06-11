@@ -306,6 +306,9 @@ Value is a list of the form (TYPE VALUE) where TYPE is either:
                  (cons :tag "Indent offset"
                        (const :tag "" :format "" indent)
                        (integer :tag "Offset to first line")))
+  :safe (lambda (v) (and (consp v)
+                         (memq (car v) '(column indent))
+                         (integerp (cdr v))))
   :group 'f90-ts)
 
 
@@ -321,6 +324,9 @@ With `left', the label's first digit starts on COLUMN (left-adjusted)."
            (const :tag "Right-adjusted (last digit at column)" right)
            (const :tag "Left-adjusted  (first digit at column)" left))
           (integer :tag "Column (0-based)"))
+  :safe (lambda (v) (and (consp v)
+                         (memq (car v) '(right left))
+                         (integerp (cdr v))))
   :group 'f90-ts)
 
 
@@ -396,6 +402,7 @@ Special comments such as separators are determined by rules in
 (defcustom f90-ts-nav-buffer-auto-sync t
   "If non-nil the point in the nav buffer follows point in the source buffer."
   :type 'boolean
+  :safe  #'booleanp
   :group 'f90-ts-nav)
 
 
@@ -473,6 +480,7 @@ preserve indentation within comments with `f90-ts-break-line'."
 Trailing blank(s) are not inserted automatically, but can be provided
 in the string."
   :type  'string
+  :safe  #'stringp
   :group 'f90-ts)
 
 
@@ -481,6 +489,7 @@ in the string."
 Trailing blank(s) are not inserted automatically, but can be provided
 in the string."
   :type  '(repeat string)
+  :safe (lambda (v) (and (listp v) (cl-every #'stringp v)))
   :group 'f90-ts)
 
 
@@ -490,6 +499,7 @@ If nil, just insert the prefix.  If non-nil, remove blanks up to length of
 prefix before commented command starts.  The preserves the original
 indentation."
   :type  'boolean
+  :safe  #'booleanp
   :group 'f90-ts)
 
 
@@ -523,6 +533,7 @@ The matched part of the comment is highlighted with `font-lock-warning-face'.
 Set to nil to disable keyword highlighting in comments."
   :type '(choice (const :tag "Disabled" nil)
                  (regexp :tag "Regexp"))
+  :safe (lambda (v) (or (null v) (stringp v)))
   :group 'f90-ts)
 
 
@@ -603,6 +614,17 @@ seem to make much sense."
                         (const :tag "f90-ts-font-lock-openmp-face"
                                f90-ts-font-lock-openmp-face)
                         (face :tag "other face"))))
+  :safe (lambda (v)
+          (and (listp v)
+               (cl-every (lambda (rule)
+                            (and (listp rule)
+                                 (stringp (plist-get rule :name))
+                                 (or (stringp (plist-get rule :match))
+                                     (functionp (plist-get rule :match)))
+                                 (memq (plist-get rule :indent)
+                                       '(column-0 context indented))
+                                 (symbolp (plist-get rule :face))))
+                          v)))
   :group 'f90-ts)
 
 
