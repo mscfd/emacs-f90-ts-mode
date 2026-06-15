@@ -860,12 +860,13 @@ This is used by the Makefile to run ert tests during development."
 ;;; auxiliary predicates, walk and query functions
 
 (defun f90-ts--node-type-p (node type)
-  "If TYPE is nil, return true and ignore NODE.
+  "Compare type of NODE with TYPE.
+If TYPE is nil, return true and ignore NODE.
 If NODE is nil and TYPE is non-nil, return nil.
 If TYPE is a string, return true if NODE is non-nil and is of type TYPE.
 If TYPE is a list of strings, return true if NODE is non-nil and its
 type is among the elements of TYPE."
-  (or (not type)
+  (or (null type)
       (and node
            (let ((type-n (treesit-node-type node)))
              (if (stringp type)
@@ -874,11 +875,12 @@ type is among the elements of TYPE."
 
 
 (defun f90-ts--node-type-match-p (node type-rx)
-  "If TYPE_RX is nil, return non-nil and ignore NODE.
+  "Match type of NODE with TYPE-RX.
+If TYPE_RX is nil, return non-nil and ignore NODE.
 If NODE is nil and TYPE_RX is non-nil, return nil.
 If TYPE-RX and NODE are both non-nil return non-nil if the type of NODE
 is matched by TYPE-RX."
-  (or (not type-rx)
+  (or (null type-rx)
       (and node
            (let ((type-n (treesit-node-type node)))
              (string-match-p type-rx type-n)))))
@@ -1599,9 +1601,18 @@ Empty lines are automatically skipped as those are not present in the tree."
 (defun f90-ts--indent-pos-at-node (node)
   "Determine indentation position of line where start of NODE is located.
 Besides blanks, skip leading ampersands as well.
+This does not anchor at NODE, just at indentation of first statement node
+on the line.
 
-Note: this can be used as anchor in indentation even within
-`treesit-indent-region', which uses buffering of computed (anchor offset)."
+Note: ampersands and statement_label's are removed for indented lines, but
+node might not be on such a line (for line indentation of region indention
+with relevant nodes outside of marked region), thus we need to actively skip
+them.
+
+Note: the determined position can be used as anchor in indentation even within
+`treesit-indent-region', which uses buffering of computed (anchor offset).
+
+TODO: besides ampersands also skip statement_label's."
   (save-excursion
     (goto-char (treesit-node-start node))
     (beginning-of-line)
@@ -1784,16 +1795,16 @@ rule but not for matched keywords, which are enforced with override=t."
    :language 'fortran
    :feature 'keyword
    '(;; match keywords in select case statements
-     ;; (which are not covered by simple keywords below
+     ;; (which are not covered by simple keywords below)
      (case_statement
       "case"    @font-lock-keyword-face
       (default) @font-lock-keyword-face)
      ;; match keywords in select type statements
-     ;; (which are not covered by simple keywords below
+     ;; (which are not covered by simple keywords below)
      (type_statement
       (default) @font-lock-keyword-face)
      ;; match keywords in select rank statements
-     ;; (which are not covered by simple keywords below
+     ;; (which are not covered by simple keywords below)
      (rank_statement
       (default) @font-lock-keyword-face))
 
@@ -2772,8 +2783,8 @@ for possible caching of anchor and offset values."
 TYPE-N, TYPE-P and TYPE-PSTMTK are expected to be regular expressions
 or nil.  If nil, everything is matched, hence the type of the corresponding
 node is ignored.
-TYPE-N is matched against type of (cached) node,
-TYPE-P is matched against type of (cached) parent and
+TYPE-N is matched against type of node,
+TYPE-P is matched against type of no-preproc parent and
 TYPE-PSTMTK is matched against type of (cached) pstmtk, which is
 the previous statement keyword node."
   (lambda (node parent _bol &rest _)
@@ -2788,8 +2799,8 @@ the previous statement keyword node."
 TYPE-N, TYPE-P TYPE-CH and TYPE-PSIBP are expected to be regular expressions
 or nil.  If nil, everything is matched, hence the type of the corresponding
 node is ignored.
-TYPE-N is matched against type of (cached) node,
-TYPE-P is matched against type of (cached) parent,
+TYPE-N is matched against type of node,
+TYPE-P is matched against type of parent,
 TYPE-CH is matched against type of (cached) first child of node and
 TYPE-PSIBP is matched against type of (cached) previous sibling by parent."
   (lambda (node parent _bol &rest _)
