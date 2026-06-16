@@ -6,7 +6,7 @@
 ;; Maintainer: Martin Stein <mscfd@gmx.net>
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
 ;; Keywords: languages, treesitter, fortran
-;; Version: 0.2.2
+;; Version: 0.2.3pre
 ;; Package-Requires: ((emacs "30.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -32,6 +32,7 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Recently changed, added or improved:
+;;   [06-2026] Indentation within (conditional) preprocessor blocks fixed
 ;;   [06-2026] Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
 ;;             `f90-ts-comment-prefix-regexp' and `f90-ts-openmp-prefix-regexp'
 ;;             has been removed from the defcustom definitions and is now

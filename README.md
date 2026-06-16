@@ -37,6 +37,7 @@ including syntax highlighting, indentation, navigation, and structural editing f
 ### Recently added, changed or improved
 
 **06-2026**
+ - Indentation within (conditional) preprocessor blocks fixed
  - Trailing blank part `\\(\\s-+\\|$\\)` in defcustom regexps
    `f90-ts-comment-prefix-regexp` and `f90-ts-openmp-prefix-regexp` has
    been removed from the defcustom definitions and is now always appended
