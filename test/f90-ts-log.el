@@ -229,18 +229,20 @@ and nodes for debugging purposes into the exclusive log buffer."
              (grandparent-nopp (f90-ts--grandparent-no-preproc parent)))
         (f90-ts-log-msg :indent "position: point=%d, bol=%d, lbp=%d, line=%d"
                     (point) bol (line-beginning-position) (line-number-at-pos))
-        (let ((tttttt (format "types n-p-gp-psibp-pstmtk-ch = %s, %s, %s, %s, %s, %s"
-                              (and node (treesit-node-type node))
-                              (and parent (treesit-node-type parent))
-                              (and grandparent (treesit-node-type grandparent))
-                              (and psibp (treesit-node-type psibp))
-                              (and pstmt-k (treesit-node-type pstmt-k))
-                              (and child0 (treesit-node-type child0))))
-              (nopp-tt (format "types nopp p-gp = %s, %s"
+        (let ((ttt-1 (format "types n-p-gp = %s, %s, %s"
+                             (and node (treesit-node-type node))
+                             (and parent (treesit-node-type parent))
+                             (and grandparent (treesit-node-type grandparent))))
+              (ttt-2 (format "types psibp-pstmtk-ch = %s, %s, %s"
+                             (and psibp (treesit-node-type psibp))
+                             (and pstmt-k (treesit-node-type pstmt-k))
+                             (and child0 (treesit-node-type child0))))
+              (tt-nopp (format "types nopp p-gp = %s, %s"
                                (and parent-nopp (treesit-node-type parent-nopp))
                                (and grandparent-nopp (treesit-node-type grandparent-nopp)))))
-          (f90-ts-log-msg :indent (propertize tttttt 'face '(:foreground "brown2")))
-          (f90-ts-log-msg :indent (propertize nopp-tt 'face '(:foreground "brown2")))
+          (f90-ts-log-msg :indent (propertize ttt-1 'face '(:foreground "brown2")))
+          (f90-ts-log-msg :indent (propertize ttt-2 'face '(:foreground "brown2")))
+          (f90-ts-log-msg :indent (propertize tt-nopp 'face '(:foreground "brown2")))
           (f90-ts-log--indent-cache-print))))
     nil))
 

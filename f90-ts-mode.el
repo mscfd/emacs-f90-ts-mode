@@ -32,7 +32,7 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Recently changed, added or improved:
-;;   [06-2026] Indentation within (conditional) preprocessor blocks fixed
+;;   [06-2026] Indentation within and after preprocessor blocks fixed
 ;;   [06-2026] Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
 ;;             `f90-ts-comment-prefix-regexp' and `f90-ts-openmp-prefix-regexp'
 ;;             has been removed from the defcustom definitions and is now
@@ -942,8 +942,19 @@ Note that the parse uses identifier not just for variables, but for types etc."
 (defun f90-ts-preproc-node-p (node)
   "Check if NODE is a preprocessor node and has the '#' prefix."
     (let ((type (treesit-node-type node)))
-      (or (string-match "^preproc_" type)
-          (string-prefix-p "#" type))))
+      (or (string-prefix-p "#" type)
+          (string-match-p "^preproc_" type))))
+
+
+(defconst f90-ts--preproc-block-keyword-regexp
+  "^#\\(ifdef\\|ifndef\\|elifdef\\|elifndef\\|elif\\|else\\|endif\\|if\\)$"
+  "Regexp for matching preprocessor nodes of block type (if block).")
+
+
+(defun f90-ts--preproc-block-keyword-p (node)
+  "Match type of NODE against block type preprocessor keywords.
+This uses `f90-ts--preproc-block-keyword-regexp' as a regexp for the matching."
+  (f90-ts--node-type-match-p node f90-ts--preproc-block-keyword-regexp))
 
 
 (defconst f90-ts--builtin-functions
@@ -1105,15 +1116,10 @@ work with lambda expressions."
   (not (f90-ts--node-type-p node '("comment" "ERROR"))))
 
 
-(defconst f90-ts--preproc-block-regexp
-  "^#\\(ifdef\\|ifndef\\|elifdef\\|elifndef\\|elif\\|else\\|endif\\|if\\)$"
-  "Regexp for matching preprocessor nodes of block type (if block).")
-
-
-(defun f90-ts--node-type-preproc-block-p (node)
-  "Match type of NODE against block type preprocessor keywords.
-This uses `f90-ts--preproc-block-regexp' as a regexp for the matching."
-  (f90-ts--node-type-match-p node f90-ts--preproc-block-regexp))
+(defun f90-ts--node-not-comment-or-preproc-p (node)
+  "Return non-nil if NODE is not of type comment or a preproc NODE."
+  (and (f90-ts--node-not-comment-p node)
+       (not (f90-ts-preproc-node-p node))))
 
 
 (defconst f90-ts--node-op-expr-types
@@ -1331,7 +1337,7 @@ example on empty lines)."
                         then (f90-ts--node-line pstmt-1)
            for pstmt-1 = (f90-ts--previous-stmt-first-line ancestor cur-line)
            while pstmt-1
-           when (not (f90-ts--node-type-preproc-block-p pstmt-1)) return pstmt-1))
+           when (not (f90-ts-preproc-node-p pstmt-1)) return pstmt-1))
 
 
 (defun f90-ts--previous-stmt-keyword-by-first (first)
@@ -1408,18 +1414,27 @@ Keyword nodes become relevant for incomplete code with ERROR nodes."
     (f90-ts--previous-stmt-keyword-by-first first)))
 
 
+(defun f90-ts--before-child (node line predicate)
+  "Return child of NODE, which is on a previous LINE and satisfies PREDICATE.
+Take the last of all children satisfying this condition."
+  (when-let* ((children (treesit-node-children node))
+              (children-prev (f90-ts--nodes-on-prev-lines children line predicate)))
+    (car (last children-prev))))
+
+
 (defun f90-ts--prev-sib-by-parent (parent)
   "Previous sibling based on position of point and PARENT.
-Especially for empty line, it often happens that node=nil, but parent is some
-relevant node, whose children, which are kind of siblings to nil-node-position,
-can be used to determine things like indentation.
-For the first sibling itself, we do not exclude ERROR nodes.  Then the
-ERROR node is descended (usually just one step) to find a node with relevant
-structure type, like subroutine_statement or similar.
-Comment nodes and ampersand are ignored"
+Especially for an empty line, it often happens that node=nil, but parent is
+some relevant node, whose children, which are kind of siblings to
+nil-node-position, can be used to determine things like indentation.
+If the sibling is an ERROR node, then descend (always the first sibling) to
+find a relevant structure type, like subroutine_statement or similar.
+Usually only one step is required to skip the ERROR node.
+
+Comment and preprocessor nodes are ignored as previous siblings."
   (let* ((cur-line (line-number-at-pos))
-         (predicate #'f90-ts--node-not-comment-p)
-         (psib (f90-ts--before-child parent cur-line predicate)))
+         (psib (f90-ts--before-child parent cur-line
+                                     #'f90-ts--node-not-comment-or-preproc-p)))
     ;; if psib=nil, just return nil
     ;; if psib=ERROR node, descend and try to find some non-error node
     (cl-loop
@@ -1442,14 +1457,6 @@ For empty NODES, return an empty list."
           (< (f90-ts--node-line node)
              cur-line)))
    nodes))
-
-
-(defun f90-ts--before-child (node line predicate)
-  "Return child of NODE, which is on a previous LINE and satisfies PREDICATE.
-Take the last of all children satisfying this condition."
-  (when-let* ((children (treesit-node-children node))
-              (children-prev (f90-ts--nodes-on-prev-lines children line predicate)))
-    (car (last children-prev))))
 
 
 (defun f90-ts--first-node-on-line (pos)
