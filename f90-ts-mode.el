@@ -2880,6 +2880,26 @@ the previous statement keyword node."
            (f90-ts--node-type-match-p pstmt-k type-pstmtk)))))
 
 
+(defun f90-ts--nopp-n-p-gp-pstmtk (type-n type-p type-gp type-pstmtk)
+  "Succeed if types of nodes match provided types.
+TYPE-N, TYPE-P, TYPE-GP and TYPE-PSTMTK are expected to be regular expressions
+or nil.  If nil, everything is matched, hence the type of the corresponding
+node is ignored.
+TYPE-N is matched against type of node,
+TYPE-P is matched against type of no-preproc parent and
+TYPE-GP is matched against type of no-preproc grandparent and
+TYPE-PSTMTK is matched against type of (cached) pstmtk, which is
+the previous statement keyword node."
+  (lambda (node parent _bol &rest _)
+    (let ((pstmt-k (f90-ts--indent-prev-stmt-keyword))
+          (parent-nopp (f90-ts--parent-no-preproc parent))
+          (grandparent-nopp (f90-ts--grandparent-no-preproc parent)))
+      (and (f90-ts--node-type-match-p node type-n)
+           (f90-ts--node-type-match-p parent-nopp type-p)
+           (f90-ts--node-type-match-p grandparent-nopp type-gp)
+           (f90-ts--node-type-match-p pstmt-k type-pstmtk)))))
+
+
 (defun f90-ts--n-p-ch-psibp (type-n type-p type-ch type-psibp)
   "Succeed if types of nodes match provided types.
 TYPE-N, TYPE-P TYPE-CH and TYPE-PSIBP are expected to be regular expressions
@@ -4026,6 +4046,7 @@ passed through unchanged."
                        nopp-parent-is
                        nopp-n-p-gp
                        nopp-n-p-pstmtk
+                       nopp-n-p-gp-pstmtk
                        n-p-ch-psibp
                        ;; dummy matcher (always fail, but do preparations)
                        populate-cache
@@ -4226,11 +4247,13 @@ and in case of ERROR nodes with incomplete code.")
 (defvar f90-ts--indent-rules-dtype-enum
   (f90-ts--with-map-rules
    ;; derived type definitions
-   ((nopp-n-p-gp       "end_type_statement"      "derived_type_definition" nil)                      nopp-parent 0)
-   ((n-p-ch-psibp      "derived_type_procedures" "derived_type_definition" "contains_statement" nil) nopp-parent 0)
-   ((n-p-ch-psibp      "ERROR"                   "derived_type_definition" "contains_statement" nil) nopp-parent 0)
-   ((nopp-parent-is    "derived_type_procedures") nopp-parent f90-ts-indent-block)
-   ((nopp-parent-is    "derived_type_definition") nopp-parent f90-ts-indent-block)
+   ((nopp-n-p-gp        "end_type_statement"      "derived_type_definition" nil)                      nopp-parent 0)
+   ((n-p-ch-psibp       "derived_type_procedures" "derived_type_definition" "contains_statement" nil) nopp-parent 0)
+   ((n-p-ch-psibp       "ERROR"                   "derived_type_definition" "contains_statement" nil) nopp-parent 0)
+   ((nopp-n-p-gp-pstmtk nil                       "ERROR"                   "derived_type_definition" "contains")  previous-stmt-anchor f90-ts-indent-block)
+   ((nopp-n-p-gp-pstmtk nil                       "ERROR"                   "derived_type_definition" "procedure") previous-stmt-anchor 0)
+   ((nopp-parent-is     "derived_type_procedures") nopp-parent f90-ts-indent-block)
+   ((nopp-parent-is     "derived_type_definition") nopp-parent f90-ts-indent-block)
 
    ;; enumeration types: enum and enumeration
    ((node-is         "end_enum_statement")                    nopp-parent 0)
