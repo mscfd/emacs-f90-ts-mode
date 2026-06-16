@@ -4236,13 +4236,24 @@ This node occurs in conjunction with \"contain\" statements.")
   (f90-ts--with-map-rules
    ;; statements related to toplevel subroutine or function statements,
    ;; and ERROR cases (might or might not be toplevel)
-   ;; TODO: it seems that these might not be relevant anymore???
+   ;; most rules are for incomplete code (like shown in resources/indent_line_incomplete.erts)
+   ;; unfortunately, these are difficult to reproduce and test with erts, as the exact composition of
+   ;; relatives in the tree returned by tree-sitter queries depend on presence of trailing blanks and
+   ;; newline symbols after point at |, like in this simple code piece:
+   ;;
+   ;; subroutine sub()
+   ;; |
+   ;; (as string: "subroutine sub()\n|", with point at the very last position, no newline)
+   ;;
+   ;; in short: there are no testcases for the following rules, but there are sometimes very short
+   ;; code pieces like the above which might require exactly one of these rules...
    ((n-p-ch-psibp nil "translation_unit" nil "subroutine_statement") nopp-parent f90-ts-indent-block)
    ((n-p-ch-psibp nil "ERROR"            nil "subroutine_statement") nopp-parent f90-ts-indent-block)
    ((n-p-ch-psibp nil "translation_unit" nil "function_statement")   nopp-parent f90-ts-indent-block)
    ((n-p-ch-psibp nil "ERROR"            nil "function_statement")   nopp-parent f90-ts-indent-block)
    ;; rule for translation_unit and module_procedure_statement does not seem possible,
    ;; as module procedure statements are only allowed within contains section
+
    ((n-p-ch-psibp nil "ERROR"            nil "module_procedure_statement") nopp-parent f90-ts-indent-block)
    ((nopp-parent-is "translation_unit") column-0 0))
   "Indentation rules related to root node translation_unit.
