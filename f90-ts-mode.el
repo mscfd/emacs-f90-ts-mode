@@ -1784,11 +1784,15 @@ TODO: besides ampersands also skip statement_label's."
 
 
 (defun f90-ts--node-at-indent-pos (pos)
-  "Determine node at indentation position of line determined by POS."
+  "Determine node at indentation position of line determined by POS.
+If the line is empty, return nil."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
-    (treesit-node-at (point))))
+    (let ((node (treesit-node-at (point))))
+      (when (and node
+                 (= (point) (treesit-node-start node)))
+        node))))
 
 
 ;;;-----------------------------------------------------------------------------
