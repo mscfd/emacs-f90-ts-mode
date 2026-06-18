@@ -32,7 +32,9 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Recently changed, added or improved:
-;;   [06-2026] Indentation within and after preprocessor blocks fixed
+;;   [06-2026] Indentation of lines after a structure beginning line with
+;;             statement label fixed.
+;;   [06-2026] Indentation within and after preprocessor blocks fixed.
 ;;   [06-2026] Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
 ;;             `f90-ts-comment-prefix-regexp' and `f90-ts-openmp-prefix-regexp'
 ;;             has been removed from the defcustom definitions and is now
@@ -860,6 +862,98 @@ This is used by the Makefile to run ert tests during development."
 ;;;-----------------------------------------------------------------------------
 ;;; auxiliary predicates, walk and query functions
 
+(defun f90-ts--node-line (node)
+  "Determine line number of start position of NODE."
+  (line-number-at-pos (treesit-node-start node)))
+
+
+(defun f90-ts--node-column (node)
+  "Determine column number of start position of NODE."
+  (f90-ts--column-number-at-pos (treesit-node-start node)))
+
+
+(defun f90-ts--column-number-at-pos (pos)
+  "Compute column at position POS."
+  (save-excursion
+    (goto-char pos)
+    (current-column)))
+
+
+(defun f90-ts--indentation-at-pos (pos)
+  "Compute indentation of line at POS."
+  (save-excursion
+    (goto-char pos)
+    (current-indentation)))
+
+
+(defun f90-ts--line-number-at-node-or-pos (node)
+  "Return line number of NODE or point.
+If NODE is non-nil, return line number at which start position is
+located, otherwise return line number of current point position."
+  (or (and node (f90-ts--node-line node))
+      (line-number-at-pos)))
+
+
+(defun f90-ts--node-start-trimmed (node)
+  "Return the position of the first non-blank character of NODE."
+  (save-excursion
+    (goto-char (treesit-node-start node))
+    (skip-chars-forward " \t\n")
+    (point)))
+
+
+(defun f90-ts--node-end-trimmed (node)
+  "Return the position of the last non-blank character of NODE."
+  (save-excursion
+    (goto-char (treesit-node-end node))
+    (skip-chars-backward " \t\n")
+    (point)))
+
+
+(defun f90-ts--region-trimmed ()
+  "Return (BEG . END) of trimmed active region.
+The trimming removes leading and trailing whitespace."
+  (cons (save-excursion
+          (goto-char (region-beginning))
+          (skip-chars-forward " \t\n")
+          (point))
+        (save-excursion
+          (goto-char (region-end))
+          (skip-chars-backward " \t\n")
+          (point))))
+
+
+(defun f90-ts--pos-first-nonspace (pos)
+  "Determine position of first non-space character of line at POS."
+  (save-excursion
+    (goto-char pos)
+    (beginning-of-line)
+    (skip-chars-forward " \t")
+    (point)))
+
+
+(defun f90-ts--pos-last-nonspace (pos)
+  "Determine position right after last non-space character of line at POS."
+  (save-excursion
+    (goto-char pos)
+    (end-of-line)
+    (skip-chars-backward " \t")
+    (point)))
+
+
+(defun f90-ts--pos-nonspace (pos)
+  "Move point to first or last non-space character on current line.
+If POS is before the first non-space character, move to it.
+If POS is after the last non-space character, move to just after it.
+Otherwise return POS."
+  (let ((first (f90-ts--pos-first-nonspace pos))
+        (last (f90-ts--pos-last-nonspace pos)))
+    (cond
+     ((< pos first) first)
+     ((> pos last)  last)
+     (t             pos))))
+
+
 (defun f90-ts--node-type-p (node type)
   "Compare type of NODE with TYPE.
 If TYPE is nil, return true and ignore NODE.
@@ -1287,6 +1381,105 @@ Nodes of type comments and ampersand are not considered \"proper\"."
      (not (f90-ts--node-type-p n '("comment" "&"))))))
 
 
+(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
+  "Filter NODES by PREDICATE and line number.
+Accept only NODES which are on a line prior to CUR-LINE.
+If PREDICATE is provided, additionally filter by predicate.
+For empty NODES, return an empty list."
+  (seq-filter
+   (lambda (node)
+     (and (or (not predicate)
+              (funcall predicate node))
+          (< (f90-ts--node-line node)
+             cur-line)))
+   nodes))
+
+
+(defun f90-ts--first-node-on-line (pos)
+  "Return the first node on the line at POS.
+Take virtual ampersand nodes into account, these are not returned by
+`treesit-node-at' and require extra work.  If the line is empty, return nil."
+  (save-excursion
+    (goto-char pos)
+    (back-to-indentation)
+    (let* ((line (line-number-at-pos))
+           (on-node (treesit-node-on (point) (point)))
+           (at-node (treesit-node-at (point))))
+      (cond
+       ((and on-node
+             (= (point) (treesit-node-start on-node)))
+        ;; in some cases, there might be other virtual nodes,
+        ;; or treesit-node-on returns a proper node starting at (point),
+        ;; walk back as long as start of node does not change
+        (cl-loop for node = on-node
+                 then (treesit-node-prev-sibling node)
+                 while (and node
+                            (= (treesit-node-start node) (point)))
+                 for last = node ; updates only if while condition is true
+                 finally return last))
+
+       ((and at-node
+             (= line (f90-ts--node-line at-node)))
+        at-node)))))
+
+
+(defun f90-ts--last-node-on-line (pos)
+  "Go to end of line of POS and obtain the node at this end of line position."
+  (save-excursion
+    (goto-char pos)
+    (end-of-line)
+    (skip-chars-backward " \t")
+    (unless (bolp)
+      (when-let ((node (treesit-node-at (point))))
+        (when (= (line-number-at-pos pos)
+                 (f90-ts--node-line node))
+          node)))))
+
+
+(defun f90-ts--find-first-ampersand (first)
+  "Find the first ampersand if at a ampersand-comment*-ampersand sequence.
+In continued lines, continuation symbol ampersands appears in
+sequences like &, (comment)*, &.  This routines checks whether node
+FIRST is any of those ampersand or comment nodes, and returns the first
+ampersand node of this sequence.  FIRST is assumed to be the first node
+on its line!"
+  (when-let ((nprev
+              (cond
+               ((f90-ts--node-ampersand-p first)
+                ;; go one step back to first ampersand or sequence
+                ;; of comments
+                (treesit-node-prev-sibling first))
+
+               ((f90-ts--node-type-p first "comment")
+                first)
+
+               (t
+                ;; in all other cases, we are not on a continued line
+                nil))))
+    ;; if necessary skip comments (but only comments) to find the first ampersand,
+    ;; if we are in a sequence of comments not being part of a continued line,
+    ;; then the final non-comment node is not an ampersand and we return nil
+    (cl-loop for node = nprev then (treesit-node-prev-sibling node)
+             while (f90-ts--node-type-p node "comment")
+             finally return (and (f90-ts--node-ampersand-p node)
+                                 node))))
+
+
+(defun f90-ts--first-node-of-stmt (node)
+  "Return the first node of the statement at which NODE is placed.
+Use `f90-ts--first-node-on-line', check for continuation symbol and
+if present, further go back, skipping comments and empty lines until
+beginning of statement is found."
+  (cl-loop
+   for namp = node then next-namp
+   for first = (progn
+                 (f90-ts--first-node-on-line
+                  (treesit-node-start namp)))
+   for next-namp = (f90-ts--find-first-ampersand first)
+   while next-namp
+   finally return first))
+
+
 (defun f90-ts--previous-stmt-first-line (node line-num)
   "Return previous statement determined by NODE.
 First search for any reasonable (leaf) node, which is before line with
@@ -1326,10 +1519,27 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
                         ;; if there is a next, continue and shift next to sib
                         ;; with "for sib=next" in the first cl-loop line
                         while next
-                        finally return sib))))
-    ;; take continuation lines into account and go to beginning of statement
-    (and prev-descend
-         (f90-ts--first-node-of-stmt prev-descend))))
+                        finally return sib)))
+         ;; take continuation lines into account and go to beginning of statement
+         (first (and prev-descend
+                     (f90-ts--first-node-of-stmt prev-descend))))
+    ;; check for statement_label node and skip if possible
+    (when first
+      (if (not (f90-ts--node-type-p first "statement_label"))
+          ;; standard case, no statement label present
+          first
+        ;; first should be the unnamed node in (statement_label "statement_label")
+        ;; we need the parent, first ensure that this assumption is correct
+        (cl-assert (f90-ts--node-type-p (treesit-node-parent first) "statement_label")
+                   nil "unexpected tree structure at leaf node of type statement_label")
+        (let ((next (treesit-node-next-sibling
+                     (treesit-node-parent first))))
+          (if (and next
+                   (= (f90-ts--node-line first)
+                      (f90-ts--node-line next)))
+              ;; retrieve the leaf node starting at next
+              (treesit-node-at (treesit-node-start next))
+            first))))))
 
 
 (defun f90-ts--previous-stmt-first (node parent)
@@ -1453,90 +1663,6 @@ Comment and preprocessor nodes are ignored as previous siblings."
      finally return current)))
 
 
-(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
-  "Filter NODES by PREDICATE and line number.
-Accept only NODES which are on a line prior to CUR-LINE.
-If PREDICATE is provided, additionally filter by predicate.
-For empty NODES, return an empty list."
-  (seq-filter
-   (lambda (node)
-     (and (or (not predicate)
-              (funcall predicate node))
-          (< (f90-ts--node-line node)
-             cur-line)))
-   nodes))
-
-
-(defun f90-ts--first-node-on-line (pos)
-  "Return the first node on the line at POS.
-Take virtual ampersand nodes into account, these are not returned by
-`treesit-node-at' and require extra work.  If the line is empty, return nil."
-  (save-excursion
-    (goto-char pos)
-    (back-to-indentation)
-    (let* ((line (line-number-at-pos))
-           (on-node (treesit-node-on (point) (point)))
-           (at-node (treesit-node-at (point))))
-      (cond
-       ((and on-node
-             (= (point) (treesit-node-start on-node)))
-        ;; in some cases, there might be other virtual nodes,
-        ;; or treesit-node-on returns a proper node starting at (point),
-        ;; walk back as long as start of node does not change
-        (cl-loop for node = on-node
-                 then (treesit-node-prev-sibling node)
-                 while (and node
-                            (= (treesit-node-start node) (point)))
-                 for last = node ; updates only if while condition is true
-                 finally return last))
-
-       ((and at-node
-             (= line (f90-ts--node-line at-node)))
-        at-node)))))
-
-
-(defun f90-ts--last-node-on-line (pos)
-  "Go to end of line of POS and obtain the node at this end of line position."
-  (save-excursion
-    (goto-char pos)
-    (end-of-line)
-    (skip-chars-backward " \t")
-    (unless (bolp)
-      (when-let ((node (treesit-node-at (point))))
-        (when (= (line-number-at-pos pos)
-                 (f90-ts--node-line node))
-          node)))))
-
-
-(defun f90-ts--find-first-ampersand (first)
-  "Find the first ampersand if at a ampersand-comment*-ampersand sequence.
-In continued lines, continuation symbol ampersands appears in
-sequences like &, (comment)*, &.  This routines checks whether node
-FIRST is any of those ampersand or comment nodes, and returns the first
-ampersand node of this sequence.  FIRST is assumed to be the first node
-on its line!"
-  (when-let ((nprev
-              (cond
-               ((f90-ts--node-ampersand-p first)
-                ;; go one step back to first ampersand or sequence
-                ;; of comments
-                (treesit-node-prev-sibling first))
-
-               ((f90-ts--node-type-p first "comment")
-                first)
-
-               (t
-                ;; in all other cases, we are not on a continued line
-                nil))))
-    ;; if necessary skip comments (but only comments) to find the first ampersand,
-    ;; if we are in a sequence of comments not being part of a continued line,
-    ;; then the final non-comment node is not an ampersand and we return nil
-    (cl-loop for node = nprev then (treesit-node-prev-sibling node)
-             while (f90-ts--node-type-p node "comment")
-             finally return (and (f90-ts--node-ampersand-p node)
-                                 node))))
-
-
 (defun f90-ts--line-continued-at-end-p (last pos)
   "Check whether line at POS is continued.
 It usually ends in &, but might be followed by a comment.  First check that
@@ -1601,21 +1727,6 @@ must also match."
         (f90-ts--line-continued-at-end-p last pos))))
 
 
-(defun f90-ts--first-node-of-stmt (node)
-  "Return the first node of the statement at which NODE is placed.
-Use `f90-ts--first-node-on-line', check for continuation symbol and
-if present, further go back, skipping comments and empty lines until
-beginning of statement is found."
-  (cl-loop
-   for namp = node then next-namp
-   for first = (progn
-                 (f90-ts--first-node-on-line
-                  (treesit-node-start namp)))
-   for next-namp = (f90-ts--find-first-ampersand first)
-   while next-namp
-   finally return first))
-
-
 (defun f90-ts--parent-no-preproc (parent)
   "Ascend until a non-preproc ancestor PARENT is found.
 If PARENT is a normal node, then return PARENT."
@@ -1678,98 +1789,6 @@ TODO: besides ampersands also skip statement_label's."
     (goto-char pos)
     (back-to-indentation)
     (treesit-node-at (point))))
-
-
-(defun f90-ts--node-line (node)
-  "Determine line number of start position of NODE."
-  (line-number-at-pos (treesit-node-start node)))
-
-
-(defun f90-ts--node-column (node)
-  "Determine column number of start position of NODE."
-  (f90-ts--column-number-at-pos (treesit-node-start node)))
-
-
-(defun f90-ts--column-number-at-pos (pos)
-  "Compute column at position POS."
-  (save-excursion
-    (goto-char pos)
-    (current-column)))
-
-
-(defun f90-ts--indentation-at-pos (pos)
-  "Compute indentation of line at POS."
-  (save-excursion
-    (goto-char pos)
-    (current-indentation)))
-
-
-(defun f90-ts--line-number-at-node-or-pos (node)
-  "Return line number of NODE or point.
-If NODE is non-nil, return line number at which start position is
-located, otherwise return line number of current point position."
-  (or (and node (f90-ts--node-line node))
-      (line-number-at-pos)))
-
-
-(defun f90-ts--node-start-trimmed (node)
-  "Return the position of the first non-blank character of NODE."
-  (save-excursion
-    (goto-char (treesit-node-start node))
-    (skip-chars-forward " \t\n")
-    (point)))
-
-
-(defun f90-ts--node-end-trimmed (node)
-  "Return the position of the last non-blank character of NODE."
-  (save-excursion
-    (goto-char (treesit-node-end node))
-    (skip-chars-backward " \t\n")
-    (point)))
-
-
-(defun f90-ts--region-trimmed ()
-  "Return (BEG . END) of trimmed active region.
-The trimming removes leading and trailing whitespace."
-  (cons (save-excursion
-          (goto-char (region-beginning))
-          (skip-chars-forward " \t\n")
-          (point))
-        (save-excursion
-          (goto-char (region-end))
-          (skip-chars-backward " \t\n")
-          (point))))
-
-
-(defun f90-ts--pos-first-nonspace (pos)
-  "Determine position of first non-space character of line at POS."
-  (save-excursion
-    (goto-char pos)
-    (beginning-of-line)
-    (skip-chars-forward " \t")
-    (point)))
-
-
-(defun f90-ts--pos-last-nonspace (pos)
-  "Determine position right after last non-space character of line at POS."
-  (save-excursion
-    (goto-char pos)
-    (end-of-line)
-    (skip-chars-backward " \t")
-    (point)))
-
-
-(defun f90-ts--pos-nonspace (pos)
-  "Move point to first or last non-space character on current line.
-If POS is before the first non-space character, move to it.
-If POS is after the last non-space character, move to just after it.
-Otherwise return POS."
-  (let ((first (f90-ts--pos-first-nonspace pos))
-        (last (f90-ts--pos-last-nonspace pos)))
-    (cond
-     ((< pos first) first)
-     ((> pos last)  last)
-     (t             pos))))
 
 
 ;;;-----------------------------------------------------------------------------

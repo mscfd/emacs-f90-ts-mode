@@ -1,11 +1,12 @@
 # f90-ts-mode
 
-Tree-sitter based major mode for editing Fortran (Fortran 90 / 2003 and
+Tree-sitter-based major mode for editing Fortran (Fortran 90 / 2003 and
 newer) in free source form in Emacs. It requires Emacs 30+.
 
-The mode is inspired by f90-mode in emacs core. Besides features expected from a mode,
-it tries to provide and enhance f90-mode's additional core features like smart-end completion,
-comment region, and other, which made f90-mode such an outstanding and enjoyable mode.
+The mode is inspired by f90-mode in Emacs core. Alongside modern
+Tree-sitter-based functionality, it aims to provide and enhance features
+such as smart end completion and region commenting that have made f90-mode
+productive and enjoyable to use.
 
 This project is under active [development](#roadmap).
 For a comprehensive overview see [MANUAL.md](MANUAL.md).
@@ -39,7 +40,8 @@ including syntax highlighting, indentation, navigation, and structural editing f
 ### Recently added, changed or improved
 
 **06-2026**
- - Indentation within and after preprocessor blocks fixed
+ - Indentation of lines after a structure beginning line with statement label fixed.
+ - Indentation within and after preprocessor blocks fixed.
  - Trailing blank part `\\(\\s-+\\|$\\)` in defcustom regexps
    `f90-ts-comment-prefix-regexp` and `f90-ts-openmp-prefix-regexp` has
    been removed from the defcustom definitions and is now always appended
