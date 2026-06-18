@@ -37,9 +37,9 @@
 ;;   [06-2026] Indentation within and after preprocessor blocks fixed.
 ;;   [06-2026] Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
 ;;             `f90-ts-comment-prefix-regexp' and `f90-ts-openmp-prefix-regexp'
-;;             has been removed from the defcustom definitions and is now
-;;             always appended internally.  If these variables have been
-;;             customized, please adjust.
+;;             removed from the defcustom definitions and added as
+;;             `f90-ts-comment-prefix-separator-regexp'.  If the regexp
+;;             variables have been customized, please adjust.
 ;;
 ;; Features:
 ;;   - Almost all statements up to F2023
@@ -474,12 +474,42 @@ For matching identifiers the face `f90-ts-font-lock-special-var' is used."
 
 (defcustom f90-ts-comment-prefix-regexp "!\\S-*"
   "Regular expression for matching and capturing comment starts.
-This is used to extract the comment prefix for `f90-ts-break-line',
-`f90-ts-join-line-prev' and `f90-ts-join-line-next' operations.
+Together with `f90-ts-comment-prefix-separator-regexp', this is used to extract
+the comment prefix for `f90-ts-break-line', `f90-ts-join-line-prev' and
+`f90-ts-join-line-next' operations.
 OpenMP prefix is matched by `f90-ts-openmp-prefix-regexp'.
 
-The variable should also add trailing whitespace characters to
-preserve indentation within comments with `f90-ts-break-line'."
+Note: do *NOT* use capturing groups in the regular expression, otherwise
+comment prefix matching fails.  If a group is required, then use non-capturing
+groups with \"\\(?:regexp\\)\".  Example: \"!\\(?:doc\\|remark\\|!\\$\\)\".
+
+The default value \"!\\S-*\" with separator \"\\s-\" assumes that the comment
+prefixes are always separated by a blank.  If comment content starts right
+after the comment start \"!\", then these two regexp must be adjusted to
+properly match only desired comment starters without any separator."
+  :type  'regexp
+  :safe  #'stringp
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-comment-prefix-separator-regexp "\\s-"
+  "Regular expression for separating comment prefix and its content.
+End-of-string always serves as separator as well and does not need to provided.
+
+If comment content regularly starts right after comment start \"!\", then this
+should be disabled and `f90-ts-comment-prefix-regexp' properly formulate to
+match only exactly desired prefixes."
+  :type '(choice (regexp :tag "Separator regexp")
+                 (const :tag "No separator" nil))
+  :safe (lambda (v) (or (null v) (stringp v)))
+  :group 'f90-ts)
+
+
+(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?"
+  "Regular expression for matching OpenMP starts.
+It is used for identifying openmp statements, which are just comment nodes.
+For example, this is relevant for line break operations, as openmp statements
+require continuation symbols."
   :type  'regexp
   :safe  #'stringp
   :group 'f90-ts)
@@ -523,17 +553,6 @@ defaulting to end of region if there is no active region present."
                   (const :tag "Point at end" end)
                   (const :tag "Preserve order" preserve))
   :safe  (lambda (v) (memq v '(start end preserve)))
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?"
-  "Regular expression for matching OpenMP starts.
-This is used for line break operations, as openmp statements require
-continuation symbols.
-The defcustom should also add trailing whitespace characters to preserve
-indentation within OpenMP statements."
-  :type  'regexp
-  :safe  #'stringp
   :group 'f90-ts)
 
 
@@ -993,6 +1012,41 @@ is matched by TYPE-RX."
        (= end (treesit-node-end node))))
 
 
+(defun f90-ts--comment-omp-prefix-regexp ()
+  "Return the combined comment and openmp prefix regexp.
+The returned regexp also captures trailing blanks, which serves as an assertion
+that the prefix is properly separated by a blank.  If accessing the captured
+prefix, match group 1 needs to be used."
+  ;; first match openmp as comment prefix might just take the initial ! and
+  ;; ignore the following $omp part in openmp statements
+  (concat "^\\(?:"
+          "\\(" f90-ts-openmp-prefix-regexp "\\)\\(?:\\s-\\|$\\)"
+          "\\|\\(" f90-ts-comment-prefix-regexp "\\)"
+          (when f90-ts-comment-prefix-separator-regexp
+            (concat "\\(?:" f90-ts-comment-prefix-separator-regexp "\\|$\\)"))
+          ;; if nothing matches, then extract the leading comment starter
+          "\\|\\(!\\)"
+          "\\)"))
+
+
+(defun f90-ts--match-comment-omp-prefix (text)
+  "Match a comment prefix at the start of TEXT.
+Returns the prefix in the comment TEXT if matched, nil otherwise.
+It uses `f90-ts--comment-omp-prefix-regexp' to capture the prefix."
+  (when (string-match (f90-ts--comment-omp-prefix-regexp) text)
+    (or (match-string 1 text)
+        (match-string 2 text)
+        (match-string 3 text))))
+
+
+(defun f90-ts--comment-omp-prefix-with-blanks (text prefix)
+  "Return PREFIX extended by any blanks following it in TEXT.
+Used to capture trailing blanks in comment and openmp prefixes."
+  (let ((pos (length prefix)))
+    (string-match "\\s-*" text pos)
+    (substring text 0 (match-end 0))))
+
+
 (defun f90-ts--comment-prefix (node trim)
   "Extract the starting character sequence from a comment NODE.
 NODE is assumed to be of type comment.  It uses `f90-ts-openmp-prefix-regexp'
@@ -1002,16 +1056,49 @@ If TRIM is `trimmed', only the matched prefix is returned."
   (cl-assert (f90-ts--node-type-p node "comment")
              nil "comment-prefix: comment node expected")
   (cl-assert (memq trim '(with-blanks trimmed)) nil "argument trim has invalid value, got %s" trim)
+  (let* ((text (treesit-node-text node))
+         (prefix (f90-ts--match-comment-omp-prefix text)))
+    ;; there should always be a prefix, as a single "!" is captured as well
+    (cl-assert prefix nil "comment has no prefix")
+    (if (eq trim 'with-blanks)
+        (f90-ts--comment-omp-prefix-with-blanks text prefix)
+      prefix)))
 
+
+(defun f90-ts--comment-content (node)
+  "Extract the content of a comment NODE following the comment prefix.
+NODE is assumed to be of type comment.  It uses `f90-ts-openmp-prefix-regexp'
+and `f90-ts-comment-prefix-regexp' to identify the prefix to extract.
+It always removes blanks after the prefix.  Thus the first character in the
+returned content is a non-blank character, or content is nil."
+  (cl-assert (f90-ts--node-type-p node "comment")
+             nil "comment node expected")
+  (let* ((text (treesit-node-text node))
+         (prefix (f90-ts--match-comment-omp-prefix text)))
+    (cl-assert prefix nil "comment has no prefix")
+    (let ((pos (length prefix)))
+      (string-match "\\s-*" text pos)
+      (let ((content-start (match-end 0)))
+        (when (< content-start (length text))
+          (substring text content-start))))))
+
+
+(defun f90-ts--comment-forward-prefix (node)
+  "Position point at end of comment prefix matched at start of NODE.
+NODE is assumed to be of type comment.  It uses `f90-ts-openmp-prefix-regexp'
+and `f90-ts-comment-prefix-regexp' to identify the prefix to extract."
+  (cl-assert (f90-ts--node-type-p node "comment")
+             nil "comment node expected")
   ;; first match openmp as comment prefix would just take the initial ! and ignoring
   ;; following $omp part in openmp statements
-  (let* ((text (treesit-node-text node))
-         (rx-comment (concat "^\\(\\(?:" f90-ts-openmp-prefix-regexp "\\)\\|\\(?:"
-                             f90-ts-comment-prefix-regexp "\\)\\)\\(\\s-+\\|$\\)")))
-    (when (string-match rx-comment text)
-      (if (eq trim 'with-blanks)
-          (match-string 0 text)
-        (match-string 1 text)))))
+  (let ((start (treesit-node-start node))
+        (end (treesit-node-end node)))
+    (goto-char start)
+    (re-search-forward (f90-ts--comment-omp-prefix-regexp)
+                       end t)
+    ;; rx-comment contains trailing blanks as an assertion, skip-backwards
+    ;; to end of comment prefix
+    (skip-chars-backward " \t")))
 
 
 (defun f90-ts--node-special-var-p (node)

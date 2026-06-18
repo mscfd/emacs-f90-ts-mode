@@ -31,6 +31,7 @@ for implementation.
   - [Imenu](#imenu)
   - [Navigation menu](#navigation-menu)
   - [Navigation buffer](#navigation-buffer)
+  - [Comment prefix](#comment-prefix)
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
@@ -541,6 +542,26 @@ Keybindings in the navigation buffer:
 Note: the navigation buffer is still missing some features to be really useful.
 
 
+### Comment prefix
+
+Various operations, in particular break, join, fill and mark operations require to match and extract
+comment prefixes.
+The comment prefix is found by regexp `f90-ts-comment-prefix-regexp` in combination with separator
+`f90-ts-comment-prefix-separator-regexp`, which can be customized if necessary.
+
+To be precise the comment prefix is matched and extracted by match groups 1, 2 or 3 of
+```elisp
+  (concat "^\\(?:"
+          "\\(" f90-ts-openmp-prefix-regexp "\\)\\(?:\\s-\\|$\\)"
+          "\\|\\(" f90-ts-comment-prefix-regexp "\\)"
+          (when f90-ts-comment-prefix-separator-regexp
+            (concat "\\(?:" f90-ts-comment-prefix-separator-regexp "\\|$\\)"))
+          ;; if nothing matches, then extract the leading comment starter
+          "\\|\\(!\\)"
+          "\\)"))
+```
+where the single `!` is always matched to cover all not yet matched prefixes.
+
 
 ### Breaking and joining lines
 
@@ -557,10 +578,9 @@ These operations are inspired by the legacy f90 mode, but behave a bit different
 #### Breaking lines
 
 The function `f90-ts-break-line` breaks the current line at point and adds continuation symbols.
-If the current line is a comment,
-then the comment starter (like '!>', '!<' or similar) is extracted, including indentation offset after the
-comment starter, and inserted into the new line to continue the comment.
-The comment starter is found by regexp `f90-ts-comment-prefix-regexp`, which can be customized if necessary.
+If the current line is a comment, then the comment prefix (like '!>', '!<' or similar) is extracted,
+including indentation offset after the comment prefix, and inserted into the new line to continue the comment.
+See [Comment prefix](#comment-prefix) for details.
 
 Whether a leading ampersand at the start of the new line is inserted is controlled by option
 `f90-ts-leading-ampersand`.
@@ -568,23 +588,22 @@ Whether a leading ampersand at the start of the new line is inserted is controll
 
 #### Joining lines
 
-Two consecutive lines connected by continuation symbol `&` can be joined by
-`f90-ts-join-line-prev` and `f90-ts-join-line-next`.
-The ampersand(s) in between are removed.
-One whitespace character is left after putting the second line at the end of the first line.
+Consecutive lines can be joined by `f90-ts-join-line-prev` and `f90-ts-join-line-next`
+under various circumstances, which are:
+
+- two consecutive lines connected by continuation symbol `&`.
+- some statement followed by empty line(s) (join-line-prev)
+- empty line(s) followed by some statement (join-line-next)
+- comments with the same comment prefix (see [Comment prefix](#comment-prefix) for details)
+- comment after a continued line (join-line-prev)
+- continued line followed by a comment (join-line-next)
+- continued string
+
+The ampersand(s) or comment prefixes in between are removed, where necessary, adding
+one whitespace character where applicable.
 
 If there are empty lines, then only the empty lines are removed, without joining the lines.
-A second join operation can be used to actually join the lines. 
-
-If there are comments at end of first line or in between the two lines, joining is not possible,
-as it is not quite clear what should be done with such comments.
-
-If point is on an empty line (not necessarily within a continued statement),
-then previous (prev variant) or subsequent (next variant) empty lines are removed,
-but nothing is joined in any case.
-
-The `prev` variant joins current line with previous (non-empty) line.
-The `next` variant joins current line with next (non-empty) line.
+A second join operation can be used to actually join the lines.
 
 Current limitations are:
 * Comments within string literals are not supported by the tree-sitter grammar itself.
@@ -627,8 +646,8 @@ be preserved (defaulting to end position if no active region is present).
 
 Blocks of nodes of the same kind are grouped and and dealt with like
 the block would be represented by a node in the tree (which they are not).
-Currently comments with the same comment prefix extracted by `f90-ts-comment-prefix-regexp`
-are recognised. (Other groups like use statements or public statements could be added in the future.)
+Currently comments with the same comment prefix are recognised (see [Comment prefix](#comment-prefix)).
+(Other groups like use statements or public statements could be added in the future.)
 
 Identifying comments with the same comment prefix and including those in mark region operations
 is particularly useful in conjunction with comment region operations.
