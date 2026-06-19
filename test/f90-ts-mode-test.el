@@ -803,15 +803,29 @@ PREFIX is the test name prefix, usually \"f90-ts-mode-test-std\"."
 ;;------------------------------------------------------------------------------
 ;; mark region helpers
 
-(defun f90-ts-mode-test--mark-region (command)
-  "Test function for mark region with no prior region selected.
-Execute COMMAND, which marks some region and insert markers @..| for
-result region."
+(defun f90-ts-mode-test--mark-region-pre (command)
+  "Mark region before COMMAND is executed.
+Use markers @..| to find region for COMMAND to work on."
+  (let ((pos (point)))
+    (goto-char (point-min))
+    (search-forward "@")
+    ;; point is after marker @, so delete before
+    (delete-char -1)
+    (push-mark (point) t t)
+    (if (< (point) pos)
+        (goto-char (1- pos))
+      (goto-char pos))
+    (funcall command)))
+
+
+(defun f90-ts-mode-test--mark-region-post (command)
+  "Insert markers into result buffer after executing COMMAND..
+Insert markers @..| for result region."
   (funcall command)
   (f90-ts-mode-test--insert-region-markers))
 
 
-(defun f90-ts-mode-test--modify-region (command)
+(defun f90-ts-mode-test--mark-region-modify (command)
   "Setup pre-selected region and apply COMMAND for modifying region.
 Set up region from @ to | markers, then call COMMAND and reinsert @..| markers
 for modified region."

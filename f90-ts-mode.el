@@ -5095,6 +5095,26 @@ multi-line statements.  Default value is `f90-ts-indent-list-line'."
    (f90-ts--indent-line-aux variant)))
 
 
+(defun f90-ts--complete-end-node-p (node pos end-marker at-col0)
+  "Predicate for `treesit-search-forward' in smart end completion loop.
+Return non-nil if NODE is a completion target within POS and END-MARKER.
+If AT-COL0 is non-nil, do no accept nodes at starting at END-MARKER.
+Thus do not work on nodes at the line if end marker is at column 0.
+
+It throws `f90-ts--past-end' if END-MARKER has been passed, as there is
+no abort mechanism for `treesit-search-foward'."
+  (let ((start-n (treesit-node-start node))
+        (end-n  (f90-ts--node-end-trimmed node)))
+    (when (or (> start-n end-marker)
+              (and at-col0 (= start-n end-marker)))
+      ;; treesit-search-forward has no early abort option,
+      ;; without this, the search exhausts the whole remaining tree
+      (throw 'f90-ts--past-end nil))
+    (and (<= pos end-n)
+         (member (treesit-node-type node)
+                 f90-ts--complete-end-structs))))
+
+
 ;; used by f90-ts-indent-and-complete-region
 (defun f90-ts-complete-smart-end-region (beg end)
   "Execute smart end completion in region from BEG to END."
@@ -5103,37 +5123,29 @@ multi-line statements.  Default value is `f90-ts-indent-list-line'."
        (list (region-beginning) (region-end))
      (list (point-min) (point-max))))
 
-  (let ((beg-pos (if (markerp beg) (marker-position beg) beg))
-        (end-pos (if (markerp end) (marker-position end) end))
-        (end-marker nil))
+  (let* ((beg-pos (if (markerp beg) (marker-position beg) beg))
+         (end-pos (if (markerp end) (marker-position end) end))
+         ;; skip the final line if end-pos is at zeroth column
+         (at-col0 (= 0 (f90-ts--column-number-at-pos end-pos)))
+         (end-marker nil))
     (unwind-protect
         (progn
           (setq end-marker (copy-marker end-pos))
           (catch 'f90-ts--past-end
-           (cl-loop
-            with pos = beg-pos
-            for node = (treesit-search-forward
-                        (treesit-node-at pos)
-                        (lambda (n)
-                          (let ((start-n (treesit-node-start n)))
-                            ;; treesit-search-forward has no early abort
-                            ;; option, without this, the search exhausts
-                            ;; the whole remaining tree
-                            (when (> start-n end-marker)
-                              (throw 'f90-ts--past-end nil))
-                            (and (<= pos start-n)
-                                 (member (treesit-node-type n)
-                                         f90-ts--complete-end-structs))))
-                             nil ; search forward
-                             nil ; only named nodes (end-structs are always named nodes)
-                             )
-            while node
-            do (let ((node-start (treesit-node-start node)))
-                 (f90-ts--complete-smart-end-node node)
-                 (progn ; or better save-excursion (seems unnecessary?)
-                   (goto-char node-start)
-                   (forward-line 1)
-                   (setq pos (point))))))
+            (cl-loop
+             with pos = beg-pos
+             for node = (treesit-search-forward
+                         (treesit-node-at pos)
+                         (lambda (n)
+                           (f90-ts--complete-end-node-p n pos end-marker at-col0))
+                         nil  ; search forward
+                         nil) ; only named nodes (end-structs are always named nodes)
+             while node
+             do (let ((node-start (treesit-node-start node)))
+                  (f90-ts--complete-smart-end-node node)
+                  (goto-char node-start)
+                  (forward-line 1)
+                  (setq pos (point)))))
           ;; after finishing move to end of region
           (goto-char end-marker))
       (set-marker end-marker nil))))

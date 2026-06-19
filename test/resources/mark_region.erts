@@ -3,7 +3,7 @@ Point-Char: |
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge))
+    (f90-ts-mode-test--mark-region-post #'f90-ts-mark-region-enlarge))
 
 Name: mark initial enlarge region 1
 =-=
@@ -65,7 +65,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-order 'start))
-      (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge)))
+      (f90-ts-mode-test--mark-region-post #'f90-ts-mark-region-enlarge)))
 
 Name: mark initial enlarge region 5
 =-=
@@ -87,7 +87,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-order 'preserve))
-      (f90-ts-mode-test--mark-region #'f90-ts-mark-region-enlarge)))
+      (f90-ts-mode-test--mark-region-post #'f90-ts-mark-region-enlarge)))
 
 Name: mark initial enlarge region 6
 =-=
@@ -107,7 +107,7 @@ end module mod_init_4
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-enlarge))
 
 Name: mark extend enlarge region 1
 =-=
@@ -185,7 +185,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-order 'start))
-      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge)))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-enlarge)))
 
 Name: mark extend enlarge region 5
 =-=
@@ -203,7 +203,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-order 'preserve))
-      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-enlarge)))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-enlarge)))
 
 Name: mark extend enlarge region 5
 =-=
@@ -219,7 +219,7 @@ end subroutine sub_ext_5@
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-shrink-child-first))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-shrink-child-first))
 
 Name: mark child0 region 1
 =-=
@@ -266,7 +266,7 @@ end subroutine sub_child0_2
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-shrink-child-last))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-shrink-child-last))
 
 Name: mark child9 region 1
 =-=
@@ -313,7 +313,7 @@ end subroutine sub_child9_2
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-first-sibling))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-first-sibling))
 
 Name: mark first region 1
 =-=
@@ -336,7 +336,7 @@ end subroutine sub_first_1
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-prev-sibling))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-prev-sibling))
 
 Name: mark prev region 1
 =-=
@@ -589,7 +589,7 @@ end subroutine sub
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-next-sibling))
 
 Name: mark next region 1
 =-=
@@ -835,7 +835,7 @@ end subroutine sub
 Code:
   (lambda ()
     (f90-ts-mode)
-    (f90-ts-mode-test--modify-region #'f90-ts-mark-region-last-sibling))
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-last-sibling))
 
 Name: mark last region 1
 =-=
@@ -858,7 +858,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-order 'preserve))
-      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling)))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-next-sibling)))
 
 Name: mark sibling region preserve 1
 =-=
@@ -898,7 +898,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((f90-ts-mark-region-order 'start))
-      (f90-ts-mode-test--modify-region #'f90-ts-mark-region-next-sibling)))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-next-sibling)))
 
 Name: mark sibling region start 1
 =-=
