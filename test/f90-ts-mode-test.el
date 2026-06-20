@@ -148,6 +148,7 @@ without final newline."
     (f90-ts-stmt-label-column . (left . 0))
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
     (f90-ts-comment-prefix-regexp . "!\\S-*")
+    (f90-ts-comment-prefix-separator-regexp . "\\s-")
     (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-comment-keyword-regexp . "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>")
@@ -946,6 +947,7 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "join_line.erts"
    "mark_region.erts"
    "comment_region.erts"
+   "comment_prefix.erts"
    "modified_bit.erts"))
 
 

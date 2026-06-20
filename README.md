@@ -42,10 +42,12 @@ including syntax highlighting, indentation, navigation, and structural editing f
 **06-2026**
  - Indentation of lines after a structure beginning line with statement label fixed.
  - Indentation within and after preprocessor blocks fixed.
- - Trailing blank part `\\(\\s-+\\|$\\)` in defcustom regexps
-   `f90-ts-comment-prefix-regexp` and `f90-ts-openmp-prefix-regexp` has
-   been removed from the defcustom definitions and is now always appended
-   internally. If these variables have been customized, please adjust.
+ - Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
+   `f90-ts-comment-prefix-regexp` and `f90-ts-openmp-prefix-regexp`
+   removed from the defcustom definitions and added as
+   `f90-ts-comment-prefix-separator-regexp`.  If the regexp
+   variables have been customized, please adjust.
+   (See [MANUAL.md](MANUAL.md#comment-prefix) for details.)
 
 
 ## Keybindings

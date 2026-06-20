@@ -1,0 +1,215 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-enlarge))
+
+Name: comment prefix 1
+=-=
+subroutine sub()
+   i = 6
+   !!$ comment 1
+   !!$ comment 2
+   @!!$ comment 3|
+   !!$ comment 4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   @!!$ comment 1
+   !!$ comment 2
+   !!$ comment 3
+   !!$ comment 4|
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 2
+=-=
+subroutine sub()
+   i = 6
+   ! match simple comment prefix
+   !!$ comment 1
+   ! comment 2
+   @! comment 3|
+   !!$ comment 4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   ! match simple comment prefix
+   !!$ comment 1
+   @! comment 2
+   ! comment 3|
+   !!$ comment 4
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 3
+=-=
+subroutine sub()
+   i = 6
+   !!$comment 1
+   !!$comment 2
+   @!!$comment 3|
+   !!$comment 4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   @!!$comment 1
+   !!$comment 2
+   !!$comment 3
+   !!$comment 4|
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 4
+=-=
+subroutine sub()
+   i = 6
+   !!$comment 1
+   !comment 2
+   @!comment 3|
+   !!$comment 4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   !!$comment 1
+   @!comment 2
+   !comment 3|
+   !!$comment 4
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 5
+=-=
+subroutine sub()
+   i = 6
+   ! all different prefixes, hence do not recognise as group
+   !!$comment1
+   !!$comment2
+   @!!$comment3|
+   !!$comment4
+   j = 5
+end subroutine sub
+
+=-=
+@subroutine sub()
+   i = 6
+   ! all different prefixes, hence do not recognise as group
+   !!$comment1
+   !!$comment2
+   !!$comment3
+   !!$comment4
+   j = 5
+end subroutine sub|
+
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-comment-prefix-regexp "!\\(?:doc\\|remark\\|!\\$\\)")
+          (f90-ts-comment-prefix-separator-regexp nil))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-enlarge)))
+
+Name: comment prefix 6
+=-=
+subroutine sub()
+   i = 6
+   !!$ comment 1
+   !!$ comment 2
+   @!!$ comment 3|
+   !!$ comment 4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   @!!$ comment 1
+   !!$ comment 2
+   !!$ comment 3
+   !!$ comment 4|
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 7
+=-=
+subroutine sub()
+   i = 6
+   ! no separator required, hence still a group
+   !!$comment1
+   !!$comment2
+   @!!$comment3|
+   !!$comment4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   ! no separator required, hence still a group
+   @!!$comment1
+   !!$comment2
+   !!$comment3
+   !!$comment4|
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 8
+=-=
+subroutine sub()
+   i = 6
+   !doc comment1
+   !doc comment2
+   @!remark comment3|
+   !remark comment4
+   !comment5
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   !doc comment1
+   !doc comment2
+   @!remark comment3
+   !remark comment4|
+   !comment5
+   j = 5
+end subroutine sub
+=-=-=
+
+Name: comment prefix 9
+=-=
+subroutine sub()
+   i = 6
+   ! no separator required, captured by fallback single !
+   !comment1
+   !comment2
+   @!comment3|
+   !comment4
+   j = 5
+end subroutine sub
+=-=
+subroutine sub()
+   i = 6
+   @! no separator required, captured by fallback single !
+   !comment1
+   !comment2
+   !comment3
+   !comment4|
+   j = 5
+end subroutine sub
+=-=-=
+
