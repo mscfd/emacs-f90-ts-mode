@@ -32,6 +32,7 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Recently changed, added or improved:
+;;   [06-2026] Defcustom group f90-ts-comment added.
 ;;   [06-2026] Indentation of lines after a structure beginning line with
 ;;             statement label fixed.
 ;;   [06-2026] Indentation within and after preprocessor blocks fixed.
@@ -104,7 +105,7 @@
 
 
 (defgroup f90-ts-font-lock nil
-  "Font-locking for Tree-sitter f90-ts mode.
+  "Font-locking options used by f90-ts-mode.
 This group defines additional faces used for F90-specific syntax.
 Standard font-lock faces are used as well."
   :prefix "f90-ts-"
@@ -112,16 +113,24 @@ Standard font-lock faces are used as well."
 
 
 (defgroup f90-ts-indent nil
-  "Indentation for Tree-sitter f90-ts mode."
+  "Indentation options used by f90-ts-mode."
+  :prefix "f90-ts-"
+  :group  'f90-ts)
+
+
+(defgroup f90-ts-comment nil
+  "Comment and openmp options used by f90-ts-mode."
   :prefix "f90-ts-"
   :group  'f90-ts)
 
 
 (defgroup f90-ts-nav nil
-  "Navigation for Tree-sitter f90-ts mode."
+  "Navigation options used by f90-ts-mode."
   :prefix "f90-ts-"
   :group  'f90-ts)
 
+
+;;;-----------------------------------------------------------------------------
 
 (defcustom f90-ts-indent-toplevel 0
   "Extra indentation applied to contain sections at toplevel."
@@ -364,7 +373,8 @@ With `left', the label's first digit starts on COLUMN (left-adjusted)."
   '((t :inherit font-lock-preprocessor-face))
   "Face used to highlight OpenMP statements.
 Openmp statements are determined by `f90-ts-special-comment-rules'."
-  :group 'f90-ts-font-lock)
+  :group 'f90-ts-font-lock
+  :group 'f90-ts-comment)
 
 
 (defface f90-ts-font-lock-special-var-face
@@ -380,7 +390,8 @@ Special variables are determined by regexp custom variable
   "Face used to highlight separator comments.
 Special comments such as separators are determined by rules in
 `f90-ts-special-comment-rules'."
-  :group 'f90-ts-font-lock)
+  :group 'f90-ts-font-lock
+  :group 'f90-ts-comment)
 
 
 ;;;-----------------------------------------------------------------------------
@@ -455,6 +466,19 @@ Copied from prog mode `f90-mode'."
   :group 'f90-ts)
 
 
+(defcustom f90-ts-mark-region-order 'preserve
+  "Mark region operations need to place point at beginning or end of region.
+If `start', point is placed at start of region.
+If `end', point is placed at end of region.
+If `preserve', the point/mark order of the active region is preserved,
+defaulting to end of region if there is no active region present."
+  :type  '(choice (const :tag "Point at start" start)
+                  (const :tag "Point at end" end)
+                  (const :tag "Preserve order" preserve))
+  :safe  (lambda (v) (memq v '(start end preserve)))
+  :group 'f90-ts)
+
+
 (defcustom f90-ts-menu-show-navigate t
   "Show navigate submenu in fortran menu if non-nil.
 For large source files, the menu might not be useful and reduce performance."
@@ -489,7 +513,7 @@ after the comment start \"!\", then these two regexp must be adjusted to
 properly match only desired comment starters without any separator."
   :type  'regexp
   :safe  #'stringp
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-comment-prefix-separator-regexp "\\s-"
@@ -502,7 +526,7 @@ match only exactly desired prefixes."
   :type '(choice (regexp :tag "Separator regexp")
                  (const :tag "No separator" nil))
   :safe (lambda (v) (or (null v) (stringp v)))
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-openmp-prefix-regexp "!\\$\\(?:omp\\)?"
@@ -512,7 +536,7 @@ For example, this is relevant for line break operations, as openmp statements
 require continuation symbols."
   :type  'regexp
   :safe  #'stringp
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-comment-region-prefix "!!$ "
@@ -521,7 +545,7 @@ Trailing blank(s) are not inserted automatically, but can be provided
 in the string."
   :type  'string
   :safe  #'stringp
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-extra-comment-prefixes '("! " "!$omp " "!$acc " "!!!" "!> " "!< ")
@@ -530,7 +554,7 @@ Trailing blank(s) are not inserted automatically, but can be provided
 in the string."
   :type  '(repeat string)
   :safe (lambda (v) (and (listp v) (cl-every #'stringp v)))
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-comment-prefix-keep-indent t
@@ -540,20 +564,7 @@ prefix before commented command starts.  This preserves the original
 indentation if possible."
   :type  'boolean
   :safe  #'booleanp
-  :group 'f90-ts)
-
-
-(defcustom f90-ts-mark-region-order 'preserve
-  "Mark region operations need to place point at beginning or end of region.
-If `start', point is placed at start of region.
-If `end', point is placed at end of region.
-If `preserve', the point/mark order of the active region is preserved,
-defaulting to end of region if there is no active region present."
-  :type  '(choice (const :tag "Point at start" start)
-                  (const :tag "Point at end" end)
-                  (const :tag "Preserve order" preserve))
-  :safe  (lambda (v) (memq v '(start end preserve)))
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-comment-keyword-regexp "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>"
@@ -563,7 +574,7 @@ Set to nil to disable keyword highlighting in comments."
   :type '(choice (const :tag "Disabled" nil)
                  (regexp :tag "Regexp"))
   :safe (lambda (v) (or (null v) (stringp v)))
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 (defcustom f90-ts-special-comment-rules
@@ -654,7 +665,7 @@ seem to make much sense."
                                        '(column-0 context indented))
                                  (symbolp (plist-get rule :face))))
                           v)))
-  :group 'f90-ts)
+  :group 'f90-ts-comment)
 
 
 ;;;-----------------------------------------------------------------------------

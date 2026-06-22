@@ -40,6 +40,7 @@ including syntax highlighting, indentation, navigation, and structural editing f
 ### Recently added, changed or improved
 
 **06-2026**
+ - Defcustom group f90-ts-comment added.
  - Indentation of lines after a structure beginning line with statement label fixed.
  - Indentation within and after preprocessor blocks fixed.
  - Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
