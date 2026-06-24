@@ -204,3 +204,27 @@ subroutine sub()
 end subroutine sub
 **
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--modified-check t
+     (lambda () (f90-ts-indent-and-complete-region (point-min) (point-max)))))
+
+Name: region modified boundaries 1
+=-=
+! indent the whole buffer, which reduces in size,
+! the original end position at point-max will be outside of buffer
+! boundaries after indentation
+subroutine sub()
+                          x = 1
+end subroutine sub
+=-=
+! indent the whole buffer, which reduces in size,
+! the original end position at point-max will be outside of buffer
+! boundaries after indentation
+subroutine sub()
+     x = 1
+end subroutine sub
+**
+=-=-=
