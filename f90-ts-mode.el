@@ -936,6 +936,37 @@ This is used by the Makefile to run ert tests during development."
 
 
 ;;;-----------------------------------------------------------------------------
+;;; switches for grammar variant
+
+(defvar f90-ts--string-literal-decomposed-p 'unknown
+  "Cached grammar variant for string_literal of loaded fortran grammar.
+Original grammar just had a named leaf node `string_literal'.
+New grammar decomposes it into its parts and ampersand, comment and
+quote symbols.
+Value is `unknown' until first detection, then t for new and nil
+for original grammar rule.")
+
+
+(defun f90-ts--string-literal-decomposed-p ()
+  "Return non-nil if the loaded Fortran grammar uses the new
+decomposed `string_literal' (with `string_literal_part' children)
+rather than the old flat `string_literal' leaf node.
+Result is detected once and cached for the session."
+  (when (eq f90-ts--string-literal-decomposed-p 'unknown)
+    (setq f90-ts--string-literal-decomposed-p
+          (condition-case nil
+              (progn
+                ;; A minimal probe query referencing the new node type.
+                ;; If `string_literal_part' is unknown to the grammar,
+                ;; this signals a query compilation error.
+                (treesit-query-compile 'fortran '((string_literal_part) @x))
+                t)
+            (treesit-query-error nil)
+            (error nil))))
+  f90-ts--string-literal-decomposed-p)
+
+
+;;;-----------------------------------------------------------------------------
 ;;; auxiliary predicates, walk and query functions
 
 (defun f90-ts--node-line (node)
@@ -1322,15 +1353,38 @@ node."
     (string-match-p rx text)))
 
 
+;; this works for both old and new string_literal parsing rules
 (defun f90-ts--in-string-p ()
   "Non-nil if point is inside a string."
-  (when-let ((node (treesit-node-at (point))))
-    (when (f90-ts--node-type-p node "string_literal")
-      (let ((start (treesit-node-start node))
-            (end (treesit-node-end node))
-            (pos (point)))
-        ;; start and end position are the quotation characters
-        (and (< start pos) (< pos end))))))
+  (when-let* ((node (treesit-node-at (point)))
+              (string-node
+               ;; only ascend if node type is possible within a string
+               (and (f90-ts--node-type-p node '(string_literal
+                                                string_literal_part
+                                                comment
+                                                "&"
+                                                "\""))
+                    (treesit-parent-until
+                     node
+                     (lambda (n) (f90-ts--node-type-p n "string_literal"))
+                     t))))
+    (let ((start (treesit-node-start string-node))
+          (end   (treesit-node-end   string-node))
+          (pos   (point)))
+      ;; start/end are the opening/closing quotation characters
+      (and (< start pos) (< pos end)))))
+
+
+;; only valid with new string_literal tree
+(defun f90-ts--string-between-amp-p (string-node pos)
+  "Non-nil if POS within STRING-NODE is between two ampersands.
+Note that string literals can be distributed onto several lines with ampersands
+and even comments in-between those ampersands."
+  (cl-oddp
+   (cl-loop for child in (treesit-node-children string-node)
+            when (and (string= (treesit-node-type child) "&")
+                      (< (treesit-node-end child) pos))
+            count t)))
 
 
 (defun f90-ts--in-openmp-p ()
@@ -2125,8 +2179,8 @@ rule but not for matched keywords, which are enforced with override=t."
    :feature 'preproc
    ;; highlight macro names in definitions
    '((preproc_include
-      "#include"             @font-lock-preprocessor-face
-      path: (string_literal) @font-lock-string-face)
+      "#include"                                  @font-lock-preprocessor-face
+      path: (string_literal (string_literal_part) @font-lock-string-face))
      (preproc_def
       "#define"            @font-lock-preprocessor-face
       name: (identifier)   @font-lock-constant-face)
@@ -2320,8 +2374,7 @@ rule but not for matched keywords, which are enforced with override=t."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'variable
-   '(
-     ((identifier) @f90-ts-font-lock-special-var-face
+   '(((identifier) @f90-ts-font-lock-special-var-face
       (:pred f90-ts--node-special-var-p @f90-ts-font-lock-special-var-face)))))
 
 
@@ -2330,8 +2383,7 @@ rule but not for matched keywords, which are enforced with override=t."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'string
-   '(((string_literal) @font-lock-string-face)
-     (preproc_include path: (string_literal) @font-lock-string-face))
+   '(((string_literal_part) @font-lock-string-face))
 
    :language 'fortran
    :feature 'number
@@ -2342,7 +2394,7 @@ rule but not for matched keywords, which are enforced with override=t."
    :feature 'constant
    '(((boolean_literal) @font-lock-constant-face)
      ((null_literal) @font-lock-constant-face)
-     (statement_label) @font-lock-constant-face)))
+     ((statement_label) @font-lock-constant-face))))
 
 
 (defun f90-ts--font-lock-rules-delimiter ()
@@ -2354,7 +2406,7 @@ rule but not for matched keywords, which are enforced with override=t."
 
    :language 'fortran
    :feature 'delimiter
-   '(["," ":" ";" "::" "=>" "&"] @f90-ts-font-lock-delimiter-face)))
+   '(["," ":" ";" "::" "=>" "\"" "&"] @f90-ts-font-lock-delimiter-face)))
 
 
 (defun f90-ts--font-lock-rules-operator ()
@@ -4331,7 +4383,7 @@ triple ((f90-ts-log-indent-print-state MSG) parent 0) directly."
    ;; populate cache and then always fail
    (populate-cache parent 0)
    ;; info rules needs populated cache
-   ;;(log-state "start")
+   (log-state "start")
    )
   "Indentation rules executed at start.
 The main purpose is to fill the indentation cache for a new run.")
@@ -4380,10 +4432,7 @@ The main purpose is to fill the indentation cache for a new run.")
    ;; indent-region operations with buffering)
    (continued-line-cache-start parent 0)
 
-   ;; continued strings need special care, the ampersands do not appear as
-   ;; separate nodes, (treesit-node-at pos) at indentation position returns
-   ;; the string_literal, which starts at some previous line
-   ((nopp-n-p-gp nil "string_literal" nil) nopp-parent 0)
+   ;;((nopp-n-p-gp nil "string_literal" nil) nopp-parent 0)
 
    ;; it is easy to see whether we are on a continued line (not the first line
    ;; of a multiline statement, only subsequent lines), but handling specific
@@ -5053,10 +5102,11 @@ blanked."
           ;; then we should considers this to be a trailing ampersand and keep it as is
           (unless (looking-at  "&\\s-*\\(?:!\\|$\\)")
             (let ((node (treesit-node-at (point))))
-              ;; this excludes string literals
+              ;; make sure ampersand is a node at point and not part of a string_literal
               (when (and node
                          (= (point) (treesit-node-start node))
-                         (f90-ts--node-type-p node "&"))
+                         (f90-ts--node-type-p node "&")
+                         (not (f90-ts--in-string-p)))
                 (delete-char 1)
                 (insert " ")
                 '(amp)))))
@@ -8042,6 +8092,10 @@ and keyword are sometimes equal.  But we only want the structure node."
   ;; calling treesit-major-mode-setup
   (setq-local indent-line-function #'f90-ts-indent-and-complete-line)
   (setq-local indent-region-function #'f90-ts-indent-and-complete-region)
+
+  ;;(setq-local treesit--font-lock-verbose t)
+  (setq-local treesit--indent-verbose t)
+
 
   (add-hook 'xref-backend-functions #'f90-ts-xref-backend nil t)
 
