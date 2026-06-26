@@ -28,15 +28,17 @@
            print *,"openmp"
 !          ^^^^^ font-lock-keyword-face
 !                ^ nil
-!                 ^ f90-ts-font-lock-delimiter-face
-!                  ^^^^^^^^ font-lock-string-face
+!                 ^^ f90-ts-font-lock-delimiter-face
+!                   ^^^^^^ font-lock-string-face
+!                         ^ f90-ts-font-lock-delimiter-face
       else
 !     ^^^^ font-lock-keyword-face
            print *,"no openmp"
 !          ^^^^^ font-lock-keyword-face
 !                ^ nil
-!                 ^ f90-ts-font-lock-delimiter-face
-!                  ^^^^^^^^^^^ font-lock-string-face
+!                 ^^ f90-ts-font-lock-delimiter-face
+!                   ^^^^^^^^^ font-lock-string-face
+!                            ^ f90-ts-font-lock-delimiter-face
       end if
 !     ^^^ font-lock-keyword-face
 !         ^^ font-lock-keyword-face

@@ -447,6 +447,12 @@ With `left', the label's first digit starts on COLUMN (left-adjusted)."
   :group 'f90-ts-font-lock)
 
 
+(defface f90-ts-font-lock-escape-face
+  '((t :inherit font-lock-escape-face))
+  "Face used to highlight quotes in strings used as escape character.
+This is the first quote in double single- or double- quotes within strings."
+  :group 'f90-ts-font-lock)
+
 (defface f90-ts-font-lock-openmp-face
   '((t :inherit font-lock-preprocessor-face))
   "Face used to highlight OpenMP statements.
@@ -1053,6 +1059,41 @@ This is used by the Makefile to run ert tests during development."
 
 
 ;;;-----------------------------------------------------------------------------
+;;; switches for grammar variant
+
+(defvar f90-ts--string-literal-variant-cached 'unknown
+  "Cached grammar variant for string_literal of loaded fortran grammar.
+Original grammar just had a named leaf node `string_literal'.
+New grammar decomposes it into its parts and ampersand, comment and
+quote symbols.
+Value is `unknown' until first detection, then t for new and nil
+for original grammar rule.")
+
+
+(defun f90-ts--string-literal-decomposed-p ()
+  "Return non-nil if string_literal is decomposed by the Fortran grammar.
+The original grammar provided `string_literal' as a named leaf node.
+Newer grammars decompose it into its parts (with `string_literal_part',
+quotation, comment etc. as children of `string_literal').
+Result is detected once and cached for the session."
+  (when (eq f90-ts--string-literal-variant-cached 'unknown)
+    (setq f90-ts--string-literal-variant-cached
+          (condition-case nil
+              (progn
+                ;; eagerly compile a query with `string_literal_part',
+                ;; if it is unknown, this signals a `treesit-query-error',
+                ;; otherwise a `treesit-compiled-query' object is returned
+                (treesit-query-compile 'fortran '((string_literal_part) @x) t)
+                t)
+            (treesit-query-error nil)
+            (error nil)))
+    ;;(f90-ts-log-msg :grammar "discovered string literal: %s" f90-ts--string-literal-variant-cached)
+    )
+  ;; return cached value
+  f90-ts--string-literal-variant-cached)
+
+
+;;;-----------------------------------------------------------------------------
 ;;; auxiliary predicates, walk and query functions
 
 (defun f90-ts--node-line (node)
@@ -1085,6 +1126,11 @@ If NODE is non-nil, return line number at which start position is
 located, otherwise return line number of current point position."
   (or (and node (f90-ts--node-line node))
       (line-number-at-pos)))
+
+
+(defun f90-ts--node-length (node)
+  "Return length of text of NODE."
+  (- (treesit-node-end node) (treesit-node-start node)))
 
 
 (defun f90-ts--node-start-trimmed (node)
@@ -1349,6 +1395,25 @@ Note that the parse uses identifier not just for variables, but for types etc."
                     (treesit-node-text node))))
 
 
+(defun f90-ts--node-line-leading-p (node)
+  "Check whether NODE is the first node on its source line.
+It checks whether there are any non-blank characters between start of line
+and start of NODE."
+  (save-excursion
+    (goto-char (treesit-node-start node))
+    (skip-chars-backward " \t")
+    (bolp)))
+
+
+(defun f90-ts--node-leading-real-ampersand-p (node)
+  "Check whether NODE is a non-virtual ampersand at the start of its line.
+Note that leading ampersand are optional.  If missing, the grammar injects
+a virtual zero-length ampersand token."
+  (and (f90-ts--node-type-p node "&")
+       (= 1 (f90-ts--node-length node))
+       (f90-ts--node-line-leading-p node)))
+
+
 (defun f90-ts--node-block-label-ancestor (node)
   "Return block_label_start_expression ancestor of leaf NODE if there is one.
 NODE is assumed to be the leaf node at the start of a line.  The function
@@ -1497,15 +1562,27 @@ node."
     (string-match-p rx text)))
 
 
+;; this works for both old and new string_literal parsing rules
 (defun f90-ts--in-string-p ()
   "Non-nil if point is inside a string."
-  (when-let ((node (treesit-node-at (point))))
-    (when (f90-ts--node-type-p node "string_literal")
-      (let ((start (treesit-node-start node))
-            (end (treesit-node-end node))
-            (pos (point)))
-        ;; start and end position are the quotation characters
-        (and (< start pos) (< pos end))))))
+  (when-let* ((node (treesit-node-at (point)))
+              (string-node
+               ;; only ascend if node type is possible within a string
+               (and (f90-ts--node-type-p node '(string_literal
+                                                string_literal_part
+                                                comment
+                                                "&"
+                                                "\""
+                                                "\\"))
+                    (treesit-parent-until
+                     node
+                     (lambda (n) (f90-ts--node-type-p n "string_literal"))
+                     t))))
+    (let ((start (treesit-node-start string-node))
+          (end   (treesit-node-end   string-node))
+          (pos   (point)))
+      ;; start/end are the opening/closing quotation characters
+      (and (< start pos) (< pos end)))))
 
 
 (defun f90-ts--in-openmp-p ()
@@ -2314,10 +2391,17 @@ to exclude leading and trailing blanks, which are sometimes part of ERROR nodes.
    :language 'fortran
    :feature 'preproc
    ;; highlight macro names in definitions
-   '((preproc_include
-      "#include"             @font-lock-preprocessor-face
-      path: (string_literal) @font-lock-string-face)
-     (preproc_def
+   (if (f90-ts--string-literal-decomposed-p)
+       '((preproc_include
+          "#include"                                  @font-lock-preprocessor-face
+          path: (string_literal (string_literal_part) @font-lock-string-face)))
+     '((preproc_include
+      "#include"                                      @font-lock-preprocessor-face
+      path: (string_literal)                          @font-lock-string-face)))
+
+   :language 'fortran
+   :feature 'preproc
+   '((preproc_def
       "#define"            @font-lock-preprocessor-face
       name: (identifier)   @font-lock-constant-face)
      (preproc_function_def
@@ -2510,19 +2594,31 @@ to exclude leading and trailing blanks, which are sometimes part of ERROR nodes.
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'variable
-   '(
-     ((identifier) @f90-ts-font-lock-special-var-face
+   '(((identifier) @f90-ts-font-lock-special-var-face
       (:pred f90-ts--node-special-var-p @f90-ts-font-lock-special-var-face)))))
 
 
-(defun f90-ts--font-lock-rules-value ()
-  "Font-lock rules for numbers, strings, booleans etc."
-  (treesit-font-lock-rules
-   :language 'fortran
-   :feature 'string
-   '(((string_literal) @font-lock-string-face)
-     (preproc_include path: (string_literal) @font-lock-string-face))
+(defun f90-ts--font-lock-rules-string ()
+  "Font-lock rules for strings."
+  (if (f90-ts--string-literal-decomposed-p)
+      (treesit-font-lock-rules
+       :language 'fortran
+       :feature 'string
+       '(((string_literal_part) @font-lock-string-face))
 
+       :language 'fortran
+       :feature 'escape-sequence
+       '(("\\" @f90-ts-font-lock-escape-face)))
+
+    (treesit-font-lock-rules
+     :language 'fortran
+     :feature 'string
+     '(((string_literal) @font-lock-string-face)))))
+
+
+(defun f90-ts--font-lock-rules-value ()
+  "Font-lock rules for numbers, booleans, etc. (except strings)."
+  (treesit-font-lock-rules
    :language 'fortran
    :feature 'number
    '(((number_literal) @font-lock-number-face)
@@ -2532,7 +2628,7 @@ to exclude leading and trailing blanks, which are sometimes part of ERROR nodes.
    :feature 'constant
    '(((boolean_literal) @font-lock-constant-face)
      ((null_literal) @font-lock-constant-face)
-     (statement_label) @font-lock-constant-face)))
+     ((statement_label) @font-lock-constant-face))))
 
 
 (defun f90-ts--font-lock-rules-delimiter ()
@@ -2544,7 +2640,9 @@ to exclude leading and trailing blanks, which are sometimes part of ERROR nodes.
 
    :language 'fortran
    :feature 'delimiter
-   '(["," ":" ";" "::" "=>" "&"] @f90-ts-font-lock-delimiter-face)))
+   `(["," ":" ";" "::" "=>" "&"
+      ,@(when (f90-ts--string-literal-decomposed-p) '("\""))]
+     @f90-ts-font-lock-delimiter-face)))
 
 
 (defun f90-ts--font-lock-rules-operator ()
@@ -2597,9 +2695,11 @@ changes in how string_literal is parsed and whether it is decomposed."
    (f90-ts--font-lock-rules-end)
    (f90-ts--font-lock-rules-operator)
    (f90-ts--font-lock-rules-variable)
+   (f90-ts--font-lock-rules-string)
    (f90-ts--font-lock-rules-value)
    (f90-ts--font-lock-rules-delimiter)
    (f90-ts--font-lock-rules-error)))
+
 
 ;;;-----------------------------------------------------------------------------
 ;;; Xref backend
@@ -3512,6 +3612,10 @@ If NODE is nil return nil."
         ;; text is not always "&" (like virtual ampersand at beginning of line)
         'ampersand)
 
+       ((f90-ts--node-type-p node "\\")
+        ;; escape quote in string (double quote)
+        'escape)
+
        (t
         (let ((text (treesit-node-text node)))
           (pcase text
@@ -3521,6 +3625,8 @@ If NODE is nil return nil."
             ("&"  'ampersand)
             ("=>" 'associate)
             ("="  'assignment)
+            ((or "\"" "'")
+             'quote)
             ;; default: argument for anything else (this is probably a named node
             ;; of type identifier, number_literal, call_expression, parenthesized_expression etc.
             (_    'named))))))))
@@ -3679,8 +3785,8 @@ parenthesis node if present as cdr of CONTEXT."
 ;;++++++++++++++
 ;; list context: parenthesized expressions, arguments, array, parameters
 
-(defun f90-ts--align-list-items-children (context _loc)
-  "Return all children of CONTEXT.
+(defun f90-ts--align-list-items-children-no-paren (context _loc)
+  "Return all children of CONTEXT except for parenthesis.
 This is used for a context where all direct children are relevant,
 which are \"parenthesized_expression\", \"argument_list\",
 \"array_literal\" and \"parameters\"."
@@ -3730,6 +3836,34 @@ before and after \"::\")."
                                   (lambda (c) (f90-ts--node-type-p c "="))
                                   (treesit-node-children n)))))
                      decl-children))))))
+
+
+;;++++++++++++++
+;; list context: string_literal
+
+(defun f90-ts--align-list-items-string (context _loc)
+  "Return almost all children of CONTEXT of type string_literal.
+There is one small exception:
+Always drop the second quote in an escape double quote sequence,
+which is represented as a string_literal_part."
+  (cl-assert (f90-ts--string-literal-decomposed-p)
+             nil "wrong grammar, string_literal not decomposed by parser")
+  ;; example code (where we want to primarily try to align the text):
+  ;; s = """start with quoted quote&
+  ;;        and continue without leading ampersand"
+  ;; exclude the escape node (second \" of the three quotes) from the items list
+  (let* ((list-context (car context))
+        (children (treesit-node-children list-context)))
+    (cl-assert (f90-ts--node-type-p list-context
+                                    '("string_literal"))
+               nil "expected list context: string_literal, got '%s'" list-context)
+    (seq-filter
+     (lambda (n)
+       (let* ((psib (treesit-node-prev-sibling n)))
+         (not
+           (and (f90-ts--node-type-p psib "\\")
+                (f90-ts--node-type-p n "string_literal_part")))))
+     children)))
 
 
 ;;++++++++++++++
@@ -4018,9 +4152,7 @@ This primary position is returned as first element of the list."
          (nsym (alist-get 'nsym loc))
          (child-paren (treesit-node-child list-context 0 nil)))
     (cl-assert (f90-ts--node-type-p list-context "association_list")
-               nil
-               "align-list-other-association: wrong context, got '%s'"
-               list-context)
+               nil "wrong context, got '%s'" list-context)
 
     (f90-ts--collecting-anoff
      (cl-assert (f90-ts--node-type-p child-paren "(")
@@ -4033,6 +4165,40 @@ This primary position is returned as first element of the list."
                 ('parenthesis f90-ts-indent-paren-close)   ; indents ")"
                 (_            f90-ts-indent-paren-default) ; all other kind of nodes
                 ))
+     (merge-items (f90-ts--align-list-other-epilog
+                   items-plist (anything-collected-p))))))
+
+
+(defun f90-ts--align-list-other-string (context loc items-plist)
+  "Return a list of default positions (anchors offset) for string nodes.
+The first entry of the returned \"other\" list is used as primary anchor.
+For string literals these anchors depend on CONTEXT, node-sym (nsym in
+LOC), ITEMS-SYM and ITEMS-PLIST.
+
+A string_literal consists of opening and closing quoting symbol,
+string_literal_part, ampersand, quote escape character and comments.
+Note that a leading ampersand cannot be removed, as following blank characters
+must be preserved.  Thus we need to deal with the ampersand.  It should be
+aligned to the opening ampersand as primary position."
+  (cl-assert (f90-ts--string-literal-decomposed-p)
+             nil "wrong grammar, string_literal not decomposed by parser")
+  (let* ((list-context (car context))
+         (nsym (alist-get 'nsym loc))
+         (open-quote (treesit-node-child list-context 0 nil))
+         (items-prev (plist-get items-plist :prev)))
+    (cl-assert (f90-ts--node-type-p list-context "string_literal")
+               nil "wrong context, got '%s'" list-context)
+    (f90-ts--collecting-anoff
+     (when (member nsym '(ampersand comment quote))
+       (as-primary open-quote 0))
+     ;; if node is string_literal_part ('named) collect escape nodes, and vice versa
+     (when-let ((opp-sym (cond ((eq nsym 'named) 'escape)
+                               ((eq nsym 'escape) 'named))))
+       (cl-loop
+        for (n . s) in items-prev
+        when (eq s opp-sym)
+        do (collect n 0)))
+
      (merge-items (f90-ts--align-list-other-epilog
                    items-plist (anything-collected-p))))))
 
@@ -4102,28 +4268,32 @@ for default continued line indentation."
 ;;++++++++++++++
 ;; list context: items and columns
 
-(defun f90-ts--align-list-filter-prev-nsym (items-all cur-line)
-  "Filter ITEMS-ALL and add node symbol information.
-ITEMS-ALL are all nodes of a list context and might contain nodes from future
-lines.
+(defun f90-ts--align-list-filter-prev (items cur-line)
+  "Filter ITEMS by line number and remove most ampersands.
+For alignment purposes, only items on previous lines are relevant.
 
 The filter removes any items not before line CUR-LINE.  It also filters out
-ampersand nodes (continuation symbols), which are not relevant for alignment.
-Those ampersands cannot appear as leading nodes in a line, since they leading
-ampersands are removed during indentation.
+trailing and virtual ampersand nodes, which are not relevant for alignment.
+Leading ampersands are removed during indentation, except for ampersands
+within strings, which we want to keep."
+  (seq-filter
+   ;; filter by line number, use only items on some previous line,
+   ;; also drop continuation symbols, as these are not relevant for alignment
+   (lambda (n) (and (< (f90-ts--node-line n)
+                       cur-line)
+                    (or (not (f90-ts--node-type-p n "&"))
+                        ;; accept a real leading ampersand
+                        ;; (which appears within a string_literal)
+                        (f90-ts--node-leading-real-ampersand-p n))))
+   items))
 
-It returns a list (NODE . NSYM) with symbol information for all filtered
-items."
-  (let ((items-filtered (seq-filter
-                         ;; filter by line number, use only items on some previous line,
-                         ;; also drop continuation symbols, as these are not relevant for alignment
-                         (lambda (n) (and (< (f90-ts--node-line n)
-                                             cur-line)
-                                          (not (f90-ts--node-type-p n "&"))))
-                         items-all)))
-    (mapcar
-     (lambda (n) (cons n (f90-ts--align-node-symbol n)))
-     items-filtered)))
+
+(defun f90-ts--align-list-attach-nsym (items)
+  "Attach node symbol information to a list of ITEMS.
+Map each NODE in ITEMS, to a cons cell (NODE . NSYM)."
+  (mapcar
+   (lambda (n) (cons n (f90-ts--align-node-symbol n)))
+   items))
 
 
 (defun f90-ts--align-list-items-head-p (node-nsym context-line)
@@ -4331,12 +4501,15 @@ LOC is an alist which provides the node and further location data.
 Note: for anchor-offset pairs extracted from CONTEXT nodes directly,
 the offset is assumed to be 0."
   (let* ((get-items (f90-ts--get-list-context-prop :get-items-fn context))
-         (items-all (funcall get-items context loc))
          (cur-line (alist-get 'line loc))
          (cntxt-line (f90-ts--node-line (or (cdr context) (car context))))
          (node-sym (alist-get 'nsym loc))
+         (items-all
+          (funcall get-items context loc))
+         (items-prev
+          (f90-ts--align-list-filter-prev items-all cur-line))
          (items-prev-sym
-          (f90-ts--align-list-filter-prev-nsym items-all cur-line))
+          (f90-ts--align-list-attach-nsym items-prev))
          (items-head
           (f90-ts--align-list-nsym-filter-offset
            items-prev-sym
@@ -4427,9 +4600,11 @@ Finally use VARIANT to select one pair to align with."
 (defconst f90-ts--align-list-context-properties
   (let ((expr-prop  '(:get-items-fn f90-ts--align-list-items-op-expr
                       :get-other-fn f90-ts--align-list-other-op-expr))
-        (paren-prop '(:get-items-fn f90-ts--align-list-items-children
+        (paren-prop '(:get-items-fn f90-ts--align-list-items-children-no-paren
                       :get-other-fn f90-ts--align-list-other-paren))
         (bind-prop  '(:get-items-fn f90-ts--align-list-items-children2)))
+    (cl-remove-if
+     #'null
      (list
       (cons "logical_expression"       expr-prop)
       (cons "math_expression"          expr-prop)
@@ -4441,6 +4616,10 @@ Finally use VARIANT to select one pair to align with."
       (cons "parenthesized_expression" paren-prop)
       (cons "argument_list"            paren-prop)
       (cons "array_literal"            paren-prop)
+      (when (f90-ts--string-literal-decomposed-p)
+        (cons "string_literal"
+              '(:get-items-fn f90-ts--align-list-items-string
+                :get-other-fn f90-ts--align-list-other-string)))
       (cons "parameters"               paren-prop)
       (cons "association_list"
             '(:get-items-fn f90-ts--align-list-items-assocation
@@ -4449,7 +4628,7 @@ Finally use VARIANT to select one pair to align with."
             '(:get-items-fn f90-ts--align-list-items-var-decl
               :get-other-fn f90-ts--align-list-other-var-decl))
       (cons "import_statement"
-            '(:get-items-fn f90-ts--align-list-items-children1))))
+            '(:get-items-fn f90-ts--align-list-items-children1)))))
   "List of tree-sitter node types presenting some kind of list context.
 A list context is a node with children which are suitable for alignment if
 spread over several lines in a continued line statement.
@@ -4563,10 +4742,9 @@ Return value nil signals that position is not within a list context.
 
 Only expressions return an auxiliary node, which is assignment \"=\"
 or parenthesis \"(\".  It is required but not part of the list context node."
-  (let ((stmt-max (f90-ts--align-list-context-max loc)))
-    (when stmt-max
-      (or (f90-ts--align-list-context-op-expr loc parent)
-          (f90-ts--align-list-context-other loc parent)))))
+  (when-let ((stmt-max (f90-ts--align-list-context-max loc)))
+    (or (f90-ts--align-list-context-op-expr loc parent)
+        (f90-ts--align-list-context-other loc parent))))
 
 
 (defun f90-ts--continued-line-anchor-offset (variant pstmt-1 loc parent)
@@ -4783,7 +4961,9 @@ The main purpose is to fill the indentation cache for a new run."
    ;; continued strings need special care, the ampersands do not appear as
    ;; separate nodes, (treesit-node-at pos) at indentation position returns
    ;; the string_literal, which starts at some previous line
-   ((nopp-n-p-gp nil "string_literal" nil) nopp-parent 0)
+   ;; TODO: keep for old string_literal style node
+   (unless (f90-ts--string-literal-decomposed-p)
+     ((nopp-n-p-gp nil "string_literal" nil) nopp-parent 0))
 
    ;; it is easy to see whether we are on a continued line (not the first line
    ;; of a multiline statement, only subsequent lines), but handling specific
@@ -5456,10 +5636,11 @@ blanked."
           ;; then we should considers this to be a trailing ampersand and keep it as is
           (unless (looking-at  "&\\s-*\\(?:!\\|$\\)")
             (let ((node (treesit-node-at (point))))
-              ;; this excludes string literals
+              ;; make sure ampersand is a node at point and not part of a string_literal
               (when (and node
                          (= (point) (treesit-node-start node))
-                         (f90-ts--node-type-p node "&"))
+                         (f90-ts--node-type-p node "&")
+                         (not (f90-ts--in-string-p)))
                 (delete-char 1)
                 (insert " ")
                 '(amp)))))
@@ -5955,16 +6136,22 @@ Move point to first character on the line after it was originally placed."
 
 (defun f90-ts--join-line-string (node pos1 pos2)
   "Join previous line with current line both belonging to a continued string.
-The string is provided by NODE, which is of type string_literal.
-Positions POS1 and POS2 are end of previous line and start of current line."
-  (cl-assert (f90-ts--node-type-p node "string_literal")
-             nil "node is not a string literal")
+Positions POS1 and POS2 are end of previous line and start of current line.
+
+If the grammar variant does not decompose the string_literal, then NODE is
+of type string_literal.  For the decomposed variant, NODE is the first
+ampersand before POS1 and within the string_literal to be joined."
+  (cl-assert (if (f90-ts--string-literal-decomposed-p)
+                 (and (f90-ts--node-type-p node "&")
+                      (f90-ts--node-type-p (treesit-node-parent node) "string_literal"))
+               (f90-ts--node-type-p node "string_literal"))
+             nil "node is not within a string literal")
   (cl-assert (eq (char-before pos1) ?&)
              nil "character before pos1 is not an ampersand")
-  (cl-assert (eq (char-after pos2) ?&)
-             nil "character at pos2 is not an ampersand")
   (let ((beg (1- pos1))
-        (end (1+ pos2)))
+        (end (if (eq (char-after pos2) ?&)
+                 (1+ pos2)
+               pos2)))
     (delete-region beg end)
     (goto-char beg)))
 
@@ -6056,6 +6243,22 @@ Argument IS-PREV signals whether the function was called from the
               'remove-blank-lines-between))))))
 
 
+(defun f90-ts--join-line-is-cont-str (first secnd)
+  "Check whether the join is performed within a continued string literal.
+FIRST and SECND are the leaf nodes at the first and second join positions,
+which are at end of first and beginning of second line.
+The predicate only returns non-nil if FIRST and SECND are ampersand nodes,
+without any comments in-between (the non-decomposed grammar variant fails to
+parse comments within strings)."
+  (if (f90-ts--string-literal-decomposed-p)
+      (and (f90-ts--node-type-p first "&")
+           (f90-ts--node-type-p secnd "&")
+           (f90-ts--node-type-p (treesit-node-parent first) "string_literal"))
+    (and (f90-ts--node-type-p first "string_literal")
+         (f90-ts--node-type-p secnd "string_literal")
+         (treesit-node-eq first secnd))))
+
+
 (defun f90-ts--join-line-prev-aux ()
   "Join previous line with the current one, if part of a continued statement.
 Returns a cons (THUNK . ACTION); the caller is responsible for executing
@@ -6082,9 +6285,7 @@ THUNK and for messaging on failure."
                    (point)))
            (first (f90-ts--node-on-pos pos1 'left))
            (secnd (f90-ts--node-on-pos pos2 'right))
-           (is-cont-str (and (f90-ts--node-type-p first "string_literal")
-                             (f90-ts--node-type-p secnd "string_literal")
-                             (treesit-node-eq first secnd))))
+           (is-cont-str (f90-ts--join-line-is-cont-str first secnd)))
       ;;(f90-ts-log-msg :joinprev "pos1: %s, %s" pos1 first)
       ;;(f90-ts-log-msg :joinprev "pos2: %s, %s" pos2 secnd)
       ;;(f90-ts-log-msg :joinprev "is-cont-str: %s" is-cont-str)
@@ -6102,11 +6303,8 @@ THUNK and for messaging on failure."
                  nil "secnd node has wrong start position")
       (cond
        (is-cont-str
-        (if (eq (char-before pos1) ?&)
-            (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
-                  'join-continued-string)
-          (cons (lambda () (back-to-indentation))
-                'failed-comment-within-string)))
+        (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
+              'join-continued-string))
 
        (first
         (f90-ts--join-line-action-common first secnd t))
@@ -6160,9 +6358,7 @@ THUNK and for messaging on failure."
                    (point)))
            (first (f90-ts--node-on-pos pos1 'left))
            (secnd (f90-ts--node-on-pos pos2 'right))
-           (is-cont-str (and (f90-ts--node-type-p first "string_literal")
-                             (f90-ts--node-type-p secnd "string_literal")
-                             (treesit-node-eq first secnd))))
+           (is-cont-str (f90-ts--join-line-is-cont-str first secnd)))
       ;;(f90-ts-log-msg :joinnext "pos1: %s, %s" pos1 first)
       ;;(f90-ts-log-msg :joinnext "pos2: %s, %s" pos2 secnd)
       ;;(f90-ts-log-msg :joinnext "is-cont-str: %s" is-cont-str)
@@ -6188,11 +6384,8 @@ THUNK and for messaging on failure."
               'end-of-buffer))
 
        (is-cont-str
-        (if (eq (char-after pos2) ?&)
-            (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
-                  'join-continued-string)
-          (cons (lambda () (end-of-line))
-                'failed-comment-within-string)))
+        (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
+              'join-continued-string))
 
        (t
         (f90-ts--join-line-action-common first secnd nil)))))))
@@ -8566,11 +8759,13 @@ package `markdown-mode' are available, then use these."
   (setq-local treesit-font-lock-feature-list
               '((comment preproc error)                          ; level 1
                 (builtin keyword string type)                    ; level 2
-                (constant number)                                ; level 3
+                (constant number escape-sequence)                ; level 3
                 (function variable operator bracket delimiter))) ; level 4
 
-  ;; set font-lock and indentation rules
+  ;; use the pre-defined font-lock rules variable
   (setq-local treesit-font-lock-settings (f90-ts-font-lock-rules))
+
+  ;; use the pre-defined indentation rules variable
   (setq-local treesit-simple-indent-rules (f90-ts-indent-rules))
 
   ;; set Imenu

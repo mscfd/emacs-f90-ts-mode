@@ -331,6 +331,18 @@ subroutine str5()
 end subroutine str5
 =-=-=
 
+Name: join prev string 6
+=-=
+subroutine str6()
+     str = "012&
+|            345"
+end subroutine str6
+=-=
+subroutine str6()
+     str = "012|345"
+end subroutine str6
+=-=-=
+
 Name: join prev empty 1
 =-=
 
@@ -756,6 +768,23 @@ subroutine str5()
 end subroutine str5
 =-=-=
 
+
+Name: join next string 6
+=-=
+subroutine str6()
+     str = "012&|
+            345"
+end subroutine str6
+=-=
+subroutine str6()
+     str = "012|345"
+end subroutine str6
+=-=-=
+
+
+
+
+remark
 erts functions parse the expected block always adding a final newline for the last line, which cannot be stripped.
 So the point marker cannot be placed in the expected position; as a consequence, check point position in Code block.
 This is done for the final join statement and some empty checks.

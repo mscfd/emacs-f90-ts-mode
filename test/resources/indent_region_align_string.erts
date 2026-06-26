@@ -32,6 +32,7 @@ end subroutine string2
 =-=-=
 
 Name: continued string 3
+Skip: (not (f90-ts--string-literal-decomposed-p))
 =-=
 subroutine string3()
      str = "012&
@@ -40,6 +41,105 @@ subroutine string3()
            &abc &
 
            &uvw&
-           xyz"
+            xyz"
 end subroutine string3
 =-=-=
+
+Name: continued string 4
+=-=
+subroutine sub()
+     s0123456789 = "012&
+                   ! comment
+                   &345&
+                    678&
+                   ! comment 1
+                   ! comment 2
+                    9ab&
+            ! comment at continued
+                   &cde&
+            &       fgh"
+     s0123456789 = "align&
+! comment
+                   &comment"
+     s0123456789 = "comment&
+            ! comment 1
+! comment 2
+                   &group"
+end subroutine sub
+=-=
+subroutine sub()
+     s0123456789 = "012&
+                   ! comment
+                   &345&
+                    678&
+                   ! comment 1
+                   ! comment 2
+                    9ab&
+            ! comment at continued
+                   &cde&
+            &       fgh"
+     s0123456789 = "align&
+                   ! comment
+                   &comment"
+     s0123456789 = "comment&
+            ! comment 1
+            ! comment 2
+                   &group"
+end subroutine sub
+=-=-=
+
+Name: continued string 5
+Skip: (not (f90-ts--string-literal-decomposed-p))
+=-=
+subroutine sub()
+     s0123456789 = """abc&
+                      def"
+     s0123456789 = """abc&
+            def"
+     s0123456789 = """abc&
+                    def"
+     s0123456789 = """abc&
+def"
+end subroutine sub
+=-=
+subroutine sub()
+     s0123456789 = """abc&
+                      def"
+     s0123456789 = """abc&
+            def"
+     s0123456789 = """abc&
+                    def"
+     s0123456789 = """abc&
+                      def"
+end subroutine sub
+=-=-=
+
+Name: continued string 6
+=-=
+subroutine sub()
+     s0123456789 = "abc""def&
+                    X"
+     s0123456789 = "abc""def&
+                         X"
+     s0123456789 = "abc""def&
+                       X"
+     s0123456789 = "abc""def&
+X"
+     s0123456789 = "abc""def&
+                        X"
+end subroutine sub
+=-=
+subroutine sub()
+     s0123456789 = "abc""def&
+                    X"
+     s0123456789 = "abc""def&
+                         X"
+     s0123456789 = "abc""def&
+                       X"
+     s0123456789 = "abc""def&
+                    X"
+     s0123456789 = "abc""def&
+                    X"
+end subroutine sub
+=-=-=
+

@@ -1020,24 +1020,26 @@ If buffer was modified, insert `**' otherwise insert '--'."
 
 
 ;; register font lock tests
-(f90-ts-mode-test--font-lock-register
- "f90-ts-mode-test-std"
- '("font_lock_progmod.f90"
-   "font_lock_comment.f90"
-   "font_lock_builtin.f90"
-   "font_lock_operator.f90"
-   "font_lock_interface.f90"
-   "font_lock_type.f90"
-   "font_lock_enum.f90"
-   "font_lock_select.f90"
-   "font_lock_do_concurrent.f90"
-   "font_lock_where.f90"
-   "font_lock_forall.f90"
-   "font_lock_openmp.f90"
-   "font_lock_coarray.f90"
-   "font_lock_value.f90"
-   "font_lock_special_var.f90"
-   "font_lock_error.f90"))
+(when (f90-ts--string-literal-decomposed-p)
+  (f90-ts-mode-test--font-lock-register
+   "f90-ts-mode-test-std"
+   '("font_lock_progmod.f90"
+     "font_lock_comment.f90"
+     "font_lock_builtin.f90"
+     "font_lock_operator.f90"
+     "font_lock_interface.f90"
+     "font_lock_type.f90"
+     "font_lock_enum.f90"
+     "font_lock_select.f90"
+     "font_lock_do_concurrent.f90"
+     "font_lock_where.f90"
+     "font_lock_forall.f90"
+     "font_lock_openmp.f90"
+     "font_lock_coarray.f90"
+     "font_lock_value.f90"
+     "font_lock_continued_string.f90"
+     "font_lock_special_var.f90"
+     "font_lock_error.f90")))
 
 
 ;; xref tests
@@ -1049,9 +1051,10 @@ If buffer was modified, insert `**' otherwise insert '--'."
 
 
 ;; register extra font lock tests
-(f90-ts-mode-test--font-lock-register
- "f90-ts-mode-test-extra"
- '("font_lock_integration_collatz.f90"))
+(when (f90-ts--string-literal-decomposed-p)
+  (f90-ts-mode-test--font-lock-register
+   "f90-ts-mode-test-extra"
+   '("font_lock_integration_collatz.f90")))
 
 
 ;;------------------------------------------------------------------------------
