@@ -90,3 +90,42 @@ contains
       end subroutine sub
 end module mod
 =-=-=
+
+Name: stmt label block structure 1
+=-=
+! if statement_label is on a beginning of a block structure,
+! special care is required to find the proper anchor node, which
+! is not the statement_label but the node block_label_start_expression
+subroutine sub()
+     name: block
+  123     loop: do i = 1,3
+               print *,i
+          end do loop
+     end block name
+end subroutine sub
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (let ((f90-ts-stmt-label-column '(right . 3)))
+      (funcall f90-ts-mode-test--action-fn)))
+
+
+Name: stmt label block structure 2
+=-=
+! if statement_label is on a beginning of a block structure,
+! special care is required to find the proper anchor node, which
+! is not the statement_label but the node block_label_start_expression
+subroutine sub()
+ 123 if (cond) then
+          ! comment 1
+ 456      if (other) then
+               ! comment 2
+          end if
+     end if
+end subroutine sub
+=-=-=

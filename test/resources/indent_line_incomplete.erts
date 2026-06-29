@@ -217,3 +217,64 @@ module incomplete
 end
 contains
 =-=-=
+
+Name: derived type 1
+=-=
+module incomplete
+type :: test
+     integer :: i
+contains
+|pro
+end type test
+end module incomplete
+=-=
+module incomplete
+type :: test
+     integer :: i
+contains
+     |pro
+end type test
+end module incomplete
+=-=-=
+
+Name: derived type 2
+=-=
+module incomplete
+type :: test
+     integer :: i
+contains
+     procedure :: name
+|pro
+end type test
+end module incomplete
+=-=
+module incomplete
+type :: test
+     integer :: i
+contains
+     procedure :: name
+     |pro
+end type test
+end module incomplete
+=-=-=
+
+Name: derived type 3
+=-=
+module incomplete
+type :: test
+     integer :: i
+contains
+     generic :: name
+|pro
+end type test
+end module incomplete
+=-=
+module incomplete
+type :: test
+     integer :: i
+contains
+     generic :: name
+     |pro
+end type test
+end module incomplete
+=-=-=

@@ -206,6 +206,61 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
+Name: join prev statement 15
+=-=
+subroutine sub_same_prefix()
+     !!$ comment A
+|     !!$        B
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     !!$ comment A |B
+end subroutine sub_same_prefix
+=-=-=
+
+Name: join prev statement 16
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in second comment
+     !!$ comment A
+|     !!$     
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in second comment
+     !!$ comment A |
+end subroutine sub_same_prefix
+=-=-=
+
+Name: join prev statement 17
+=-=
+subroutine sub_same_prefix()
+     ! without trailing blanks in second comment
+     !!$ comment A
+|     !!$
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     ! without trailing blanks in second comment
+     !!$ comment A |
+end subroutine sub_same_prefix
+=-=-=
+
+Name: join prev statement 18
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in first comment
+     !!$     
+     !!$ comment A|
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in first comment
+     !!$ |comment A
+end subroutine sub_same_prefix
+=-=-=
+
+
 Name: join prev string 1
 =-=
 subroutine str1()
@@ -531,6 +586,20 @@ end subroutine sub_1
 
 Name: join next statement 13
 =-=
+subroutine sub()
+     x = 6 +| &
+         ! first number
+            5
+end subroutine sub
+=-=
+subroutine sub()
+     x = 6 + & |! first number
+            5
+end subroutine sub
+=-=-=
+
+Name: join next statement 14
+=-=
 subroutine sub_1()
      x = |65
 end subroutine sub_1
@@ -538,6 +607,82 @@ end subroutine sub_1
 subroutine sub_1()
      x = 65|
 end subroutine sub_1
+=-=-=
+
+Name: join next statement 15
+=-=
+! this failed as querying the single character node "5" before point
+! in f90-ts--node-on-pos failed, caused by the virtual zero-span
+! ampersand node right at start of the "5"
+subroutine sub()
+     x = 6 + &
+         5|
+     y = 7
+end subroutine sub
+=-=
+! this failed as querying the single character node "5" before point
+! in f90-ts--node-on-pos failed, caused by the virtual zero-span
+! ampersand node right at start of the "5"
+subroutine sub()
+     x = 6 + &
+         5|
+     y = 7
+end subroutine sub
+=-=-=
+
+Name: join next statement 15
+=-=
+subroutine sub_same_prefix()
+|     !!$ comment A
+     !!$        B
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     !!$ comment A |B
+end subroutine sub_same_prefix
+=-=-=
+
+Name: join next statement 16
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in second comment
+     !!$ comment A|
+     !!$     
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in second comment
+     !!$ comment A |
+end subroutine sub_same_prefix
+=-=-=
+
+Name: join next statement 17
+=-=
+subroutine sub_same_prefix()
+     ! without trailing blanks in second comment
+     !!$ comment A|
+     !!$
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     ! without trailing blanks in second comment
+     !!$ comment A |
+end subroutine sub_same_prefix
+=-=-=
+
+
+Name: join next statement 18
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in first comment
+     !!$|     
+     !!$ comment A
+end subroutine sub_same_prefix
+=-=
+subroutine sub_same_prefix()
+     ! with trailing blanks in first comment
+     !!$ |comment A
+end subroutine sub_same_prefix
 =-=-=
 
 Name: join next string 1
@@ -623,7 +768,7 @@ Code:
     (unless (= (point) (point-max))
       (insert (format "POINT-WRONG: at=%s, expected=%s\n" (point) (point-max)))))
 
-Name: join next statement 14
+Name: join next statement 16
 =-=
 subroutine sub_1()
 end s|ubroutine sub_1

@@ -145,16 +145,18 @@ without final newline."
     (f90-ts-smart-end . no-message)
     (f90-ts-leading-ampersand . nil)
     (f90-ts-leading-ampersand-style . (indent . 3))
+    (f90-ts-fill-select-breakpoint-by . rightmost)
     (f90-ts-stmt-label-column . (left . 0))
     (f90-ts-special-comment-rules . ,f90-ts-mode-test--special-comment-rules)
-    (f90-ts-comment-prefix-regexp . "!\\S-*\\(\\s-+\\|$\\)")
-    (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?\\(\\s-+\\|$\\)")
+    (f90-ts-comment-prefix-regexp . "!\\S-*")
+    (f90-ts-comment-prefix-separator-regexp . "\\s-")
+    (f90-ts-openmp-prefix-regexp . "!\\$\\(?:omp\\)?")
     (f90-ts-special-var-regexp . "\\_<\\(self\\|this\\)\\_>")
     (f90-ts-comment-keyword-regexp . "\\<\\(TODO\\|FIXME\\|Remarks?\\)\\>")
     (f90-ts-comment-region-prefix . "!!$ ")
     (f90-ts-extra-comment-prefixes . ("!!!" "! " "!> "))
     (f90-ts-comment-prefix-keep-indent . t)
-    (f90-ts-mark-region-reversed . nil)
+    (f90-ts-mark-region-order . preserve)
     (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
                                         ; also needs treesit-font-lock-recompute-features
     (indent-tabs-mode . nil)
@@ -288,7 +290,6 @@ mark region functions etc. are possible as well.")
   "Show diff between ACTUAL and EXPECTED external tool DIFF."
   (let* ((actual-file (make-temp-file "f90-ts-mode-actual-"))
          (expected-file (make-temp-file "f90-ts-mode-expected-")))
-
     (with-temp-file actual-file
       (insert actual))
     (with-temp-file expected-file
@@ -358,6 +359,33 @@ This is intended for testing smart end completion."
     (forward-line 1)))
 
 
+(defmacro f90-ts-mode-test--with-mocked-keys (keys &rest body)
+  "Execute BODY while mocking `read-key' to return elements from KEYS.
+KEYS is a vector of keys as returned by `read-key', with the following
+readable aliases accepted: `space' -> ?\\s, `return' -> ?\\r,
+`backspace' -> ?\\d.  Exhausting the sequence defaults to `keyboard-quit'."
+  (declare (indent 1))
+  `(let ((key-list (mapcar (lambda (k)
+                             ;; some symbol names are not recognised, so map them
+                             ;; (home, end, abort=C-g do not need mapping)
+                             (pcase k
+                               ('space     ?\s)
+                               ('return    ?\r)
+                               ('delete    'deletechar)
+                               ('backspace ?\d)
+                               (_          k)))
+                           (append ,keys nil)))
+         (idx 0))
+     (cl-letf (((symbol-function 'read-key)
+                (lambda (&optional _prompt)
+                  (if (< idx (length key-list))
+                      (let ((k (elt key-list idx)))
+                        (cl-incf idx)
+                        k)
+                    ?\C-g))))
+       ,@body)))
+
+
 ;;------------------------------------------------------------------------------
 ;; ERTS: indentation
 
@@ -384,7 +412,7 @@ can be observed and checked."
                                                    update-fn-choices nil t)
                                   update-fn-choices)))
           (indent-variant-choices (mapcar (lambda (x) (cons (symbol-name (cdr x)) (cdr x)))
-                                          f90-ts-indent-list-options))
+                                          f90-ts--indent-region-options-alist))
           (chosen-indent-variant
            (unless chosen-update-fn  ; chosen-update-fn=nil is option indent-region
              (cdr (assoc
@@ -803,21 +831,36 @@ PREFIX is the test name prefix, usually \"f90-ts-mode-test-std\"."
 ;;------------------------------------------------------------------------------
 ;; mark region helpers
 
-(defun f90-ts-mode-test--mark-region (command)
-  "Test function for mark region with no prior region selected.
-Execute COMMAND, which marks some region and insert markers @..| for
-result region."
+(defun f90-ts-mode-test--mark-region-pre (command)
+  "Mark region before COMMAND is executed.
+Use markers @..| to find region for COMMAND to work on."
+  (let ((pos (point)))
+    (goto-char (point-min))
+    (search-forward "@")
+    ;; point is after marker @, so delete before
+    (delete-char -1)
+    (push-mark (point) t t)
+    (if (< (point) pos)
+        (goto-char (1- pos))
+      (goto-char pos))
+    (funcall command)))
+
+
+(defun f90-ts-mode-test--mark-region-post (command)
+  "Insert markers into result buffer after executing COMMAND..
+Insert markers @..| for result region."
   (funcall command)
   (f90-ts-mode-test--insert-region-markers))
 
 
-(defun f90-ts-mode-test--modify-region (command)
+(defun f90-ts-mode-test--mark-region-modify (command)
   "Setup pre-selected region and apply COMMAND for modifying region.
 Set up region from @ to | markers, then call COMMAND and reinsert @..| markers
 for modified region."
   (let ((pos (point)))
     (goto-char (point-min))
     (search-forward "@")
+    ;; point is after marker @, so delete before
     (delete-char -1)
     (push-mark (point) t t)
     (if (< (point) pos)
@@ -929,8 +972,11 @@ If buffer was modified, insert `**' otherwise insert '--'."
    "indent_stmt_misc.erts"
    "break_line.erts"
    "join_line.erts"
+   "fill_region_aux.erts"
+   "fill_operations.erts"
    "mark_region.erts"
    "comment_region.erts"
+   "comment_prefix.erts"
    "modified_bit.erts"))
 
 

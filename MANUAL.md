@@ -31,9 +31,11 @@ for implementation.
   - [Imenu](#imenu)
   - [Navigation menu](#navigation-menu)
   - [Navigation buffer](#navigation-buffer)
+  - [Comment prefix](#comment-prefix)
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
+  - [Fill lines and regions(#fill-lines-and-regions)
   - [Comment region](#comment-region)
   - [Mark regions based on tree-sitter nodes](#mark-regions-based-on-tree-sitter-nodes)
 - [Development and Testing](#development-and-testing)
@@ -135,16 +137,19 @@ placed somewhere in `init.el` (or elsewhere).
 
   :bind (;; mode-specific bindings, adjust to your needs
          :map f90-ts-mode-map
-         ;; transient popup
+         ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts
+         ;; shortcuts (just some examples)
          ("A-<return>"    . #'f90-ts-break-line)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
-         ("A-\\"          . #'f90-ts-enlarge-region)
-         ("A-0"           . #'f90-ts-child0-region)
-         ("A-["           . #'f90-ts-prev-region)
-         ("A-]"           . #'f90-ts-next-region)))
+         ("A-\\"          . #'f90-ts-mark-region-enlarge)
+         ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
+         ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
+         ("A-["           . #'f90-ts-mark-region-prev-sibling)
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 #### Development setup (local clone)
@@ -171,16 +176,19 @@ First clone the repository of `f90-ts-mode` as mentioned above.
 
   :bind (;; mode-specific bindings, adjust to your needs
          :map f90-ts-mode-map
-         ;; transient popup
+         ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts
+         ;; shortcuts (examples)
          ("A-<return>"    . #'f90-ts-break-line)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
-         ("A-\\"          . #'f90-ts-enlarge-region)
-         ("A-0"           . #'f90-ts-child0-region)
-         ("A-["           . #'f90-ts-prev-region)
-         ("A-]"           . #'f90-ts-next-region)))
+         ("A-\\"          . #'f90-ts-mark-region-enlarge)
+         ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
+         ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
+         ("A-{"           . #'f90-ts-mark-region-first-sibling)
+         ("A-["           . #'f90-ts-mark-region-prev-sibling)
+         ("A-]"           . #'f90-ts-mark-region-next-sibling)
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
 ```
 
 #### Testing module
@@ -247,16 +255,18 @@ The popup is defined as `f90-ts-transient` and covers:
 | Section                   | Keys                            | Commands                                        |
 |---------------------------|---------------------------------|-------------------------------------------------|
 | **Indentation**           | `TAB` `s` `I` `E`               | Indent line / statement / region / smart end    |
-| **Line editing**          | `RET` `j` `J`                   | Break line, join with prev/next                 |
+| **Line editing**          | `b` `j` `J`                     | Break line, join with prev/next                 |
+| **Mark region**           | `r` `0` `9`                     | Enlarge, first and last,                        |
+|                           | `{`,`[` `]`,`}`                 | first, prev, next and last sibling              |
 | **Comment region**        | `c` `C`                         | Default and custom prefix                       |
 | **Structural navigation** | `a` `e` `p` `n`                 | Procedure (beginning, end, prev, next)          |
 |                           | `M-a` `M-e` `M-p` `M-n`         | Type (beginning, end, prev, next)               |
 |                           | `C-M-a` `C-M-e` `C-M-p` `C-M-n` | Interface (beginning, end, prev, next)          |
-| **Region**                | `r` `0` `[` `]`                 | Enlarge, child-0, prev, next                    |
 | **Xref**                  | `.` `,` `/` `<` `>`             | Definitions, references, apropos, back, forward |
-| **Navigation side panel** | `b` `f`                         | Open and focus nav buffer                       |
+| **Navigation side panel** (alpha!) | `B` `F`                | Open and focus nav buffer                       |
 
-The entire popup can be bound to a different prefix by:
+The entire transient popup can be bound to a different prefix with a use-package statement
+in the `:bind` section as shown above, or simply by:
 
 ```elisp
 (define-key f90-ts-mode-map "..." #'f90-ts-transient)
@@ -267,17 +277,23 @@ The entire popup can be bound to a different prefix by:
 ## Features
 (with inspiration from the legacy f90 mode in emacs)
 
+- Almost all statements up to F2023
 - Syntax highlighting (font lock faces)
 - Indentation of lines, regions, multiline statements and structure blocks
+- Alignment for multiline statements with rotation and other options
 - Smart end completion
-- Break lines with automatic continuation and comment starters for comment lines
-- Join lines
-- Comment region operations with configurable prefixes and indentation rules
-- Mark regions based on tree-sitter nodes
+- Configurable leading ampersand and statement label positions
+- Break line with automatic continuation and comment starters for comment lines
+- Join with previous and next line
+- (Un)commenting regions with configurable prefixes and indentation rules
+- Special comments like doc strings and separators
+  (syntax highlighting and indentation options)
+- Keyword highlighting in comments (like TODO, Remark etc.)
 - OpenMP and preprocessor directives
 - Coarray keywords and statements
-- `Imenu` and a `Fortran` menu in the menu bar
-- Navigation (defun, things, Xref, tree as submenu and as side panel buffer)
+- Region selection based on tree-sitter nodes
+- Imenu and a Fortran menu in the menu bar
+- Navigation (defun, things, Xref, side panel tree)
 
 
 
@@ -527,6 +543,26 @@ Keybindings in the navigation buffer:
 Note: the navigation buffer is still missing some features to be really useful.
 
 
+### Comment prefix
+
+Various operations, in particular break, join, fill and mark operations require to match and extract
+comment prefixes.
+The comment prefix is found by regexp `f90-ts-comment-prefix-regexp` in combination with separator
+`f90-ts-comment-prefix-separator-regexp`, which can be customized if necessary.
+
+To be precise the comment prefix is matched and extracted by match groups 1, 2 or 3 of
+```elisp
+  (concat "^\\(?:"
+          "\\(" f90-ts-openmp-prefix-regexp "\\)\\(?:\\s-\\|$\\)"
+          "\\|\\(" f90-ts-comment-prefix-regexp "\\)"
+          (when f90-ts-comment-prefix-separator-regexp
+            (concat "\\(?:" f90-ts-comment-prefix-separator-regexp "\\|$\\)"))
+          ;; if nothing matches, then extract the leading comment starter
+          "\\|\\(!\\)"
+          "\\)"))
+```
+where the single `!` is always matched to cover all not yet matched prefixes.
+
 
 ### Breaking and joining lines
 
@@ -543,10 +579,9 @@ These operations are inspired by the legacy f90 mode, but behave a bit different
 #### Breaking lines
 
 The function `f90-ts-break-line` breaks the current line at point and adds continuation symbols.
-If the current line is a comment,
-then the comment starter (like '!>', '!<' or similar) is extracted, including indentation offset after the
-comment starter, and inserted into the new line to continue the comment.
-The comment starter is found by regexp `f90-ts-comment-prefix-regexp`, which can be customized if necessary.
+If the current line is a comment, then the comment prefix (like '!>', '!<' or similar) is extracted,
+including indentation offset after the comment prefix, and inserted into the new line to continue the comment.
+See [Comment prefix](#comment-prefix) for details.
 
 Whether a leading ampersand at the start of the new line is inserted is controlled by option
 `f90-ts-leading-ampersand`.
@@ -554,28 +589,65 @@ Whether a leading ampersand at the start of the new line is inserted is controll
 
 #### Joining lines
 
-Two consecutive lines connected by continuation symbol `&` can be joined by
-`f90-ts-join-line-prev` and `f90-ts-join-line-next`.
-The ampersand(s) in between are removed.
-One whitespace character is left after putting the second line at the end of the first line.
+Consecutive lines can be joined by `f90-ts-join-line-prev` and `f90-ts-join-line-next`
+under various circumstances, which are:
+
+- two consecutive lines connected by continuation symbol `&`.
+- some statement followed by empty line(s) (join-line-prev)
+- empty line(s) followed by some statement (join-line-next)
+- comments with the same comment prefix (see [Comment prefix](#comment-prefix) for details)
+- comment after a continued line (join-line-prev)
+- continued line followed by a comment (join-line-next)
+- continued string
+
+The ampersand(s) or comment prefixes in between are removed, where necessary, adding
+one whitespace character where applicable.
 
 If there are empty lines, then only the empty lines are removed, without joining the lines.
-A second join operation can be used to actually join the lines. 
-
-If there are comments at end of first line or in between the two lines, joining is not possible,
-as it is not quite clear what should be done with such comments.
-
-If point is on an empty line (not necessarily within a continued statement),
-then previous (prev variant) or subsequent (next variant) empty lines are removed,
-but nothing is joined in any case.
-
-The `prev` variant joins current line with previous (non-empty) line.
-The `next` variant joins current line with next (non-empty) line.
+A second join operation can be used to actually join the lines.
 
 Current limitations are:
 * Comments within string literals are not supported by the tree-sitter grammar itself.
 Thus joining such strings is not possible anyway. Continued strings can be joined.
 * Joining of openmp statements is not yet implemented.
+
+
+### Fill lines and regions
+
+The mode provides filling and rebalancing operations. It breaks overlong lines (exceeding `fill-column`)
+and joins continued lines or comments with matching prefix where possible to rebalance the code and
+fill up the column space as much as possible.
+
+
+#### Fill Operations
+
+These operations can be accessed via the transient popup (`C-c C-f`) under the **Fill/Rebalance** section:
+
+* `f` (`f90-ts-fill-region`): Fills the active region. If no region is active, it processes the entire buffer.
+* `M-f` (`f90-ts-fill-at-line`): Breaks and joins the current line at point.
+* `M-j` (`f90-ts-fill-prev-line`): Fills the current line and the previous line.
+* `M-J` (`f90-ts-fill-next-line`): Fills the current line and the next line.
+
+
+#### Breakpoint Selection
+When a line exceeds the target `fill-column`, the fill function must decide where to safely split the statement or comment.
+This behavior is controlled by the customizable variable `f90-ts-fill-select-breakpoint-by`, which offers two modes:
+
+* `rightmost`: (default) Automatically picks the rightmost eligible break point before the `fill-column` limit.
+                It avoids breaking at awkward positions (like immediately before an opening parenthesis or within
+                a `%` component selection) unless strictly necessary.
+* `interactive`: Pauses the fill operation and allows to manually rotate through possible valid breakpoints
+                 using an interactive break and join session. The mode allows to break lines beyond fill-column.
+    * `left`, `right`, `home`, `end`, `C-p` and `C-n` to walk through breakpoints with the cursor.
+    * `RET` to confirm the break.
+    * `BACKSPACE` to perform a normal join with the previous line.
+    * `DEL` to perform a normal a normal join with the next line.
+    * `SPC` to skip and possibly extend the fill region by one non-empty line to continue with rebalancing.
+    * `q` to skip the line and keep as is.
+    * `C-g` to abort the fill session.
+
+Remark: The current `fill-column` and breakpoint selection method can be overwritten on the fly
+using `C-f` and `C-b` inside the transient menu.
 
 
 ### Comment region
@@ -606,15 +678,30 @@ any blanks to keep original indentation of commented code.
 
 ### Mark region based on tree-sitter nodes
 
-Regions can be selected, enlarged, shrunk or moved based on tree-sitter nodes.
+Marked regions can be selected, enlarged, shrunk or moved based on the tree-sitter node structure.
+Defcustom variable `f90-ts-mark-region-order' can be used to configure whether the point after
+a marked region operation should be placed at start, at end or if order of active region should
+be preserved (defaulting to end position if no active region is present).
+
+Blocks of nodes of the same kind are grouped and and dealt with like
+the block would be represented by a node in the tree (which they are not).
+Currently comments with the same comment prefix are recognised (see [Comment prefix](#comment-prefix)).
+(Other groups like use statements or public statements could be added in the future.)
+
+Identifying comments with the same comment prefix and including those in mark region operations
+is particularly useful in conjunction with comment region operations.
+
 Key bindings are provided in the transient popup (`C-c C-f`) under the Region section:
 
-| Function                         | Popup key | Description                                                              |
-|----------------------------------|-----------|--------------------------------------------------------------------------|
-| `f90-ts-enlarge-region`          | `r`       | Find smallest parent node of existing region which is strictly larger    |
-| `f90-ts-child0-region`           | `0`       | Reduce existing region to a first (grand)child which is strictly smaller |
-| `f90-ts-prev-region`             | `[`       | Move selected region to previous sibling                                 |
-| `f90-ts-next-region`             | `]`       | Move selected region to next sibling                                     |
+| Function                                | Popup key | Description                                                              |
+|-----------------------------------------|-----------|--------------------------------------------------------------------------|
+| `f90-ts-mark-region-enlarge`            | `r`       | Find smallest parent node of existing region which is strictly larger    |
+| `f90-ts-mark-region-shrink-child-first` | `0`       | Shrink region to a first (grand)child which is strictly smaller          |
+| `f90-ts-mark-region-shrink-child-last`  | `9`       | Shrink region to a last (grand)child which is strictly smaller           |
+| `f90-ts-mark-region-first-sibling`      | `{`       | Move selected region to first sibling                                    |
+| `f90-ts-mark-region-prev-sibling`       | `[`       | Move selected region to previous sibling                                 |
+| `f90-ts-mark-region-next-sibling`       | `]`       | Move selected region to next sibling                                     |
+| `f90-ts-mark-region-last-sibling`       | `}`       | Move selected region to last sibling                                     |
 
 
 ## Development and Testing
