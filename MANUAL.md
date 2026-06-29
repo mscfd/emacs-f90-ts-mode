@@ -35,6 +35,7 @@ for implementation.
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
+  - [Fill lines and regions(#fill-lines-and-regions)
   - [Comment region](#comment-region)
   - [Mark regions based on tree-sitter nodes](#mark-regions-based-on-tree-sitter-nodes)
 - [Development and Testing](#development-and-testing)
@@ -609,6 +610,44 @@ Current limitations are:
 * Comments within string literals are not supported by the tree-sitter grammar itself.
 Thus joining such strings is not possible anyway. Continued strings can be joined.
 * Joining of openmp statements is not yet implemented.
+
+
+### Fill lines and regions
+
+The mode provides filling and rebalancing operations. It breaks overlong lines (exceeding `fill-column`)
+and joins continued lines or comments with matching prefix where possible to rebalance the code and
+fill up the column space as much as possible.
+
+
+#### Fill Operations
+
+These operations can be accessed via the transient popup (`C-c C-f`) under the **Fill/Rebalance** section:
+
+* `f` (`f90-ts-fill-region`): Fills the active region. If no region is active, it processes the entire buffer.
+* `M-f` (`f90-ts-fill-at-line`): Breaks and joins the current line at point.
+* `M-j` (`f90-ts-fill-prev-line`): Fills the current line and the previous line.
+* `M-J` (`f90-ts-fill-next-line`): Fills the current line and the next line.
+
+
+#### Breakpoint Selection
+When a line exceeds the target `fill-column`, the fill function must decide where to safely split the statement or comment.
+This behavior is controlled by the customizable variable `f90-ts-fill-select-breakpoint-by`, which offers two modes:
+
+* `rightmost`: (default) Automatically picks the rightmost eligible break point before the `fill-column` limit.
+                It avoids breaking at awkward positions (like immediately before an opening parenthesis or within
+                a `%` component selection) unless strictly necessary.
+* `interactive`: Pauses the fill operation and allows to manually rotate through possible valid breakpoints
+                 using an interactive break and join session. The mode allows to break lines beyond fill-column.
+    * `left`, `right`, `home`, `end`, `C-p` and `C-n` to walk through breakpoints with the cursor.
+    * `RET` to confirm the break.
+    * `BACKSPACE` to perform a normal join with the previous line.
+    * `DEL` to perform a normal a normal join with the next line.
+    * `SPC` to skip and possibly extend the fill region by one non-empty line to continue with rebalancing.
+    * `q` to skip the line and keep as is.
+    * `C-g` to abort the fill session.
+
+Remark: The current `fill-column` and breakpoint selection method can be overwritten on the fly
+using `C-f` and `C-b` inside the transient menu.
 
 
 ### Comment region

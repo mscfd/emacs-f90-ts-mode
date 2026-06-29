@@ -6,7 +6,7 @@
 ;; Maintainer: Martin Stein <mscfd@gmx.net>
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
 ;; Keywords: languages, treesitter, fortran
-;; Version: 0.2.3pre
+;; Version: 0.3.0
 ;; Package-Requires: ((emacs "30.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -32,6 +32,7 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Recently changed, added or improved:
+;;   [06-2026] Fill line and region operations added.
 ;;   [06-2026] Defcustom group f90-ts-comment added.
 ;;   [06-2026] Indentation of lines after a structure beginning line with
 ;;             statement label fixed.
@@ -41,6 +42,7 @@
 ;;             removed from the defcustom definitions and added as
 ;;             `f90-ts-comment-prefix-separator-regexp'.  If the regexp
 ;;             variables have been customized, please adjust.
+;;   [06-2026] Mark region operations complemented
 ;;
 ;; Features:
 ;;   - Almost all statements up to F2023
@@ -49,7 +51,9 @@
 ;;   - Alignment for multiline statements with rotation and other options
 ;;   - Smart end completion
 ;;   - Configurable leading ampersand and statement label positions
-;;   - Breaking and joining continued lines
+;;   - Breaking and joining of continued lines
+;;   - Filling and rebalancing of lines or regions (with rightmost breakpoint
+;;     selection or interactive break and join session)
 ;;   - (Un)commenting regions with configurable prefixes and indentation rules
 ;;   - Special comments like doc strings and separators
 ;;     (syntax highlighting and indentation options)
@@ -479,6 +483,18 @@ defaulting to end of region if there is no active region present."
   :group 'f90-ts)
 
 
+(defcustom f90-ts-fill-select-breakpoint-by 'rightmost
+  "How to select the break point when filling a Fortran line.
+- rightmost:   automatically pick the rightmost eligible break point.
+- interactive: rotate through possible break points with left/right or
+               \\[previous-line]/\\[next-line], confirming with RET.
+               Start at previous break point if there was one."
+  :type '(choice (const :tag "Rightmost" rightmost)
+                 (const :tag "Interactive" interactive))
+  :safe (lambda (v) (memq v '(rightmost interactive)))
+  :group 'f90-ts)
+
+
 (defcustom f90-ts-menu-show-navigate t
   "Show navigate submenu in fortran menu if non-nil.
 For large source files, the menu might not be useful and reduce performance."
@@ -499,8 +515,8 @@ For matching identifiers the face `f90-ts-font-lock-special-var' is used."
 (defcustom f90-ts-comment-prefix-regexp "!\\S-*"
   "Regular expression for matching and capturing comment starts.
 Together with `f90-ts-comment-prefix-separator-regexp', this is used to extract
-the comment prefix for `f90-ts-break-line', `f90-ts-join-line-prev' and
-`f90-ts-join-line-next' operations.
+the comment prefix for `f90-ts-break-line', `f90-ts-join-line-prev',
+`f90-ts-join-line-next' and various fill operations.
 OpenMP prefix is matched by `f90-ts-openmp-prefix-regexp'.
 
 Note: do *NOT* use capturing groups in the regular expression, otherwise
@@ -561,7 +577,7 @@ in the string."
   "Keep indentation in comment region operation when inserting comment prefix.
 If nil, just insert the prefix.  If non-nil, remove blanks up to length of
 prefix before commented command starts.  This preserves the original
-indentation if possible."
+indentation."
   :type  'boolean
   :safe  #'booleanp
   :group 'f90-ts-comment)
@@ -733,6 +749,29 @@ seem to make much sense."
   "Keymap for `f90-ts-mode'.")
 
 
+(transient-define-infix f90-ts-transient--fill-column ()
+  "Transient infix for fill column override."
+  :class    'transient-lisp-variable
+  :variable 'fill-column
+  :prompt   "Fill column: "
+  :reader   (lambda (prompt initial _history)
+               (read-number prompt initial)))
+
+
+(transient-define-suffix f90-ts-transient--fill-select-breakpoint-by ()
+  "Toggle breakpoint selection between `rightmost' and `interactive'."
+  :transient t
+  :description (lambda ()
+                 (concat "Fill column select by: "
+                         (propertize (symbol-name f90-ts-fill-select-breakpoint-by)
+                                     'face 'transient-value)))
+  (interactive)
+  (setq f90-ts-fill-select-breakpoint-by
+        (if (eq f90-ts-fill-select-breakpoint-by 'interactive)
+            'rightmost
+          'interactive)))
+
+
 (transient-define-prefix f90-ts-transient ()
   "F90 Tree-sitter Mode."
   ;; Modify
@@ -753,7 +792,14 @@ seem to make much sense."
     ("]"   "Next sibling"               f90-ts-mark-region-next-sibling)
     ("}"   "Last sibling"               f90-ts-mark-region-last-sibling)
     ("c"   "Comment region (default)"   f90-ts-comment-region-default)
-    ("C"   "Comment region (custom)"    f90-ts-comment-region-custom)]]
+    ("C"   "Comment region (custom)"    f90-ts-comment-region-custom)]
+   ["Fill/Rebalance"
+    ("C-f" "Fill column"                f90-ts-transient--fill-column)
+    ("C-b"                              f90-ts-transient--fill-select-breakpoint-by) ; text is in description slot
+    ("f"   "Fill region/buffer"         f90-ts-fill-region)
+    ("M-f" "Fill at line"               f90-ts-fill-at-line)
+    ("M-j" "Fill with prev line"        f90-ts-fill-prev-line)
+    ("M-J" "Fill with next line"        f90-ts-fill-next-line)]]
 
   ;; Navigate
   [["Procedure"
@@ -940,6 +986,41 @@ located, otherwise return line number of current point position."
     (point)))
 
 
+(defun f90-ts--empty-comment-node-p (node)
+  "Return non-nil if comment NODE has no content after its prefix."
+  (and (f90-ts--node-type-p node "comment")
+       (null (f90-ts--comment-content node))))
+
+
+(defun f90-ts--line-empty-p (pos)
+  "Return non-nil if the line at POS is empty or has only blanks."
+  (save-excursion
+    (goto-char pos)
+    (looking-at-p "^[ \t]*$")))
+
+
+(defun f90-ts--next-line-empty-p (pos)
+  "Return non-nil if the next line to POS is empty or has only blanks."
+  (save-excursion
+    (goto-char pos)
+    (and (zerop (forward-line 1))
+         (f90-ts--line-empty-p (point)))))
+
+
+(defun f90-ts--line-empty-comment-p (pos)
+  "Return non-nil if the line at POS has an empty comment node."
+  (f90-ts--empty-comment-node-p
+   (f90-ts--node-at-indent-pos pos)))
+
+
+(defun f90-ts--next-line-empty-comment-p (pos)
+  "Return non-nil if the next line after POS has an empty comment node."
+  (save-excursion
+    (goto-char pos)
+    (when (zerop (forward-line 1))
+      (f90-ts--line-empty-comment-p (point)))))
+
+
 (defun f90-ts--region-trimmed ()
   "Return (BEG . END) of trimmed active region.
 The trimming removes leading and trailing whitespace."
@@ -1027,7 +1108,11 @@ is matched by TYPE-RX."
   "Return the combined comment and openmp prefix regexp.
 The returned regexp also captures trailing blanks, which serves as an assertion
 that the prefix is properly separated by a blank.  If accessing the captured
-prefix, match group 1 needs to be used."
+prefix, match group 1 needs to be used.
+
+Note: this regexp cannot be used to match directly in the buffer, as it uses
+an anchor to match only at start of a comment.  It is intended to be used on
+the text of a comment node."
   ;; first match openmp as comment prefix might just take the initial ! and
   ;; ignore the following $omp part in openmp statements
   (concat "^\\(?:"
@@ -1065,7 +1150,7 @@ and `f90-ts-comment-prefix-regexp' to identify the prefix to extract.
 If TRIM is `with-blanks', trailing blanks are included in the returned prefix.
 If TRIM is `trimmed', only the matched prefix is returned."
   (cl-assert (f90-ts--node-type-p node "comment")
-             nil "comment-prefix: comment node expected")
+             nil "comment node expected")
   (cl-assert (memq trim '(with-blanks trimmed)) nil "argument trim has invalid value, got %s" trim)
   (let* ((text (treesit-node-text node))
          (prefix (f90-ts--match-comment-omp-prefix text)))
@@ -1103,13 +1188,14 @@ and `f90-ts-comment-prefix-regexp' to identify the prefix to extract."
   ;; first match openmp as comment prefix would just take the initial ! and ignoring
   ;; following $omp part in openmp statements
   (let ((start (treesit-node-start node))
-        (end (treesit-node-end node)))
-    (goto-char start)
-    (re-search-forward (f90-ts--comment-omp-prefix-regexp)
-                       end t)
-    ;; rx-comment contains trailing blanks as an assertion, skip-backwards
-    ;; to end of comment prefix
-    (skip-chars-backward " \t")))
+        (text (treesit-node-text node)))
+    (if (string-match (f90-ts--comment-omp-prefix-regexp) text)
+        (progn
+          (goto-char (+ start (match-end 0)))
+          (skip-chars-backward " \t"))
+      (cl-assert nil nil "failed to match comment prefix")
+      ;; skip the leading comment starter
+      (goto-char (1+ start)))))
 
 
 (defun f90-ts--node-special-var-p (node)
@@ -3565,8 +3651,8 @@ ITEMS-PLIST is the plist collection of items lists."
                 (+ start-lead offset-lead))
              (progn
                (as-primary indent-at-lead f90-ts-indent-continued)
-               (collect  start-lead offset-lead))
-           (collect  indent-at-lead f90-ts-indent-continued)
+               (collect start-lead offset-lead))
+           (collect indent-at-lead f90-ts-indent-continued)
            (as-primary start-lead offset-lead)))
 
        ;; ensure both positions are always present in the result list
@@ -5186,6 +5272,34 @@ completion for a region, like indent-stmt operations on an end struct line."
 ;;; region indentation:
 ;;;  * f90-ts-indent-and-complete-region
 
+(defconst f90-ts--join-line-prev-valid-actions
+  '(empty-line
+    beg-of-buffer
+    remove-blank-lines-between
+    join-continued-lines
+    join-continued-string
+    join-comments-same-prefix-trimmed
+    join-comments-same-prefix-with-blanks
+    append-comment-after-amp
+    append-comment-after-stmt
+    failed-comment-within-string)
+  "All valid action symbols returned by `f90-ts--join-line-prev-aux'.")
+
+
+(defconst f90-ts--join-line-next-valid-actions
+  '(empty-line
+    end-of-buffer
+    remove-blank-lines-between
+    join-continued-lines
+    join-continued-string
+    join-comments-same-prefix-trimmed
+    join-comments-same-prefix-with-blanks
+    append-comment-after-amp
+    append-comment-after-stmt
+    failed-comment-within-string)
+  "All valid action symbols returned by `f90-ts--join-line-next-aux'.")
+
+
 (defun f90-ts-indent-and-complete-line ()
   "Indent and apply smart end completion to current line.
 This is the default function for indent and smart complete of end lines,
@@ -5411,7 +5525,7 @@ After the operation point is after the last character on the non-blank line."
   (cl-assert (f90-ts--point-on-empty-line-p)
              nil "join-line-empty-prev requires point to be on an empty line")
   (let* ((prev (save-excursion
-                 (skip-chars-backward "[ \t\n]")
+                 (skip-chars-backward " \t\n")
                  (point)))
          (end (line-end-position)))
     (delete-region prev end)))
@@ -5423,93 +5537,11 @@ Move point to first character on the line after it was originally placed."
   (cl-assert (f90-ts--point-on-empty-line-p)
              nil "join-line-empty-next requires point to be on an empty line")
   (let* ((next (save-excursion
-                 (skip-chars-forward "[ \t\n]")
+                 (skip-chars-forward " \t\n")
                  (line-beginning-position)))
          (beg (line-beginning-position)))
     (delete-region beg next)
     (back-to-indentation)))
-
-
-(defun f90-ts--join-line-aux (first secnd is-prev)
-  "Join lines between nodes FIRST and SECND.
-For continued lines without comments in between, FIRST and SECND are the two
-ampersand nodes (FIRST at end of line, SECND at beginning of next non-empty
-line).  This function joins the two lines where FIRST and SECND are located,
-and removes any empty lines in-between.
-
-If IS-PREV is non-nil, then this is called from `f90-ts-join-line-prev',
-otherwise from `f90-ts-join-line-next.'  This is used to place point after
-deleting intermediate empty lines or if nothing can be joined."
-  ;; note: due to comments and empty lines, a simple forward-line or backward-line
-  ;; does not seem possible easily, instead reconstruct the (&, comment*, &)
-  ;; sequence of nodes and use it for navigation and changes
-  (let* ((is-amp-1st (f90-ts--node-type-p first "&"))
-         (is-amp-2nd (f90-ts--node-type-p secnd "&"))
-         (is-comment-1st (f90-ts--node-type-p first "comment"))
-         (is-comment-2nd (f90-ts--node-type-p secnd "comment")))
-    (cl-destructuring-bind (beg end post)
-        (cond
-         ((and is-amp-1st is-amp-2nd)
-          ;; chose start and end positions such that the two ampersand are
-          ;; removed as well
-          (list (treesit-node-start first)
-                (treesit-node-end secnd)
-                (lambda ()
-                  (fixup-whitespace)
-                  (skip-chars-forward "[ \t]"))))
-
-         ((and is-amp-1st is-comment-2nd)
-          ;; append comment after ampersand
-          (list (treesit-node-end first)
-                (treesit-node-start secnd)
-                (lambda () (insert " "))))
-
-         ((and is-comment-1st
-               is-comment-2nd
-               (string= (f90-ts--comment-prefix first 'trimmed)
-                        (f90-ts--comment-prefix secnd 'trimmed)))
-          ;; two comments with same comment prefix, join comments
-          (list (save-excursion
-                  ;; if the first comment has trailing blanks, remove them
-                  (goto-char (treesit-node-end first))
-                  (skip-chars-backward "[ \t]")
-                  (point))
-                (+ (treesit-node-start secnd)
-                   ;; if the second has leading blanks, remove them
-                   (length (f90-ts--comment-prefix secnd 'with-blanks)))
-                (lambda () (insert " "))))
-
-         ((and (null is-comment-1st)
-               is-comment-2nd)
-          ;; some command and a comment, append comment
-          (list (save-excursion
-                  ;; if the node end position does not correspond with last non-blank characters
-                  ;; (can happen for comments, but any other node, maybe), remove trailing blanks
-                  (goto-char (treesit-node-end first))
-                  (skip-chars-backward "[ \t]")
-                  (point))
-                (treesit-node-start secnd)
-                (lambda () (insert " "))))
-
-         (t
-          ;; only delete intermediate empty lines
-          (list (save-excursion
-                  (goto-char (treesit-node-end first))
-                  (line-beginning-position 2))
-                (save-excursion
-                  (goto-char (treesit-node-start secnd))
-                  (line-beginning-position))
-                (lambda () (if is-prev
-                               (skip-chars-forward "[ \t]")
-                               (skip-chars-backward "[ \t\n]"))))))
-
-      (if (and beg end)
-          (progn
-            (delete-region beg end)
-            (goto-char beg)
-            (when post
-              (funcall post)))
-        (message "join failed: joining not possible")))))
 
 
 (defun f90-ts--join-line-string (node pos1 pos2)
@@ -5528,27 +5560,116 @@ Positions POS1 and POS2 are end of previous line and start of current line."
     (goto-char beg)))
 
 
-(defun f90-ts-join-line-prev ()
+(defun f90-ts--join-line-action-common (first secnd is-prev)
+  "Compute an action pair for joining lines at FIRST and SECND.
+The pair (THUNK . ACTION) provides a THUNK to perform the join and an ACTION
+symbol describing what is done.
+
+The ACTION symbol is used by the caller to decide whether to execute the thunk,
+for example in a `fill-region' loop context.
+
+Argument IS-PREV signals whether the function was called from the
+`join-line-prev' or the `join-line-next' function."
+  (let ((is-amp-1st     (f90-ts--node-type-p first "&"))
+        (is-amp-2nd     (f90-ts--node-type-p secnd "&"))
+        (is-comment-1st (f90-ts--node-type-p first "comment"))
+        (is-comment-2nd (f90-ts--node-type-p secnd "comment")))
+    (cond
+     ((and is-amp-1st
+           is-amp-2nd)
+      (let ((beg (treesit-node-start first))
+            (end (treesit-node-end secnd)))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (fixup-whitespace)
+                (skip-chars-forward " \t"))
+              'join-continued-lines)))
+
+     ((and is-amp-1st
+           is-comment-2nd)
+      (let ((beg (treesit-node-end first))
+            (end (treesit-node-start secnd)))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (insert " "))
+              'append-comment-after-amp)))
+
+     ((and is-comment-1st
+           is-comment-2nd
+           (string= (f90-ts--comment-prefix first 'trimmed)
+                    (f90-ts--comment-prefix secnd 'trimmed)))
+      (let ((beg (save-excursion
+                   (goto-char (treesit-node-end first))
+                   (skip-chars-backward " \t")
+                   (point)))
+            (end (+ (treesit-node-start secnd)
+                    (length (f90-ts--comment-prefix secnd 'with-blanks)))))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (insert " "))
+              ;; join and fill operation behave differently: do not join in
+              ;; fill operation, if indentation is different, so signal whether
+              ;; prefixes including blanks or only trimmed
+              (if (string= (f90-ts--comment-prefix first 'with-blanks)
+                           (f90-ts--comment-prefix secnd 'with-blanks))
+                  'join-comments-same-prefix-with-blanks
+                'join-comments-same-prefix-trimmed))))
+
+     ((and (null is-comment-1st)
+           is-comment-2nd)
+      (let ((beg (save-excursion
+                   (goto-char (treesit-node-end first))
+                   (skip-chars-backward " \t")
+                   (point)))
+            (end (treesit-node-start secnd)))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (insert " "))
+              'append-comment-after-stmt)))
+
+     (t
+      (let ((beg (save-excursion
+                   (goto-char (treesit-node-end first))
+                   (line-beginning-position 2)))
+            (end (save-excursion
+                   (goto-char (treesit-node-start secnd))
+                   (line-beginning-position))))
+        (cons (lambda ()
+                (delete-region beg end)
+                (goto-char beg)
+                (if is-prev
+                    (skip-chars-forward " \t")
+                  (skip-chars-backward " \t\n")))
+              'remove-blank-lines-between))))))
+
+
+(defun f90-ts--join-line-prev-aux ()
   "Join previous line with the current one, if part of a continued statement.
-This is (partially) a counterpart to `f90-ts-break-line'.
-If previous line has comments (at end, next line etc.) joining is not done."
-  (interactive)
+Returns a cons (THUNK . ACTION); the caller is responsible for executing
+THUNK and for messaging on failure."
   (cond
    ((f90-ts--point-on-empty-line-p)
-    (f90-ts--join-line-empty-prev))
+    (cons (lambda () (f90-ts--join-line-empty-prev))
+          'empty-line))
+
    ((save-excursion
       (back-to-indentation)
       (bobp))
-    ;; on first line and not empty, just move to beginning of line
-    (beginning-of-line))
+    (cons (lambda () (beginning-of-line))
+          'beg-of-buffer))
+
    (t
     (let* ((pos1 (save-excursion
                    (beginning-of-line)
-                   (skip-chars-backward "[ \t\n]")
+                   (skip-chars-backward " \t\n")
                    (point)))
            (pos2 (save-excursion
                    (beginning-of-line)
-                   (skip-chars-forward "[ \t\n]")
+                   (skip-chars-forward " \t\n")
                    (point)))
            (first (f90-ts--node-on-pos pos1 'left))
            (secnd (f90-ts--node-on-pos pos2 'right))
@@ -5563,8 +5684,6 @@ If previous line has comments (at end, next line etc.) joining is not done."
       (cl-assert (or (null first)
                      is-cont-str
                      (or (= pos1 (treesit-node-end first))
-                         ;; note that a comment might have trailing blanks, hence pos1
-                         ;; might differ from node end position
                          (and (f90-ts--node-type-p first "comment")
                               (string-blank-p (buffer-substring pos1 (treesit-node-end first))))))
                  nil "first node has wrong end position %s" first)
@@ -5572,46 +5691,63 @@ If previous line has comments (at end, next line etc.) joining is not done."
       (cl-assert (or (= pos2 (treesit-node-start secnd))
                      is-cont-str)
                  nil "secnd node has wrong start position")
-
       (cond
        (is-cont-str
-        ;; check that previous line is not a comment
-        ;; (within the string, not yet supported by tree-sitter grammar)
         (if (eq (char-before pos1) ?&)
-            ;; first and secnd are equal (established in is-cont-str)
-            (f90-ts--join-line-string first pos1 pos2)
-          (message "join failed: joining not possible (comment within string literal)")))
+            (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
+                  'join-continued-string)
+          (cons (lambda () (back-to-indentation))
+                'failed-comment-within-string)))
 
-      (first
-       (f90-ts--join-line-aux first secnd t))
+       (first
+        (f90-ts--join-line-action-common first secnd t))
 
-      (t
-       ;; all lines prior to point are empty, delete them
-       (back-to-indentation)
-       (delete-region pos1 (point))))))))
+       (t
+        (cons (lambda ()
+                (back-to-indentation)
+                (delete-region pos1 (point)))
+              'beg-of-buffer)))))))
 
 
-(defun f90-ts-join-line-next ()
-  "Join current line with the next one, if part of a continued statement.
+(defun f90-ts-join-line-prev ()
+  "Join previous line with the current one, if part of a continued statement.
 This is (partially) a counterpart to `f90-ts-break-line'.
-If continued line has comments (at end, next line etc.) joining is not done."
+If previous line has comments (at end, next line etc.) joining is not done."
   (interactive)
+  (let* ((pair (f90-ts--join-line-prev-aux))
+         (process-fn (car pair))
+         (action (cdr pair)))
+    (cl-assert (member action f90-ts--join-line-prev-valid-actions)
+               nil "invalid action from f90-ts--join-line-prev-aux, got %s" action)
+    (funcall process-fn)
+    (when (and (called-interactively-p 'interactive)
+               (eq action 'failed-comment-within-string))
+      (message "join failed: joining not possible"))))
+
+
+(defun f90-ts--join-line-next-aux ()
+  "Join current line with the next one, if part of a continued statement.
+Returns a cons (THUNK . ACTION); the caller is responsible for executing
+THUNK and for messaging on failure."
   (cond
    ((f90-ts--point-on-empty-line-p)
-    (f90-ts--join-line-empty-next))
+    (cons (lambda () (f90-ts--join-line-empty-next))
+          'empty-line))
+
    ((save-excursion
       (end-of-line)
       (eobp))
-    ;; on last line and not empty, just move to end of line
-    (end-of-line))
+    (cons (lambda () (end-of-line))
+          'end-of-buffer))
+
    (t
     (let* ((pos1 (save-excursion
                    (end-of-line)
-                   (skip-chars-backward "[ \t\n]")
+                   (skip-chars-backward " \t\n")
                    (point)))
            (pos2 (save-excursion
                    (end-of-line)
-                   (skip-chars-forward "[ \t\n]")
+                   (skip-chars-forward " \t\n")
                    (point)))
            (first (f90-ts--node-on-pos pos1 'left))
            (secnd (f90-ts--node-on-pos pos2 'right))
@@ -5624,36 +5760,748 @@ If continued line has comments (at end, next line etc.) joining is not done."
       (cl-assert first nil "first node is nil")
       (cl-assert (or (= pos1 (treesit-node-end first))
                      is-cont-str
-                     ;; note that a comment might have trailing blanks, hence pos1
-                     ;; might differ from node end position
                      (and (f90-ts--node-type-p first "comment")
                           (string-blank-p (buffer-substring pos1 (treesit-node-end first)))))
                  nil "first node has wrong end position")
-      ;; in contrast to join-line-prev, if there are only blank lines after point,
-      ;; pos2 is at point-max and secnd is the root node "translation_unit"
       (cl-assert secnd nil "secnd node is nil")
       (cl-assert (or (not (f90-ts--node-type-p secnd "translation_unit"))
                      (= pos2 (point-max)))
-                 nil "secnd node is translation_unit with with wrong pos2")
+                 nil "secnd node is translation_unit with wrong pos2")
       (cl-assert (or (f90-ts--node-type-p secnd "translation_unit")
                      is-cont-str
                      (= pos2 (treesit-node-start secnd)))
                  nil "secnd node has wrong start position")
       (cond
        ((f90-ts--node-type-p secnd "translation_unit")
-        ;; all lines after point are empty, delete them
-        (end-of-line)
-        (delete-region (point) pos2))
+        (cons (lambda ()
+                (end-of-line)
+                (delete-region (point) pos2))
+              'end-of-buffer))
 
        (is-cont-str
-        ;; check that previous line is not a comment
-        ;; (within the string, not yet supported by tree-sitter grammar)
         (if (eq (char-after pos2) ?&)
-            ;; first and secnd are equal (established in is-cont-str)
-            (f90-ts--join-line-string first pos1 pos2)
-          (message "join failed: joining not possible (comment within string literal)")))
+            (cons (lambda () (f90-ts--join-line-string first pos1 pos2))
+                  'join-continued-string)
+          (cons (lambda () (end-of-line))
+                'failed-comment-within-string)))
+
        (t
-        (f90-ts--join-line-aux first secnd nil)))))))
+        (f90-ts--join-line-action-common first secnd nil)))))))
+
+
+(defun f90-ts-join-line-next ()
+  "Join current line with the next one, if part of a continued statement.
+This is (partially) a counterpart to `f90-ts-break-line'.
+If continued line has comments (at end, next line etc.) joining is not done."
+  (interactive)
+  (let* ((pair (f90-ts--join-line-next-aux))
+         (process-fn (car pair))
+         (action (cdr pair)))
+    (cl-assert (member action f90-ts--join-line-next-valid-actions)
+               nil "invalid action from f90-ts--join-line-next-aux, got %s" action)
+    (funcall process-fn)
+    (when (and (called-interactively-p 'interactive)
+               (eq action 'failed-comment-within-string))
+      (message "join failed: joining not possible"))))
+
+
+;;;-----------------------------------------------------------------------------
+;;; fill operations
+;;; the code is inspired and partially copied from the f90-mode.el in emacs core
+
+(defconst f90-ts--join-line-fill-auto-actions
+  '(join-continued-lines
+    join-continued-string
+    join-comments-same-prefix-with-blanks)
+  "Set of join actions for non-interactive join during fill operations.
+It is a subset of `f90-ts--join-line-next-valid-actions'.")
+
+
+(defconst f90-ts--join-line-fill-interactive-actions
+  '(join-continued-lines
+    join-continued-string
+    join-comments-same-prefix-trimmed
+    join-comments-same-prefix-with-blanks
+    append-comment-after-amp
+    append-comment-after-stmt)
+  "Set of join actions for interactive join during fill operations.
+It is a subset of both `f90-ts--join-line-prev-valid-actions'
+and `f90-ts--join-line-next-valid-actions' and used for interactive join with
+previous and with next line.")
+
+
+(defvar-local f90-ts--breakpoint-seed-markers nil
+  "List of markers recording positions where continuation lines were joined.
+It has the format (cons POS-MARKER SEED-MARKERS), where pos-marker stores
+current point as preferred initial position, seed-markers are other seeds.
+The other seeds are populated by `f90-ts--join-line-fill' during the join
+phase and consumed by `f90-ts--find-breakpoint' during the subsequent break
+phase to choose initial interactive position in case pos-marker is not
+available.  Cleared after each statement is joined and broken up completely.")
+
+
+(defun f90-ts--breakpoint-seed-markers-reset ()
+  "Reset `f90-ts--breakpoint-seed-markers', invalidating all markers."
+  (when-let* ((m (car f90-ts--breakpoint-seed-markers)))
+    (set-marker m nil))
+  (cl-loop for m in (cdr f90-ts--breakpoint-seed-markers)
+           do (set-marker m nil))
+  (setq f90-ts--breakpoint-seed-markers (cons nil nil)))
+
+
+(defun f90-ts--seed-markers-pos-marker ()
+  "Return the pos-marker from `f90-ts--breakpoint-seed-markers', or nil."
+  (car f90-ts--breakpoint-seed-markers))
+
+
+(defun f90-ts--seed-markers-seeds ()
+  "Return the seed marker list from `f90-ts--breakpoint-seed-markers'."
+  (cdr f90-ts--breakpoint-seed-markers))
+
+
+(defun f90-ts--seed-markers-set-pos (pos)
+  "Set or update the pos-marker to POS in `f90-ts--breakpoint-seed-markers'."
+  (unless f90-ts--breakpoint-seed-markers
+    (setq f90-ts--breakpoint-seed-markers (cons nil nil)))
+  (if-let* ((m (car f90-ts--breakpoint-seed-markers)))
+      (set-marker m pos)
+    (setcar f90-ts--breakpoint-seed-markers (set-marker (make-marker) pos))))
+
+
+(defun f90-ts--seed-markers-push ()
+  "Push a seed marker at the current non-whitespace position.
+Skips backward over whitespace before recording the position.
+Does nothing if a seed marker at that position already exists."
+  (save-excursion
+    (skip-chars-backward " \t")
+    (let ((pos (point)))
+      (unless (cl-loop for m in (f90-ts--seed-markers-seeds)
+                       when (= (marker-position m) pos) return t)
+        (unless f90-ts--breakpoint-seed-markers
+          (setq f90-ts--breakpoint-seed-markers (cons nil nil)))
+        (push (copy-marker pos) (cdr f90-ts--breakpoint-seed-markers))))))
+
+
+(defun f90-ts--seed-markers-invalidate-pos ()
+  "Invalidate the pos-marker in `f90-ts--breakpoint-seed-markers'."
+  (when-let* ((m (car f90-ts--breakpoint-seed-markers)))
+    (set-marker m nil)
+    (setcar f90-ts--breakpoint-seed-markers nil)))
+
+
+(defun f90-ts--seed-markers-cleanup-before (pos)
+  "Discard seed markers at or before POS, keeping those beyond it."
+  (when f90-ts--breakpoint-seed-markers
+    (setcdr f90-ts--breakpoint-seed-markers
+            (cl-loop
+             for m in (f90-ts--seed-markers-seeds)
+             if (> (marker-position m) pos)
+             collect m
+             else do (set-marker m nil)))))
+
+
+(defun f90-ts--breakpoint-node-within-fill-col-p (node pos fill-col)
+  "Return non-nil if POS is within the effective fill column for NODE.
+If NODE is a comment, no continuation ampersand is added, so FILL-COL
+is compared directly.  Otherwise two characters are subtracted to
+account for the space and ampersand appended by the break operation."
+  (<= (f90-ts--column-number-at-pos pos)
+      (if (f90-ts--node-type-p node "comment")
+          fill-col
+        (- fill-col 2))))
+
+
+(defun f90-ts--breakpoint-pos-within-fill-col-p (pos fill-col)
+  "Return non-nil if POS is within the effective fill column.
+Depending on whether pos is within a statement or with a comment, FILL-COL
+needs to be adjusted.
+Like `f90-ts--breakpoint-node-within-fill-col-p', but queries the node at
+POS via `treesit-node-at'."
+  (f90-ts--breakpoint-node-within-fill-col-p (treesit-node-at pos) pos fill-col))
+
+
+(defun f90-ts--find-breakpoint-prefer-p (node)
+  "Decide whether the end point of NODE is a preferred breakpoint.
+If possible, certain positions, like directly left of a comma, opening
+parenthesis, before or after \"%\" in component selection should be avoided.
+This predicate is ignored in break point selection only if no break point can
+be found otherwise."
+  (let* ((pos-next (save-excursion
+                     (goto-char (treesit-node-end node))
+                     (skip-chars-forward " \t\n")
+                     (point)))
+         (node-next (when pos-next
+                    (treesit-node-at pos-next))))
+    (not (or
+          ;; do not split right before any of these delimiters
+          (f90-ts--node-type-p node-next '("," "(" "%"))
+          ;; do not split after this delimiter
+          (f90-ts--node-type-p node "%")))))
+
+
+(defun f90-ts--find-breakpoint-in-comment (node fill-col)
+  "Find all break positions inside comment NODE at column <= FILL-COL.
+Scan the comment text for word boundaries (whitespace preceded by a
+non-whitespace character) that fall within the fill budget.  The
+comment prefix (matched by `f90-ts-comment-prefix-regexp') is skipped
+before searching for break candidates.
+Returns a sorted list of buffer positions, or nil."
+  (let* ((end (f90-ts--node-end-trimmed node)))
+    (save-excursion
+      (f90-ts--comment-forward-prefix node)
+      (sort
+       (cl-loop
+        with prefix-end = (point)
+        while (re-search-forward "\\S-\\(\\s-+\\S-\\)" end t)
+        for pos = (match-beginning 1)
+        when (<= (f90-ts--column-number-at-pos pos) fill-col)
+        collect pos
+        into positions
+        finally return (if (eq f90-ts-fill-select-breakpoint-by 'interactive)
+                           (cons end (cons prefix-end positions))
+                         positions))
+       #'<))))
+
+
+(defun f90-ts--find-breakpoint-collect (sparse-tree)
+  "Collect all break-point positions from SPARSE-TREE.
+SPARSE-TREE is a cons of a list of position integers and a possibly empty list
+of children of the same format as SPARSE-TREE.
+It returns a sorted list of buffer positions of prospective breakpoints."
+  (let ((collected (cl-labels
+                       ((collect (tree)
+                          (when (consp tree)
+                            (append (car tree)
+                                    (seq-mapcat #'collect (cdr tree))))))
+                     (collect sparse-tree))))
+    (delete-dups
+     (sort collected #'<))))
+
+
+(defun f90-ts--find-breakpoints-for-node (node fill-col)
+  "Return a list of break positions for NODE before FILL-COL.
+In general, it returns the (trimmed) end position of the node as a
+singleton list, if the column is below (- FILL-COL 2).  Two is subtracted to
+account for a blank and the continuation symbol, which will be added by
+breaking at this position.  However, for comment nodes, there might be several
+prospective positions within the node.  These are collected by
+`f90-ts--find-breakpoint-in-comment'."
+  (if (f90-ts--node-type-p node "comment")
+      (f90-ts--find-breakpoint-in-comment node fill-col)
+    (let* ((pos (f90-ts--node-end-trimmed node)))
+      (when (f90-ts--breakpoint-node-within-fill-col-p node pos fill-col)
+        (list pos)))))
+
+
+(defun f90-ts--find-breakpoint-sparse-tree (root beg end fill-col &optional prefer-p)
+  "Return sparse tree of nodes, whose end position are possible breakpoints.
+Start at ROOT, which should be some node properly covering the line to be
+broken.
+
+Nodes are selected by their (trimmed) end position.  In particular, a node's
+end should be between BEG and END and sufficiently below FILL-COL (in general,
+two characers are required for the \" &\" continuation symbol.
+
+Predicate function PREFER-P can be be used additionally to other selection
+conditions to reduce the tree to only contain preferred break points."
+  ;; first map root to a sparse tree of prospective positions,
+  ;; then collect and sort the list
+  (treesit-induce-sparse-tree
+   root
+   (lambda (n)
+     (let* ((end-node (f90-ts--node-end-trimmed n)))
+       ;; only leaf nodes whose trimmed end falls on the
+       ;; current line, the column check is done in the process-fn
+       ;; function, as comment nodes need special care
+       (and (null (treesit-node-children n))
+            (<= beg end-node)
+            (<= end-node end)
+            (not (f90-ts--node-type-p n "&"))
+            (or (null prefer-p) (funcall prefer-p n)))))
+   (lambda (n) (f90-ts--find-breakpoints-for-node n fill-col))))
+
+
+(defun f90-ts--find-breakpoint-read-key (idx num-pos at-end)
+  "Read one key and return (IDX ACTION) for NUM-POS candidates.
+ACTION is nil to continue, or a symbol: `confirm', `join', `skip',
+`abort', `continue'.  AT-END controls whether SPC is is just a skip
+line operation or whether it extends the region by one line."
+  (let ((prompt (concat "Select break point: left/right/home/end or C-p/C-n, "
+                        "BACKSPACE/DEL join, RET confirm"
+                        (if at-end
+                            ", q skip, SPC skip and extend region"
+                          ", q/SPC skip")
+                        ", C-g abort")))
+    (message prompt))
+  (let ((key (read-key)))
+    (cond
+     ((or (eq key 'left)  (eq key ?\C-p)) (list (mod (1- idx) num-pos) nil))
+     ((or (eq key 'right) (eq key ?\C-n)) (list (mod (1+ idx) num-pos) nil))
+     ((eq key 'home)                      (list 0                      nil))
+     ((eq key 'end)                       (list (1- num-pos)           nil))
+     ((memq key '(return ?\r ?\n))        (list idx                    'confirm))
+     ((eq key ?\d)                        (list idx                    'join-prev))
+     ((eq key 'deletechar)                (list idx                    'join-next))
+     ((eq key ?q)                         (list idx                    'skip))
+     ((eq key ?\C-g)                      (list idx                    'abort))
+     ((eq key ?\s)                        (list idx                    (if at-end 'continue 'skip)))
+     ;; ignore any other keys, and keep idx
+     (t                                   (list idx                    nil)))))
+
+
+(defun f90-ts--find-breakpoint-initial-pos (positions fill-col)
+  "Return initial position for interactive breakpoint selection from POSITIONS.
+If the pos-marker in `f90-ts--breakpoint-seed-markers' is valid, return
+the closest candidate at or before it.  Otherwise, return the closest
+candidate at or before the rightmost seed marker within FILL-COL.
+If no seed markers are available, return the rightmost candidate within
+FILL-COL."
+  (or
+   ;; pos-marker: closest candidate at or before it
+   (when-let* ((m (f90-ts--seed-markers-pos-marker))
+               (ref (marker-position m)))
+     (cl-loop
+      for p in positions
+      when (<= p ref)
+      maximize p into best
+      finally return best))
+
+   ;; other seed-markers: rightmost marker within fill-col and then
+   ;;                     closest candidate at or before it
+   (when-let* ((ref (cl-loop
+                     for m in (f90-ts--seed-markers-seeds)
+                     for mpos = (marker-position m)
+                     when (and mpos
+                               (f90-ts--breakpoint-pos-within-fill-col-p mpos fill-col))
+                     maximize mpos into best
+                     finally return best)))
+     (cl-loop
+      for p in positions
+      when (<= p ref)
+      maximize p into best
+      finally return best))
+
+   ;; fallback: rightmost candidate in positions within fill-col
+   (cl-loop
+    for p in positions
+    when (f90-ts--breakpoint-pos-within-fill-col-p p fill-col)
+    maximize p into best
+    finally return best)))
+
+
+(defun f90-ts--find-breakpoint-interactive (positions fill-col allow-continue)
+  "Interactively select a break point from POSITIONS.
+Moves point to each candidate position as the user navigates with
+LEFT/RIGHT or \\[previous-line]/\\[next-line].  Returns the selected position
+on RET, or nil on \\[keyboard-quit].
+Use POSITIONS to determine a candidate closest to FILL-COL but before that.
+ALLOW-CONTINUE controls whether SPC is offered to extend the fill region.
+
+Remark: the `read-key' loop in `f90-ts--find-breakpoint-read-key' blocks other
+interaction (like scrolling in another buffer with mouse).  This might need
+some improvements."
+  (when-let* ((initial-pos (or (f90-ts--find-breakpoint-initial-pos positions fill-col)
+                               ;; no previous breakpoint available, then look into positions
+                               ;; before fill-col
+                               (cl-loop for p in positions
+                                        when (<= (f90-ts--column-number-at-pos p) fill-col)
+                                        maximize p)
+                               ;; use smallest position available as fallback
+                               (car positions)))
+              (idx (cl-position initial-pos positions))
+              (num-pos (length positions))
+              (orig-point (point))
+              (orig-cursor cursor-type))
+    (unwind-protect
+        (progn
+          ;; make cursor bar of roughly one third of character width
+          (setq cursor-type (cons 'bar (max 2 (/ (frame-char-width) 3))))
+          (goto-char (nth idx positions))
+          (cl-loop
+           for (new-idx action) = (f90-ts--find-breakpoint-read-key idx num-pos
+                                                                    allow-continue)
+           do (setq idx new-idx)
+           until action
+           do (goto-char (nth idx positions))
+           ;; track current position in pos-marker in seed-markers list
+           do (f90-ts--seed-markers-set-pos (point))
+           finally return (pcase action
+                            ;; return value nil signals that no position is available,
+                            ;; do not break this line
+                            ('confirm    (nth idx positions))
+                            ('join-prev  'join-prev)
+                            ('join-next  'join-next)
+                            ('skip       nil)
+                            ('abort      'abort)
+                            ('continue   'continue))))
+      (setq cursor-type orig-cursor)
+      (goto-char orig-point))))
+
+
+(defun f90-ts--find-breakpoints-all (fill-col fill-col-select)
+  "Collect all candidate break points on the current line.
+A break point is any end position of a leaf node on the current line,
+at column at most FILL-COL-SELECT minus 2 and beyond the estimated
+indentation of the continuation line.  FILL-COL is used to compute
+that indentation estimate.
+Returns a list of candidate POSITIONS.  First preferred positions are tried,
+and if nil, then all positions are determined.  If no positions exist,
+then it returns nil."
+  (let* ((beg (line-beginning-position))
+         (end (line-end-position))
+         ;; estimate the indentation of the line after breaking it, we need
+         ;; to make sure that the break point is before new indentation level
+         ;; TODO: what kind of estimate do we really need here??
+         ;; examples: single line statement, multiline statements, comments
+         ;;           statement with trailing comment, ...
+         (indent (save-excursion
+                   (back-to-indentation)
+                   (let ((node (treesit-node-at (point))))
+                     (+ (point)
+                        (cond
+                         ((f90-ts--subsequent-line-of-continued-stmt-p (point))
+                          1)
+                         ((f90-ts--node-type-p node "comment")
+                          0)
+                         (t
+                          f90-ts-indent-continued))))))
+         (root (treesit-node-on beg end))
+         (pos-prefer (f90-ts--find-breakpoint-collect
+                      (f90-ts--find-breakpoint-sparse-tree
+                       root indent end fill-col-select
+                       #'f90-ts--find-breakpoint-prefer-p)))
+         (positions (or pos-prefer
+                        (f90-ts--find-breakpoint-collect
+                         (f90-ts--find-breakpoint-sparse-tree
+                          root indent end fill-col-select)))))
+
+    (if (eq f90-ts-fill-select-breakpoint-by 'interactive)
+        ;; when we have pos-prefer but suggested breakpoint is not in positions, then add it
+        (let ((marker-pos (f90-ts--find-breakpoint-initial-pos pos-prefer fill-col)))
+          (if (and marker-pos (not (member marker-pos positions)))
+              (cl-sort (cons marker-pos positions) #'<)
+            positions))
+        positions)))
+
+
+(defun f90-ts--find-breakpoint (fill-col allow-continue)
+  "Find a break point on the current line.
+A break point is any end position of a leaf node on the current line and at
+column at most FILL-COL minus 2.  Returns the buffer position to break at,
+or nil if no suitable break point exists.
+
+The selection strategy is controlled by `f90-ts-fill-select-breakpoint-by'.
+
+For interactive selection, the rightmost marker in
+`f90-ts--breakpoint-seed-markers' that falls among the eligible positions is
+used as the initial suggestion.
+Interactive mode allows to select and break after FILL-COL.
+ALLOW-CONTINUE is passed to `f90-ts--find-breakpoint-interactive' to
+control whether SPC is offered to extend the fill region."
+  (when (or (> (f90-ts--column-number-at-pos (line-end-position)) fill-col)
+            (eq f90-ts-fill-select-breakpoint-by 'interactive))
+    (let* ((fill-col-select (if (eq f90-ts-fill-select-breakpoint-by 'interactive)
+                                most-positive-fixnum
+                              fill-col))
+           (positions (f90-ts--find-breakpoints-all fill-col fill-col-select)))
+      (when positions
+        (pcase f90-ts-fill-select-breakpoint-by
+          ('rightmost
+           (apply #'max positions))
+          ('interactive
+           (f90-ts--find-breakpoint-interactive positions
+                                                fill-col
+                                                allow-continue)))))))
+
+
+(defun f90-ts--break-line-wrap (fill-col allow-continue)
+  "Break the current line once if it exceeds FILL-COL.
+Find a breakpoint via `f90-ts--find-breakpoint' according to
+`f90-ts-find-breakpoint-select' and call `f90-ts-break-line' with position.
+Returns non-nil if a break was performed, nil if the line already fits
+or no breakpoint can be found.  The function assumes that the line has
+no trailing blanks.
+
+ALLOW-CONTINUE controls whether SPC is offered in interactive mode to
+extend the fill region; when selected, returns the symbol `continue'.
+
+Join markers in `f90-ts--breakpoint-seed-markers', which are before the
+break point, are discarded; those beyond it are kept as candidates for
+subsequent interactive break point selection."
+  (cl-assert (= (line-end-position)
+                (f90-ts--pos-last-nonspace (point)))
+             nil "line has trailing blanks at buffer position %s" (point))
+  (let ((pos (f90-ts--find-breakpoint fill-col allow-continue)))
+    (cond
+     ((null pos)          'skip)  ; no break point found or selected
+     ((eq pos 'join-prev) 'join-prev)
+     ((eq pos 'join-next) 'join-next)
+     ((eq pos 'abort)     'abort) ; abort the fill operation
+     ((eq pos 'continue)  'continue)
+     ((or (= pos (line-end-position))
+          (save-excursion
+            (goto-char pos)
+            (skip-chars-forward " \t")
+            (f90-ts--node-type-p (f90-ts--node-on-pos (point) 'right)
+                                 "&")))
+      ;; do not break if at end of line or at continuation symbol ampersand
+      'skip)
+     (t ; position value determined by action 'confirm
+      (goto-char pos)
+      (f90-ts-break-line)
+      ;; discard markers at or before the break point,
+      ;; keep only those beyond it (still valid candidates)
+      (let ((break-pos (point)))
+        (f90-ts--seed-markers-invalidate-pos)
+        (f90-ts--seed-markers-cleanup-before break-pos))
+      'broken))))
+
+
+(defun f90-ts--join-line-fill-p (join-col end-marker)
+  "Return non-nil if current line should be joined with next line for filling.
+It checks that the current line is shorter than JOIN-COL, that next line does
+not start after END-MARKER and that neither the current nor next line is empty
+or an empty comment.  This is done to preserve any comment structure.
+
+Note: most checks whether lines can be joined are done in
+`f90-ts--join-line-action-common', which returns an action symbol for deciding
+whether a join operations fits the fill case.  This predicate provides a
+pre-check to exclude column related cases and some specific corner-case."
+  (not
+   (or (>= (- (line-end-position)
+              (line-beginning-position))
+           join-col)
+       (>= (save-excursion (forward-line 1) (point))
+           end-marker)
+       (f90-ts--next-line-empty-p (point))
+       (f90-ts--line-empty-comment-p (point))
+       (f90-ts--next-line-empty-comment-p (point)))))
+
+
+(defun f90-ts--join-line-fill (fill-col end-marker &optional requested)
+  "Join current line with the next one, as part of a fill operation.
+The join operation is performed as long as current line does not exceed
+column FILL-COL and the next line does not start after END-MARKER.
+
+In interactive mode, REQUESTED can be non-nil.  In this case, the fill
+pre-check `f90-ts--join-line-fill-p' is bypassed and the full set of join
+actions is accepted.
+If REQUESTED is `join-prev' then `f90-ts-join-line-prev' is invoked.
+If REQUESTED is `join-next' then `f90-ts-join-line-next' is invoked.
+
+The function adds the position of the join in `f90-ts--breakpoint-seed-markers'
+after each successful join."
+  (cl-assert (memq requested '(nil join-prev join-next))
+             nil "invalid join action, requested is %s" requested)
+  (when (or requested (f90-ts--join-line-fill-p fill-col end-marker))
+    (let* ((prev-p (eq requested 'join-prev))
+           (pair (if prev-p
+                     (f90-ts--join-line-prev-aux)
+                   (f90-ts--join-line-next-aux)))
+           (process-fn (car pair))
+           (action     (cdr pair))
+           (valid-actions (if prev-p
+                              f90-ts--join-line-prev-valid-actions
+                            f90-ts--join-line-next-valid-actions))
+           (accepted-actions (if requested
+                                 f90-ts--join-line-fill-interactive-actions
+                               f90-ts--join-line-fill-auto-actions)))
+      (cl-assert (member action valid-actions)
+                 nil "invalid join action, got %s" action)
+      (when (member action accepted-actions)
+        (funcall process-fn)
+        (f90-ts--seed-markers-push)
+        ;; signal that a join took place
+        t))))
+
+
+(defun f90-ts--fill-region-update-end-overlay (ov end-marker)
+  "Update OV to show the END-MARKER with an indicator.
+END-MARKER is assumed to be at beginning of line position.
+The overlay is placed on the end of the previous line, which is the
+last line to be filled."
+  (save-excursion
+    (goto-char (marker-position end-marker))
+    (if (eobp)
+        (move-overlay ov (1- (point)) (point))
+      (let ((pos (1- (point))))         ; newline character of preceding line
+        (move-overlay ov (1- pos) pos)))
+    ;; 25C4 is a left pointing filled triangle
+    (overlay-put ov 'after-string (propertize " \u25C4" 'face 'warning))))
+
+
+(defun f90-ts--fill-region-continue (end-marker end-overlay)
+  "Advance END-MARKER past empty and empty-comment lines.
+Called after a \\='continue action to position END-MARKER at the
+first line where a break candidate can exist and interactive session
+can resume.
+The function updates END-OVERLAY to match the new end marker position."
+  ;; assertion also works if at final line at eob with and without
+  ;; trailing newline
+  (cl-assert (= (marker-position end-marker) (line-beginning-position 2))
+             nil "end-marker not at start of next line: marker=%s lbp2=%s"
+             (marker-position end-marker) (line-beginning-position 2))
+  (unless (= (marker-position end-marker) (point-max))
+    (save-excursion
+      (goto-char (line-beginning-position 2))
+      (while (and (not (eobp))
+                  (f90-ts--line-empty-p (point)))
+        (forward-line 1))
+      ;; either at end of buffer or at first non-empty-like line,
+      ;; place marker at start of next line
+      (forward-line 1)
+      (set-marker end-marker (point)))
+    (when end-overlay
+      (f90-ts--fill-region-update-end-overlay end-overlay end-marker))))
+
+
+(defun f90-ts--fill-region-join-step (broke end-marker fill-col)
+  "Attempt to join the current line with its continuation.
+BROKE is the result of the previous break step; when it is the symbol
+`join', the user has requested a standard join with next line and fill
+heuristics are bypassed.  END-MARKER is the region end marker and is moved
+to the start of the next line if it falls inside the newly joined line, so that
+the main loop's while condition does not abort prematurely.  FILL-COL is the
+target fill column passed to `f90-ts--join-line-fill'.
+Returns non-nil if a join was performed or signalled."
+  (unless (f90-ts--point-on-empty-line-p)
+    (let ((joined (f90-ts--join-line-fill fill-col end-marker
+                                          (and (memq broke '(join-prev join-next))
+                                               broke))))
+      (when joined
+        ;; if end-marker landed inside the newly joined line, move it to
+        ;; the start of the next line so the while condition steps past cleanly
+        (when (< (marker-position end-marker) (line-end-position))
+          (set-marker end-marker (line-beginning-position 2))))
+      ;; pass on the signal that a join took place (even if
+      ;; f90-ts-join-line-next has not joined, but this skips any subsequent
+      ;; actions in the main loop like the break step to be performed)
+      joined)))
+
+
+(defun f90-ts--fill-region-break-step (joined fill-col end-marker)
+  "Attempt to break the current line if it exceeds the fill column FILL-COL.
+JOINED is the result of the join step; if it is non-nil, or the current
+line is empty, no break is attempted.  END-MARKER is used to determine
+whether the `continue' action should be offered: it is only available
+when END-MARKER is exactly at the start of the next line, avoiding
+accidental region extension when the boundary is not visible.
+Returns the result of `f90-ts--break-line-wrap', or nil if skipped."
+  (unless (or joined (f90-ts--point-on-empty-line-p))
+    (end-of-line)
+    (delete-horizontal-space)
+    (let ((allow-continue (= (marker-position end-marker)
+                             (line-beginning-position 2))))
+      (f90-ts--break-line-wrap fill-col allow-continue))))
+
+
+(defun f90-ts--fill-region-advance ()
+  "Advance past the current line and reset the join-marker list.
+Called when neither a join nor a break was performed on the current line,
+indicating it needed no modification and the loop should move on.
+Clears `f90-ts--breakpoint-seed-markers' and moves point to the next line."
+  (f90-ts--breakpoint-seed-markers-reset)
+  (forward-line 1))
+
+
+(defun f90-ts--fill-region-aux (beg end fill-col)
+  "Fill every line in region BEG..END up to column FILL-COL.
+Break overlong lines exceeding FILL-COL and join continued lines or
+comments where possible.
+
+For line-based fill operations, an initial break point marker for
+interactive mode can be injected via `f90-ts--breakpoint-seed-markers'."
+  ;; extend beg/end to canonical line-beginning positions
+  (save-excursion
+    (goto-char beg)
+    (unless (bolp) (setq beg (line-beginning-position))))
+  (save-excursion
+    (goto-char end)
+    (unless (bolp) (setq end (line-beginning-position 2))))
+
+  (when (eq f90-ts-fill-select-breakpoint-by 'interactive)
+    (deactivate-mark))
+
+  (save-excursion
+    (f90-ts--with-check-modified-region beg end
+      (let (end-marker end-overlay)
+        (unwind-protect
+            (progn
+              (setq end-marker (copy-marker end t))
+              (when (eq f90-ts-fill-select-breakpoint-by 'interactive)
+                (setq end-overlay (make-overlay 1 1))
+                (f90-ts--fill-region-update-end-overlay end-overlay end-marker))
+
+              (cl-loop
+               ;; note: broke is initialised with nil, it is first accessed
+               ;; in the next line, before first evaluated afterwards
+               initially (goto-char beg)
+
+               ;; at most one action per loop step: join, break or advance
+               for joined = (f90-ts--fill-region-join-step broke end-marker fill-col)
+               do (when end-overlay
+                    (f90-ts--fill-region-update-end-overlay end-overlay end-marker))
+
+               for broke = (f90-ts--fill-region-break-step joined fill-col end-marker)
+               do (when (eq broke 'continue)
+                    (f90-ts--fill-region-continue end-marker end-overlay))
+
+               until (eq broke 'abort)
+               unless (or joined (memq broke '(broken join-prev join-next)))
+               do (f90-ts--fill-region-advance)
+               while (or (< (point) end-marker)
+                         (memq broke '(join-prev join-next)))))
+          ;; clean up overlay and markers
+          ;; (end-marker and prior breakpoint markers for join)
+          (when end-overlay (delete-overlay end-overlay))
+          (f90-ts--breakpoint-seed-markers-reset)
+          (set-marker end-marker nil))))))
+
+
+(defun f90-ts-fill-region ()
+  "Fill active region or whole buffer up to `fill-column'."
+  (interactive)
+  (f90-ts--fill-region-aux
+   (if (use-region-p) (region-beginning) (point-min))
+   (if (use-region-p) (region-end)       (point-max))
+   fill-column))
+
+
+(defun f90-ts-fill-at-line ()
+  "Break and join current line at point according to fill operations.
+Joining is done in interactive mode and allows to combine current with
+subsequent lines in multiline statements or comment blocks.
+In interactive mode, the current point is used as the initial break point
+suggestion."
+  (interactive)
+  (unwind-protect
+      (progn
+        (when (eq f90-ts-fill-select-breakpoint-by 'interactive)
+          (f90-ts--seed-markers-set-pos (point)))
+        (f90-ts--fill-region-aux (line-beginning-position)
+                                 (line-end-position)
+                                 fill-column))
+    (f90-ts--breakpoint-seed-markers-reset)))
+
+
+(defun f90-ts-fill-prev-line ()
+  "Fill the current line and the previous line."
+  (interactive)
+  (let ((beg (save-excursion
+               (forward-line -1)
+               (line-beginning-position)))
+        (end (line-end-position)))
+    (f90-ts--fill-region-aux beg end fill-column)))
+
+
+(defun f90-ts-fill-next-line ()
+  "Fill the current line and the next line."
+  (interactive)
+  (let ((beg (line-beginning-position))
+        (end (save-excursion
+               (forward-line 1)
+               (line-end-position))))
+    (f90-ts--fill-region-aux beg end fill-column)))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -5871,7 +6719,7 @@ This operation assumes that no region is active."
              nil
              "active region already present")
 
-  (let* ((pos     (f90-ts--pos-nonspace (point)))
+  (let* ((pos (f90-ts--pos-nonspace (point)))
          (node-at (treesit-node-at pos)))
     (if (f90-ts--node-type-p node-at "comment")
         (f90-ts--mark-region-node node-at f90-ts-mark-region-order)

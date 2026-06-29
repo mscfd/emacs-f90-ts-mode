@@ -586,6 +586,20 @@ end subroutine sub_1
 
 Name: join next statement 13
 =-=
+subroutine sub()
+     x = 6 +| &
+         ! first number
+            5
+end subroutine sub
+=-=
+subroutine sub()
+     x = 6 + & |! first number
+            5
+end subroutine sub
+=-=-=
+
+Name: join next statement 14
+=-=
 subroutine sub_1()
      x = |65
 end subroutine sub_1
@@ -595,7 +609,7 @@ subroutine sub_1()
 end subroutine sub_1
 =-=-=
 
-Name: join next statement 14
+Name: join next statement 15
 =-=
 ! this failed as querying the single character node "5" before point
 ! in f90-ts--node-on-pos failed, caused by the virtual zero-span
@@ -754,7 +768,7 @@ Code:
     (unless (= (point) (point-max))
       (insert (format "POINT-WRONG: at=%s, expected=%s\n" (point) (point-max)))))
 
-Name: join next statement 15
+Name: join next statement 16
 =-=
 subroutine sub_1()
 end s|ubroutine sub_1

@@ -11,6 +11,22 @@ productive and enjoyable to use.
 This project is under active [development](#roadmap).
 For a comprehensive overview see [MANUAL.md](MANUAL.md).
 
+### Recently added, changed or improved
+
+**06-2026**
+ - Fill line and region operations added
+ - Defcustom group f90-ts-comment added.
+ - Indentation of lines after a structure beginning line with statement label fixed.
+ - Indentation within and after preprocessor blocks fixed
+ - Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
+   `f90-ts-comment-prefix-regexp` and `f90-ts-openmp-prefix-regexp`
+   removed from the defcustom definitions and added as
+   `f90-ts-comment-prefix-separator-regexp`.  If the regexp
+   variables have been customized, please adjust.
+   (See [MANUAL.md](MANUAL.md#comment-prefix) for details.)
+ - Mark region operations complemented
+
+
 ## Overview
 
 f90-ts-mode provides a modern Fortran editing experience using Tree-sitter,
@@ -26,6 +42,8 @@ including syntax highlighting, indentation, navigation, and structural editing f
 - Configurable leading ampersand and statement label positions
 - Break line with automatic continuation and comment starters for comment lines
 - Join with previous and next line
+- Fill and rebalance operations for lines or regions (with rightmost breakpoint
+  selection or interactive break and join session)
 - (Un)commenting regions with configurable prefixes and indentation rules
 - Special comments like doc strings and separators
   (syntax highlighting and indentation options)
@@ -35,20 +53,6 @@ including syntax highlighting, indentation, navigation, and structural editing f
 - Region selection based on tree-sitter nodes
 - Imenu and a Fortran menu in the menu bar
 - Navigation (defun, things, Xref, side panel tree)
-
-
-### Recently added, changed or improved
-
-**06-2026**
- - Defcustom group f90-ts-comment added.
- - Indentation of lines after a structure beginning line with statement label fixed.
- - Indentation within and after preprocessor blocks fixed.
- - Trailing blank part "\\(\\s-+\\|$\\)" in defcustom regexps
-   `f90-ts-comment-prefix-regexp` and `f90-ts-openmp-prefix-regexp`
-   removed from the defcustom definitions and added as
-   `f90-ts-comment-prefix-separator-regexp`.  If the regexp
-   variables have been customized, please adjust.
-   (See [MANUAL.md](MANUAL.md#comment-prefix) for details.)
 
 
 ## Keybindings
@@ -131,10 +135,14 @@ It will automatically be loaded when opening a file with extension `.f90`.
          :map f90-ts-mode-map
          ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts (just some examples)
+         ;; examples for shortcuts
          ("A-<return>"    . #'f90-ts-break-line)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
+         ("A-l"           . (lambda () (interactive)
+                              (let ((f90-ts-fill-select-breakpoint-by 'interactive))
+                                (f90-ts-fill-at-line))))
+
          ("A-\\"          . #'f90-ts-mark-region-enlarge)
          ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
          ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
@@ -169,7 +177,9 @@ The following list provides features planned for implementation (somewhat ordere
   This all requires extension of the grammar itself.
   See issues [Continued strings at grammar repo](https://github.com/stadelmanma/tree-sitter-fortran/issues/193)
   and [Continued strings at mode repo](https://github.com/mscfd/emacs-f90-ts-mode/issues/127)
-- Fill operations similar to `f90-fill-region` and `f90-fill-paragraph`.
+- Fill operations with lower column width (before joining).
+- Fill operation similar to `f90-fill-paragraph`. In conjunction with mark operations: determine interesting
+  nodes within tree as region (like: statements, structure block, subroutine/function level).
 - Support for (context-aware) `completion-at-point-function` (capf).
 - More list contexts for alignment in continued lines.
   There are a number of list like contexts, which are not yet supported, but for which proper
