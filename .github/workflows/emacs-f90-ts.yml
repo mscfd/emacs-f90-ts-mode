@@ -121,7 +121,7 @@ jobs:
       # -------------------------
       - name: Build tree-sitter-fortran
         run: |
-          git clone --depth 1 --single-branch --branch master \
+          git clone --depth 1 --single-branch --branch string_literal_emacs \
             https://github.com/mscfd/tree-sitter-fortran.git
           cd tree-sitter-fortran
 
