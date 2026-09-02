@@ -25,7 +25,7 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
      '((fortran "https://github.com/mscfd/tree-sitter-fortran" "string_literal_emacs")))
    ```
    It resides in the feature branch `string_literal_emacs`.
- - Tested with emacs 31.1 and tree-sitter 0.26.
+ - Testing with emacs 31.1 and tree-sitter 0.26 added.
 
 **08-2026**
  - `f90-ts-shift-line-break` as combined break/join function added.
@@ -218,7 +218,6 @@ When reporting a bug, please include a small code snippet, showing the issue or 
 There are a number of features still missing or incomplete.
 The following list provides features planned for implementation (somewhat ordered by priority):
 
-- Test with Emacs 31 and its new tree-sitter related features.
 - Provide code folding: add support for hideshow `hs-minor-mode`, `outline-mode` (both provided by emacs core)
   and external `treesit-fold` package.
 - Make indentation and alignment aware of fill-column: Do not suggest an indentation if the line exceeds fill-column.
