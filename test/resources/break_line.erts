@@ -1,3 +1,5 @@
+note   double end marker =-=-= required due to a bug in erts in conjunction with skip clause, fixed in emacs 31
+
 Point-Char: |
 
 Code:
@@ -230,4 +232,192 @@ subroutine sub_3()
      x = &
             ! number still to add
 end subroutine sub_3
+=-=-=
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-break-line))
+
+Name: break string 1
+=-=
+subroutine str1
+     s0123456789 = "Lorem ipsum dolor sit amet,| consetetur sadipscing elitr, ..."
+end subroutine str1
+=-=
+subroutine str1
+     s0123456789 = "Lorem ipsum dolor sit amet,&
+                   &| consetetur sadipscing elitr, ..."
+end subroutine str1
+=-=-=
+
+Name: break string 2
+=-=
+subroutine str2
+     s0123456789 = "|""Lorem ipsum dolor sit amet, consetetur sadipscing elitr, ..."""
+end subroutine str2
+=-=
+subroutine str2
+     s0123456789 = "&
+                   &|""Lorem ipsum dolor sit amet, consetetur sadipscing elitr, ..."""
+end subroutine str2
+=-=-=
+
+Name: break string 3
+=-=
+subroutine str3
+     s0123456789 = ""|"Lorem ipsum dolor sit amet, consetetur sadipscing elitr, ..."""
+end subroutine str3
+=-=
+subroutine str3
+     s0123456789 = ""&
+                   &|"Lorem ipsum dolor sit amet, consetetur sadipscing elitr, ..."""
+end subroutine str3
+=-=-=
+
+Name: break string 4
+=-=
+subroutine str4
+     s0123456789 = "|& Lorem ipsum ..."
+end subroutine str4
+=-=
+subroutine str4
+     s0123456789 = "&
+                   &|& Lorem ipsum ..."
+end subroutine str4
+=-=-=
+
+Name: break string 5
+=-=
+subroutine str5
+     s0123456789 = "&| Lorem ipsum ..."
+end subroutine str5
+=-=
+subroutine str5
+     s0123456789 = "&&
+                   &| Lorem ipsum ..."
+end subroutine str5
+=-=-=
+
+Name: break string 6
+=-=
+! insert double & on new line with point in between to allow continue adding text
+subroutine str6
+     s = "Lorem ipsum dolor |&
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str6
+=-=
+! insert double & on new line with point in between to allow continue adding text
+subroutine str6
+     s = "Lorem ipsum dolor &
+         &|&
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str6
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: break string 7
+=-=
+! insert double & on new line with point in between to allow continue adding text
+subroutine str7
+     s = "Lorem ipsum dolor &|
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str7
+=-=
+! insert double & on new line with point in between to allow continue adding text
+subroutine str7
+     s = "Lorem ipsum dolor &
+         &|&
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str7
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: break string 8
+=-=
+subroutine str8
+     s = "Lorem ipsum dolor &    !!% comment|
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str8
+=-=
+subroutine str8
+     s = "Lorem ipsum dolor &    !!% comment
+                                 !!% |
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str8
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: break string 9
+=-=
+subroutine str9
+     s = "Lorem ipsum dolor &
+         !!% |comment
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str9
+=-=
+subroutine str9
+     s = "Lorem ipsum dolor &
+         !!%
+         !!% |comment
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str9
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: break string 10
+=-=
+subroutine str10
+     s = "Lorem ipsum dolor &
+         |&sit amet, consetetur sadipscing elitr, ..."
+end subroutine str10
+=-=
+subroutine str10
+     s = "Lorem ipsum dolor &
+
+         |&sit amet, consetetur sadipscing elitr, ..."
+end subroutine str10
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: break string 11
+=-=
+subroutine str11
+     s = "Lorem ipsum dolor &
+         &|sit amet, consetetur sadipscing elitr, ..."
+end subroutine str11
+=-=
+subroutine str11
+     s = "Lorem ipsum dolor &
+         &&
+         &|sit amet, consetetur sadipscing elitr, ..."
+end subroutine str11
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: break string 12
+=-=
+! aligned using continued offset as primary position
+! (not optimal, but a justified choice)
+subroutine str12
+     s = "Lorem ipsum dolor &
+
+|
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str12
+=-=
+! aligned using continued offset as primary position
+! (not optimal, but a justified choice)
+subroutine str12
+     s = "Lorem ipsum dolor &
+
+
+            |
+         &sit amet, consetetur sadipscing elitr, ..."
+end subroutine str12
+=-=-=
 =-=-=

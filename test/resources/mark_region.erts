@@ -180,6 +180,32 @@ subroutine sub_ext_3()
 end subroutine sub_ext_3
 =-=-=
 
+Name: mark extend enlarge region 4
+=-=
+module mod_ext_4
+
+use other
+
+contains
+
+|subroutine sub()@
+   call something()
+end subroutine sub
+
+end module mod_ext_4
+=-=
+module mod_ext_4
+
+use other
+
+contains
+
+|subroutine sub()
+   call something()
+end subroutine sub@
+
+end module mod_ext_4
+=-=-=
 
 Code:
   (lambda ()
@@ -189,13 +215,13 @@ Code:
 
 Name: mark extend enlarge region 5
 =-=
-subroutine sub_ext_4()
+subroutine sub_ext_5()
   @print *,'hello'|
-end subroutine sub_ext_4
+end subroutine sub_ext_5
 =-=
-|subroutine sub_ext_4()
+|subroutine sub_ext_5()
   print *,'hello'
-end subroutine sub_ext_4@
+end subroutine sub_ext_5@
 =-=-=
 
 
@@ -205,15 +231,15 @@ Code:
     (let ((f90-ts-mark-region-order 'preserve))
       (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-enlarge)))
 
-Name: mark extend enlarge region 5
+Name: mark extend enlarge region 6
 =-=
-subroutine sub_ext_5()
+subroutine sub_ext_6()
   |print *,'hello'@
-end subroutine sub_ext_5
+end subroutine sub_ext_6
 =-=
-|subroutine sub_ext_5()
+|subroutine sub_ext_6()
   print *,'hello'
-end subroutine sub_ext_5@
+end subroutine sub_ext_6@
 =-=-=
 
 Code:
@@ -332,6 +358,50 @@ subroutine sub_first_1()
 end subroutine sub_first_1
 =-=-=
 
+Name: mark first region 2
+=-=
+module mod
+
+use other
+
+! note that the grammar places contains as a sibling of its follow content
+contains
+
+subroutine sub1()
+end subroutine sub1
+
+subroutine sub2()
+end subroutine sub2
+
+|subroutine sub3()
+end subroutine sub3@
+
+subroutine sub4()
+end subroutine sub4
+
+end module mod
+=-=
+module mod
+
+use other
+
+! note that the grammar places contains as a sibling of its follow content
+|contains@
+
+subroutine sub1()
+end subroutine sub1
+
+subroutine sub2()
+end subroutine sub2
+
+subroutine sub3()
+end subroutine sub3
+
+subroutine sub4()
+end subroutine sub4
+
+end module mod
+=-=-=
 
 Code:
   (lambda ()
@@ -353,6 +423,92 @@ subroutine sub_prev_1()
       end do|
    end if
 end subroutine sub_prev_1
+=-=-=
+
+Name: mark prev region 2
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub2()
+   call other()
+   if (cond1) then
+      call action1()
+   end if
+   |if (cond2) then
+      call action2()
+   end if@
+end subroutine sub2
+
+end module mod
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub2()
+   call other()
+   |if (cond1) then
+      call action1()
+   end if@
+   if (cond2) then
+      call action2()
+   end if
+end subroutine sub2
+
+end module mod
+=-=-=
+
+Name: mark prev region 3
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub1()
+   call something()
+end subroutine sub1
+
+|subroutine sub2()
+   call other()
+   if (cond1) then
+      call action1()
+   end if
+   if (cond2) then
+      call action2()
+   end if
+end subroutine sub2@
+
+end module mod
+=-=
+module mod
+
+use other
+
+contains
+
+|subroutine sub1()
+   call something()
+end subroutine sub1@
+
+subroutine sub2()
+   call other()
+   if (cond1) then
+      call action1()
+   end if
+   if (cond2) then
+      call action2()
+   end if
+end subroutine sub2
+
+end module mod
 =-=-=
 
 Name: mark prev region group 1
@@ -608,6 +764,92 @@ subroutine sub_next_1()
 end subroutine sub_next_1
 =-=-=
 
+Name: mark next region 2
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub2()
+   call other()
+   |if (cond1) then
+      call action1()
+   end if@
+   if (cond2) then
+      call action2()
+   end if
+end subroutine sub2
+
+end module mod
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub2()
+   call other()
+   if (cond1) then
+      call action1()
+   end if
+   |if (cond2) then
+      call action2()
+   end if@
+end subroutine sub2
+
+end module mod
+=-=-=
+
+Name: mark next region 3
+=-=
+module mod
+
+use other
+
+contains
+
+|subroutine sub1()
+   call something()
+end subroutine sub1@
+
+subroutine sub2()
+   call other()
+   if (cond1) then
+      call action1()
+   end if
+   if (cond2) then
+      call action2()
+   end if
+end subroutine sub2
+
+end module mod
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub1()
+   call something()
+end subroutine sub1
+
+|subroutine sub2()
+   call other()
+   if (cond1) then
+      call action1()
+   end if
+   if (cond2) then
+      call action2()
+   end if
+end subroutine sub2@
+
+end module mod
+=-=-=
+
 Name: mark next region group 1
 =-=
 ! recognise comment block as virtual node
@@ -852,6 +1094,49 @@ subroutine sub_last_1()
       end do
    @end if|
 end subroutine sub_last_1
+=-=-=
+
+Name: mark last region 2
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub1()
+end subroutine sub1
+
+|subroutine sub2()
+end subroutine sub2@
+
+subroutine sub3()
+end subroutine sub3
+
+subroutine sub4()
+end subroutine sub4
+
+end module mod
+=-=
+module mod
+
+use other
+
+contains
+
+subroutine sub1()
+end subroutine sub1
+
+subroutine sub2()
+end subroutine sub2
+
+subroutine sub3()
+end subroutine sub3
+
+|subroutine sub4()
+end subroutine sub4@
+
+end module mod
 =-=-=
 
 Code:

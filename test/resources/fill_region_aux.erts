@@ -1,3 +1,5 @@
+note   double end marker =-=-= required due to a bug in erts in conjunction with skip clause, fixed in emacs 31
+
 Point-Char: |
 
 Code:
@@ -244,6 +246,23 @@ subroutine comments()
 end subroutine comments
 =-=-=
 
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux (point-min) (point-max) 60))
+
+Name: fill all break 9
+=-=
+subroutine comment_with_a()
+     ! this tests whether the comment is broken after the a for which fill col should be 60
+end subroutine comment_with_a
+=-=
+subroutine comment_with_a()
+     ! this tests whether the comment is broken after the a
+     ! for which fill col should be 60
+end subroutine comment_with_a
+=-=-=
+
 Point-Char: |
 
 Code:
@@ -396,7 +415,6 @@ real, public :: alpha1, &
 end module mod
 =-=-=
 
-
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -445,7 +463,6 @@ real, public :: alpha1, alpha2, &
       alpha9
 end module mod
 =-=-=
-
 
 Code:
   (lambda ()
@@ -608,4 +625,147 @@ subroutine sub()
      ! comment22
      ! comment33
 end subroutine sub
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux (point-min) (point-max) 40))
+
+Name: fill all string 1
+=-=
+subroutine sub()
+     s = "0123456789abcdef ghijklmnopqrs tuvwxyz012345      6789abcdefghijklmnopqr,stuvwxyz0123456789abcdefghijk,lmnopqrstuvwxyz0123456789ab()cdefghijklmnopqrstuvwxyz012,3456789abcdefghijklmnopqrstu.vwxyz0123456789abcdefghijkl [mnopqrstuvwxyz0123456789abc[]{}defghijklmnopqrstuvwxyz01.{}"
+end subroutine sub
+=-=
+subroutine sub()
+     s = "0123456789abcdef &
+         &ghijklmnopqrs tuvwxyz012345  &
+         &    6789abcdefghijklmnopqr,&
+         &stuvwxyz0123456789abcdefghijk&
+         &,lmnopqrstuvwxyz0123456789ab(&
+         &)cdefghijklmnopqrstuvwxyz012,&
+         &3456789abcdefghijklmnopqrstu.&
+         &vwxyz0123456789abcdefghijkl [&
+         &mnopqrstuvwxyz0123456789abc[]&
+         &{}defghijklmnopqrstuvwxyz01.{&
+         &}"
+end subroutine sub
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts--fill-region-aux (point-min) (point-max) 40))
+
+Name: fill all string 2
+=-=
+!1 make sure that leading ampersand does not interfere with break point loop
+!1 (first string has default indentation right of ampersand, second has it
+!1 left of ampersand),
+!2 also test that indentation is always set to primary
+subroutine sub()
+     s0123456789 = "0123456789abcdef &
+            &ghijklmnopqrs     &
+            &tuvwxyz0 123456789"
+     s="0123456789abcdef ghijklmnopq   &
+            &  rstuvwxyz0 123456789 abcdefg &
+            &hijklmnopqrst uvwxyz 0123456789"
+end subroutine sub
+=-=
+!1 make sure that leading ampersand does
+!1 not interfere with break point loop
+!1 (first string has default indentation
+!1 right of ampersand, second has it
+!1 left of ampersand),
+!2 also test that indentation is always
+!2 set to primary
+subroutine sub()
+     s0123456789 = "0123456789abcdef &
+                   &ghijklmnopqrs     &
+                   &tuvwxyz0 123456789"
+     s="0123456789abcdef ghijklmnopq   &
+            &  rstuvwxyz0 123456789 &
+            &abcdefg hijklmnopqrst &
+            &uvwxyz 0123456789"
+end subroutine sub
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: fill all string 3
+=-=
+!1 test filling with comments within string
+!2 test normal ampersand character in string, which does not act as a continuation symbol
+!3 check that empty lines are preserved within strings
+subroutine sub()
+     s = "0123456789abcdef ghijklmnopq rstuvwxyz0 123456789 &
+         !1 comment1 comment1 comment1 comment1 cooment1
+         !1 comment2 comment2 comment2 comment2 cooment2
+         !2 domment domment domment domment domment
+
+         &  abcdef ghijklmnopq rstuvwxyz0 123456789 &rstuvwxyz0 123456789"
+end subroutine sub
+=-=
+!1 test filling with comments within
+!1 string
+!2 test normal ampersand character in
+!2 string, which does not act as a
+!2 continuation symbol
+!3 check that empty lines are preserved
+!3 within strings
+subroutine sub()
+     s = "0123456789abcdef ghijklmnopq &
+         &rstuvwxyz0 123456789 &
+         !1 comment1 comment1 comment1
+         !1 comment1 cooment1 comment2
+         !1 comment2 comment2 comment2
+         !1 cooment2
+         !2 domment domment domment
+         !2 domment domment
+
+         &  abcdef ghijklmnopq &
+         &rstuvwxyz0 123456789 &&
+         &rstuvwxyz0 123456789"
+end subroutine sub
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: fill all string 4
+=-=
+! use any position in string
+subroutine break_anywhere()
+   s = '0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefhijklmnopqrstuvwxyz'
+end subroutine break_anywhere
+=-=
+! use any position in string
+subroutine break_anywhere()
+   s = '0123456789abcdefghijklmnopqrstu&
+       &vwxyz0123456789abcdefhijklmnopq&
+       &rstuvwxyz'
+end subroutine break_anywhere
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: fill all string 5
+=-=
+!1 using any position in string if necessary
+subroutine break_anywhere_if_necessary()
+   s = '0123456789abcdefghijklmnopqrstuvwxyz0123456789 abcdefhijklmnopqrstuvwxyz'
+end subroutine break_anywhere_if_necessary
+=-=
+!1 using any position in string if
+!1 necessary
+subroutine break_anywhere_if_necessary()
+   s = '0123456789abcdefghijklmnopqrstu&
+       &vwxyz0123456789 &
+       &abcdefhijklmnopqrstuvwxyz'
+end subroutine &
+       break_anywhere_if_necessary
+=-=-=
 =-=-=

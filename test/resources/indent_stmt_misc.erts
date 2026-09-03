@@ -321,3 +321,23 @@ contains
  end subroutine simulate|
 end
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (delete-region (point) (point-max))
+    (f90-ts-indent-and-complete-stmt)
+    (insert "\n")
+    (goto-char (1- (point))))
+
+Name: completion at end of buffer without final newline
+
+=-=
+subroutine sub()
+     name: if (cond) then
+     end|
+=-=
+subroutine sub()
+     name: if (cond) then
+     end if name|
+=-=-=

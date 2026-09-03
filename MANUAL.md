@@ -18,6 +18,7 @@ for implementation.
   - [Keybindings](#keybindings)
 - [Features](#features)
   - [Syntax highlight and font lock faces](#syntax-highlight-and-font-lock-faces)
+    - [Syntax highlighting of error regions](#syntax-highlighting-of-error-regions)
     - [Special variables](#special-variables)
     - [Comment regexps and rules](#comment-regexps-and-rules)
   - [Indentation](#indentation)
@@ -35,7 +36,8 @@ for implementation.
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
     - [Joining lines](#joining-lines)
-  - [Fill lines and regions(#fill-lines-and-regions)
+    - [Shifting line break](#Shifting-line-break)
+  - [Filling lines and regions](#filling-lines-and-regions)
   - [Comment region](#comment-region)
   - [Mark regions based on tree-sitter nodes](#mark-regions-based-on-tree-sitter-nodes)
 - [Development and Testing](#development-and-testing)
@@ -52,10 +54,16 @@ for implementation.
 
 ### Tree-sitter grammar
 
-Currently, the mode relies on a recent tree-sitter grammar version of Fortran at
+The mode relies on a recent tree-sitter grammar version of Fortran at
 [official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
-There is also an upstream Tree-sitter grammar fork, which might contain fixes not yet merged:
+
+There is also an upstream Tree-sitter grammar fork, which might contain fixes or extensions not yet merged:
 [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
+The parser in this fork was generated with treesitter `0.25.10`, in case `0.26` causes any problems with emacs,
+
+Currently it also provides the `string_literal` extension not yet merged into the official grammar, in branch
+[mscfd/tree-sitter-fortran/string-literal-emacs](https://github.com/mscfd/tree-sitter-fortran/tree/string_literal_emacs).
+
 
 
 #### Installing the grammar in Emacs
@@ -66,6 +74,12 @@ Register the grammar repository in `treesit-language-source-alist`:
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
               '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
+```
+or variants mentioned above, like:
+```elisp
+(setq treesit-language-source-alist
+      (append treesit-language-source-alist
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "string_literal_emacs"))))
 ```
 
 Then compile and install the grammar once with:
@@ -81,25 +95,29 @@ The installation can be verified with:
 ```
 
 **NOTE**:
+* `emacs 30.x`:
 The Fortran grammar should be compiled with Tree-sitter version `0.25.x`, as Emacs
 (including 30.2) does not yet support the `0.26` branch correctly.
 For example, queries are not translated as expected by the `0.26` branch.
+Emacs 31 added support for tree-sitter 0.26 and the mode has been tested with it.
 
-The master branch at `mscfd/tree-sitter-fortran` mentioned above provides the parser generated with `0.25.10`.
+The master branch at `mscfd/tree-sitter-fortran` mentioned above provides the parser generated with `0.25.10` if required.
 
 The following can be used to check whether versions are correct:
 
 (`M-:` = `eval-expression`)
 
-* with `M-:` `(treesit-library-abi-version)` should be `15`
-* with `M-:` `(treesit-language-abi-version 'fortran)` should be `15`
-* `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25`
+- with `M-:` `(treesit-library-abi-version)` should be `15`
+- with `M-:` `(treesit-language-abi-version 'fortran)` should be `15`
+- emacs 30.x: `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25`
 
-**Note**:
 The parser generator step `tree-sitter generate` done with Tree-Sitter `0.26` seems to be
-compatible with Emacs, but the library and ABI versions listed above must match.
+compatible with Emacs 30.x, but the library and ABI versions listed above must match in any case.
 This generator step of creating the parser source files is not necessary in general, as the
 parser source files are already provided in the grammar repositories.
+
+* `emacs 31.x`:
+This recently published version has not yet been tested. It is supposed to support tree-sitter `0.26`.
 
 
 ### Tree-sitter based mode
@@ -124,7 +142,8 @@ placed somewhere in `init.el` (or elsewhere).
 ```elisp
 (use-package f90-ts-mode
   :ensure t
-  :mode ("\\.f90\\'" . f90-ts-mode)
+  :mode (("\\.f90\\'" . f90-ts-mode)
+         ("\\.i90\\'" . f90-ts-mode))
 
   :init
   (require 'treesit)
@@ -136,13 +155,20 @@ placed somewhere in `init.el` (or elsewhere).
   (message "f90-ts-mode loaded")
 
   :bind (;; mode-specific bindings, adjust to your needs
+         ;; (just some examples)
          :map f90-ts-mode-map
          ;; transient popup (additional shorter binding to "C-c C-f")
          ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts (just some examples)
+
          ("A-<return>"    . #'f90-ts-break-line)
+         ("A-<return>"    . #'f90-ts-break-line)
+         ("C-<return>"    . #'f90-ts-shift-line-break)
          ("A-<backspace>" . #'f90-ts-join-line-prev)
          ("A-<delete>"    . #'f90-ts-join-line-next)
+         ("A-C-f"         . (lambda () (interactive)
+                              (let ((f90-ts-fill-select-breakpoint-by 'interactive))
+                                (f90-ts-fill-at-line))))
+
          ("A-\\"          . #'f90-ts-mark-region-enlarge)
          ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
          ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
@@ -155,40 +181,20 @@ placed somewhere in `init.el` (or elsewhere).
 #### Development setup (local clone)
 
 First clone the repository of `f90-ts-mode` as mentioned above.
+Then modify the use-package block:
 
 ```elisp
 (use-package f90-ts-mode
   :ensure nil
   :load-path "path_to/emacs-f90-ts-mode"
-  :mode ("\\.f90\\'" . f90-ts-mode)
-
-  :init
-  (require 'treesit)
-
-  ;; uncomment if Imenu entry in menu bar is desired
-  ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
+  ...
 
   :config
-  ;; only required for development
-  ;;(require 'f90-ts-log)
-
+  ;; only required for logging
+  (require 'f90-ts-log)
   (message "f90-ts-mode loaded")
 
-  :bind (;; mode-specific bindings, adjust to your needs
-         :map f90-ts-mode-map
-         ;; transient popup (additional shorter binding to "C-c C-f")
-         ("A-<up>"        . #'f90-ts-transient)
-         ;; shortcuts (examples)
-         ("A-<return>"    . #'f90-ts-break-line)
-         ("A-<backspace>" . #'f90-ts-join-line-prev)
-         ("A-<delete>"    . #'f90-ts-join-line-next)
-         ("A-\\"          . #'f90-ts-mark-region-enlarge)
-         ("A-0"           . #'f90-ts-mark-region-shrink-child-first)
-         ("A-9"           . #'f90-ts-mark-region-shrink-child-last)
-         ("A-{"           . #'f90-ts-mark-region-first-sibling)
-         ("A-["           . #'f90-ts-mark-region-prev-sibling)
-         ("A-]"           . #'f90-ts-mark-region-next-sibling)
-         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
+  ...
 ```
 
 #### Testing module
@@ -252,18 +258,22 @@ commands grouped by category.
 
 The popup is defined as `f90-ts-transient` and covers:
 
-| Section                   | Keys                            | Commands                                        |
-|---------------------------|---------------------------------|-------------------------------------------------|
-| **Indentation**           | `TAB` `s` `I` `E`               | Indent line / statement / region / smart end    |
-| **Line editing**          | `b` `j` `J`                     | Break line, join with prev/next                 |
-| **Mark region**           | `r` `0` `9`                     | Enlarge, first and last,                        |
-|                           | `{`,`[` `]`,`}`                 | first, prev, next and last sibling              |
-| **Comment region**        | `c` `C`                         | Default and custom prefix                       |
-| **Structural navigation** | `a` `e` `p` `n`                 | Procedure (beginning, end, prev, next)          |
-|                           | `M-a` `M-e` `M-p` `M-n`         | Type (beginning, end, prev, next)               |
-|                           | `C-M-a` `C-M-e` `C-M-p` `C-M-n` | Interface (beginning, end, prev, next)          |
-| **Xref**                  | `.` `,` `/` `<` `>`             | Definitions, references, apropos, back, forward |
-| **Navigation side panel** (alpha!) | `B` `F`                | Open and focus nav buffer                       |
+| Section                   | Keys                            | Commands                                          |
+|---------------------------|---------------------------------|---------------------------------------------------|
+| **Indentation**           | `TAB` `s` `I` `E`               | Indent line / statement / region / smart end      |
+| **Line editing**          | `b` `j` `J` `C-s`               | Break line, join with prev/next, shift line break |
+| **Filling**               | `C-f` `C-b`                     | Set fill column and fill method                   |
+|                           | `f` `M-f` `M-j` `M-J`           | fill line, region, with prev/next line            |
+| **Mark region**           | `r` `0` `9`                     | Enlarge, first and last,                          |
+|                           | `{` `[` `]` `}`                 | first, prev, next and last sibling                |
+|                           | `X`                             | Exchange mark and point                           |
+| **Comment region**        | `c` `C`                         | Default and custom prefix                         |
+| **Structural navigation** | `a` `e` `p` `n`                 | Procedure (beginning, end, prev, next)            |
+|                           | `M-a` `M-e` `M-p` `M-n`         | Type (beginning, end, prev, next)                 |
+|                           | `C-M-a` `C-M-e` `C-M-p` `C-M-n` | Interface (beginning, end, prev, next)            |
+| **Xref**                  | `.` `,` `/` `<` `>`             | Definitions, references, apropos, back, forward   |
+| **Navigation side panel** (alpha!) | `B` `F`                | Open and focus nav buffer                         |
+| **Documentation**         | `C-h a` `C-h r` 'C-h m'         | Show About, README and MANUAL                     |
 
 The entire transient popup can be bound to a different prefix with a use-package statement
 in the `:bind` section as shown above, or simply by:
@@ -285,13 +295,15 @@ in the `:bind` section as shown above, or simply by:
 - Configurable leading ampersand and statement label positions
 - Break line with automatic continuation and comment starters for comment lines
 - Join with previous and next line
+- Fill and rebalance operations for lines or regions (with rightmost breakpoint
+  selection or interactive break and join session)
+- Region selection based on tree-sitter nodes
 - (Un)commenting regions with configurable prefixes and indentation rules
 - Special comments like doc strings and separators
   (syntax highlighting and indentation options)
 - Keyword highlighting in comments (like TODO, Remark etc.)
 - OpenMP and preprocessor directives
 - Coarray keywords and statements
-- Region selection based on tree-sitter nodes
 - Imenu and a Fortran menu in the menu bar
 - Navigation (defun, things, Xref, side panel tree)
 
@@ -301,9 +313,9 @@ in the `:bind` section as shown above, or simply by:
 
 The mode has four levels of font-locking, which is controlled by customizable variable `treesit-font-lock-level`.
 
- - level 1: comment, preprocessor,
+ - level 1: comment, preprocessor, error,
  - level 2: builtin, keyword, string, type,
- - level 3: constant, number,
+ - level 3: constant, number escape-sequence,
  - level 4: function, variable, operator, bracket, delimiter.
 
 Additionally to the usual faces, there are some extra custom faces:
@@ -316,6 +328,18 @@ Additionally to the usual faces, there are some extra custom faces:
 | `f90-ts-font-lock-openmp-face`            | openmp directives                                       |
 | `f90-ts-font-lock-special-var-face`       | special variables (e.g. `self`, `this`)                 |
 | `f90-ts-font-lock-separator-comment-face` | separator comments like `!---------` and `! arguments`) |
+| `f90-ts-font-lock-escape-face`            | for escaped quotes within strings                       |
+| `f90-ts-font-lock-error-face`             | additional properties for errors                        |
+
+
+#### Syntax highlighting of error regions
+
+The syntax highlighting of error regions (spanned by an `ERROR` node) can be enabled or disabled by
+`f90-ts-font-lock-error-show`. If nil, it is switched off. If it equals symbol `all`, the whole span
+of the error node is fontified. Otherwise it should contain a positive integer for the number of lines,
+to which the fontified span is limited, in case it spans more lines than the given maximum.
+This is done in case error recovery of the tree-sitter parser does not work well and there are ERROR
+nodes with a big span.
 
 
 #### Special variables
@@ -573,7 +597,7 @@ breaking or joining comments with a common comment starter.
 
 The line break function is bound to `C-<return>`.
 All break and join functions are available via the transient popup (`C-c C-f`)
-under keys `RET`, `j` and `J`.
+under keys `RET`, `j`, `J` and `C-s`.
 These operations are inspired by the legacy f90 mode, but behave a bit differently.
 
 #### Breaking lines
@@ -598,7 +622,7 @@ under various circumstances, which are:
 - comments with the same comment prefix (see [Comment prefix](#comment-prefix) for details)
 - comment after a continued line (join-line-prev)
 - continued line followed by a comment (join-line-next)
-- continued string
+- continued string literal
 
 The ampersand(s) or comment prefixes in between are removed, where necessary, adding
 one whitespace character where applicable.
@@ -607,16 +631,21 @@ If there are empty lines, then only the empty lines are removed, without joining
 A second join operation can be used to actually join the lines.
 
 Current limitations are:
-* Comments within string literals are not supported by the tree-sitter grammar itself.
-Thus joining such strings is not possible anyway. Continued strings can be joined.
 * Joining of openmp statements is not yet implemented.
 
 
-### Fill lines and regions
+#### Shifting line break
+
+Changing the point at which a line is continued is sufficiently common and thus provided as `f90-ts-shift-line-break`.
+It breaks the current line at point and joins the trailing part with the next line, effectively shifting the break point.
+
+
+### Filling lines and regions
 
 The mode provides filling and rebalancing operations. It breaks overlong lines (exceeding `fill-column`)
 and joins continued lines or comments with matching prefix where possible to rebalance the code and
 fill up the column space as much as possible.
+
 
 
 #### Fill Operations
@@ -628,6 +657,9 @@ These operations can be accessed via the transient popup (`C-c C-f`) under the *
 * `M-j` (`f90-ts-fill-prev-line`): Fills the current line and the previous line.
 * `M-J` (`f90-ts-fill-next-line`): Fills the current line and the next line.
 
+With `C-f` and `C-b`, the transient popup allows to configure fill column and fill method.
+
+
 
 #### Breakpoint Selection
 When a line exceeds the target `fill-column`, the fill function must decide where to safely split the statement or comment.
@@ -638,7 +670,7 @@ This behavior is controlled by the customizable variable `f90-ts-fill-select-bre
                 a `%` component selection) unless strictly necessary.
 * `interactive`: Pauses the fill operation and allows to manually rotate through possible valid breakpoints
                  using an interactive break and join session. The mode allows to break lines beyond fill-column.
-    * `left`, `right`, `home`, `end`, `C-p` and `C-n` to walk through breakpoints with the cursor.
+    * `left`, `right`, `home`, `end`, `r`, `C-p` and `C-n` to walk through breakpoints with the cursor.
     * `RET` to confirm the break.
     * `BACKSPACE` to perform a normal join with the previous line.
     * `DEL` to perform a normal a normal join with the next line.

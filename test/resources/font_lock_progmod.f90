@@ -5,10 +5,13 @@
 ! ^^^^^ font-lock-keyword-face
 !      ^ f90-ts-font-lock-bracket-face
 !       ^ nil
-!        ^ f90-ts-font-lock-delimiter-face
-!         ^^^^^ font-lock-string-face
+!        ^^ f90-ts-font-lock-delimiter-face
+!          ^^^ font-lock-string-face
+!             ^ f90-ts-font-lock-delimiter-face
 !              ^ f90-ts-font-lock-bracket-face
-!                ^^^^^^^ font-lock-string-face
+!                ^ f90-ts-font-lock-delimiter-face
+!                 ^^^^^ font-lock-string-face
+!                      ^ f90-ts-font-lock-delimiter-face
  end program program1
 !^^^ font-lock-keyword-face
 !    ^^^^^^^ font-lock-keyword-face
@@ -34,9 +37,9 @@
        print *,'i = ', i
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
-!             ^ f90-ts-font-lock-delimiter-face
-!              ^^^^^^ font-lock-string-face
-!                    ^ f90-ts-font-lock-delimiter-face
+!             ^^ f90-ts-font-lock-delimiter-face
+!               ^^^^ font-lock-string-face
+!                   ^^ f90-ts-font-lock-delimiter-face
 !                      ^ nil
   end do
 ! ^^^ font-lock-keyword-face
@@ -274,10 +277,12 @@
 !                       ^ f90-ts-font-lock-bracket-face
             print '(10a,i4)', 'done ', n
 !           ^^^^^ font-lock-keyword-face
-!                 ^^^^^^^^^^ font-lock-string-face
-!                           ^ f90-ts-font-lock-delimiter-face
-!                             ^^^^^^^ font-lock-string-face
-!                                    ^ f90-ts-font-lock-delimiter-face
+!                 ^ f90-ts-font-lock-delimiter-face
+!                  ^^^^^^^^ font-lock-string-face
+!                          ^^ f90-ts-font-lock-delimiter-face
+!                             ^ f90-ts-font-lock-delimiter-face
+!                              ^^^^^ font-lock-string-face
+!                                   ^^ f90-ts-font-lock-delimiter-face
 !                                      ^ nil
        end if verify
 !      ^^^ font-lock-keyword-face

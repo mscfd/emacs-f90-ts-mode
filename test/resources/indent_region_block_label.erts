@@ -1,0 +1,55 @@
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Point-Char: |
+
+Name: block label 1
+=-=
+subroutine sub()
+     inc: associate (x => array(i))
+          x = x + 1
+     end associate inc
+
+     name: do while (cond)
+          x = x + 1
+     end do name
+
+     if: if (cond) then
+          x = x + 1
+     end if if
+end subroutine sub
+=-=-=
+
+Name: block label with continuation 1
+=-=
+subroutine sub()
+     inc: &
+            associate (x => array(i))
+          x = x + 1
+     end associate inc
+
+     name: & ! comment
+            do while (cond)
+          x = x + 1
+     end do name
+
+     select_x: &
+            ! comment
+            select case (x)
+     case (1)
+          print *, 'hallo'
+     end select select_x
+
+     if: &
+            ! several comments
+            ! several comments
+            ! several comments
+            if (cond) then
+          x = x + 1
+     end if if
+end subroutine sub
+=-=-=

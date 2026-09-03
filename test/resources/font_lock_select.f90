@@ -13,21 +13,28 @@
       case ('version1')
 !     ^^^^ font-lock-keyword-face
 !          ^ f90-ts-font-lock-bracket-face
-!           ^^^^^^^^^^ font-lock-string-face
+!           ^ f90-ts-font-lock-delimiter-face
+!            ^^^^^^^^ font-lock-string-face
+!                    ^ f90-ts-font-lock-delimiter-face
 !                     ^ f90-ts-font-lock-bracket-face
            print *, 'version1'
 !          ^^^^^ font-lock-keyword-face
 !                ^ nil
 !                 ^ f90-ts-font-lock-delimiter-face
-!                   ^^^^^^^^^^ font-lock-string-face
+!                   ^ f90-ts-font-lock-delimiter-face
+!                    ^^^^^^^^ font-lock-string-face
+!                            ^ f90-ts-font-lock-delimiter-face
       case ('version2', &
 !     ^^^^ font-lock-keyword-face
 !          ^ f90-ts-font-lock-bracket-face
-!           ^^^^^^^^^^ font-lock-string-face
-!                     ^ f90-ts-font-lock-delimiter-face
+!           ^ f90-ts-font-lock-delimiter-face
+!            ^^^^^^^^ font-lock-string-face
+!                    ^^ f90-ts-font-lock-delimiter-face
 !                       ^ f90-ts-font-lock-delimiter-face
              'extra')
-!            ^^^^^^^ font-lock-string-face
+!            ^ f90-ts-font-lock-delimiter-face
+!             ^^^^^ font-lock-string-face
+!                  ^ f90-ts-font-lock-delimiter-face
 !                   ^ f90-ts-font-lock-bracket-face
            call xyz()
 !          ^^^^ font-lock-keyword-face
@@ -84,7 +91,9 @@
            arg = '1'
 !          ^^^ nil
 !              ^ f90-ts-font-lock-operator-face
-!                ^^^ font-lock-string-face
+!                ^ f90-ts-font-lock-delimiter-face
+!                 ^ font-lock-string-face
+!                  ^ f90-ts-font-lock-delimiter-face
       class is (tuple_t) select_arg
 !     ^^^^^ font-lock-keyword-face
 !           ^^ font-lock-keyword-face
@@ -110,7 +119,9 @@
            error stop 'not supported'
 !          ^^^^^ font-lock-keyword-face
 !                ^^^^ font-lock-keyword-face
-!                     ^^^^^^^^^^^^^^^ font-lock-string-face
+!                     ^ f90-ts-font-lock-delimiter-face
+!                      ^^^^^^^^^^^^^ font-lock-string-face
+!                                   ^ f90-ts-font-lock-delimiter-face
       end select select_arg
 !     ^^^ font-lock-keyword-face
 !         ^^^^^^ font-lock-keyword-face
@@ -156,7 +167,9 @@
            error stop 'assumed-size input not supported (b)'
 !          ^^^^^ font-lock-keyword-face
 !                ^^^^ font-lock-keyword-face
-!                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                     ^ f90-ts-font-lock-delimiter-face
+!                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                          ^ f90-ts-font-lock-delimiter-face
       end select
 !     ^^^ font-lock-keyword-face
 !         ^^^^^^ font-lock-keyword-face
@@ -178,8 +191,9 @@
 !          ^^^^^ font-lock-keyword-face
 !                ^ nil
 !                 ^ f90-ts-font-lock-delimiter-face
-!                   ^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
-!                                        ^ f90-ts-font-lock-delimiter-face
+!                   ^ f90-ts-font-lock-delimiter-face
+!                    ^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                       ^^ f90-ts-font-lock-delimiter-face
 !                                          ^^^^ font-lock-builtin-face
 !                                              ^ f90-ts-font-lock-bracket-face
 !                                               ^ nil
@@ -192,7 +206,9 @@
            error stop 'rank size combination of a and b not supported'
 !          ^^^^^ font-lock-keyword-face
 !                ^^^^ font-lock-keyword-face
-!                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                     ^ f90-ts-font-lock-delimiter-face
+!                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                                    ^ f90-ts-font-lock-delimiter-face
       end if
 !     ^^^ font-lock-keyword-face
 !         ^^ font-lock-keyword-face
@@ -353,7 +369,9 @@
 !               ^^^^^ font-lock-keyword-face
 !                     ^ nil
 !                      ^ f90-ts-font-lock-delimiter-face
-!                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                        ^ f90-ts-font-lock-delimiter-face
+!                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                             ^ f90-ts-font-lock-delimiter-face
            end select rank_b
 !          ^^^ font-lock-keyword-face
 !              ^^^^^^ font-lock-keyword-face
@@ -368,7 +386,9 @@
            error stop 'assumed-size input not supported (a)'
 !          ^^^^^ font-lock-keyword-face
 !                ^^^^ font-lock-keyword-face
-!                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                     ^ f90-ts-font-lock-delimiter-face
+!                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                          ^ f90-ts-font-lock-delimiter-face
       end select rank_a
 !     ^^^ font-lock-keyword-face
 !         ^^^^^^ font-lock-keyword-face

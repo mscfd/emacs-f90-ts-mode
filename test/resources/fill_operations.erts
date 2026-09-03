@@ -1,3 +1,5 @@
+note   double end marker =-=-= required due to a bug in erts in conjunction with skip clause, fixed in emacs 31
+
 Point-Char: |
 
 Code:
@@ -232,10 +234,10 @@ end subroutine sub@
 subroutine |sub()
      ! very long comment header with
      ! lots and lots of gibberish
-     !    content 1 content 2 content
-     !    3 content 4 content 5 content
-     !    6 content 3 content 4 content
-     !    5 content 6 content 7
+     !    content 1 content 2 content 3
+     !    content 4 content 5 content 6
+     !    content 3 content 4 content 5
+     !    content 6 content 7
      ! another header
      !    content 110 content 123
      !    content 234 content 345
@@ -390,6 +392,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((fill-column 40)
+          (inhibit-message t)
           (f90-ts-fill-select-breakpoint-by 'interactive))
       (f90-ts-mode-test--with-mocked-keys
        '[left return right backspace end left left left left left left return space delete home right right right right right right delete left left delete left left return backspace return right return ?q]
@@ -425,6 +428,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((fill-column 40)
+          (inhibit-message t)
           (f90-ts-fill-select-breakpoint-by 'interactive))
       (f90-ts-mode-test--with-mocked-keys
        '[space left left return delete space space space space delete delete space space left return space]
@@ -467,6 +471,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((fill-column 40)
+          (inhibit-message t)
           (f90-ts-fill-select-breakpoint-by 'interactive))
       (f90-ts-mode-test--with-mocked-keys
        '[space space left return return left return]
@@ -491,6 +496,7 @@ Code:
   (lambda ()
     (f90-ts-mode)
     (let ((fill-column 40)
+          (inhibit-message t)
           (f90-ts-fill-select-breakpoint-by 'interactive))
       (f90-ts-mode-test--with-mocked-keys
        '[space ?q left return return left return]
@@ -507,4 +513,88 @@ subroutine sub()|
      !
      ! comment1 comment2
 end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40)
+          (inhibit-message t)
+          (f90-ts-fill-select-breakpoint-by 'interactive))
+      (f90-ts-mode-test--with-mocked-keys
+       '[left return delete ?r return delete ?r right return return]
+        (call-interactively #'f90-ts-fill-at-line))))
+
+Name: fill line interactive 5
+=-=
+module mod
+type :: t
+|   integer :: var1, var2, var3, var4, &
+              var5, var6, var7, var8, &
+              var9, var10, var11, var12
+end type t
+end module mod
+=-=
+module mod
+type :: t
+|   integer :: var1, var2, var3, &
+              var4, var5, var6, var7, &
+              var8, var9, var10, var11, &
+              var12
+end type t
+end module mod
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40)
+          (inhibit-message t)
+          (f90-ts-fill-select-breakpoint-by 'interactive))
+      (f90-ts-mode-test--with-mocked-keys
+       '[right right right ?r return right right right return left left left return return]
+        (call-interactively #'f90-ts-fill-at-line))))
+
+Name: fill line interactive 5
+=-=
+subroutine break_anywhere()
+|     s = '0123456789abcdefghijklmnopqrstuvwxyz0123456789abcdefhijklmnopqrstuvwxyz0123456789abcdefhijklmnopqrstuvwxyz'
+end subroutine break_anywhere
+=-=
+subroutine break_anywhere()
+|     s = '0123456789abcdefghijklmnopqrs&
+         &tuvwxyz0123456789abcdefhijklmnop&
+         &qrstuvwxyz0123456789abcdef&
+         &hijklmnopqrstuvwxyz'
+end subroutine break_anywhere
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((fill-column 40)
+          (inhibit-message t)
+          (f90-ts-fill-select-breakpoint-by 'interactive))
+      (f90-ts-mode-test--with-mocked-keys
+       '[right right right ?r return left left return right right return space return return]
+        (call-interactively #'f90-ts-fill-at-line))))
+
+Name: fill line interactive 6
+=-=
+subroutine break_anywhere_if_necessary()
+|     s = '0123456789abcdefghijklmnopqrstuvw xyz0123456789abcdefhij+klmnopqrstuvwxyz0123456789abcdefhijklmnopqrstuv wxyz'
+end subroutine break_anywhere_if_necessary
+=-=
+subroutine break_anywhere_if_necessary()
+|     s = '0123456789abcdefghijklmnopqrs&
+         &tuvw &
+         &xyz0123456789abcdefhij+klmnopqrstuvwxyz0123456789abcdefhijklmnopqrstuv &
+         &wxyz'
+end subroutine &
+       break_anywhere_if_necessary
+=-=-=
 =-=-=

@@ -118,16 +118,27 @@ by CATEGORY and a time stamp."
 
 ;;;-----------------------------------------------------------------------------
 
-(defun f90-ts-log-line (category msg &optional pos)
+(defun f90-ts-log-line (category msg &optional pos-marker pos)
   "Write the line at POS or point to the log buffer.
-Use CATEGORY and MSG to prefix the log message."
-  (let ((p (or pos (point))))
-  (save-excursion
-    (goto-char p)
-    (let ((line (buffer-substring-no-properties (line-beginning-position)
-                                                (line-end-position))))
-      (f90-ts-log-msg category "%s: line at <pos:%d,line:%d> = %S"
-                      msg p (line-number-at-pos p) line)))))
+Use CATEGORY and MSG to prefix the log message.
+Optional POS-MARKER (char or string) is inserted at POS."
+  (let ((p (or pos (point)))
+        (marker (cond ((characterp pos-marker) (char-to-string pos-marker))
+                      ((stringp pos-marker) pos-marker)
+                      (t nil))))
+    (save-excursion
+      (goto-char p)
+      (let* ((bol (line-beginning-position))
+             (eol (line-end-position))
+             (rel-pos (- p bol))
+             (line-raw (buffer-substring-no-properties bol eol))
+             (line (if marker
+                       (concat (substring line-raw 0 rel-pos)
+                               marker
+                               (substring line-raw rel-pos))
+                     line-raw)))
+        (f90-ts-log-msg category "%s: line at <pos:%d,line:%d> = %S"
+                        msg p (line-number-at-pos p) line)))))
 
 
 ;;;-----------------------------------------------------------------------------

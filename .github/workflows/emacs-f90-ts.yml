@@ -12,7 +12,43 @@ jobs:
 
     strategy:
       matrix:
-        emacs-version: ["30.1", "30.2"]
+        include:
+          # Emacs 30.1 built against Tree-sitter 0.24:
+          # exercises the ABI-14 environment shipped by Emacs 30.
+          - emacs-version: "30.1"
+            emacs-source: true
+            tree-sitter-version: "0.24.7"
+            tree-sitter-abi: "14"
+
+          # Emacs 30.1 built against Tree-sitter 0.25:
+          # exercises the ABI-15 environment commonly found in
+          # self-built Emacs 30 installations.
+          - emacs-version: "30.1"
+            emacs-source: true
+            tree-sitter-version: "0.25.10"
+            tree-sitter-abi: "15"
+
+          # Emacs 30.2 built against Tree-sitter 0.24:
+          # ABI-14 environment.
+          - emacs-version: "30.2"
+            emacs-source: true
+            tree-sitter-version: "0.24.7"
+            tree-sitter-abi: "14"
+
+          # Emacs 30.2 built against Tree-sitter 0.25:
+          # ABI-15 environment.
+          - emacs-version: "30.2"
+            emacs-source: true
+            tree-sitter-version: "0.25.10"
+            tree-sitter-abi: "15"
+
+          # Emacs 31: use Purcell's precompiled Emacs.
+          # Current Purcell build uses Tree-sitter 0.26.x,
+          # which supports ABI 15.
+          - emacs-version: "31.1"
+            emacs-source: false
+            tree-sitter-version: "0.26.11"
+            tree-sitter-abi: "15"
 
     steps:
       # -------------------------
@@ -22,47 +58,74 @@ jobs:
         uses: actions/checkout@v5
 
       # -------------------------
-      # Install dependencies
+      # Install common dependencies
       # -------------------------
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             build-essential \
+            git \
+            cmake \
+            pkg-config \
+            npm \
+            curl
+
+      # -------------------------
+      # Install dependencies needed
+      # for building Emacs 30
+      # -------------------------
+      - name: Install Emacs build dependencies
+        if: matrix.emacs-source
+        run: |
+          sudo apt-get install -y \
             autoconf \
             automake \
             texinfo \
             libjansson-dev \
             libgnutls28-dev \
             libncurses-dev \
-            libgccjit-13-dev \
-            git \
-            cmake \
-            pkg-config
+            libgccjit-13-dev
 
       # -------------------------
-      # Build tree-sitter 0.25.x
+      # Build Tree-sitter
       # -------------------------
-      - name: Build tree-sitter 0.25
+      #
+      # The Tree-sitter version here determines the ABI range
+      # supported by the Emacs binary:
+      #
+      #   0.24.x -> ABI 13-14
+      #   0.25.x -> ABI 13-15
+      #
+      - name: Build tree-sitter ${{ matrix.tree-sitter-version }}
+        if: matrix.emacs-source
         run: |
-          git clone --depth 1 --branch v0.25.10 https://github.com/tree-sitter/tree-sitter.git
+          git clone \
+            --depth 1 \
+            --branch v${{ matrix.tree-sitter-version }} \
+            https://github.com/tree-sitter/tree-sitter.git
+
           cd tree-sitter
 
           make -j$(nproc)
           make PREFIX=$HOME/local install
 
-          echo "LD_LIBRARY_PATH=$HOME/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-          echo "LIBRARY_PATH=$HOME/local/lib:$LIBRARY_PATH" >> $GITHUB_ENV
-          echo "CPATH=$HOME/local/include:$CPATH" >> $GITHUB_ENV
-          echo "PKG_CONFIG_PATH=$HOME/local/lib/pkgconfig:$PKG_CONFIG_PATH" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=$HOME/local/lib:$LD_LIBRARY_PATH" >> "$GITHUB_ENV"
+          echo "LIBRARY_PATH=$HOME/local/lib:$LIBRARY_PATH" >> "$GITHUB_ENV"
+          echo "CPATH=$HOME/local/include:$CPATH" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$HOME/local/lib/pkgconfig:$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
 
       # -------------------------
-      # Build Emacs (linked to TS 0.25)
+      # Build Emacs 30
       # -------------------------
       - name: Build Emacs ${{ matrix.emacs-version }}
+        if: matrix.emacs-source
         run: |
-          git clone --depth 1 --branch emacs-${{ matrix.emacs-version }} \
+          git clone \
+            --depth 1 \
+            --branch emacs-${{ matrix.emacs-version }} \
             https://github.com/emacs-mirror/emacs.git
+
           cd emacs
 
           ./autogen.sh
@@ -86,79 +149,196 @@ jobs:
           make -j$(nproc)
           make install
 
-          echo "$HOME/emacs/bin" >> $GITHUB_PATH
+          echo "$HOME/emacs/bin" >> "$GITHUB_PATH"
 
       # -------------------------
-      # Verify Emacs + linkage
+      # Install Emacs 31
       # -------------------------
-      - name: Verify version
-        run: emacs --version
+      - name: Install Emacs 31
+        if: "!matrix.emacs-source"
+        uses: purcell/setup-emacs@master
+        with:
+          version: '31.1'
 
-      - name: Verify tree-sitter linkage
+      # -------------------------
+      # Verify Emacs
+      # -------------------------
+      - name: Verify Emacs
         run: |
-          EMACS_BIN=$(which emacs)
-          echo "Emacs binary: $EMACS_BIN"
+          which emacs
+          emacs --version
 
-          LDD_OUT=$(ldd "$EMACS_BIN" | grep libtree-sitter || true)
-          echo "tree-sitter linkage: $LDD_OUT"
+      # -------------------------
+      # Verify Tree-sitter support
+      # -------------------------
+      #
+      # Print both ends of the ABI range. This is the important
+      # compatibility information, rather than the exact
+      # Tree-sitter release number.
+      #
+      - name: Verify Tree-sitter ABI
+        run: |
+          emacs --batch -Q \
+            --eval "(progn
+              (princ (format \"Emacs: %s\n\" emacs-version))
+              (princ
+               (format
+                \"Tree-sitter ABI minimum: %s\n\"
+                (treesit-library-abi-version t)))
+              (princ
+               (format
+                \"Tree-sitter ABI maximum: %s\n\"
+                (treesit-library-abi-version)))
 
-          if ! echo "$LDD_OUT" | grep -q "libtree-sitter.so.0.25"; then
-            echo "Error: Emacs is not linked against libtree-sitter.so.0.25"
+              (unless (treesit-available-p)
+                (error \"Tree-sitter is not available\")))"
+
+      # -------------------------
+      # Verify expected ABI
+      # -------------------------
+      - name: Verify expected Tree-sitter ABI
+        run: |
+          ACTUAL_ABI=$(
+            emacs --batch -Q \
+              --eval '(princ (treesit-library-abi-version))'
+          )
+
+          echo "Expected maximum ABI: ${{ matrix.tree-sitter-abi }}"
+          echo "Actual maximum ABI:   $ACTUAL_ABI"
+
+          if [ "$ACTUAL_ABI" != "${{ matrix.tree-sitter-abi }}" ]; then
+            echo "Error: unexpected Tree-sitter ABI"
             exit 1
           fi
 
-          echo "Emacs is correctly linked against libtree-sitter.so.0.25"
+      # -------------------------
+      # Verify Emacs 30 linkage
+      # -------------------------
+      - name: Verify tree-sitter linkage
+        if: matrix.emacs-source
+        run: |
+          EMACS_BIN=$(which emacs)
+
+          echo "Emacs binary: $EMACS_BIN"
+
+          LDD_OUT=$(ldd "$EMACS_BIN" | grep libtree-sitter || true)
+
+          echo "tree-sitter linkage:"
+          echo "$LDD_OUT"
+
+          if [ -z "$LDD_OUT" ]; then
+            echo "Error: Emacs is not linked against libtree-sitter"
+            exit 1
+          fi
+
+      # -------------------------
+      # Verify Emacs 31 linkage
+      # -------------------------
+      #
+      # This is informational for the Purcell binary. The important
+      # verification is the ABI reported by the running Emacs above.
+      #
+      - name: Verify precompiled Emacs tree-sitter linkage
+        if: "!matrix.emacs-source"
+        run: |
+          EMACS_BIN=$(which emacs)
+
+          echo "Emacs binary: $EMACS_BIN"
+
+          LDD_OUT=$(ldd "$EMACS_BIN" | grep libtree-sitter || true)
+
+          echo "tree-sitter linkage:"
+          echo "$LDD_OUT"
+
+          if [ -z "$LDD_OUT" ]; then
+            echo "Warning: no libtree-sitter linkage found in ldd."
+            echo "The binary may load Tree-sitter another way."
+          fi
 
       # -------------------------
       # Install tree-sitter CLI
       # -------------------------
+      #
+      # For the source-built Emacs jobs this matches the Tree-sitter
+      # library used to build Emacs, so the generated grammar naturally
+      # has the corresponding latest ABI:
+      #
+      #   CLI 0.24.x -> grammar ABI 14
+      #   CLI 0.25.x -> grammar ABI 15
+      #   CLI 0.26.x -> grammar ABI 15
+      #
       - name: Install tree-sitter CLI
         run: |
-          npm install -g tree-sitter-cli@0.25.10
+          npm install -g \
+            tree-sitter-cli@${{ matrix.tree-sitter-version }}
 
       # -------------------------
-      # Build tree-sitter-fortran
+      # Verify tree-sitter CLI
       # -------------------------
-      - name: Build tree-sitter-fortran
+      - name: Verify tree-sitter CLI
         run: |
-          git clone --depth 1 --single-branch --branch master \
-            https://github.com/mscfd/tree-sitter-fortran.git
-          cd tree-sitter-fortran
-
-          echo "Grammar commit: $(git rev-parse HEAD)"
-
-          tree-sitter generate
-
-          cc -fPIC -c src/parser.c
-          cc -fPIC -c src/scanner.c 2>/dev/null || true
-
-          cc -shared parser.o scanner.o -o libtree-sitter-fortran.so || \
-            cc -shared parser.o -o libtree-sitter-fortran.so
-
-          mkdir -p ~/.emacs.d/tree-sitter
-          cp libtree-sitter-fortran.so ~/.emacs.d/tree-sitter/
+          tree-sitter --version
 
       # -------------------------
-      # Verify ABI compatibility
+      # Run checks
       # -------------------------
-      - name: Verify tree-sitter ABI
-        run: |
-          emacs --batch -Q \
-            --eval "(progn
-              (add-to-list 'treesit-extra-load-path \"~/.emacs.d/tree-sitter\")
-
-              (let ((lib (treesit-library-abi-version))
-                    (lang (treesit-language-abi-version 'fortran)))
-                (princ (format \"lib ABI: %s\nlang ABI: %s\n\" lib lang))
-                (unless (and (= lib 15) (= lang 15))
-                  (princ \"ABI mismatch!\n\")
-                  (kill-emacs 1))))"
-
-      # -------------------------
-      # Run checks + tests
-      # -------------------------
-      - name: Run checks (targeted files)
+      - name: Run checks
         run: |
           make test-checkdoc
           make test-byte-compile
-          make test-ert-all
+
+      # -------------------------
+      # Test both grammar versions
+      # -------------------------
+      - name: Test grammar versions
+        run: |
+          set -e
+
+          # Ensure target directory exists for tree-sitter libraries
+          mkdir -p ~/.emacs.d/tree-sitter
+
+          for branch in master string_literal_emacs; do
+            echo
+            echo "========================================"
+            echo "Testing grammar branch: $branch"
+            echo "========================================"
+
+            rm -rf tree-sitter-fortran
+
+            git clone \
+              --depth 1 \
+              --single-branch \
+              --branch "$branch" \
+              https://github.com/mscfd/tree-sitter-fortran.git
+
+            cd tree-sitter-fortran
+
+            echo "Grammar branch: $branch"
+            echo "Grammar commit: $(git rev-parse HEAD)"
+
+            # Generate parser source files.
+            #
+            # The CLI version is selected by the matrix, so this
+            # produces the ABI appropriate for the Emacs under test.
+            tree-sitter generate
+
+            # Verify the generated grammar ABI explicitly.
+            echo "Grammar ABI:"
+            grep LANGUAGE_VERSION src/parser.c
+
+            if ! grep -q "#define LANGUAGE_VERSION ${{ matrix.tree-sitter-abi }}" src/parser.c; then
+              echo "Error: generated grammar has unexpected ABI"
+              exit 1
+            fi
+
+            # Compile directly to Emacs tree-sitter directory.
+            tree-sitter build \
+              --output ~/.emacs.d/tree-sitter/libtree-sitter-fortran.so
+
+            cd ..
+
+            echo
+            echo "Running ERT tests for $branch"
+
+            make test-ert-all
+          done

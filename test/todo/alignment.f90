@@ -1,14 +1,19 @@
-! primary of -0.03333 is not good (due to leading minus sign which becomes a unary operator,
-! but aligning 0.03333 without minus to 1.0 is difficult)
-subroutine arr2()
-     real, dimension(1:10), parameter :: &
-            bernoulli = (/ 1.0, -0.5, 0.16667, 0.0, &
-                                -0.03333, 0.0, &
-                           0.0238, 0.0 &
-                            /)
-end subroutine arr2
+! use commata as anchor, maybe like:
+! if node is not a commata and directly followed by a commata, then a previous commata
+! is a good anchor with offset -lenght of node?
+subroutine array
+   use, intrinsic :: iso_fortran_env, only : real64
+   integer, parameter :: dp = real64
+   real(kind=dp), parameter :: g = (1.0 + sqrt(5.0)) / 2.0
 
-
+   real(kind=dp), dimension(1:3,1:4), parameter :: &
+          arr = reshape( &
+          [      g,      1.0_dp,     1.0_dp, &
+                -g,      2.0_dp,     2.0_dp, &
+            1.0_dp,           g,         -g, &
+           -1.0_dp,          -g,          g], &
+          [3,4])
+end subroutine array
 
 
 ! there is no proper context node for "! comment 2", but "! comment 1"
@@ -23,10 +28,13 @@ end subroutine math
 
 ! y is not a math-expression, just an identifier,
 ! should identifier be added?
-! (in order to get column after = as suggestion)
+! (in order to get column after = as suggestion,
+! especially if a comment is present, this makes sense)
 subroutine math()
      x1234567890 = &
-            y
+            (x+y)
+     x1234567890 = & ! commen
+            (x+y)
      z = &
             y
 end subroutine math
@@ -163,7 +171,7 @@ program int23
 end program int23
 
 
-! align result below predicate_ifc?
+! align "result" below predicate_ifc?
 module mod
  abstract interface
       impure function predicate_ifc(self, k1, k2, &

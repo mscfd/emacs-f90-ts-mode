@@ -1,6 +1,9 @@
  program coarray_test
 !^^^^^^^ font-lock-keyword-face
 !        ^^^^^^^^^^^^ font-lock-function-name-face
+  use iso_fortran_env
+! ^^^ font-lock-keyword-face
+!     ^^^^^^^^^^^^^^^ nil
   implicit none
 ! ^^^^^^^^ font-lock-keyword-face
 !          ^^^^ font-lock-keyword-face
@@ -50,13 +53,13 @@
 !          ^^^^^^^^^^^^^^^^^^^^^^ font-lock-keyword-face
 !                                 ^^ f90-ts-font-lock-delimiter-face
 !                                    ^^^ nil
-  integer :: team_value[*]
-! ^^^^^^^ font-lock-type-face
-!         ^^ f90-ts-font-lock-delimiter-face
-!            ^^^^^^^^^^ nil
-!                      ^ f90-ts-font-lock-bracket-face
-!                       ^ nil
-!                        ^ f90-ts-font-lock-bracket-face
+  type(team_type) :: team_value
+! ^^^^ font-lock-keyword-face
+!     ^ f90-ts-font-lock-bracket-face
+!      ^^^^^^^^^ font-lock-type-face
+!               ^ f90-ts-font-lock-bracket-face
+!                 ^^ f90-ts-font-lock-delimiter-face
+!                    ^^^^^^^^^^ nil
   type(lock_type), codimension[*] :: mylock
 ! ^^^^ font-lock-keyword-face
 !     ^ f90-ts-font-lock-bracket-face
@@ -67,14 +70,14 @@
 !                                 ^^ f90-ts-font-lock-delimiter-face
 !                                    ^^^^^^ nil
 
-  scalar_co[1]       = 42
+  scalar_co[1]      = 42
 ! ^^^^^^^^^ nil
 !          ^ f90-ts-font-lock-bracket-face
 !           ^ font-lock-number-face
 !            ^ f90-ts-font-lock-bracket-face
-!                    ^ f90-ts-font-lock-operator-face
-!                      ^^ font-lock-number-face
-  arr(5)[1, 2]       = 3.14
+!                   ^ f90-ts-font-lock-operator-face
+!                     ^^ font-lock-number-face
+  arr(5)[1, 2]      = 3.14
 ! ^^^ nil
 !    ^ f90-ts-font-lock-bracket-face
 !     ^ font-lock-number-face
@@ -83,16 +86,16 @@
 !         ^ f90-ts-font-lock-delimiter-face
 !           ^ font-lock-number-face
 !            ^ f90-ts-font-lock-bracket-face
-!                    ^ f90-ts-font-lock-operator-face
-!                      ^^^^ font-lock-number-face
-  val[this_image()]  = this_image()
+!                   ^ f90-ts-font-lock-operator-face
+!                     ^^^^ font-lock-number-face
+  val[this_image()] = this_image()
 ! ^^^ nil
 !    ^ f90-ts-font-lock-bracket-face
 !     ^^^^^^^^^^ font-lock-builtin-face
 !               ^^^ f90-ts-font-lock-bracket-face
-!                    ^ f90-ts-font-lock-operator-face
-!                      ^^^^^^^^^^ font-lock-builtin-face
-!                                ^^ f90-ts-font-lock-bracket-face
+!                   ^ f90-ts-font-lock-operator-face
+!                     ^^^^^^^^^^ font-lock-builtin-face
+!                               ^^ f90-ts-font-lock-bracket-face
 
   ! intrinsics
 ! ^^^^^^^^^^^^ font-lock-comment-face
@@ -200,15 +203,15 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^ font-lock-string-face
-!                                ^ f90-ts-font-lock-delimiter-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^ font-lock-string-face
+!                               ^^ f90-ts-font-lock-delimiter-face
 !                                  ^^^^^^^^^^ font-lock-builtin-face
 !                                            ^^ f90-ts-font-lock-bracket-face
-  end change team name_ch
+  end team name_ch
 ! ^^^ font-lock-keyword-face
-!     ^^^^^^ font-lock-keyword-face
-!            ^^^^ font-lock-keyword-face
-!                 ^^^^^^^ nil
+!     ^^^^ font-lock-keyword-face
+!          ^^^^^^^ nil
 
  end program coarray_test
 !^^^ font-lock-keyword-face
@@ -307,9 +310,9 @@
             print *,"Failed images: ", failed_images()
 !           ^^^^^ font-lock-keyword-face
 !                 ^ nil
-!                  ^ f90-ts-font-lock-delimiter-face
-!                   ^^^^^^^^^^^^^^^^^ font-lock-string-face
-!                                    ^ f90-ts-font-lock-delimiter-face
+!                  ^^ f90-ts-font-lock-delimiter-face
+!                    ^^^^^^^^^^^^^^^ font-lock-string-face
+!                                   ^^ f90-ts-font-lock-delimiter-face
 !                                      ^^^^^^^^^^^^^ font-lock-builtin-face
 !                                                   ^^ f90-ts-font-lock-bracket-face
        else if (stat == STAT_STOPPED_IMAGE) then
@@ -324,9 +327,9 @@
             print *,"Stopped images: ", stopped_images()
 !           ^^^^^ font-lock-keyword-face
 !                 ^ nil
-!                  ^ f90-ts-font-lock-delimiter-face
-!                   ^^^^^^^^^^^^^^^^^^ font-lock-string-face
-!                                     ^ f90-ts-font-lock-delimiter-face
+!                  ^^ f90-ts-font-lock-delimiter-face
+!                    ^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                    ^^ f90-ts-font-lock-delimiter-face
 !                                       ^^^^^^^^^^^^^^ font-lock-builtin-face
 !                                                     ^^ f90-ts-font-lock-bracket-face
        else
@@ -334,8 +337,9 @@
             print *,"Unforseen error, aborting"
 !           ^^^^^ font-lock-keyword-face
 !                 ^ nil
-!                  ^ f90-ts-font-lock-delimiter-face
-!                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                  ^^ f90-ts-font-lock-delimiter-face
+!                    ^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                             ^ f90-ts-font-lock-delimiter-face
             error stop
 !           ^^^^^ font-lock-keyword-face
 !                 ^^^^ font-lock-keyword-face
@@ -558,7 +562,9 @@
 !                   ^^^^^ font-lock-keyword-face
 !                         ^ nil
 !                          ^ f90-ts-font-lock-delimiter-face
-!                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                            ^ f90-ts-font-lock-delimiter-face
+!                             ^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                       ^ f90-ts-font-lock-delimiter-face
        stop
 !      ^^^^ font-lock-keyword-face
   end if
@@ -577,7 +583,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                 ^ f90-ts-font-lock-delimiter-face
 
        ! Wait until at least 2 events have been posted
 !      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
@@ -596,7 +604,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                          ^ f90-ts-font-lock-delimiter-face
 
   else if (me == 2) then
 ! ^^^^ font-lock-keyword-face
@@ -611,7 +621,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                         ^ f90-ts-font-lock-delimiter-face
 
        call event_post(evt[1])
 !      ^^^^ font-lock-keyword-face
@@ -625,7 +637,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                  ^ f90-ts-font-lock-delimiter-face
 
        call event_post(evt[1])
 !      ^^^^ font-lock-keyword-face
@@ -639,7 +653,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                   ^ f90-ts-font-lock-delimiter-face
   end if
 ! ^^^ font-lock-keyword-face
 !     ^^ font-lock-keyword-face
@@ -723,7 +739,9 @@
 !                   ^^^^^ font-lock-keyword-face
 !                         ^ nil
 !                          ^ f90-ts-font-lock-delimiter-face
-!                            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                            ^ f90-ts-font-lock-delimiter-face
+!                             ^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                       ^ f90-ts-font-lock-delimiter-face
        stop
 !      ^^^^ font-lock-keyword-face
   end if
@@ -744,7 +762,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                      ^ f90-ts-font-lock-delimiter-face
 
        call atomic_define(flag[1], 42)
 !      ^^^^ font-lock-keyword-face
@@ -761,7 +781,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                    ^ f90-ts-font-lock-delimiter-face
 
        call event_post(evt[1])
 !      ^^^^ font-lock-keyword-face
@@ -775,7 +797,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                         ^ f90-ts-font-lock-delimiter-face
 
        ! simulate failure after notifying
 !      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-comment-face
@@ -783,7 +807,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                    ^ f90-ts-font-lock-delimiter-face
        fail image
 !      ^^^^ font-lock-keyword-face
 !           ^^^^^ font-lock-keyword-face
@@ -803,7 +829,9 @@
 !      ^^^^^ font-lock-keyword-face
 !            ^ nil
 !             ^ f90-ts-font-lock-delimiter-face
-!               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
+!                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                    ^ f90-ts-font-lock-delimiter-face
 
        done = .false.
 !      ^^^^ nil
@@ -846,7 +874,9 @@
 !                ^^^^^ font-lock-keyword-face
 !                      ^ nil
 !                       ^ f90-ts-font-lock-delimiter-face
-!                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                         ^ f90-ts-font-lock-delimiter-face
+!                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                                          ^ f90-ts-font-lock-delimiter-face
             end if
 !           ^^^ font-lock-keyword-face
 !               ^^ font-lock-keyword-face
@@ -866,8 +896,9 @@
 !           ^^^^^ font-lock-keyword-face
 !                 ^ nil
 !                  ^ f90-ts-font-lock-delimiter-face
-!                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
-!                                               ^ f90-ts-font-lock-delimiter-face
+!                    ^ f90-ts-font-lock-delimiter-face
+!                     ^^^^^^^^^^^^^^^^^^^^^^^^^ font-lock-string-face
+!                                              ^^ f90-ts-font-lock-delimiter-face
 !                                                 ^^^ nil
             done = .true.
 !           ^^^^ nil

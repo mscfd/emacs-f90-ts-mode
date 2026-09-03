@@ -1,11 +1,11 @@
+Point-Char: |
+
 Code:
   (lambda ()
     (f90-ts-mode)
     (when f90-ts-mode-test--prepare-fn
       (funcall f90-ts-mode-test--prepare-fn))
     (funcall f90-ts-mode-test--action-fn))
-
-Point-Char: |
 
 Name: align logical expression 1
 =-=
@@ -255,7 +255,7 @@ subroutine sub()
                  -7 * &
                  -value2 * fun(.not. A, &
                                .not. B, &
-                               -C)
+                              -C)
 end subroutine sub
 =-=-=
 
@@ -351,4 +351,172 @@ subroutine sub()
                           psi_2) &
                     )
 end subroutine sub
+=-=-=
+
+Name: align unary minus 1
+=-=
+subroutine unary_minus_1()
+real, dimension(1:10), parameter :: &
+bernoulli = (/ 1.0, -0.5, 0.16667, 0.0, &
+-0.03333, 0.0, &
+0.0238, 0.0 &
+/)
+end subroutine unary_minus_1
+=-=
+subroutine unary_minus_1()
+     real, dimension(1:10), parameter :: &
+            bernoulli = (/ 1.0, -0.5, 0.16667, 0.0, &
+                          -0.03333, 0.0, &
+                           0.0238, 0.0 &
+                            /)
+end subroutine unary_minus_1
+=-=-=
+
+Name: align unary minus 2
+=-=
+subroutine unary_minus_2()
+A = [ 1, 2, &
+-3, 4, &
+-(a+b), 5, &
++6, +7,&
+8, 9, &
+.myop. c, d]
+call foo(   .not. f1, &
+-x1, &
+x2, &
+x1+x2, &
+-x1+x2+x3+x4, &
+-x1==x2, &
+-x1==x2 .or. x1 == 3, &
++x1==x2, &
+(f2 .and. f3), &
+f2 .or. f3, &
+.not. f2 .or. .not. f3 .or. f4, &
+.not. f2 .or. .not. f3 .nor. f4, &
+.not. f2 .imply. .not. f3 .or. f4, &
+.not. f4, &
+.other. x3, &
+! comment
+)
+end subroutine unary_minus_2
+=-=
+subroutine unary_minus_2()
+     A = [ 1, 2, &
+          -3, 4, &
+          -(a+b), 5, &
+          +6, +7,&
+           8, 9, &
+           .myop. c, d]
+     call foo(   .not. f1, &
+                -x1, &
+                 x2, &
+                 x1+x2, &
+                -x1+x2+x3+x4, &
+                -x1==x2, &
+                -x1==x2 .or. x1 == 3, &
+                +x1==x2, &
+                 (f2 .and. f3), &
+                 f2 .or. f3, &
+                 .not. f2 .or. .not. f3 .or. f4, &
+                 .not. f2 .or. .not. f3 .nor. f4, &
+                 .not. f2 .imply. .not. f3 .or. f4, &
+                 .not. f4, &
+                 .other. x3, &
+              ! comment
+                )
+end subroutine unary_minus_2
+=-=-=
+
+Name: align unary minus 3
+=-=
+subroutine sub()
+! works partially
+x0123456789 =  - &
+5 + &
+6
+! works partially
+x0123456789 =   5 + &
+- &
+6
+! works (is it expected to align --5 with 123456?)
+x0123456789 =   123456 - &
+-      --5
+! works
+x0123456789 = 5 **&
+-2
+! works
+x0123456789 = 5 &
+** -2
+end subroutine sub
+=-=
+subroutine sub()
+     ! works partially
+     x0123456789 =  - &
+                     5 + &
+                     6
+     ! works partially
+     x0123456789 =   5 + &
+                    - &
+                     6
+     ! works (is it expected to align --5 with 123456?)
+     x0123456789 =   123456 - &
+              -      --5
+     ! works
+     x0123456789 = 5 **&
+                  -2
+     ! works
+     x0123456789 = 5 &
+                  ** -2
+end subroutine sub
+=-=-=
+
+Name: align unary minus 4
+=-=
+! These are pathological corner cases, testing a large minus offset
+! (due to the many blanks between minus and expression) required to
+! align the content of an unary minus operator.
+!
+! The first two assignments cannot be aligned properly, but it must
+! not fail and be somewhat reasonable:
+!
+! The first gives a rather bad (non idem potent case) as it hits
+! limitations in the region indent cache, which only caches buffered
+! deltas for continued lines, and not the whole region to be indented.
+!
+! The second can choose the minimal column at 0, but is still unable
+! to align, obviously.
+subroutine unary_minus_4()
+x = [ 1, 2, &
+-           3, 4]
+     x = [ 1, 2, &
+-           3, 4]
+x0123456 = [ 1, 2, &
+-           3, 4]
+x0123456 = [               1, 2, &
+-           3, 4]
+end subroutine unary_minus_4
+=-=
+! These are pathological corner cases, testing a large minus offset
+! (due to the many blanks between minus and expression) required to
+! align the content of an unary minus operator.
+!
+! The first two assignments cannot be aligned properly, but it must
+! not fail and be somewhat reasonable:
+!
+! The first gives a rather bad (non idem potent case) as it hits
+! limitations in the region indent cache, which only caches buffered
+! deltas for continued lines, and not the whole region to be indented.
+!
+! The second can choose the minimal column at 0, but is still unable
+! to align, obviously.
+subroutine unary_minus_4()
+     x = [ 1, 2, &
+     -           3, 4]
+     x = [ 1, 2, &
+-           3, 4]
+     x0123456 = [ 1, 2, &
+      -           3, 4]
+     x0123456 = [               1, 2, &
+                    -           3, 4]
+end subroutine unary_minus_4
 =-=-=

@@ -15,7 +15,9 @@
       s = "abc"
 !     ^ nil
 !       ^ f90-ts-font-lock-operator-face
-!         ^^^^^ font-lock-string-face
+!         ^ f90-ts-font-lock-delimiter-face
+!          ^^^ font-lock-string-face
+!             ^ f90-ts-font-lock-delimiter-face
       l = .true. .or. .false.
 !     ^ nil
 !       ^ f90-ts-font-lock-operator-face
@@ -30,7 +32,9 @@
 !^^^^ font-lock-constant-face
 !     ^^^^^^^^^^ nil
 !               ^ f90-ts-font-lock-operator-face
-!                ^^^^^^ font-lock-string-face
+!                ^ f90-ts-font-lock-delimiter-face
+!                 ^^^^ font-lock-string-face
+!                     ^ f90-ts-font-lock-delimiter-face
  end subroutine values
 !^^^ font-lock-keyword-face
 !    ^^^^^^^^^^ font-lock-keyword-face

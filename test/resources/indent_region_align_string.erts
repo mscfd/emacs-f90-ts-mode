@@ -1,3 +1,5 @@
+note   double end marker =-=-= required due to a bug in erts in conjunction with skip clause, fixed in emacs 31
+
 Code:
   (lambda ()
     (f90-ts-mode)
@@ -31,6 +33,7 @@ subroutine string2()
 end subroutine string2
 =-=-=
 
+Skip: (not (f90-ts--string-literal-decomposed-p))
 Name: continued string 3
 =-=
 subroutine string3()
@@ -40,6 +43,109 @@ subroutine string3()
            &abc &
 
            &uvw&
-           xyz"
+            xyz"
 end subroutine string3
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: continued string 4
+=-=
+subroutine sub()
+     s0123456789 = "012&
+                   ! comment
+                   &345&
+                    678&
+                   ! comment 1
+                   ! comment 2
+                    9ab&
+            ! comment at continued
+                   &cde&
+            &       fgh"
+     s0123456789 = "align&
+! comment
+                   &comment"
+     s0123456789 = "comment&
+            ! comment 1
+! comment 2
+                   &group"
+end subroutine sub
+=-=
+subroutine sub()
+     s0123456789 = "012&
+                   ! comment
+                   &345&
+                    678&
+                   ! comment 1
+                   ! comment 2
+                    9ab&
+            ! comment at continued
+                   &cde&
+            &       fgh"
+     s0123456789 = "align&
+                   ! comment
+                   &comment"
+     s0123456789 = "comment&
+            ! comment 1
+            ! comment 2
+                   &group"
+end subroutine sub
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: continued string 5
+=-=
+subroutine sub()
+     s0123456789 = """abc&
+                      def"
+     s0123456789 = """abc&
+            def"
+     s0123456789 = """abc&
+                    def"
+     s0123456789 = """abc&
+def"
+end subroutine sub
+=-=
+subroutine sub()
+     s0123456789 = """abc&
+                      def"
+     s0123456789 = """abc&
+            def"
+     s0123456789 = """abc&
+                    def"
+     s0123456789 = """abc&
+                      def"
+end subroutine sub
+=-=-=
+=-=-=
+
+Skip: (not (f90-ts--string-literal-decomposed-p))
+Name: continued string 6
+=-=
+subroutine sub()
+     s0123456789 = "abc""def&
+                    X"
+     s0123456789 = "abc""def&
+                         X"
+     s0123456789 = "abc""def&
+                       X"
+     s0123456789 = "abc""def&
+X"
+     s0123456789 = "abc""def&
+                        X"
+end subroutine sub
+=-=
+subroutine sub()
+     s0123456789 = "abc""def&
+                    X"
+     s0123456789 = "abc""def&
+                         X"
+     s0123456789 = "abc""def&
+                       X"
+     s0123456789 = "abc""def&
+                    X"
+     s0123456789 = "abc""def&
+                    X"
+end subroutine sub
+=-=-=
 =-=-=

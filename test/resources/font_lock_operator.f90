@@ -99,9 +99,13 @@
       str = "abc" // "def" // get_name()
 !     ^^^ nil
 !         ^ f90-ts-font-lock-operator-face
-!           ^^^^^ font-lock-string-face
+!           ^ f90-ts-font-lock-delimiter-face
+!            ^^^ font-lock-string-face
+!               ^ f90-ts-font-lock-delimiter-face
 !                 ^^ f90-ts-font-lock-operator-face
-!                    ^^^^^ font-lock-string-face
+!                    ^ f90-ts-font-lock-delimiter-face
+!                     ^^^ font-lock-string-face
+!                        ^ f90-ts-font-lock-delimiter-face
 !                          ^^ f90-ts-font-lock-operator-face
 !                             ^^^^^^^^ nil
 !                                     ^^ f90-ts-font-lock-bracket-face
