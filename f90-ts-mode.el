@@ -32,10 +32,10 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 30+)
 ;;
 ;; Recently changed, added or improved:
-;;   [09-2026]  Syntax highlighting, indentation and break/join/fill for string literals improved.
-;;              This requires a proposed (but not yet merged) tree-sitter language grammar extension.
-;;              See README.md for more details.
-;;   [09-2026] Tested with Emacs 31.1 and tree-sitter 0.26.
+;;   [09-2026] Syntax highlighting, indentation and break/join/fill for string literals improved.
+;;             This requires a proposed (but not yet merged) tree-sitter language grammar extension.
+;;             See README.md for more details.
+;;   [09-2026] Testing with Emacs 31.1 and tree-sitter 0.26 added.
 ;;
 ;;   [08-2026] `f90-ts-shift-line-break' as combined break/join function added.
 ;;   [08-2026] Defcustom `f90-ts-font-lock-error` replaced by
@@ -140,7 +140,7 @@ Recently changed, added or improved:
 - Improve syntax highlighting, indentation and break/join/fill for string
   literals.  This requires a proposed (but not yet merged) tree-sitter
   language grammar extension.  See README.md for more details.
-- Tested with emacs 31.1 and tree-sitter 0.26.
+- Testing with emacs 31.1 and tree-sitter 0.26 added.
 
 [08-2026]
 - `f90-ts-shift-line-break' as combined break/join function added.

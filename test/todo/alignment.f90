@@ -1,3 +1,21 @@
+! use commata as anchor, maybe like:
+! if node is not a commata and directly followed by a commata, then a previous commata
+! is a good anchor with offset -lenght of node?
+subroutine array
+   use, intrinsic :: iso_fortran_env, only : real64
+   integer, parameter :: dp = real64
+   real(kind=dp), parameter :: g = (1.0 + sqrt(5.0)) / 2.0
+
+   real(kind=dp), dimension(1:3,1:4), parameter :: &
+          arr = reshape( &
+          [      g,      1.0_dp,     1.0_dp, &
+                -g,      2.0_dp,     2.0_dp, &
+            1.0_dp,           g,         -g, &
+           -1.0_dp,          -g,          g], &
+          [3,4])
+end subroutine array
+
+
 ! there is no proper context node for "! comment 2", but "! comment 1"
 ! would be a proper primary or secondary choice, besides default indentation shown below
 ! in both cases: add assignment_statement as list context and extract part after "="
