@@ -2281,7 +2281,7 @@ rule but not for matched keywords, which are enforced with override=t."
                        'font-lock-warning-face t))))))
 
 
-(defun f90-ts--fontify-error (node _override start end &rest _)
+(defun f90-ts--fontify-error (node override start end &rest _)
   "Add error fontification for span of NODE if enabled and applicable.
 If `f90-ts-font-lock-error-show' is non-nil, and NODE of type \"ERROR\" has
 no other error node has descendant, then the function appends
@@ -2289,7 +2289,7 @@ no other error node has descendant, then the function appends
 Often an error results in several \"ERROR\" nodes in the chain towards the root.
 Only the smallest error nodes should be marked.  Moreover, the span is trimmed
 to exclude leading and trailing blanks, which are sometimes part of ERROR nodes.
-Restrict fontification to the region between START and END."
+Restrict fontification to the region between START and END, using OVERRIDE."
   (when (and f90-ts-font-lock-error-show
              (let ((sparse-tree (treesit-induce-sparse-tree node "^ERROR$")))
                ;; if the sparse-tree has only one node (node itself),
@@ -2307,14 +2307,15 @@ Restrict fontification to the region between START and END."
                                   f90-ts-font-lock-error-show)
                        ;; go f90-ts-font-lock-error-show minus one line forward and
                        ;; then trim to last character of that line
-                       (save-excursion
-                         (goto-char node-start)
-                         (end-of-line f90-ts-font-lock-error-show)
-                         (skip-chars-backward " \t")
-                         (point)))))
+                       (min node-end
+                            (save-excursion
+                              (goto-char node-start)
+                              (end-of-line f90-ts-font-lock-error-show)
+                              (skip-chars-backward " \t")
+                              (point))))))
         (treesit-fontify-with-override node-start end-err
                                        'f90-ts-font-lock-error-face
-                                       'append start end)))))
+                                       override start end)))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -2709,6 +2710,7 @@ append to a determined font lock face."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'error
+   :override 'append
    '(;; if enabled append some error face properties to existing faces
      ((ERROR) @f90-ts--fontify-error))))
 

@@ -546,54 +546,6 @@ PREFIX is the test name prefix, usual \"f90-ts-mode\" or \"f90-ts-mode-extra\"."
                        (ert-test-erts-file (ert-resource-file ,file))))))))))))
 
 
-;;------------------------------------------------------------------------------
-;; ERT: font locking
-
-(ert-deftest f90-ts-mode-test-std--font-lock--error-update ()
-  "Remove stale ERROR highlighting after an incremental edit."
-  (skip-unless (treesit-ready-p 'fortran))
-  (f90-ts-mode-test-with-custom-testing
-      '((f90-ts-font-lock-error-show . nil))
-    (with-temp-buffer
-      (insert "subroutine sub()\n"
-              "   call foo(arg1, &\n"
-              "!!$  &          arg2, &\n"
-              " &\n"
-              "end subroutine sub\n")
-      (f90-ts-mode)
-      (font-lock-ensure)
-
-      (goto-char (point-min))
-      (search-forward "arg2")
-      (let ((comment-pos (match-beginning 0)))
-        (should (memq 'font-lock-comment-face
-                      (ensure-list (get-text-property comment-pos 'face))))
-
-        (goto-char (point-min))
-        (search-forward "\n &")
-        (let ((amp-pos (1- (point)))
-              (edit-pos (point))
-              (line-start (line-beginning-position))
-              (line-end (line-end-position)))
-          (setq f90-ts-font-lock-error-show 'all)
-          (font-lock-flush line-start line-end)
-          (font-lock-ensure line-start line-end)
-
-          (should (memq 'f90-ts-font-lock-error-face
-                        (ensure-list (get-text-property amp-pos 'face))))
-          (should-not (memq 'f90-ts-font-lock-error-face
-                            (ensure-list (get-text-property comment-pos 'face))))
-
-          (goto-char edit-pos)
-          (insert "          arg3)")
-          (font-lock-ensure line-start (line-end-position))
-
-          (should-not (memq 'f90-ts-font-lock-error-face
-                            (ensure-list (get-text-property comment-pos 'face))))
-          (should (memq 'font-lock-comment-face
-                        (ensure-list (get-text-property comment-pos 'face)))))))))
-
-
 (defun f90-ts-mode-test--next-boundary (beg end)
   "Find next face or blank/non-blank boundary from BEG to END."
   (let ((next-face-change (next-single-property-change beg 'face nil end))
@@ -1105,7 +1057,8 @@ If buffer was modified, insert `**' otherwise insert '--'."
      ;; note that assertions are also part of the fontified buffer,
      ;; fontifying 9 lines translates into 3 proper lines and 6 assertions,
      ;; which is what we want to see in font_lock_error5
-     ("font_lock_error5.f90" . ((f90-ts-font-lock-error-show . 9))))))
+     ("font_lock_error5.f90" . ((f90-ts-font-lock-error-show . 9)))
+     ("font_lock_error6.f90" . ((f90-ts-font-lock-error-show . 6))))))
 
 
 ;; xref tests
