@@ -33,6 +33,8 @@
 ;;
 ;; Changelog:
 ;; [09-2026]
+;;   - `f90-ts-indent-delete-trailing-whitespace' added to automatically delete
+;;     trailing whitespace after indentation operation.
 ;;   - Font locking of interface name in deferred procedure declaration fixed.
 ;;   - Trimming of trailing whitespace characters in thing-end-of-X navigation
 ;;     added.
@@ -152,6 +154,8 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog:
 
 [09-2026]
+- `f90-ts-indent-delete-trailing-whitespace' added to automatically delete
+  trailing whitespace after indentation operation.
 - Font locking of interface name in deferred procedure declaration fixed.
 - Handling of trailing whitespace characters in thing-end-of-X navigation added.
 - Support for Emacs 29 + tree-sitter 0.20.x added (tested with 29.1, 29.3 and
@@ -415,6 +419,19 @@ Primary alignment column for the second line of a declaration plus
 `f90-ts-indent-declaration'."
   :type  'integer
   :safe  #'integerp
+  :group 'f90-ts-indent)
+
+
+(defcustom f90-ts-indent-delete-trailing-whitespace nil
+  "If non-nil, delete trailing whitespace characters after indentation.
+This applies whenever an indentation operation is performed on a single
+line, a statement (which may span several lines), or a region.
+Besides `f90-ts-indent-line', `f90-ts-indent-and-complete-line',
+`f90-ts-indent-and-complete-stmt', `f90-ts-indent-region' and
+`f90-ts-indent-and-complete-region', this also applies to operations
+performing indentation, like `f90-ts-comment-region-default' etc."
+  :type  'boolean
+  :safe  #'booleanp
   :group 'f90-ts-indent)
 
 
@@ -6076,6 +6093,34 @@ If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
 ;;; Indentation: auxiliary function
 ;;; mainly for handling leading ampersands in continued lines
 
+(defun f90-ts--delete-trailing-whitespace-line (pos)
+  "Delete trailing whitespace characters at the end of the line after POS."
+  (save-excursion
+    (let ((pos-last (f90-ts--pos-last-nonspace pos)))
+      (goto-char pos)
+      (delete-region (max pos pos-last)
+                     (line-end-position)))))
+
+
+(defun f90-ts--delete-trailing-whitespace-region (beg end)
+  "Delete trailing whitespace characters on each line between BEG and END.
+Uses the same line-boundary convention as
+`f90-ts--indent-whitespace-leading-amp-or-label-region': if END is at the
+beginning of a line, that line is excluded.
+Does nothing unless `f90-ts-indent-delete-trailing-whitespace' is non-nil."
+  (save-excursion
+    (goto-char beg)
+    (beginning-of-line)
+    (let ((line-end (save-excursion
+                      (goto-char end)
+                      (if (bolp)
+                          (1- (line-number-at-pos))
+                        (line-number-at-pos)))))
+      (while (<= (line-number-at-pos) line-end)
+        (f90-ts--delete-trailing-whitespace-line (point))
+        (forward-line 1)))))
+
+
 (defmacro f90-ts--with-check-modified-line (&rest body)
   "Execute BODY, restoring unmodified status if current line is unchanged.
 
@@ -6333,7 +6378,10 @@ determined by `f90-ts-leading-ampersand-style' and `f90-ts-stmt-label-column'."
     ;; (ampersand if there was already one or if f90-ts-leading-ampersand
     ;; is non-nil)
     (save-excursion
-      (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label))))
+      (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label))
+    ;; delete trailing whitespace characters, if enabled
+    (when f90-ts-indent-delete-trailing-whitespace
+      (f90-ts--delete-trailing-whitespace-line (point)))))
 
 
 (defun f90-ts--indent-region-aux (beg-marker end-marker)
@@ -6356,7 +6404,10 @@ part of a continued line, can be indented correctly."
     ;; first line (insertion-type nil keeps it before any text
     ;; treesit-indent may have inserted at the start).
     (f90-ts--indent-restore-leading-amp-or-label-region
-     beg-marker vec)))
+     beg-marker vec)
+    ;; delete trailing whitespace characters on each line, if enabled
+    (when f90-ts-indent-delete-trailing-whitespace
+      (f90-ts--delete-trailing-whitespace-region beg-marker end-marker))))
 
 
 (defun f90-ts--indent-and-complete-line-aux (variant indent-struct)

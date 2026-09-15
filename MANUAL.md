@@ -393,7 +393,8 @@ Customizable variables for indentations are:
 | `f90-ts-indent-block`            | extra indentation applied to most blocks                                    |
 | `f90-ts-indent-continued`        | extra indentation applied to continued lines                                |
 
-
+Additionally `f90-ts-indent-delete-trailing-whitespace` can be used to enable automatic deletion of
+trailing whitespace characters of indented lines after each indentation operation.
 
 *Remarks*
 - statement blocks are features such as `functions`, `subroutines`, control statements (`do`, `if`, `select`)

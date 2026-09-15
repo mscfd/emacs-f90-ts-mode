@@ -5,18 +5,22 @@ Code:
     (f90-ts-mode)
     (f90-ts-indent-line))
 
-Name: indent region empty line with whitespace
+Name: indent line with whitespace  1
 =-=
-|program blank_line
+|program trailing_ws   
                   
-end program blank_line
+end program trailing_ws
 =-=-=
 
-Name: indent region trailing whitespace after code
+Name: indent line with whitespace 2
 =-=
-|program blank_line
- use mod         
-end program blank_line
+program trailing_ws
+|use mod         
+end program trailing_ws
+=-=
+program trailing_ws
+ |use mod         
+end program trailing_ws
 =-=-=
 
 Code:
@@ -24,16 +28,126 @@ Code:
     (f90-ts-mode)
     (f90-ts-indent-region (point-min) (point-max)))
 
-Name: indent region empty line with whitespace
+Name: indent region with whitespace 1
 =-=
-|program blank_line
+|program trailing_ws
                   
-end program blank_line
+end program trailing_ws
 =-=-=
 
-Name: indent region trailing whitespace after code
+Name: indent region with whitespace 2
 =-=
-|program blank_line
+|program trailing_ws   
  use mod         
-end program blank_line
+end program trailing_ws
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-indent-and-complete-stmt))
+
+Name: indent stmt with whitespace 1
+=-=
+! trailing ws are removed only in complemented end statements
+subroutine sub()  
+    do i = 1,10  
+    
+       print *,i  
+end  
+end  |  
+=-=
+! trailing ws are removed only in complemented end statements
+subroutine sub()  
+     do i = 1,10  
+    
+          print *,i  
+     end do
+end subroutine sub|
+=-=-=
+
+Name: indent region with whitespace 2
+=-=
+|program trailing_ws   
+ use mod         
+end program trailing_ws
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-delete-trailing-whitespace t))
+      (f90-ts-indent-line)))
+
+Name: indent line with whitespace delete 1
+=-=
+|program trailing_ws   
+                  
+end program trailing_ws
+=-=
+|program trailing_ws
+                  
+end program trailing_ws
+=-=-=
+
+Name: indent line with whitespace delete 2
+=-=
+program trailing_ws   
+|                  
+end program trailing_ws
+=-=
+program trailing_ws   
+ |
+end program trailing_ws
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-delete-trailing-whitespace t))
+      (f90-ts-indent-region (point-min) (point-max))))
+
+Name: indent region with whitespace delete 1
+=-=
+|program trailing_ws
+                  
+end program trailing_ws
+=-=
+|program trailing_ws
+
+end program trailing_ws
+=-=-=
+
+Name: indent region with whitespace delete 2
+=-=
+|program trailing_ws   
+ use mod         
+end program trailing_ws
+=-=
+|program trailing_ws
+ use mod
+end program trailing_ws
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-delete-trailing-whitespace t))
+      (f90-ts-indent-and-complete-stmt)))
+
+Name: indent stmt with whitespace delete 1
+=-=
+subroutine sub()  
+    do i = 1,10  
+    
+       print *,i  
+end  
+end  |  
+=-=
+subroutine sub()
+     do i = 1,10
+
+          print *,i
+     end do
+end subroutine sub|
 =-=-=

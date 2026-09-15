@@ -145,6 +145,7 @@ without final newline."
     (f90-ts-indent-expr-assign-default . 2)
     (f90-ts-indent-expr-assign-assoc-op . 1)
     (f90-ts-indent-declaration . 3)
+    (f90-ts-indent-delete-trailing-whitespace . nil)
     (f90-ts-smart-end . no-message)
     (f90-ts-leading-ampersand . nil)
     (f90-ts-leading-ampersand-style . (indent . 3))
