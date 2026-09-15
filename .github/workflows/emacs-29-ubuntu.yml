@@ -1,0 +1,205 @@
+name: emacs f90-mode (Ubuntu Emacs 29)
+
+on:
+  push:
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      # -------------------------
+      # Checkout repo
+      # -------------------------
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # -------------------------
+      # Install common dependencies
+      # -------------------------
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            git \
+            cmake \
+            pkg-config \
+            npm \
+            curl \
+            emacs-nox
+
+      # -------------------------
+      # Verify Ubuntu Emacs 29
+      # -------------------------
+      - name: Verify Emacs
+        run: |
+          which emacs
+          emacs --version
+
+          case "$(emacs --version | head -n1)" in
+            "GNU Emacs 29."*) ;;
+            *)
+              echo "Error: Ubuntu did not install Emacs 29.x"
+              exit 1
+              ;;
+          esac
+
+      # -------------------------
+      # Verify Tree-sitter support
+      # -------------------------
+      #
+      # Ubuntu 24.04 (Noble) ships Emacs 29.3 linked against
+      # libtree-sitter 0.20.8. Tree-sitter 0.20.3+ uses
+      # language ABI 14, while ABI 15 starts with tree-sitter 0.25.
+      #
+      - name: Verify Tree-sitter ABI
+        run: |
+          emacs --batch -Q \
+            --eval "(progn
+              (princ (format \"Emacs: %s\\n\" emacs-version))
+              (princ
+               (format
+                \"Tree-sitter ABI minimum: %s\\n\"
+                (treesit-library-abi-version t)))
+              (princ
+               (format
+                \"Tree-sitter ABI maximum: %s\\n\"
+                (treesit-library-abi-version)))
+
+              (unless (treesit-available-p)
+                (error \"Tree-sitter is not available\")))"
+
+      # -------------------------
+      # Verify expected ABI
+      # -------------------------
+      - name: Verify expected Tree-sitter ABI
+        run: |
+          ACTUAL_MIN_ABI=$(
+            emacs --batch -Q \
+              --eval '(princ (treesit-library-abi-version t))'
+          )
+
+          ACTUAL_MAX_ABI=$(
+            emacs --batch -Q \
+              --eval '(princ (treesit-library-abi-version))'
+          )
+
+          echo "Expected ABI range: 13-14"
+          echo "Actual minimum ABI: $ACTUAL_MIN_ABI"
+          echo "Actual maximum ABI: $ACTUAL_MAX_ABI"
+
+          if [ "$ACTUAL_MIN_ABI" != "13" ] || [ "$ACTUAL_MAX_ABI" != "14" ]; then
+            echo "Error: unexpected Tree-sitter ABI range"
+            exit 1
+          fi
+
+      # -------------------------
+      # Verify Emacs tree-sitter linkage
+      # -------------------------
+      - name: Verify tree-sitter linkage
+        run: |
+          EMACS_BIN=$(which emacs)
+
+          echo "Emacs binary: $EMACS_BIN"
+
+          LDD_OUT=$(ldd "$EMACS_BIN" | grep libtree-sitter || true)
+
+          echo "tree-sitter linkage:"
+          echo "$LDD_OUT"
+
+          if [ -z "$LDD_OUT" ]; then
+            echo "Error: Emacs is not linked against libtree-sitter"
+            exit 1
+          fi
+
+      # -------------------------
+      # Show the Ubuntu tree-sitter package
+      # -------------------------
+      - name: Verify Ubuntu tree-sitter package
+        run: |
+          dpkg-query -W -f='${Package} ${Version}\\n' libtree-sitter0
+          apt-cache policy libtree-sitter0
+
+      # -------------------------
+      # Install tree-sitter CLI
+      # -------------------------
+      #
+      # CLI 0.24.x generates grammar ABI 14, matching the ABI supported
+      # by Ubuntu 24.04's libtree-sitter 0.20.8 and Emacs 29 package.
+      #
+      - name: Install tree-sitter CLI
+        run: |
+          npm install -g tree-sitter-cli@0.24.7
+
+      # -------------------------
+      # Verify tree-sitter CLI
+      # -------------------------
+      - name: Verify tree-sitter CLI
+        run: |
+          tree-sitter --version
+
+      # -------------------------
+      # Run checks
+      # -------------------------
+      - name: Run checks
+        run: |
+          make test-checkdoc
+          make test-byte-compile
+
+      # -------------------------
+      # Test both grammar versions
+      # -------------------------
+      - name: Test grammar versions
+        run: |
+          set -e
+
+          # Ensure target directory exists for tree-sitter libraries
+          mkdir -p ~/.emacs.d/tree-sitter
+
+          for branch in master string_literal_emacs; do
+            echo
+            echo "========================================"
+            echo "Testing grammar branch: $branch"
+            echo "========================================"
+
+            rm -rf tree-sitter-fortran
+
+            git clone \
+              --depth 1 \
+              --single-branch \
+              --branch "$branch" \
+              https://github.com/mscfd/tree-sitter-fortran.git
+
+            cd tree-sitter-fortran
+
+            echo "Grammar branch: $branch"
+            echo "Grammar commit: $(git rev-parse HEAD)"
+
+            # Generate parser source files.
+            # CLI 0.24.7 generates ABI 14, which matches Ubuntu Emacs 29.
+            tree-sitter generate
+
+            # Verify the generated grammar ABI explicitly.
+            echo "Grammar ABI:"
+            grep LANGUAGE_VERSION src/parser.c
+
+            if ! grep -q "#define LANGUAGE_VERSION 14" src/parser.c; then
+              echo "Error: generated grammar has unexpected ABI"
+              exit 1
+            fi
+
+            # Compile directly to Emacs tree-sitter directory.
+            tree-sitter build \
+              --output ~/.emacs.d/tree-sitter/libtree-sitter-fortran.so
+
+            cd ..
+
+            echo
+            echo "Running ERT tests for $branch"
+
+            make test-ert-all
+          done
