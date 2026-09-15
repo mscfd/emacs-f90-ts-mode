@@ -8863,6 +8863,63 @@ and keyword are sometimes equal.  But we only want the structure node."
   "List of things with regexp and predicates to identify relevant nodes.")
 
 
+(defun f90-ts--navigate-thing (pos direction thing)
+  "Navigate to next or previous THING from POS depending on DIRECTION.
+
+This is a wrapper to provide the navigate feature for Emacs 29."
+  (if (fboundp 'treesit-navigate-thing)
+      (treesit-navigate-thing pos direction 'beg thing)
+    (let ((captures
+           (treesit-query-capture
+            (treesit-buffer-root-node)
+            `((,(symbol-name thing)) @thing))))
+      (if (> direction 0)
+          (when-let* ((capture
+                       (seq-find
+                        (lambda (capture)
+                          (> (treesit-node-start (cdr capture)) pos))
+                        captures)))
+            (treesit-node-start (cdr capture)))
+        (when-let* ((capture
+                     (car
+                      (last
+                       (seq-filter
+                        (lambda (capture)
+                          (< (treesit-node-start (cdr capture)) pos))
+                        captures)))))
+          (treesit-node-start (cdr capture)))))))
+
+
+(defun f90-ts--beginning-of-thing (thing)
+  "Move to beginning of current THING.
+
+This is a wrapper to provide the navigate feature for Emacs 29."
+  (if (fboundp 'treesit-beginning-of-thing)
+      (treesit-beginning-of-thing thing)
+    (when-let* ((node
+                 (treesit-parent-until
+                 (treesit-node-at (point))
+                 (lambda (node)
+                   (equal (treesit-node-type node)
+                          (symbol-name thing))))))
+      (goto-char (treesit-node-start node)))))
+
+
+(defun f90-ts--end-of-thing (thing)
+  "Move to end of current THING.
+
+This is a wrapper to provide the navigate feature for Emacs 29."
+  (if (fboundp 'treesit-end-of-thing)
+      (treesit-end-of-thing thing)
+    (when-let* ((node
+                (treesit-parent-until
+                 (treesit-node-at (point))
+                 (lambda (node)
+                   (equal (treesit-node-type node)
+                          (symbol-name thing))))))
+      (goto-char (treesit-node-end node)))))
+
+
 (defmacro f90-ts--define-thing-commands (thing label)
   "Define next/prev/beginning/end-of navigation commands for THING.
 LABEL is used in the generated docstrings."
@@ -8873,16 +8930,18 @@ LABEL is used in the generated docstrings."
     `(progn
        (defun ,next () ,(format "Move to next %s." label)
          (interactive)
-         (when-let* ((pos (treesit-navigate-thing (point) 1 'beg ',thing)))
+         (when-let* ((pos (f90-ts--navigate-thing (point) 1 ',thing)))
            (goto-char pos)))
        (defun ,prev () ,(format "Move to previous %s." label)
          (interactive)
-         (when-let* ((pos (treesit-navigate-thing (point) -1 'beg ',thing)))
+         (when-let* ((pos (f90-ts--navigate-thing (point) -1 ',thing)))
            (goto-char pos)))
        (defun ,beg () ,(format "Move to beginning of current %s." label)
-         (interactive) (treesit-beginning-of-thing ',thing))
+         (interactive)
+         (f90-ts--beginning-of-thing ',thing))
        (defun ,end () ,(format "Move to end of current %s." label)
-         (interactive) (treesit-end-of-thing ',thing)))))
+         (interactive)
+         (f90-ts--end-of-thing ',thing)))))
 
 
 (f90-ts--define-thing-commands procedure "procedure")
