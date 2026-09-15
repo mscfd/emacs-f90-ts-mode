@@ -181,6 +181,14 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
                  collect (cons var (default-value var)))))
 
 
+(defun f90-ts-mode-test--font-lock-recompute-features ()
+  "Wrapper to invoke the treesit function depending on Emacs version."
+  (apply #'treesit-font-lock-recompute-features
+         (if (version< emacs-version "30")
+             '(nil nil)
+           '(nil nil fortran))))
+
+
 ;;;###autoload
 (defun f90-ts-mode-test-set-custom-testing ()
   "Save current values and apply temporary ones for testing purposes."
@@ -192,8 +200,7 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
                   (set var val))
                 (set-default var val)))
   ;; treesit-font-lock-level requires a recompute
-  (treesit-font-lock-recompute-features nil nil 'fortran))
-
+  (f90-ts-mode-test--font-lock-recompute-features))
 
 ;;;###autoload
 (defun f90-ts-mode-test-restore-custom ()
@@ -206,7 +213,7 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
                   ;; if current buffer has a local copy, set it as well
                   (set var val))
                 (set-default var val)))
-  (treesit-font-lock-recompute-features nil nil 'fortran)
+  (f90-ts-mode-test--font-lock-recompute-features)
   (setq f90-ts-mode-test-custom-saved nil))
 
 
@@ -237,11 +244,11 @@ test values for specific tests."
                 do (set var val))
        (unwind-protect
            (progn
-             (treesit-font-lock-recompute-features nil nil 'fortran)
+             (f90-ts-mode-test--font-lock-recompute-features))
              (progn ,@body))
          (cl-loop for (var . val) in saved-locals
                   do (set var val))
-         (treesit-font-lock-recompute-features nil nil 'fortran)))))
+         (f90-ts-mode-test--font-lock-recompute-features))))
 
 
 (defun f90-ts-mode-test--run-with-testing (file body-fn)
