@@ -2282,7 +2282,7 @@ If the line is empty, return nil."
 ;;;-----------------------------------------------------------------------------
 ;;; Font-locking: auxiliary
 
-(defun f90-ts--fontify-comment (node override _start _end &rest _)
+(defun f90-ts--fontify-comment (node override start end &rest _)
   "Fontify NODE assumed to be a comment.
 Check whether NODE satisfies a special comment rule, and if it does,
 use the face provided by the first matching rule.
@@ -2292,26 +2292,31 @@ Keyword matches from `f90-ts-comment-keyword-regexp' are additionally
 highlighted with `font-lock-warning-face' on top of the base face.
 
 Argument OVERRIDE is passed to `treesit-fontify-with-override' for the comment
-rule but not for matched keywords, which are enforced with override=t."
+rule but not for matched keywords, which are enforced by override=t.
+
+Restrict fontification to the region between START and END."
   (cl-assert (f90-ts--node-type-p node "comment")
              nil "fontify-comment: comment node expected")
   (let* ((rule (f90-ts--comment-matching-rule node))
          (face (or (and rule (plist-get rule :face))
                    'font-lock-comment-face))
-         (start (treesit-node-start node))
-         (end   (treesit-node-end node)))
+         (comment-start (treesit-node-start node))
+         (comment-end (treesit-node-end node)))
 
     ;; apply base face to the whole comment node
-    (treesit-fontify-with-override start end face override)
+    (treesit-fontify-with-override comment-start comment-end
+                                   face override
+                                   start end)
 
     ;; overlay keyword matches on top
     (when f90-ts-comment-keyword-regexp
       (save-excursion
-        (goto-char start)
+        (goto-char comment-start)
         (cl-loop while (re-search-forward f90-ts-comment-keyword-regexp end t)
                  do (treesit-fontify-with-override
                        (match-beginning 0) (match-end 0)
-                       'font-lock-warning-face t))))))
+                       'font-lock-warning-face t
+                       start end))))))
 
 
 (defun f90-ts--fontify-error (node override start end &rest _)
