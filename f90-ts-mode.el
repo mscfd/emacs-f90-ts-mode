@@ -2739,11 +2739,11 @@ Restrict fontification to the region between START and END, using OVERRIDE."
 Append a customizable property like italic or underline to hightlight an
 error region, which tree-sitter was not able to parse.
 This rule should be processed last, so that the error property can be
-append to a determined font lock face."
+prepended to overwrite any properties of existing font lock face."
   (treesit-font-lock-rules
    :language 'fortran
    :feature 'error
-   :override 'append
+   :override 'prepend
    '(;; if enabled append some error face properties to existing faces
      ((ERROR) @f90-ts--fontify-error))))
 
