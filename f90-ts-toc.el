@@ -972,23 +972,23 @@ afterwards, so that re-rendering the same source does not scroll the panel."
 RESTRICTION is a pair of positions in the source buffer.  BEG is the start of
 the first such line, END the end of the last one.
 If there are no such lines, return nil."
-  (pcase-let ((`(,lo . ,hi) restriction))
+  (let ((lo (car restriction))
+        (hi (cdr restriction)))
     (save-excursion
       (goto-char (point-min))
       (cl-loop
-       for pos = (point) then (progn
-                                (forward-line 1)
-                                (point))
+       while (not (eobp))
+       for pos = (point)
        for marker = (get-text-property pos 'f90-ts-toc-marker)
-       for mpos   = (and marker (marker-position marker))
-       while (or (not (eobp))
-                 (= pos (point)))
+       for mpos = (and marker
+                       (marker-position marker))
        when (and mpos
                  (<= lo mpos hi))
        minimize pos into beg
        and maximize (line-end-position) into end
-       finally return (when beg
-                        (cons beg end))))))
+       do (forward-line 1)
+       finally return (and beg
+                           (cons beg end))))))
 
 
 (defun f90-ts--toc-buffer-clamp (pos)
@@ -1026,10 +1026,11 @@ point out of the confined lines afterwards is walking, see
 `f90-ts--toc-buffer-walk'.  Nothing is confined if the source buffer is not
 narrowed, or if the narrowed region contains no entry."
   (let* ((restriction (f90-ts--toc-source-restriction f90-ts--toc-buffer-source))
-         (win         (get-buffer-window (current-buffer) 'visible)))
-    (setq f90-ts--toc-buffer-restriction restriction
-          f90-ts--toc-buffer-confine
-          (and restriction (f90-ts--toc-buffer-confine-bounds restriction)))
+         (win (get-buffer-window (current-buffer) 'visible)))
+    (setq f90-ts--toc-buffer-restriction restriction)
+    (setq f90-ts--toc-buffer-confine
+          (and restriction
+               (f90-ts--toc-buffer-confine-bounds restriction)))
     (f90-ts--toc-buffer-update-dimming)
     (when f90-ts--toc-buffer-confine
       (goto-char (f90-ts--toc-buffer-clamp (point)))
@@ -1242,8 +1243,8 @@ The source window is the one selected last, see
       (narrow-to-region beg end)
       (goto-char beg)
       (recenter 0))
-    ;; A window which is not selected is not necessarily redisplayed
-    ;; after the restriction changed.
+    ;; a window which is not selected is not necessarily redisplayed
+    ;; after the restriction changed
     (force-window-update src)))
 
 
