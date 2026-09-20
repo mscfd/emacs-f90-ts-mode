@@ -1219,7 +1219,8 @@ Point is placed after the first \"[...]\" replacement."
 ;; test cases in el resource files
 (f90-ts-mode-test--collection-register
  "f90-ts-mode-test"
- '("abbrev-table.el"))
+ '("abbrev-table.el"
+   "imenu-tests.el"))
 
 
 ;; register font lock tests
