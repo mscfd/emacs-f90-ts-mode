@@ -45,7 +45,7 @@ LOAD = \
 ERTFLAGS = \
 	--eval '(setq ert-batch-print-length nil ert-batch-print-level nil)'
 
-SRCS = f90-ts-mode.el test/f90-ts-mode-test.el
+SRCS = f90-ts-workaround.el f90-ts-mode.el test/f90-ts-mode-test.el
 
 
 # ----------------------------------------------------------------------
@@ -237,6 +237,7 @@ test-byte-compile:
 		$(TREE_SITTER_LOAD) \
 		--eval "(add-to-list 'load-path \"test\")" \
 		--eval "(setq byte-compile-error-on-warn t)" \
+		--eval "(byte-compile-file \"f90-ts-workaround.el\")" \
 		--eval "(byte-compile-file \"f90-ts-mode.el\")" \
 		--eval "(load-file \"f90-ts-mode.el\")" \
 		--eval "(byte-compile-file \"test/f90-ts-mode-test.el\")" \
@@ -274,25 +275,3 @@ test-ert-extra:
 .PHONY: test-ert-all
 test-ert-all:
 	$(call run-ert-single,^f90-ts-mode-test)
-
-
-# ----------------------------------------------------------------------
-# Legacy internal parallel targets
-#
-# These are retained for compatibility.  They use the same parallel
-# runner as the dynamically generated targets.
-# ----------------------------------------------------------------------
-
-.PHONY: _test-ert-p-main
-_test-ert-p-main:
-	$(call run-ert-parallel,^f90-ts-mode-test-std)
-
-
-.PHONY: _test-ert-p-extra-font-lock
-_test-ert-p-extra-font-lock:
-	$(call run-ert-parallel,^f90-ts-mode-test-extra--font-lock--)
-
-
-.PHONY: _test-ert-p-extra-indent-by-region
-_test-ert-p-extra-indent-by-region:
-	$(call run-ert-parallel,^f90-ts-mode-test-extra--indent-by-region--)
