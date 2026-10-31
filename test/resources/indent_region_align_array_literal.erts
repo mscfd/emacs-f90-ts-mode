@@ -57,9 +57,9 @@ Name: align array literal 5
 =-=
 ! note that "(/" after "rgb =" is aligned, and this alignment is preserved
 subroutine arr5()
-     character(len=5), dimension(1:3) :: & ! comment
+     character(len=5), dimension(1:3) :: & !! comment
           
-          ! comment
+          !! comment
           
                                   rgb = &
                                   (/ &
@@ -71,9 +71,9 @@ end
 =-=
 ! note that "(/" after "rgb =" is aligned, and this alignment is preserved
 subroutine arr5()
-     character(len=5), dimension(1:3) :: & ! comment
+     character(len=5), dimension(1:3) :: & !! comment
           
-                                         ! comment
+                                           !! comment
           
             rgb = &
             (/ &
@@ -84,7 +84,7 @@ subroutine arr5()
 end subroutine arr5
 =-=-=
 
-Name: align array literal 5
+Name: align array literal 6
 =-=
 subroutine arr5()
      character(len=5), dimension(1:3) :: & ! comment
@@ -99,7 +99,7 @@ end
 =-=
 subroutine arr5()
      character(len=5), dimension(1:3) :: & ! comment
-                                         ! comment
+                                           ! comment
             rgb = &
                    [ &
                     'red  ', &

@@ -411,6 +411,20 @@ and `f90-ts-comment-prefix-regexp' to identify the prefix to extract."
       (goto-char (1+ start)))))
 
 
+(defun f90-ts--nodes-same-group-p (node1 node2)
+  "Return non-nil if NODE1 and NODE2 belong to the same group.
+
+Currently this predicate only groups comment nodes sharing the same comment
+prefix.  It is used for indentation and mark region operations."
+  ;; even if not belonging to any kind of group, a node is at least grouped with itself,
+  ;; this avoids any additional branches in other functions
+  (or (treesit-node-eq node1 node2)
+      (and (f90-ts--node-type-p node1 "comment")
+           (f90-ts--node-type-p node2 "comment")
+           (string= (f90-ts--comment-prefix node1 'trimmed)
+                    (f90-ts--comment-prefix node2 'trimmed)))))
+
+
 (defun f90-ts--node-special-var-p (node)
   "Check if NODE is an identifier and matches the special variable regexp.
 Note that the parse uses identifier not just for variables, but for types etc."
@@ -718,6 +732,33 @@ NODE is assumed to be of type comment."
           ((stringp match)   (string-match-p match text))
           ((functionp match) (funcall match node)))))
      f90-ts-special-comment-rules)))
+
+
+(defun f90-ts--comments-same-rule-p (node1 node2)
+  "Return non-nil if comments NODE1 and NODE2 match the same special rule.
+Comments matching no rule never match in this predicate."
+  (when-let* ((rule1 (f90-ts--comment-matching-rule node1))
+              (rule2 (f90-ts--comment-matching-rule node2)))
+    (eq rule1 rule2)))
+
+
+(defun f90-ts--comments-match-p (node1 node2)
+  "Return non-nil if kind of comment NODE1 and comment NODE2 match.
+A special rule of `f90-ts-special-comment-rules' is the first criterion:
+if either comment matches a rule, both must match the same rule.
+Comments matching no rule belong together if they share the same prefix,
+see `f90-ts--nodes-same-group-p'.
+
+Note that special comment rules might allow different prefixes (like matching
+both \"!<\" and \"!>\" for documentation text).
+On the other hand different rules never match, even if the prefixes
+agree, (for example `!$omp' versus `!$omp simd' can be different rules with
+different indentation etc.)."
+  (let ((rule1 (f90-ts--comment-matching-rule node1))
+        (rule2 (f90-ts--comment-matching-rule node2)))
+    (if (or rule1 rule2)
+        (eq rule1 rule2)
+      (f90-ts--nodes-same-group-p node1 node2))))
 
 
 (defun f90-ts--node-on-pos (pos side &optional named)

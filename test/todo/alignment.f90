@@ -1,13 +1,3 @@
-! there is no proper context node for "! comment 2", but "! comment 1"
-! would be a proper primary or secondary choice, besides default indentation shown below
-! in both cases: add assignment_statement as list context and extract part after "="
-subroutine math()
-     integer, parameter :: x = 5 + 6
-     x1234567890 = & ! comment 1
-            ! comment 2
-            5 + 6
-end subroutine math
-
 ! list context for case range
 subroutine select_case()
      select_variant: select case (variant)

@@ -13,10 +13,14 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 
 ### Changelog (recent)
 
+**11-2026**
+- Alignment rules for trailing comments within continued lines as well as
+  those following a statement added.
+
 **10-2026**
 - Extend/reduce variants for mark region operations based on siblings
   (first, last, previous, next) added.
-- Replace f90-ts-nav by improved f90-ts-toc providing a side panel with a
+- Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel with a
   table of content of a f90 buffer, see `MANUAL.md' for details.  This
   optional package requires its own use-package statement.
 - Alignment rules for improved indentation of variable declarations with
@@ -65,25 +69,6 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
    ```
    It resides in the feature branch `string_literal_emacs`.
  - Testing with emacs 31.1 and tree-sitter 0.26 added.
-
-**08-2026**
- - `f90-ts-shift-line-break` as combined break/join function added.
- - Defcustom `f90-ts-font-lock-error` replaced by `f90-ts-font-lock-error-show`.
-   Errors are now always fontified by f90-ts-font-lock-error-face.
-   The new defcustom `f90-ts-font-lock-error-show` can be used to turn ERROR node
-   highlighting on and off, or the number of lines to be highlighted for each ERROR node.
- - Jump-to-rightmost-position (within fill-column) to the interactive
-   fill operation added.
- - Mark region operations fixed: always consider trimmed region of nodes.
-   Some nodes like a whole `subroutine..end subroutine` block contains a trailing
-   newline, which should not be considered. Not consequently trimming all spans
-   broke some mark region operations.
- - About, README and MANUAL entries in the fortran and transient
-   popup menu to view information about the mode added.
- - Additional font-locking for error regions added.  This can be customized by
-   `f90-ts-font-lock-error` and `f90-ts-font-lock-error-face`.
- - Smart end completion of coarray "change team ... end team" blocks fixed. It was
-   wrongly assumed that the end statement is "end change team".
 
 
 ## Overview

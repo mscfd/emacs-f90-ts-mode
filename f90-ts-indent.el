@@ -497,8 +497,14 @@ pair in the continued line cache as well.  Use NODE PARENT and BOL to
 determine, whether this is a continued line."
   (f90-ts--indent-anchor-cache anchor)
   (f90-ts--indent-offset-cache offset)
-  ;; when within continued line statement, then cache anchor offset
+  ;; when within continued line statement, then cache anchor offset;
+  ;; apply a possible flush delta of the first line before (as is done in
+  ;; `f90-ts--continued-line-anchor'), otherwise anchor line deltas are stale,
+  ;; note that comment regions within continued lines are matched before the
+  ;; general continued line machinery kicks in (which also updates the cache)
   (when (f90-ts--continued-subsequent-line-is node parent bol)
+    (when-let* ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
+      (f90-ts--continued-line-cache-update (treesit-node-start pstmt-1)))
     (f90-ts--continued-line-cache-put-subsequent
      bol anchor offset)))
 
@@ -551,20 +557,69 @@ but instead let other rules handle it."
 
 (defun f90-ts--comment-region-is (node parent bol &rest _)
   "Succeed if NODE is a comment following another comment of the same kind.
-Comments are classified by rules in `f90-ts-special-comment-rules' (including
-both matching none=default comment).  The operation requires PARENT and BOL
-for possible caching of anchor and offset values."
+Comments match if they are matched by the same special rule in
+`f90-ts-special-comment-rules' or, if there is no rule, if they share the same
+comment prefix, see `f90-ts--comments-match-p'.  The operation requires PARENT
+and BOL for possible caching of anchor and offset values."
   (when (f90-ts--node-type-p node "comment")
     (when-let* ((prev-sib (treesit-node-prev-sibling node))
                 (prev-line (f90-ts--first-node-on-line
                             (treesit-node-start prev-sib))))
       (when (and (f90-ts--node-type-p prev-line "comment")
-                 (eq (f90-ts--comment-matching-rule node)
-                     (f90-ts--comment-matching-rule prev-line)))
+                 (f90-ts--comments-match-p node prev-line))
         (let ((anchor (treesit-node-start prev-line)))
           (f90-ts--cache-anchor-offset node parent bol anchor 0)
           ;; signal match
           t)))))
+
+
+(defun f90-ts--trailing-comment-prev (node)
+  "Return previous sibling of NODE if that is a trailing comment, otherwise nil.
+NODE must be a comment.  A trailing comment is a comment which does not start
+its line.  The previous sibling is then the last comment on the previous
+nonblank line."
+  (when (f90-ts--node-type-p node "comment")
+    (when-let* ((prev-sib (treesit-node-prev-sibling node))
+                ((f90-ts--node-type-p prev-sib "comment"))
+                (first (f90-ts--first-node-on-line
+                        (treesit-node-start prev-sib)))
+                ((not (treesit-node-eq first prev-sib))))
+      prev-sib)))
+
+
+(defun f90-ts--trailing-comment-primary (node)
+  "Return the primary anchor-offset for comment NODE on a continued line.
+If the previous sibling of NODE is a trailing comment and both comments belong
+to the same comment region, see `f90-ts--comments-match-p', return the
+pair (PREV-SIB . 0) which aligns NODE with that comment, otherwise nil.
+This is used by the continued line anchor, which also provides the secondary
+candidates."
+  (when-let* (((f90-ts--node-type-p node "comment"))
+              (prev-sib (f90-ts--trailing-comment-prev node))
+              ((f90-ts--comments-match-p node prev-sib)))
+    (cons prev-sib 0)))
+
+
+(defun f90-ts--trailing-comment-region-is (node parent bol &rest _)
+  "Succeed for a comment on its own line following a trailing comment.
+Only lines which are not part of a continued statement are handled here, see
+`f90-ts--trailing-comment-primary' for the other case.  The previous sibling of
+NODE must be a trailing comment.  Succeed only if both comments match the same
+special rule in `f90-ts-special-comment-rules'.  Then NODE is aligned with the
+trailing comment.  Otherwise fail, such that the remaining rules determine the
+default indentation.
+
+Comments following a comment which starts its own line are handled by
+`f90-ts--comment-region-is'.  The operation requires PARENT and BOL for
+caching."
+  (when-let* (((f90-ts--node-type-p node "comment"))
+              ((not (f90-ts--continued-subsequent-line-is node parent bol)))
+              (prev-sib (f90-ts--trailing-comment-prev node))
+              ((f90-ts--comments-same-rule-p node prev-sib)))
+    (f90-ts--cache-anchor-offset node parent bol
+                                 (treesit-node-start prev-sib) 0)
+    ;; signal match
+    t))
 
 
 (defun f90-ts--nopp-parent-is (type-p)
@@ -1722,9 +1777,14 @@ proper items are present on this line."
 (defun f90-ts--align-items-tail-p (node-nsym context-line)
   "Predicate to determine relevant items in the tail after context line.
 NODE-NSYM is a cons (NODE . NSYM) providing NODE and the symbol for NODE.
-The predicate compares line number of NODE with CONTEXT-LINE."
+The predicate compares line number of NODE with CONTEXT-LINE.
+It also drops comments, like `f90-ts--align-items-head-p' does for the head
+line.  The column of a comment is a consequence of alignment (with items or
+with a trailing comment of the head line), it does not reflect the style of the
+list items, and must not influence the decision which position is primary."
   (let ((n (car node-nsym)))
-    (< context-line (f90-ts--node-line n))))
+    (and (< context-line (f90-ts--node-line n))
+         (not (f90-ts--node-type-p n "comment")))))
 
 
 (defun f90-ts--align-unary-arg-delta (node)
@@ -2011,7 +2071,10 @@ To this end items on continued lines in the provided CONTEXT are
 determined.  Additionally further anchors (like the first node of previous
 statement by pstmt-1) are considered.
 Finally use VARIANT to select one pair to align with."
-  (let* ((anoff-items-plist (f90-ts--align-anoff-items loc
+  (let* ((node (alist-get 'node loc))
+         ;; a comment aligned with the trailing comment on the previous line
+         (anoff-comment (and node (f90-ts--trailing-comment-primary node)))
+         (anoff-items-plist (f90-ts--align-anoff-items loc
                                                        context))
          ;;(_ (progn
          ;;     (f90-ts-log-msg :anoff "items-sym = %s"  (plist-get anoff-items-plist :sym))
@@ -2028,15 +2091,18 @@ Finally use VARIANT to select one pair to align with."
          (anoff-default (plist-get anoff-other :primary))
          ;; determine whether anoff-default, anoff-continued or something else is used as primary:
          ;; 1. keep-or-continued-line forces the continued line position
-         ;; 2. the context may force its default
-         ;; 3. if there are earlier items compatible with the current node,
+         ;; 2. a comment following a matching trailing comment aligns with it
+         ;; 3. the context may force its default
+         ;; 4. if there are earlier items compatible with the current node,
          ;;    the one with the smallest column
-         ;; 4. the default of the context
-         ;; 5. the continued line position
+         ;; 5. the default of the context
+         ;; 6. the continued line position
          (anoff-primary
           (cond
            ((eq variant 'keep-or-continued-line)
             anoff-continued)
+           (anoff-comment
+            anoff-comment)
            ((plist-get anoff-other :force)
             (or anoff-default anoff-continued))
            (anoff-items-sym
@@ -2045,6 +2111,7 @@ Finally use VARIANT to select one pair to align with."
             (or anoff-default anoff-continued))))
          ;; final list of anchors (which are nodes or pairs (position offset))
          (anoff-final (append (list anoff-continued)
+                              (and anoff-comment (list anoff-comment))
                               (and anoff-default (list anoff-default))
                               (plist-get anoff-other :others)
                               (unless (plist-get anoff-other :no-items-sym)
@@ -2255,6 +2322,30 @@ be determined or variant prescribes the default continued line indentation."
                                    context))))
 
 
+(defun f90-ts--continued-line-trailing-comment-anoff (variant loc)
+  "Return anchor-offset for a comment following a trailing comment.
+VARIANT controls alignment behavior, LOC is the location data of the node.
+This is the case without list context, otherwise
+`f90-ts--align-anchor-offset' takes care of comments.  Candidates are the
+continued line position and the column of the trailing comment.  The latter is
+primary if the comments match, see `f90-ts--trailing-comment-primary', except
+for variant `keep-or-continued-line'.  Return nil if NODE is no such comment or
+if VARIANT prescribes the default continued line indentation."
+  (unless (eq variant 'continued-line)
+    (when-let* ((node (alist-get 'node loc))
+                ((f90-ts--node-type-p node "comment"))
+                (prev-sib (f90-ts--trailing-comment-prev node)))
+      (let ((continued (f90-ts--align-pstmt1-anoff))
+            (trailing (cons prev-sib 0)))
+        (f90-ts--align-select variant
+                              (alist-get 'col loc)
+                              (if (and (not (eq variant 'keep-or-continued-line))
+                                       (f90-ts--trailing-comment-primary node))
+                                  trailing
+                                continued)
+                              (list continued trailing))))))
+
+
 (defun f90-ts--continued-line-anchor (node parent bol &rest _)
   "Determine anchor for a continued line given by NODE, PARENT and BOL.
 If the current position is within a list like context, try to align with
@@ -2284,6 +2375,12 @@ the continued line matcher."
                                                                     pstmt-1
                                                                     loc
                                                                     parent)
+                              ;; if there is no list context and node is a comment
+                              ;; following a trailing comment, then choose between
+                              ;; the continued line position and the column of that
+                              ;; comment (primary if both comments match)
+                              (f90-ts--continued-line-trailing-comment-anoff
+                               variant loc)
                               default-anchor-offset)))
       ;; there are two caches:
       ;;  * cache anchor and offset for offset function for the
@@ -2323,6 +2420,7 @@ passed through unchanged."
                        preproc-at-toplevel-is
                        special-comment-is
                        comment-region-is
+                       trailing-comment-region-is
                        ;; anchor
                        nopp-parent
                        nopp-grandparent
@@ -2419,7 +2517,12 @@ The main purpose is to fill the indentation cache for a new run."
    ;; indent separator comments like their parent nodes
    ;; this check is after the region check, hence previous sibling
    ;; is not a comment of same kind
-   (special-comment-is cached-anchor cached-offset)))
+   (special-comment-is cached-anchor cached-offset)
+   ;; own-line comment following a trailing comment on the previous nonblank
+   ;; line (not continued): align with that comment if both match the same
+   ;; special comment rule, otherwise fail and use the default indentation.
+   ;; On continued lines the continued line anchor deals with comments.
+   (trailing-comment-region-is cached-anchor cached-offset)))
 
 
 (defun f90-ts--indent-rules-preproc ()
