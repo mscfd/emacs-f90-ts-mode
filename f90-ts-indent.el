@@ -1092,7 +1092,7 @@ before and after \"::\")."
   "Return almost all children of CONTEXT of type string_literal.
 There is one small exception:
 Always drop the second quote in an escape double quote sequence,
-which is represented as a string_literal_part."
+which is represented as a string_content."
   (cl-assert (f90-ts--grammar-string-literal-decomposed-p)
              nil "wrong grammar, string_literal not decomposed by parser")
   ;; example code (where we want to primarily try to align the text):
@@ -1109,7 +1109,7 @@ which is represented as a string_literal_part."
        (let* ((psib (treesit-node-prev-sibling n)))
          (not
            (and (f90-ts--node-type-p psib "\\")
-                (f90-ts--node-type-p n "string_literal_part")))))
+                (f90-ts--node-type-p n "string_content")))))
      children)))
 
 
@@ -1610,12 +1610,12 @@ align-list-other family."
 (defun f90-ts--align-other-string (context loc items-plist)
   "Return the other plist for string nodes.
 A string_literal consists of opening and closing quoting symbol,
-string_literal_part, ampersand, quote escape character and comments.
+string_content, ampersand, quote escape character and comments.
 Note that a leading ampersand cannot be removed, as following blank characters
 must be preserved.  Thus we need to deal with the ampersand.  It should be
 aligned to the opening quote as primary position.
 
-If the node is a string_literal_part (symbol `named') the escape nodes are
+If the node is a string_content (symbol `named') the escape nodes are
 candidates, and vice versa.  If there is nothing else, the first of these is
 the primary position.
 

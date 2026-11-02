@@ -241,11 +241,11 @@ Restrict fontification to the region between START and END, using OVERRIDE."
    ;; highlight macro names in definitions
    (if (f90-ts--grammar-string-literal-decomposed-p)
        '((preproc_include
-          "#include"                                  @font-lock-preprocessor-face
-          path: (string_literal (string_literal_part) @font-lock-string-face)))
+          "#include"                             @font-lock-preprocessor-face
+          path: (string_literal (string_content) @font-lock-string-face)))
      '((preproc_include
-      "#include"                                      @font-lock-preprocessor-face
-      path: (string_literal)                          @font-lock-string-face)))
+      "#include"                                 @font-lock-preprocessor-face
+      path: (string_literal)                     @font-lock-string-face)))
 
    :language 'fortran
    :feature 'preproc
@@ -463,7 +463,7 @@ Restrict fontification to the region between START and END, using OVERRIDE."
       (treesit-font-lock-rules
        :language 'fortran
        :feature 'string
-       '(((string_literal_part) @font-lock-string-face))
+       '(((string_content) @font-lock-string-face))
 
        :language 'fortran
        :feature 'escape-sequence

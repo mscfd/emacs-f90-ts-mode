@@ -606,7 +606,7 @@ node."
 The associated string_literal is NODE itself or a parent of this type."
   ;; only ascend if node type is possible within a string
   (and (f90-ts--node-type-p node '("string_literal"
-                                   "string_literal_part"
+                                   "string_content"
                                    "comment"
                                    "&"
                                    "\""
