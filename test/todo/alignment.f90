@@ -1,17 +1,3 @@
-! list context for case range
-subroutine select_case()
-     select_variant: select case (variant)
-     case ('version1')
-          print *, 'version1'
-     case ('version2', &
-            'extra')
-          call xyz()
-     case default
-          call uvw()
-     end select select_variant
-end subroutine select_case
-
-
 ! read/write lists
 subroutine sub()
      write(*,format_string_for_testing) val1, &       !comment

@@ -33,6 +33,7 @@
 ;;
 ;; Changelog (recent):
 ;; [11-2026]
+;;   - Alignment rules for case statements of select case blocks added.
 ;;   - Alignment rules for trailing comments within continued lines as well as
 ;;     those following a statement added.
 ;; [10-2026]
@@ -179,6 +180,7 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog (recent):
 
 [11-2026]
+- Alignment rules for case statements of select case blocks added.
 - Alignment rules for trailing comments within continued lines as well as
   those following a statement added.
 

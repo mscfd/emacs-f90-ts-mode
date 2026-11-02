@@ -430,3 +430,66 @@ subroutine sub()
                                           !< or formula B2
 end subroutine sub
 =-=-=
+
+Name: select case statement 1
+=-=
+! list context for case range
+subroutine select_case()
+select_variant: select case (variant)
+case ('version1')
+print *, 'version1'
+case ('version2', &
+'extra')
+call xyz()
+case      ( & ! comment1
+       ! comment2
+'version3', &
+   ! comment 3
+ 'more' &
+)
+call uvw()
+case      ('version4', &
+'further' &
+)
+! comment
+call other()
+case    ((1+ &
+CASE_OFFSET &
+! commentX
+) &
+! commentY
+)
+print *, 'const_expr'
+end select select_variant
+end subroutine select_case
+=-=
+! list context for case range
+subroutine select_case()
+     select_variant: select case (variant)
+     case ('version1')
+          print *, 'version1'
+     case ('version2', &
+           'extra')
+          call xyz()
+     case      ( & ! comment1
+            ! comment2
+            'version3', &
+            ! comment 3
+            'more' &
+            )
+          call uvw()
+     case      ('version4', &
+                'further' &
+                  )
+          ! comment
+          call other()
+     case    ((1+ &
+               CASE_OFFSET &
+               ! commentX
+                 ) &
+              ! commentY
+                )
+          print *, 'const_expr'
+     end select select_variant
+end subroutine select_case
+=-=-=
