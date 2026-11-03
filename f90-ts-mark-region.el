@@ -119,19 +119,6 @@ with BEG..END region."
     (f90-ts--largest-node-same-span cover)))
 
 
-(defun f90-ts--nodes-same-group-p (node1 node2)
-  "Return non-nil if NODE1 and NODE2 belong to the same navigation group.
-
-Currently this predicate groups comment nodes sharing the same comment prefix."
-  ;; even if not belonging to any kind of group, a node is at least grouped with itself,
-  ;; this avoids any additional branches in other functions
-  (or (treesit-node-eq node1 node2)
-      (and (f90-ts--node-type-p node1 "comment")
-           (f90-ts--node-type-p node2 "comment")
-           (string= (f90-ts--comment-prefix node1 'trimmed)
-                    (f90-ts--comment-prefix node2 'trimmed)))))
-
-
 (defun f90-ts--group-block-extent (node)
   "Return (FIRST . LAST) nodes for the group containing NODE."
   (let* ((first (cl-loop

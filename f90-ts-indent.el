@@ -497,8 +497,14 @@ pair in the continued line cache as well.  Use NODE PARENT and BOL to
 determine, whether this is a continued line."
   (f90-ts--indent-anchor-cache anchor)
   (f90-ts--indent-offset-cache offset)
-  ;; when within continued line statement, then cache anchor offset
+  ;; when within continued line statement, then cache anchor offset;
+  ;; apply a possible flush delta of the first line before (as is done in
+  ;; `f90-ts--continued-line-anchor'), otherwise anchor line deltas are stale,
+  ;; note that comment regions within continued lines are matched before the
+  ;; general continued line machinery kicks in (which also updates the cache)
   (when (f90-ts--continued-subsequent-line-is node parent bol)
+    (when-let* ((pstmt-1 (f90-ts--indent-prev-stmt-first)))
+      (f90-ts--continued-line-cache-update (treesit-node-start pstmt-1)))
     (f90-ts--continued-line-cache-put-subsequent
      bol anchor offset)))
 
@@ -551,20 +557,69 @@ but instead let other rules handle it."
 
 (defun f90-ts--comment-region-is (node parent bol &rest _)
   "Succeed if NODE is a comment following another comment of the same kind.
-Comments are classified by rules in `f90-ts-special-comment-rules' (including
-both matching none=default comment).  The operation requires PARENT and BOL
-for possible caching of anchor and offset values."
+Comments match if they are matched by the same special rule in
+`f90-ts-special-comment-rules' or, if there is no rule, if they share the same
+comment prefix, see `f90-ts--comments-match-p'.  The operation requires PARENT
+and BOL for possible caching of anchor and offset values."
   (when (f90-ts--node-type-p node "comment")
     (when-let* ((prev-sib (treesit-node-prev-sibling node))
                 (prev-line (f90-ts--first-node-on-line
                             (treesit-node-start prev-sib))))
       (when (and (f90-ts--node-type-p prev-line "comment")
-                 (eq (f90-ts--comment-matching-rule node)
-                     (f90-ts--comment-matching-rule prev-line)))
+                 (f90-ts--comments-match-p node prev-line))
         (let ((anchor (treesit-node-start prev-line)))
           (f90-ts--cache-anchor-offset node parent bol anchor 0)
           ;; signal match
           t)))))
+
+
+(defun f90-ts--trailing-comment-prev (node)
+  "Return previous sibling of NODE if that is a trailing comment, otherwise nil.
+NODE must be a comment.  A trailing comment is a comment which does not start
+its line.  The previous sibling is then the last comment on the previous
+nonblank line."
+  (when (f90-ts--node-type-p node "comment")
+    (when-let* ((prev-sib (treesit-node-prev-sibling node))
+                ((f90-ts--node-type-p prev-sib "comment"))
+                (first (f90-ts--first-node-on-line
+                        (treesit-node-start prev-sib)))
+                ((not (treesit-node-eq first prev-sib))))
+      prev-sib)))
+
+
+(defun f90-ts--trailing-comment-primary (node)
+  "Return the primary anchor-offset for comment NODE on a continued line.
+If the previous sibling of NODE is a trailing comment and both comments belong
+to the same comment region, see `f90-ts--comments-match-p', return the
+pair (PREV-SIB . 0) which aligns NODE with that comment, otherwise nil.
+This is used by the continued line anchor, which also provides the secondary
+candidates."
+  (when-let* (((f90-ts--node-type-p node "comment"))
+              (prev-sib (f90-ts--trailing-comment-prev node))
+              ((f90-ts--comments-match-p node prev-sib)))
+    (cons prev-sib 0)))
+
+
+(defun f90-ts--trailing-comment-region-is (node parent bol &rest _)
+  "Succeed for a comment on its own line following a trailing comment.
+Only lines which are not part of a continued statement are handled here, see
+`f90-ts--trailing-comment-primary' for the other case.  The previous sibling of
+NODE must be a trailing comment.  Succeed only if both comments match the same
+special rule in `f90-ts-special-comment-rules'.  Then NODE is aligned with the
+trailing comment.  Otherwise fail, such that the remaining rules determine the
+default indentation.
+
+Comments following a comment which starts its own line are handled by
+`f90-ts--comment-region-is'.  The operation requires PARENT and BOL for
+caching."
+  (when-let* (((f90-ts--node-type-p node "comment"))
+              ((not (f90-ts--continued-subsequent-line-is node parent bol)))
+              (prev-sib (f90-ts--trailing-comment-prev node))
+              ((f90-ts--comments-same-rule-p node prev-sib)))
+    (f90-ts--cache-anchor-offset node parent bol
+                                 (treesit-node-start prev-sib) 0)
+    ;; signal match
+    t))
 
 
 (defun f90-ts--nopp-parent-is (type-p)
@@ -1107,6 +1162,41 @@ children are the \"=\" or \"=>\" symbol and the initialisation expression."
 
 
 ;;++++++++++++++
+;; list context: case_statement
+
+(defun f90-ts--align-items-case-paren-children (case-stmt)
+  "Return the pair (OPEN . CLOSE) of parentheses of the case statement CASE-STMT.
+Both are direct children of the statement.  Return nil if either is missing,
+as for \"case default\"."
+  (let* ((children (treesit-node-children case-stmt))
+         (open  (seq-find (lambda (n) (f90-ts--node-type-p n "(")) children))
+         (close (seq-find (lambda (n) (f90-ts--node-type-p n ")")) children)))
+    (when (and open close)
+      (cons open close))))
+
+
+(defun f90-ts--align-items-case (context _loc)
+  "Return the items of the case statement CONTEXT between its parentheses.
+These are the children of the \"case_value_range_list\" (values, commas,
+ampersands and comments inside the list) and all further nodes between the
+parentheses, like comments before the list or after the last item."
+  (let* ((case-stmt (car context))
+         (parens (f90-ts--align-items-case-paren-children case-stmt))
+         (beg (and parens (treesit-node-start (car parens))))
+         (end (and parens (treesit-node-start (cdr parens)))))
+    (cl-assert (f90-ts--node-type-p case-stmt "case_statement")
+               nil "align-items-case: wrong context, got '%s'" case-stmt)
+    (when parens
+      (cl-loop
+       for n in (treesit-node-children case-stmt)
+       when (and (< beg (treesit-node-start n))
+                 (< (treesit-node-start n) end))
+       append (if (f90-ts--node-type-p n "case_value_range_list")
+                  (treesit-node-children n)
+                (list n))))))
+
+
+;;++++++++++++++
 ;; additional anchor for aligned lists:
 
 ;; The :get-other-fn functions of a list context are called as
@@ -1202,8 +1292,9 @@ the lead on its line.
 Which one is primary depends on the style already used by earlier items:
 aligned if there are items on the head line or no later item is left of the
 lead column (COL-LEAD), hanging otherwise.  Both positions are always
-candidates (for rotation), except for a closing parenthesis, where only the
-primary is returned.
+candidates (for rotation), also for a closing parenthesis.  For the closing
+parenthesis the hanging position is primary if an item is left of COL-LEAD,
+otherwise the aligned position.
 
 NODE-SYM is the nsym of the current node, NODE-LEAD the lead node (for its
 column), ITEMS-PLIST the items lists from `f90-ts--align-anoff-items'."
@@ -1215,10 +1306,13 @@ column), ITEMS-PLIST the items lists from `f90-ts--align-anoff-items'."
          (anoff-hang (cons indent-at-lead f90-ts-indent-continued)))
     (if (eq node-sym 'parenthesis)
         ;; closing parenthesis: align relative to indentation if any prior
-        ;; item is to the left of the context column, otherwise use anchor
-        (list :primary (if (and col-min (< col-min col-lead))
-                           anoff-hang
-                         anoff-lead))
+        ;; item is to the left of the context column, otherwise use anchor,
+        ;; the other one is secondary
+        (if (and col-min (< col-min col-lead))
+            (list :primary anoff-hang
+                  :others  (list anoff-lead))
+          (list :primary anoff-lead
+                :others  (list anoff-hang)))
       (list
        :primary
        (cond
@@ -1326,6 +1420,71 @@ the align-list-other family."
                                                                   node-sym)))
       (f90-ts--align-other-paren-expr-core
        node-sym aux-context start-aux offset-aux indent-at-aux items-plist))))
+
+
+(defun f90-ts--align-other-case-head-comment (open-paren)
+  "Return the last comment on the line of OPEN-PAREN of a case statement.
+Only nodes following OPEN-PAREN are considered.  The comment is either a
+sibling of the parenthesis, or a child of the list, if the list starts on that
+line.  Return nil if there is no such comment."
+  (let ((pos (treesit-node-start open-paren)))
+    (cl-flet
+        ((same-line-comment-p (c)
+           (and (f90-ts--node-type-p c "comment")
+                (f90-ts--same-line-p pos (treesit-node-start c)))))
+      (cl-loop
+       for n = (treesit-node-next-sibling open-paren)
+       then (treesit-node-next-sibling n)
+       while (and n (f90-ts--same-line-p pos (treesit-node-start n)))
+       if (f90-ts--node-type-p n "comment")
+       collect n into comments
+       else if (f90-ts--node-type-p n "case_value_range_list")
+       append (cl-remove-if-not #'same-line-comment-p
+                                (treesit-node-children n))
+       into comments
+       finally return (car (last comments))))))
+
+
+(defun f90-ts--align-other-case (context loc items-plist)
+  "Return the other plist for the list context \"case_statement\".
+The list is the one in \"case (a, b, c)\", restricted to the header by
+`f90-ts--align-list-context-case-aux'.  Unlike for argument lists, the
+context node starts with the keyword \"case\".  The lead node is the opening
+parenthesis, which is the auxiliary node of CONTEXT.
+A closing parenthesis on a continued line is offset by
+`f90-ts-indent-paren-close', as for expressions.
+A comment can additionally be aligned with a trailing comment on the line of the
+opening parenthesis, which is relevant if the first item is on a later line.
+See `f90-ts--align-other-paren-expr-core' for the shared logic.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
+the align-list-other family."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "case_statement")
+               nil "align-list-other-case: wrong context, got '%s'" list-context)
+    (when-let* ((open-paren (cdr context))
+                ((f90-ts--node-type-p open-paren "(")))
+      (let* ((node            (alist-get 'node loc))
+             (node-sym        (alist-get 'nsym loc))
+             (indent-at-paren (f90-ts--indent-pos-at-node open-paren))
+             (start-paren     (treesit-node-start open-paren))
+             (offset-paren    (+ (1- (length (treesit-node-text open-paren)))
+                                 (f90-ts--align-other-paren-offset node-sym)))
+             (other (f90-ts--align-other-paren-expr-core
+                     node-sym open-paren start-paren offset-paren
+                     indent-at-paren items-plist))
+             (head-comment (and (eq node-sym 'comment)
+                                (f90-ts--align-other-case-head-comment open-paren))))
+        ;; comment: further candidate is the trailing comment on the head line
+        ;; (unless already provided as primary of the continued line anchor)
+        (if (and head-comment
+                 (f90-ts--comments-match-p node head-comment)
+                 (not (let ((prev (f90-ts--trailing-comment-prev node)))
+                        (and prev (treesit-node-eq prev head-comment)))))
+            (plist-put other :others
+                       (append (plist-get other :others)
+                               (list (cons head-comment 0))))
+          other)))))
 
 
 (defun f90-ts--align-other-association (context loc _items-plist)
@@ -1722,9 +1881,14 @@ proper items are present on this line."
 (defun f90-ts--align-items-tail-p (node-nsym context-line)
   "Predicate to determine relevant items in the tail after context line.
 NODE-NSYM is a cons (NODE . NSYM) providing NODE and the symbol for NODE.
-The predicate compares line number of NODE with CONTEXT-LINE."
+The predicate compares line number of NODE with CONTEXT-LINE.
+It also drops comments, like `f90-ts--align-items-head-p' does for the head
+line.  The column of a comment is a consequence of alignment (with items or
+with a trailing comment of the head line), it does not reflect the style of the
+list items, and must not influence the decision which position is primary."
   (let ((n (car node-nsym)))
-    (< context-line (f90-ts--node-line n))))
+    (and (< context-line (f90-ts--node-line n))
+         (not (f90-ts--node-type-p n "comment")))))
 
 
 (defun f90-ts--align-unary-arg-delta (node)
@@ -1946,6 +2110,22 @@ selected."
       (cdr primary-col-pos-off)))))
 
 
+(defun f90-ts--align-expand-items-op-expr (items)
+  "Return ITEMS with each operator expression replaced by its operands.
+See `f90-ts--align-expand-op-expr'.  Other items are kept."
+  (seq-mapcat (lambda (n)
+                (if (f90-ts--node-op-expr-p n)
+                    (f90-ts--align-expand-op-expr n)
+                  (list n)))
+              items 'list))
+
+
+(defun f90-ts--align-prev-nsym (items cur-line)
+  "Return ITEMS located before CUR-LINE, each attached to its node symbol."
+  (f90-ts--align-attach-nsym
+   (f90-ts--align-filter-prev items cur-line)))
+
+
 (defun f90-ts--align-anoff-items (loc context)
   "Filter relevant alignment anchors from CONTEXT.
 Return all list context items before location specified by LOC, and
@@ -1959,35 +2139,30 @@ the offset is assumed to be 0."
          (cur-line (alist-get 'line loc))
          (cntxt-line (f90-ts--node-line (or (cdr context) (car context))))
          (node-sym (alist-get 'nsym loc))
-         (items-all
-          (funcall get-items context loc))
-         (items-prev
-          (f90-ts--align-filter-prev items-all cur-line))
-         (items-prev-sym
-          (f90-ts--align-attach-nsym items-prev))
-         (items-head
-          (f90-ts--align-nsym-filter-offset
-           items-prev-sym
-           (lambda (node-nsym)
-             (f90-ts--align-items-head-p node-nsym cntxt-line))
-           loc))
-         (items-tail
-          (f90-ts--align-nsym-filter-offset
-           items-prev-sym
-           (lambda (node-nsym)
-             (f90-ts--align-items-tail-p node-nsym cntxt-line))
-           loc))
-         ;; further filter by symbol type node-sym of current node at point
-         (items-sym
-          (when node-sym
-            (f90-ts--align-nsym-filter-offset
-             items-prev-sym
-             (lambda (nsym) (f90-ts--align-nsym-compatible-p (cdr nsym) node-sym))
-             loc))))
-    (list :sym  items-sym
-          :prev items-prev-sym
-          :head items-head
-          :tail items-tail)))
+         (items-all (funcall get-items context loc))
+         (prev-sym (f90-ts--align-prev-nsym items-all cur-line))
+         ;; the tail uses the operands of operator expressions among the
+         ;; items, as a comma is considered just another operator composing
+         ;; a tuple; otherwise "(1 + &\n 2 &\n )" has no tail items, as the
+         ;; expression starts on the head line
+         (prev-sym-expanded
+          (f90-ts--align-prev-nsym
+           (f90-ts--align-expand-items-op-expr items-all)
+           cur-line)))
+    (cl-flet ((select (items pred)
+                (f90-ts--align-nsym-filter-offset items pred loc)))
+      (list :sym  (when node-sym
+                    (select prev-sym
+                            (lambda (nsym)
+                              (f90-ts--align-nsym-compatible-p (cdr nsym)
+                                                               node-sym))))
+            :prev prev-sym
+            :head (select prev-sym
+                          (lambda (nsym)
+                            (f90-ts--align-items-head-p nsym cntxt-line)))
+            :tail (select prev-sym-expanded
+                          (lambda (nsym)
+                            (f90-ts--align-items-tail-p nsym cntxt-line)))))))
 
 
 (defun f90-ts--align-anoff-other (loc anoff-items-plist context)
@@ -2011,7 +2186,10 @@ To this end items on continued lines in the provided CONTEXT are
 determined.  Additionally further anchors (like the first node of previous
 statement by pstmt-1) are considered.
 Finally use VARIANT to select one pair to align with."
-  (let* ((anoff-items-plist (f90-ts--align-anoff-items loc
+  (let* ((node (alist-get 'node loc))
+         ;; a comment aligned with the trailing comment on the previous line
+         (anoff-comment (and node (f90-ts--trailing-comment-primary node)))
+         (anoff-items-plist (f90-ts--align-anoff-items loc
                                                        context))
          ;;(_ (progn
          ;;     (f90-ts-log-msg :anoff "items-sym = %s"  (plist-get anoff-items-plist :sym))
@@ -2028,15 +2206,18 @@ Finally use VARIANT to select one pair to align with."
          (anoff-default (plist-get anoff-other :primary))
          ;; determine whether anoff-default, anoff-continued or something else is used as primary:
          ;; 1. keep-or-continued-line forces the continued line position
-         ;; 2. the context may force its default
-         ;; 3. if there are earlier items compatible with the current node,
+         ;; 2. a comment following a matching trailing comment aligns with it
+         ;; 3. the context may force its default
+         ;; 4. if there are earlier items compatible with the current node,
          ;;    the one with the smallest column
-         ;; 4. the default of the context
-         ;; 5. the continued line position
+         ;; 5. the default of the context
+         ;; 6. the continued line position
          (anoff-primary
           (cond
            ((eq variant 'keep-or-continued-line)
             anoff-continued)
+           (anoff-comment
+            anoff-comment)
            ((plist-get anoff-other :force)
             (or anoff-default anoff-continued))
            (anoff-items-sym
@@ -2045,6 +2226,7 @@ Finally use VARIANT to select one pair to align with."
             (or anoff-default anoff-continued))))
          ;; final list of anchors (which are nodes or pairs (position offset))
          (anoff-final (append (list anoff-continued)
+                              (and anoff-comment (list anoff-comment))
                               (and anoff-default (list anoff-default))
                               (plist-get anoff-other :others)
                               (unless (plist-get anoff-other :no-items-sym)
@@ -2097,6 +2279,11 @@ Finally use VARIANT to select one pair to align with."
               '(:get-items-fn f90-ts--align-items-string
                 :get-other-fn f90-ts--align-other-string)))
       (cons "parameters"               paren-prop)
+      ;; the list context is the case statement: parentheses and comments around
+      ;; the list are its children (but also the body of the case branch)
+      (cons "case_statement"
+            '(:get-items-fn f90-ts--align-items-case
+              :get-other-fn f90-ts--align-other-case))
       (cons "association_list"
             '(:get-items-fn f90-ts--align-items-assocation
               :get-other-fn f90-ts--align-other-association))
@@ -2191,7 +2378,8 @@ nil).  But we do not need to ascend further."
   "If LOC is in a list-context, other than expressions, return that context.
 Use node from LOC or PARENT to start the search, which might require to
 ascend a few steps.
-This function return nil as second auxiliary context node."
+This function returns nil as second auxiliary context node, except for a
+case statement, where it is the opening parenthesis."
   (let* ((node (or (alist-get 'node loc)
                    parent))
          (line (alist-get 'line loc))
@@ -2203,14 +2391,42 @@ This function return nil as second auxiliary context node."
                                       f90-ts--align-list-context-properties)))
                         t ; include node in search
                         )))
-    ;; list-context might be of some operator expression type, but
-    ;; neither node nor parent are (already excluded), so we are at
-    ;; some other kind of node like a call_expression or
-    ;; parenthesized_expression, which are allowed within expressions,
-    ;; but this is another context
-    (when (and list-context
-               (not (f90-ts--node-op-expr-p list-context)))
-      (cons list-context nil))))
+    ;; the search may ascend to an operator expression although neither node
+    ;; nor parent is one, for example at `%bar' in
+    ;;    x = aa + foo &
+    ;;           %bar + cc
+    ;; whose parent is a derived_type_member_expression; operator expressions
+    ;; are handled by `f90-ts--align-list-context-op-expr', which provides the
+    ;; required auxiliary node;
+    ;; drop it, if it is found here, as it is not a usable context
+    (cond
+     ((null list-context)
+      nil)
+     ((f90-ts--node-op-expr-p list-context)
+      nil)
+     ;; no inner context exists, but the case statement includes its body:
+     ;; the context is restricted to the header, which needs the parenthesis
+     ((f90-ts--node-type-p list-context "case_statement")
+      (f90-ts--align-list-context-case-aux list-context loc))
+     (t
+      (cons list-context nil)))))
+
+
+(defun f90-ts--align-list-context-case-aux (case-stmt loc)
+  "Return a context for LOC in the header of the case statement CASE-STMT.
+The \"case_statement\" contains the body of the case branch, but is a list
+context only between its parentheses, including the closing one.  Nodes
+elsewhere, like comments and continued lines in the body, are not in this
+context, return nil for these.  The opening parenthesis is the auxiliary node
+of the context, which provides the head line of the list."
+  (when-let* ((parens (f90-ts--align-items-case-paren-children case-stmt))
+              (open  (car parens))
+              (close (cdr parens))
+              (pos   (alist-get 'pos loc))
+              ((< (treesit-node-start open) pos))
+              ((<= pos (treesit-node-start close)))
+              ((< (f90-ts--node-line open) (alist-get 'line loc))))
+    (cons case-stmt open)))
 
 
 (defun f90-ts--align-list-context (loc parent)
@@ -2224,8 +2440,9 @@ grandparent, etc.
 The smallest such context, starting on a previous line is returned.
 Return value nil signals that position is not within a list context.
 
-Only expressions return an auxiliary node, which is assignment \"=\"
-or parenthesis \"(\".  It is required but not part of the list context node."
+Only expressions and case statements return an auxiliary node, which is
+assignment \"=\" or parenthesis \"(\".  It is required but not part of the list
+context node."
   (when-let* ((stmt-max (f90-ts--align-list-context-max loc)))
     (or (f90-ts--align-list-context-op-expr loc parent)
         (f90-ts--align-list-context-other loc parent))))
@@ -2253,6 +2470,30 @@ be determined or variant prescribes the default continued line indentation."
       (f90-ts--align-anchor-offset variant
                                    loc
                                    context))))
+
+
+(defun f90-ts--continued-line-trailing-comment-anoff (variant loc)
+  "Return anchor-offset for a comment following a trailing comment.
+VARIANT controls alignment behavior, LOC is the location data of the node.
+This is the case without list context, otherwise
+`f90-ts--align-anchor-offset' takes care of comments.  Candidates are the
+continued line position and the column of the trailing comment.  The latter is
+primary if the comments match, see `f90-ts--trailing-comment-primary', except
+for variant `keep-or-continued-line'.  Return nil if NODE is no such comment or
+if VARIANT prescribes the default continued line indentation."
+  (unless (eq variant 'continued-line)
+    (when-let* ((node (alist-get 'node loc))
+                ((f90-ts--node-type-p node "comment"))
+                (prev-sib (f90-ts--trailing-comment-prev node)))
+      (let ((continued (f90-ts--align-pstmt1-anoff))
+            (trailing (cons prev-sib 0)))
+        (f90-ts--align-select variant
+                              (alist-get 'col loc)
+                              (if (and (not (eq variant 'keep-or-continued-line))
+                                       (f90-ts--trailing-comment-primary node))
+                                  trailing
+                                continued)
+                              (list continued trailing))))))
 
 
 (defun f90-ts--continued-line-anchor (node parent bol &rest _)
@@ -2284,6 +2525,12 @@ the continued line matcher."
                                                                     pstmt-1
                                                                     loc
                                                                     parent)
+                              ;; if there is no list context and node is a comment
+                              ;; following a trailing comment, then choose between
+                              ;; the continued line position and the column of that
+                              ;; comment (primary if both comments match)
+                              (f90-ts--continued-line-trailing-comment-anoff
+                               variant loc)
                               default-anchor-offset)))
       ;; there are two caches:
       ;;  * cache anchor and offset for offset function for the
@@ -2323,6 +2570,7 @@ passed through unchanged."
                        preproc-at-toplevel-is
                        special-comment-is
                        comment-region-is
+                       trailing-comment-region-is
                        ;; anchor
                        nopp-parent
                        nopp-grandparent
@@ -2419,7 +2667,12 @@ The main purpose is to fill the indentation cache for a new run."
    ;; indent separator comments like their parent nodes
    ;; this check is after the region check, hence previous sibling
    ;; is not a comment of same kind
-   (special-comment-is cached-anchor cached-offset)))
+   (special-comment-is cached-anchor cached-offset)
+   ;; own-line comment following a trailing comment on the previous nonblank
+   ;; line (not continued): align with that comment if both match the same
+   ;; special comment rule, otherwise fail and use the default indentation.
+   ;; On continued lines the continued line anchor deals with comments.
+   (trailing-comment-region-is cached-anchor cached-offset)))
 
 
 (defun f90-ts--indent-rules-preproc ()

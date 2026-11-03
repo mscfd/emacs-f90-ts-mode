@@ -281,7 +281,7 @@ Name: align variable init declaration 5
 =-=
 subroutine arr3()
      character(len=5), dimension(1:3) :: & ! comment
-                                         ! comment
+                                           ! comment
         &   rgb_colours = &
         &          [ &
         &           'red  ', &
@@ -306,4 +306,190 @@ subroutine sub()
 
             final_val
 end subroutine sub
+=-=-=
+
+
+Name: continued trailing comment 1
+=-=
+subroutine math()
+     integer, parameter :: x = 5 + 6
+     x1234567890 = & !!! comment 1
+!!! comment 2
+            5 + 6
+end subroutine math
+=-=
+subroutine math()
+     integer, parameter :: x = 5 + 6
+     x1234567890 = & !!! comment 1
+                     !!! comment 2
+            5 + 6
+end subroutine math
+=-=-=
+
+Name: continued trailing comment 2
+=-=
+subroutine math()
+     integer, parameter :: x = 5 + 6
+     x1234567890 = & !!! comment 1
+!!! comment 2
+
+!!! comment 3
+            !!$ comment 4
+            5 + 6
+end subroutine math
+=-=
+subroutine math()
+     integer, parameter :: x = 5 + 6
+     x1234567890 = & !!! comment 1
+                     !!! comment 2
+
+                     !!! comment 3
+!!$ comment 4
+            5 + 6
+end subroutine math
+=-=-=
+
+Name: continued trailing comment 3
+=-=
+! with special commment rule
+subroutine compute(arg1, & !< comment 1
+                   arg2, arg3, & !< comment 2
+!< comment 3
+                   arg4, arg5, & !< comment 4
+                           !< comment 5
+                   arg6)
+end subroutine compute
+=-=
+! with special commment rule
+subroutine compute(arg1, & !< comment 1
+                   arg2, arg3, & !< comment 2
+                                 !< comment 3
+                   arg4, arg5, & !< comment 4
+                           !< comment 5
+                   arg6)
+end subroutine compute
+=-=-=
+
+Name: continued trailing comment 4
+=-=
+! with same prefix
+subroutine compute(arg1, & !+ comment 1
+                   arg2, arg3, & !+ comment 2
+!+ comment 3
+                   arg4, arg5, & !+ comment 4
+                           !+ comment 5
+                   arg6)
+end subroutine compute
+=-=
+! with same prefix
+subroutine compute(arg1, & !+ comment 1
+                   arg2, arg3, & !+ comment 2
+                                 !+ comment 3
+                   arg4, arg5, & !+ comment 4
+                           !+ comment 5
+                   arg6)
+end subroutine compute
+=-=-=
+
+Name: continued trailing comment 5
+=-=
+subroutine compute(arg1, & !1 comment 1
+                   arg2, arg3, & !2 comment 2
+!3 comment 3
+                   arg4, arg5, & !4 comment 4
+                                 !5 comment 5
+                   arg6)
+end subroutine compute
+=-=
+subroutine compute(arg1, & !1 comment 1
+                   arg2, arg3, & !2 comment 2
+                           !3 comment 3
+                   arg4, arg5, & !4 comment 4
+                                 !5 comment 5
+                   arg6)
+end subroutine compute
+=-=-=
+
+Name: continued trailing comment 6
+=-=
+subroutine sub()
+integer, parameter :: param_a = 1,  &   !< this is param_a,
+!< which is used in formula A
+!< or formula A2
+param_b = 2    !< this is param_B,
+!< which is used in formula B
+!< or formula B2
+end subroutine sub
+=-=
+subroutine sub()
+     integer, parameter :: param_a = 1,  &   !< this is param_a,
+                                             !< which is used in formula A
+                                             !< or formula A2
+                           param_b = 2    !< this is param_B,
+                                          !< which is used in formula B
+                                          !< or formula B2
+end subroutine sub
+=-=-=
+
+Name: select case statement 1
+=-=
+! list context for case range
+subroutine select_case()
+select_variant: select case (variant)
+case ('version1')
+print *, 'version1'
+case ('version2', &
+'extra')
+call xyz()
+case      ( & ! comment1
+       ! comment2
+'version3', &
+   ! comment 3
+ 'more' &
+)
+call uvw()
+case      ('version4', &
+'further' &
+)
+! comment
+call other()
+case    ((1+ &
+CASE_OFFSET &
+! commentX
+) &
+! commentY
+)
+print *, 'const_expr'
+end select select_variant
+end subroutine select_case
+=-=
+! list context for case range
+subroutine select_case()
+     select_variant: select case (variant)
+     case ('version1')
+          print *, 'version1'
+     case ('version2', &
+           'extra')
+          call xyz()
+     case      ( & ! comment1
+            ! comment2
+            'version3', &
+            ! comment 3
+            'more' &
+            )
+          call uvw()
+     case      ('version4', &
+                'further' &
+                  )
+          ! comment
+          call other()
+     case    ((1+ &
+               CASE_OFFSET &
+               ! commentX
+                 ) &
+              ! commentY
+                )
+          print *, 'const_expr'
+     end select select_variant
+end subroutine select_case
 =-=-=
