@@ -33,6 +33,9 @@
 ;;
 ;; Changelog (recent):
 ;; [11-2026]
+;;   - Abbrev expansion at start of `f90-ts-indent-and-complete-line' added.
+;;     In particular, TAB-based indentation and completion functions also check
+;;     for abbrev expansion.
 ;;   - Function `f90-ts-install-grammar' added to provide a pinned grammar
 ;;     tested against this version.
 ;;   - Mode adjusted to finally merged grammar variant of the string_literal
@@ -113,7 +116,7 @@
 ;;   - Imenu and a Fortran menu in the menu bar
 ;;   - Navigation (defun, things, Xref)
 ;;   - TOC side panel to show interactive table of content for a f90-ts buffer
-;;    (optional package)
+;;     (optional package)
 ;;   - Hideshow and outline support (support for external treesit-fold is
 ;;     pending)
 ;;
@@ -193,6 +196,9 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog (recent):
 
 [11-2026]
+- Abbrev expansion at start of `f90-ts-indent-and-complete-line' added.
+  In particular, TAB-based indentation and completion functions also check
+  for abbrev expansion.
 - Function `f90-ts-install-grammar' added to provide a pinned grammar
   tested against this version.
 - Mode adjusted to finally merged grammar variant of the string_literal

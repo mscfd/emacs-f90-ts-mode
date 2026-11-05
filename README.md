@@ -14,6 +14,9 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Abbrev expansion at start of `f90-ts-indent-and-complete-line` added.
+  In particular, TAB-based indentation and completion functions also check
+  for abbrev expansion.
 - Function `f90-ts-install-grammar` added to provide a pinned grammar
   tested against this version.
 - Mode adjusted to finally merged grammar variant of the string_literal

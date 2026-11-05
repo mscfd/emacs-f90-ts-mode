@@ -3680,6 +3680,14 @@ completion for a region, like indent-stmt operations on an end struct line."
       (when end-marker (set-marker end-marker nil)))))
 
 
+(defun f90-ts--indent-abbrev-expand ()
+  "Expand abbrev at point if there is one.
+This is done as part of `f90-ts--indent-and-complete-line', to allow hitting
+TAB right after typing an abbrevation with proper expansion and indentation."
+  (when abbrev-mode
+    (expand-abbrev)))
+
+
 ;;;------------------------------------------------------------------------------
 ;;; Indentation and smart end completion
 
@@ -3699,9 +3707,10 @@ bound to <tab>.  More advanced indentations of involved continued lines and
 block structures is done by `f90-ts--indent-and-complete-stmt'"
   (interactive)
   (f90-ts--with-check-modified-line
-   (f90-ts--indent-and-complete-line-aux
-    f90-ts-indent-list-line
-    nil)))
+    (f90-ts--indent-abbrev-expand)
+    (f90-ts--indent-and-complete-line-aux
+     f90-ts-indent-list-line
+     nil)))
 
 
 (defun f90-ts-indent-line (&optional variant)
@@ -3712,7 +3721,7 @@ If provided VARIANT is the variant symbol for how to compute alignment in
 multi-line statements.  Default value is `f90-ts-indent-list-line'."
   (interactive)
   (f90-ts--with-check-modified-line
-   (f90-ts--indent-line-aux variant)))
+    (f90-ts--indent-line-aux variant)))
 
 
 (defun f90-ts--complete-end-node-p (node pos end-marker at-col0)

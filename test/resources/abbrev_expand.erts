@@ -304,3 +304,33 @@ program prog
      real, allocate :: x|
 end program prog
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (abbrev-mode 1)
+    (f90-ts-indent-and-complete-line))
+
+Name: abbrev expand and indent 1
+=-=
+subroutine sub()
+`i|
+=-=
+subroutine sub()
+     integer|
+=-=-=
+
+Name: abbrev expand and indent 2
+=-=
+subroutine sub()
+     if (cond)
+`sc|
+     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (cond)
+          select case|
+     end if
+end subroutine sub
+=-=-=
