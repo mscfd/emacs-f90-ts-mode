@@ -34,6 +34,7 @@
 ;; Changelog (recent):
 ;; [11-2026]
 ;;   - Support for abbreviations through abbrev-mode and transient menu added.
+;;     New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
 ;;   - Alignment rules for case statements of select case blocks added.
 ;;   - Alignment rules for trailing comments within continued lines as well as
 ;;     those following a statement added.
@@ -182,6 +183,7 @@ Changelog (recent):
 
 [11-2026]
 - Support for abbreviations through abbrev-mode and transient menu added.
+  New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
 - Alignment rules for case statements of select case blocks added.
 - Alignment rules for trailing comments within continued lines as well as
   those following a statement added.
@@ -304,6 +306,9 @@ Changelog (recent):
 ;; abbrev table
 ;; enabled by (abbrev-mode), or through a transient menu
 
+(defvar f90-ts--abbrev-installed nil
+  "Non-nil once the abbrevs have been installed into the abbrev table.")
+
 ;; The abbrev definitions are derived from `f90-mode-abbrev-table' in
 ;; f90.el (GNU Emacs), Copyright (C) 1995-2026 Free Software Foundation, Inc.
 ;; Modified: three-letter names shortened for the transient menu, duplicate
@@ -334,7 +339,7 @@ Changelog (recent):
     ("`ei"  . "else if")                ; f90-mode: `eli
     ("`ew"  . "elsewhere")              ; f90-mode: `elw
     ("`em"  . "elemental")
-    ("`e"   . "enumerator")             ; menu key: ee
+    ("`en"  . "enumerator")             ; f90-mode: `e
     ("`eq"  . "equivalence")
     ("`ex"  . "external")
     ("`ey"  . "entry")
@@ -373,8 +378,6 @@ Changelog (recent):
     ("`wh"  . "where")
     ("`wr"  . "write")
     ;; added: common statements missing in f90-mode (but maybe a bit short)
-    ("`en"  . "end")
-    ("`us"  . "use")
     ("`sv"  . "save")
     ("`va"  . "value")
     ("`sp"  . "stop")
@@ -409,20 +412,20 @@ Changelog (recent):
     ("`pe"  . "pure")
     ("`ie"  . "impure"))
   "Alist of (ABBREV . EXPANSION) for `f90-ts-mode'.
-Single-letter abbrevs (\"`c\", \"`e\", \"`i\", \"`r\", \"`t\") use a doubled
+Single-letter abbrevs (\"`c\", \"`i\", \"`r\", \"`t\") use a doubled
 key in the transient menu (cc, ee, ii, rr, tt) so that no menu key is
 a prefix of another.  Hence these doubled names are unavailable as
 abbrevs of their own.  All other abbrevs must have exactly two
 characters after the accent.")
 
 
-(define-abbrev-table 'f90-ts-mode-abbrev-table
-  (mapcar (lambda (e) (list (car e) (cdr e) nil :system t))
-          f90-ts--abbrev-definitions)
+(define-abbrev-table 'f90-ts-mode-abbrev-table nil
   "Abbrev table for `f90-ts-mode'.
-Derived from the abbrev table of `f90-mode'."
-  ;; Accept ` as the first char of an abbrev.  Also allow _ in abbrevs.
-  :regexp "\\(?:[^[:word:]_`]\\|^\\)\\(`?[[:word:]_]+\\)[^[:word:]_]*")
+Derived from the abbrev table of `f90-mode'.  Populated by
+`f90-ts--abbrev-refresh' from `f90-ts--abbrev-definitions' and
+`f90-ts-extra-abbrevs'."
+  ;; accept ` as the first char of an abbrev, also allow _ in abbrevs
+  :regexp "\\(?:[^[:word:]`]\\|^\\)\\(`?[[:word:]]+\\)[^[:word:]]*")
 
 
 (defun f90-ts--abbrev-key (name)
@@ -432,7 +435,7 @@ becomes `ii'), so that no key is a prefix of another key."
   (let ((key (string-remove-prefix "`" name)))
     (if (= (length key) 1)
         (concat key key)
-        key)))
+      key)))
 
 
 (defun f90-ts--abbrev-make-command (key exp)
@@ -448,7 +451,7 @@ The command is named `f90-ts--abbrev-insert-KEY'."
 
 
 (defun f90-ts--abbrev-check-keys (entries)
-  "Signal an error if the keys of ENTRIES clash.
+  "Signal a `user-error' if the keys of ENTRIES clash.
 Two keys clash if they are equal or one is a prefix of the other,
 since transient cannot bind both."
   (let ((clashes (cl-loop
@@ -459,29 +462,81 @@ since transient cannot bind both."
                          when (or (string-prefix-p key other)
                                   (string-prefix-p other key))
                          collect (cons key other)))))
-    (cl-assert (null clashes) nil
-               "f90-ts abbrev menu: conflicting keys %S" clashes)))
+    (when clashes
+      (user-error "Abbrev table in f90-ts-mode: conflicting keys %S" clashes))))
+
+
+(defun f90-ts--abbrev-check-extra (abbrevs)
+  "Signal a `user-error' if ABBREVS is not a valid extra abbrev alist."
+  (cl-loop
+   for abl in abbrevs
+   do (unless (and (consp abl)
+                   (stringp (car abl))
+                   (stringp (cdr abl))
+                   (string-match-p "\\`[a-z0-9]\\{1,2\\}\\'" (car abl)))
+        (user-error "Abbrev table in f90-ts-mode: abbrev %S needs (\"xy\" . \"expansion\") with \
+one or two characters [a-z0-9] and without the leading accent"
+                    abl))))
 
 
 (defconst f90-ts--abbrev-menu-columns 12
   "Maximum number of abbrevs per column in the abbrev menu.")
 
 
-(defconst f90-ts--abbrev-menu-entries
-  (cl-loop
-   for (name . exp) in (seq-sort-by (lambda (def) (f90-ts--abbrev-key (car def)))
-                                    #'string<
-                                    f90-ts--abbrev-definitions)
-   for key = (f90-ts--abbrev-key name)
-   collect (list key exp (f90-ts--abbrev-make-command key exp)))
-  "Transient suffix specs (KEY DESCRIPTION COMMAND), sorted by KEY.
+(defun f90-ts--abbrev-unescape (str)
+  "Translate the escape \\n in STR into a proper newline character."
+  (replace-regexp-in-string "\\\\n" "\n" str t t))
+
+
+(defun f90-ts--abbrev-effective-definitions ()
+  "Return default abbrevs, overridden and extended by `f90-ts-extra-abbrevs'.
+The mandatory leading accent is added to the extra abbrevs here, and
+their escapes are translated by `f90-ts--abbrev-unescape'.
+If a name occurs more than once, the last definition wins."
+  (let ((all (append f90-ts--abbrev-definitions
+                     (cl-loop for (name . exp) in f90-ts-extra-abbrevs
+                              collect (cons (concat "`" name)
+                                            (f90-ts--abbrev-unescape exp))))))
+    (cl-loop for (def . rest) on all
+             unless (assoc (car def) rest #'string=)
+             collect def)))
+
+
+(defconst f90-ts--abbrev-menu-max-width 20
+  "Maximum number of expansion characters shown in the abbrev menu.
+Longer expansions are cut off and followed by \"...\".")
+
+
+(defconst f90-ts--abbrev-menu-newline "\\n"
+  "String shown in the abbrev menu in place of a newline in an expansion.
+Use \"\\\\n\" if your font lacks the return symbol.")
+
+
+(defun f90-ts--abbrev-menu-label (exp)
+  "Return EXP shortened for display in the abbrev menu.
+Newlines are shown as `f90-ts--abbrev-menu-newline'."
+  (let ((shown (replace-regexp-in-string
+                "\n" f90-ts--abbrev-menu-newline exp t t)))
+    (if (> (length shown) f90-ts--abbrev-menu-max-width)
+        (concat (substring shown 0 f90-ts--abbrev-menu-max-width) "...")
+      shown)))
+
+
+(defun f90-ts--abbrev-menu-entries ()
+  "Return transient suffix specs (KEY DESCRIPTION COMMAND), sorted by KEY.
 KEY is the abbrev name without the leading accent (doubled for single
-letters), DESCRIPTION is the expansion.  Built once at load time from
-`f90-ts--abbrev-definitions'.")
-
-
-;; static data, checking once at load time
-(f90-ts--abbrev-check-keys f90-ts--abbrev-menu-entries)
+letters), DESCRIPTION is the expansion, shortened by
+`f90-ts--abbrev-menu-label'.  Signal a `user-error' on key clashes."
+  (let ((entries
+         (cl-loop
+          for (name . exp) in (f90-ts--abbrev-effective-definitions)
+          for key = (f90-ts--abbrev-key name)
+          collect (list key
+                        (f90-ts--abbrev-menu-label exp)
+                        (f90-ts--abbrev-make-command key exp)))))
+    (setq entries (seq-sort-by #'car #'string< entries))
+    (f90-ts--abbrev-check-keys entries)
+    entries))
 
 
 (defun f90-ts--abbrev-menu-groups (_children)
@@ -490,7 +545,7 @@ Used as `:setup-children' function of `f90-ts-abbrev-menu'."
   (transient-parse-suffixes
    'f90-ts-abbrev-menu
    (cl-loop
-    for chunk in (seq-partition f90-ts--abbrev-menu-entries
+    for chunk in (seq-partition (f90-ts--abbrev-menu-entries)
                                 f90-ts--abbrev-menu-columns)
     collect (vconcat [""] chunk))))
 
@@ -500,6 +555,32 @@ Used as `:setup-children' function of `f90-ts-abbrev-menu'."
   ["Fortran abbreviations (almost the same as in abbrev-mode)"
    :class transient-columns
    :setup-children f90-ts--abbrev-menu-groups])
+
+
+(defun f90-ts--abbrev-refresh ()
+  "Validate and (re)install all abbrevs into `f90-ts-mode-abbrev-table'.
+Validation happens first, so a bad configuration leaves the table untouched."
+  (f90-ts--abbrev-check-extra f90-ts-extra-abbrevs)
+  (f90-ts--abbrev-menu-entries)         ; signals on key clashes
+  (cl-loop
+   for (name . exp) in (f90-ts--abbrev-effective-definitions)
+   do (define-abbrev f90-ts-mode-abbrev-table name exp nil :system t))
+  (setq f90-ts--abbrev-installed t))
+
+
+(defun f90-ts-add-custom-abbrevs (abbrevs)
+  "Add ABBREVS, a list of (ABBREV . EXPANSION), to `f90-ts-extra-abbrevs'.
+ABBREV is given without the leading accent."
+  (setopt f90-ts-extra-abbrevs (append f90-ts-extra-abbrevs abbrevs)))
+
+
+(defun f90-ts--abbrev-ensure-installed ()
+  "Install the abbrevs once at first load if not yet installed.
+Later changes of the custom abbreviations invoke the setter directly to
+update changes."
+  (unless f90-ts--abbrev-installed
+    (f90-ts--abbrev-refresh)
+    (setq f90-ts--abbrev-installed t)))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -926,6 +1007,9 @@ package `markdown-mode' are available, then use these."
 
   ;; hideshow and outline support (hs-minor-mode, outline-minor-mode)
   (f90-ts-fold-setup)
+
+  ;; install abbrev table, including custom abbrevs
+  (f90-ts--abbrev-ensure-installed)
 
   ;;(setq-local treesit--font-lock-verbose t)
   ;;(setq-local treesit--indent-verbose t)

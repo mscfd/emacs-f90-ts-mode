@@ -33,6 +33,7 @@ for implementation.
   - [Indentation of continued statements with leading ampersand](#indentation-of-continued-statements-with-leading-ampersand)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
   - [Indentation of statement labels](#indentation-of-statement-labels)
+  - [Abbreviations](#abbreviations)
   - [Xref](#xref)
   - [Imenu](#imenu)
   - [TOC buffer](#toc-buffer)
@@ -360,6 +361,7 @@ in the `:bind` section as shown above, or simply by:
 - Navigation (defun, things, Xref)
 - TOC side panel to show interactive table of content for a f90-ts buffer (optional package)
 - Hideshow, outline and treesit-fold support
+- Abbreviations via abbrev-mode or via a transient menu
 
 
 
@@ -550,7 +552,21 @@ For the label itself there are two options. Either they are left-adjusted starti
 column number, or right-adjusted with last digit of the label at the fixed column number.
 If there is not enough space, the statement itself is moved to the right to ensure at least one
 blank after the label.
-This is controlled by custom variable `f90-ts-stmt-label-column'.
+This is controlled by custom variable `f90-ts-stmt-label-column`.
+
+
+### Abbreviations
+
+Emacs provides an abbrev-mode, which can be enabled by hand or automatically at load time, for example
+in the use-package setup.
+The mode provides abbreviations for many keywords. If the mode is enabled, typing "&#96" followed by
+two letters and a space inserts the corresponding keyword. Example: "&#96su " inserts subroutine.
+Abbreviations can be discovered by typing `C-&#96`, which opens a transient menu, showing the same
+two letter codes. There are a few one letter codes: "c", "i", "r" and "t". These are shown as
+"cc", "ii", "rr" and "tt" in the transient menu, to avoid common prefixes.
+
+New abbreviations can be added through defcustom variable `f90-ts-extra-abbrevs`. This also allows
+to overwrite default abbrevs.
 
 
 ### Xref
