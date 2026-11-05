@@ -6,7 +6,7 @@
 ;; Maintainer: Martin Stein <mscfd@gmx.net>
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
 ;; Keywords: languages, treesitter, fortran
-;; Version: 0.7.0
+;; Version: 0.7.1-snapshot
 ;; Package-Requires: ((emacs "29.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -38,7 +38,7 @@
 ;;   - Mode adjusted to finally merged grammar variant of the string_literal
 ;;     patch set.  Update grammar to avoid broken setup!
 ;;   - Mode adjusted to grammar changes concerning
-;;     \"block_label_start_expression\".
+;;     "block_label_start_expression".
 ;;   - Support for abbreviations through abbrev-mode and transient menu added.
 ;;     New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
 ;;   - Alignment rules for case statements of select case blocks added.

@@ -18,7 +18,7 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
   tested against this version.
 - Mode adjusted to finally merged grammar variant of the string_literal
   patch set.  Update grammar to avoid broken setup!
-- Mode adjusted to grammar changes concerning "block_label_start_expression".
+- Mode adjusted to grammar changes concerning `block_label_start_expression`.
 - Support for abbreviations through abbrev-mode and transient menu added.
   New abbrevs can be added via defcustom `f90-ts-extra-abbrevs`.
 - Alignment rules for case statements of select case blocks added.
@@ -168,7 +168,7 @@ Installation steps are:
 
 The mode relies on the `tree-sitter-fortran` grammar.
 
-There is pinned version in "https://github.com/mscfd/tree-sitter-fortran" tagged with "emacs-f90-ts-mode-v0.7.x".
+There is pinned version in "https://github.com/mscfd/tree-sitter-fortran" tagged with `emacs-f90-ts-mode-v0.7.x`.
 It can be installed by executing `M-x f90-ts-install-grammar`.
 
 If more control is desired, register the grammar repository in Emacs:
