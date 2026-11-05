@@ -54,6 +54,7 @@ SRCS = \
 	f90-ts-break-join-fill.el \
 	f90-ts-mark-region.el \
 	f90-ts-comment-region.el \
+	f90-ts-abbrev.el \
 	f90-ts-xref.el \
 	f90-ts-imenu.el \
 	f90-ts-thing.el \

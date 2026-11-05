@@ -1,0 +1,306 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`im ! no implicit typing"))
+
+Name: abbrev expand 1
+=-=
+program prog
+|
+end program prog
+=-=
+program prog
+implicit none ! no implicit typing|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`i, `it(in) :: n"))
+
+Name: abbrev expand 2
+=-=
+subroutine sub(n)
+     |
+end subroutine sub
+=-=
+subroutine sub(n)
+     integer, intent(in) :: n|
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`r(8) :: x"))
+
+Name: abbrev expand 3
+=-=
+program prog
+     |
+end program prog
+=-=
+program prog
+     real(8) :: x|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`al(x(n))"))
+
+Name: abbrev expand 4
+=-=
+program prog
+     |
+end program prog
+=-=
+program prog
+     allocate(x(n))|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`de(x)"))
+
+Name: abbrev expand 5
+=-=
+program prog
+     |
+end program prog
+=-=
+program prog
+     deallocate(x)|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`su foo"))
+
+Name: abbrev expand 6
+=-=
+module m
+contains
+ |
+end module m
+=-=
+module m
+contains
+ subroutine foo|
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`fu f(x)"))
+
+Name: abbrev expand 7
+=-=
+module m
+contains
+ |
+end module m
+=-=
+module m
+contains
+ function f(x)|
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`cn ! procedures"))
+
+Name: abbrev expand 8
+=-=
+module m
+|
+end module m
+=-=
+module m
+contains ! procedures|
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`wr(*,*) x"))
+
+Name: abbrev expand 9
+=-=
+program prog
+|
+end program prog
+=-=
+program prog
+write(*,*) x|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`pm test"))
+
+Name: abbrev expand 10
+=-=
+|
+=-=
+program test|
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (abbrev-mode -1)
+    (f90-ts-mode-test--type "`al(x)"))
+
+Name: abbrev no expand 1
+=-=
+program prog
+    |
+end program prog
+=-=
+program prog
+    `al(x)|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`ft,"
+                                   '(("ft" . "often_used_function(A"))))
+
+Name: abbrev extra added
+=-=
+subroutine sub()
+     M = |
+end subroutine sub
+=-=
+subroutine sub()
+     M = often_used_function(A,|
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`00 end"
+                                   '(("00" . "!------"))))
+
+Name: abbrev extra with digits
+=-=
+program progrog
+|
+end program progrog
+=-=
+program progrog
+!------ end|
+end program progrog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "real, `al :: x"
+                                   '(("al" . "allocatable"))))
+
+Name: abbrev extra override default
+=-=
+! default: al expands to allocate
+program prog
+     |
+end program prog
+=-=
+! default: al expands to allocate
+program prog
+     real, allocatable :: x|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`my, `po :: x"
+                                   '(("my" . "class(myown)") ("my" . "class(myother)"))))
+
+Name: abbrev extra last definition wins
+=-=
+program prog
+|
+end program prog
+=-=
+program prog
+class(myother), pointer :: x|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--abbrev-type "`cb ! comment"
+                                   '(("cb" . "block\\nend block"))))
+
+Name: abbrev extra with escaped newline
+=-=
+program prog
+|
+end program prog
+=-=
+program prog
+block
+end block ! comment|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (abbrev-mode 1)
+    (f90-ts-mode-test--with-extra-abbrevs '(("vx" . "my_var_x"))
+      (setopt f90-ts-extra-abbrevs nil)
+      (f90-ts-mode-test--type "`vx =")))
+
+Name: abbrev extra removed
+=-=
+program prog
+|
+end program prog
+=-=
+program prog
+`vx =|
+end program prog
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (abbrev-mode 1)
+    (f90-ts-mode-test--with-extra-abbrevs '(("al" . "allocatable"))
+      (setopt f90-ts-extra-abbrevs nil)
+      (f90-ts-mode-test--type "real, `al :: x")))
+
+Name: abbrevs extra removed restore defaults
+=-=
+! default: al expands to allocate
+program prog
+     |
+end program prog
+=-=
+! default: al expands to allocate
+program prog
+     real, allocate :: x|
+end program prog
+=-=-=

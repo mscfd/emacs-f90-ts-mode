@@ -164,6 +164,7 @@ without final newline."
     (f90-ts-comment-region-prefix . "!!$ ")
     (f90-ts-extra-comment-prefixes . ("!!!" "! " "!> "))
     (f90-ts-comment-prefix-keep-indent . t)
+    (f90-ts-extra-abbrevs . nil)
     (f90-ts-mark-region-order . preserve)
     (treesit-font-lock-level . 4)       ; buffer-local variable, changes to this variable
                                         ; also needs treesit-font-lock-recompute-features
@@ -184,8 +185,9 @@ It has the same structure and the same set of keys as
   "Save current custom values of managed variables.
 Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
   (setq f90-ts-mode-test-custom-saved
-        (cl-loop for (var . _) in f90-ts-mode-test-custom-settings
-                 collect (cons var (default-value var)))))
+        (cl-loop
+         for (var . _) in f90-ts-mode-test-custom-settings
+         collect (cons var (default-value var)))))
 
 
 (defun f90-ts-mode-test--font-lock-recompute-features ()
@@ -200,12 +202,13 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
 (defun f90-ts-mode-test-set-custom-testing ()
   "Save current values and apply temporary ones for testing purposes."
   (f90-ts-mode-test-save-custom)
-  (cl-loop for (var . val) in f90-ts-mode-test-custom-settings
-           do (progn
-                (when (local-variable-p var)
-                  ;; if current buffer has a local copy, set it as well
-                  (set var val))
-                (set-default var val)))
+  (cl-loop
+   for (var . val) in f90-ts-mode-test-custom-settings
+   do (progn
+        (when (local-variable-p var)
+          ;; if current buffer has a local copy, set it as well
+          (set var val))
+        (set-default var val)))
   ;; treesit-font-lock-level requires a recompute
   (f90-ts-mode-test--font-lock-recompute-features))
 
@@ -214,12 +217,13 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
   "Restore previously saved custom variable values."
   (unless f90-ts-mode-test-custom-saved
     (error "f90-ts-mode-test: No saved custom variable state to restore"))
-  (cl-loop for (var . val) in f90-ts-mode-test-custom-saved
-           do (progn
-                (when (local-variable-p var)
-                  ;; if current buffer has a local copy, set it as well
-                  (set var val))
-                (set-default var val)))
+  (cl-loop
+   for (var . val) in f90-ts-mode-test-custom-saved
+   do (progn
+        (when (local-variable-p var)
+          ;; if current buffer has a local copy, set it as well
+          (set var val))
+        (set-default var val)))
   (f90-ts-mode-test--font-lock-recompute-features)
   (setq f90-ts-mode-test-custom-saved nil))
 
@@ -246,15 +250,17 @@ test values for specific tests."
                          collect (cons var
                                        (buffer-local-value var (current-buffer))))))
      (cl-progv vars vals
-       (cl-loop for (var . val) in settings
-                when (local-variable-p var)
-                do (set var val))
+       (cl-loop
+        for (var . val) in settings
+        when (local-variable-p var)
+        do (set var val))
        (unwind-protect
            (progn
              (f90-ts-mode-test--font-lock-recompute-features))
              (progn ,@body))
-         (cl-loop for (var . val) in saved-locals
-                  do (set var val))
+         (cl-loop
+          for (var . val) in saved-locals
+          do (set var val))
          (f90-ts-mode-test--font-lock-recompute-features))))
 
 
@@ -281,6 +287,75 @@ so that selection of indentation rules is tested properly."
     (insert "program activation\nend program activation\n")
     (f90-ts-mode)
     (should (derived-mode-p 'f90-ts-mode))))
+
+
+;;------------------------------------------------------------------------------
+;; subtest collection
+;;
+;; An elisp resource file defines a collection of subtest with
+;; `f90-ts-mode-test-defsub'. The collection is registered with
+;; `f90-ts-mode-test--collection-register' as a single ert test.
+;; It then runs as one ert test containing many subtests.
+
+(defvar f90-ts-mode-test--subtests nil
+  "Names of the cases defined while loading a resource file.
+Bound by `f90-ts-mode-test--collection-load', most recent definition first.")
+
+
+(defmacro f90-ts-mode-test-defsub (name args &rest body)
+  "Define case function NAME with ARGS and BODY, like `defun'.
+ARGS must be empty.  If the definition is evaluated while a resource file is
+loaded by `f90-ts-mode-test--collection-load', the case is recorded, and
+run as part of the ert test registered for that file.  The name should be
+unique across all resource files, as it is a plain function."
+  (declare (indent defun) (doc-string 3))
+  (unless (null args)
+    (error "Test Case %s must not take arguments" name))
+  `(progn
+     (defun ,name ,args ,@body)
+     (cl-pushnew ',name f90-ts-mode-test--subtests)
+     ',name))
+
+
+(defun f90-ts-mode-test--collection-load (file)
+  "Load resource FILE and return the names of its cases in order."
+  (let ((f90-ts-mode-test--subtests nil))
+    (load file nil t t)
+    (reverse f90-ts-mode-test--subtests)))
+
+
+(defun f90-ts-mode-test--collection-run (file)
+  "Load resource FILE and run all its cases.
+Each case runs inside an `ert-info' naming it, so a failure shows which
+case it belongs to.  The first failing case ends the test."
+  (let ((names (f90-ts-mode-test--collection-load file)))
+    (ert-info ((file-name-nondirectory file) :prefix "Resource file: ")
+      (should names)
+      (cl-loop
+       for name in names
+       do (ert-info ((symbol-name name) :prefix "Test case: ")
+            (funcall name))))))
+
+
+(defun f90-ts-mode-test--collection-register (prefix files)
+  "Dynamically generate one ert-test for each of FILES.
+Each element of FILES is a file name relative to the resource directory,
+or a cons (FILE . SETTINGS), where SETTINGS is an alist of (VAR . VALUE) to
+override test settings, see `f90-ts-mode-test-with-custom-testing'.
+The file is loaded when the test runs, and all cases defined in it are
+run.  PREFIX is the test name prefix (like \"f90-ts-mode-test\")."
+  (cl-loop
+   for entry in files
+   for (file . settings) = (if (consp entry) entry (list entry))
+   for test-name = (intern
+                    (format "%s--%s"
+                            prefix
+                            (string-replace
+                             "_" "-" (file-name-sans-extension file))))
+   do (eval
+       `(ert-deftest ,test-name ()
+          (f90-ts-mode-test-with-custom-testing ',settings
+            (f90-ts-mode-test--collection-run (ert-resource-file ,file)))))))
 
 
 ;;------------------------------------------------------------------------------
@@ -589,22 +664,24 @@ PREFIX is the test name prefix (like \"f90-ts-mode-test\")."
     (let* ((start (point))
            (end (line-end-position))
            (span-faces
-            (cl-loop while (< (point) end)
-                     for face = (get-text-property (point) 'face)
-                     for next = (f90-ts-mode-test--next-boundary (point) end)
-                     if (or face (not (looking-at "[[:blank:]]")))
-                       collect (list (max 1 (- (point) start))
-                                     (- next start)
-                                     face)
-                     do (goto-char next))))
+            (cl-loop
+             while (< (point) end)
+             for face = (get-text-property (point) 'face)
+             for next = (f90-ts-mode-test--next-boundary (point) end)
+             if (or face (not (looking-at "[[:blank:]]")))
+             collect (list (max 1 (- (point) start))
+                           (- next start)
+                           face)
+             do (goto-char next))))
       (forward-line 1)
-      (cl-loop for (beg end face) in span-faces
-               do (when (< beg end)
-                    (insert "!"
-                            (make-string (1- beg) ?\s)
-                            (make-string (- end beg) ?^)
-                            (format " %s" face)
-                            "\n"))))))
+      (cl-loop
+       for (beg end face) in span-faces
+       do (when (< beg end)
+            (insert "!"
+                    (make-string (1- beg) ?\s)
+                    (make-string (- end beg) ?^)
+                    (format " %s" face)
+                    "\n"))))))
 
 
 (defun f90-ts-mode-test--update-face-line (annotate)
@@ -712,6 +789,44 @@ PREFIX is the prefix of the test file name (like \"f90-ts-mode-test\")."
              'f90-ts-mode))))))
 
 
+;;------------------------------------------------------------------------------
+;; abbrev
+
+(defmacro f90-ts-mode-test--with-extra-abbrevs (extra &rest body)
+  "Set `f90-ts-extra-abbrevs' to EXTRA with `setopt' and execute BODY.
+Going through `setopt' validates EXTRA and updates the abbrev table, as for
+a user.  The previous value is restored afterwards, again with `setopt',
+so that the abbrev table is never left in a modified state by a test."
+  (declare (indent 1))
+  (let ((old (make-symbol "old")))
+    `(let ((,old f90-ts-extra-abbrevs))
+       (unwind-protect
+           (progn
+             (setopt f90-ts-extra-abbrevs ,extra)
+             ,@body)
+         (setopt f90-ts-extra-abbrevs ,old)))))
+
+
+(defun f90-ts-mode-test--type (keys)
+  "Insert the characters of string KEYS into the current buffer.
+Each character is inserted by `self-insert-command', as if it was typed, so
+that abbrev expansion is triggered by non-word characters if `abbrev-mode'
+is enabled."
+  (cl-loop
+   for ch across keys
+   do (let ((last-command-event ch))
+        (self-insert-command 1 ch))))
+
+
+(defun f90-ts-mode-test--abbrev-type (keys &optional extra)
+  "Enable `f90-ts-mode' and `abbrev-mode', then type KEYS.
+`f90-ts-extra-abbrevs' is set to EXTRA (default nil, so only the default
+abbrevs are active) while typing."
+  (abbrev-mode 1)
+  (f90-ts-mode-test--with-extra-abbrevs extra
+    (f90-ts-mode-test--type keys)))
+
+
 ;; -----------------------------
 ;; xref
 
@@ -727,22 +842,24 @@ Target-pos is position of the line (the directly previous non-assertion line),
 on which to execute the xref command."
   (save-excursion
     (goto-char (point-min))
-    (cl-loop while (re-search-forward "!@\\(def\\|ref\\) \\(.+\\)" nil t)
-             for type = (if (string= (match-string 1) "def") 'def 'ref)
-             for raw-line = (match-string 2)
-             for target-pos = (save-excursion
-                                (goto-char (line-beginning-position))
-                                (while (progn (forward-line -1)
-                                              (looking-at-p "[[:space:]]*!@")))
-                                (line-beginning-position))
-             nconc (cl-loop for entry in (split-string raw-line "[[:space:]]+" t)
-                            for parts = (split-string entry "#")
-                            for sym = (car parts)
-                            for line-assert = (line-number-at-pos)
-                            ;; Parse comma-separated line numbers into a list of ints
-                            for line-parts = (and (cadr parts) (split-string (cadr parts) "," t))
-                            for expected-lines = (mapcar #'string-to-number line-parts)
-                            collect (list type sym expected-lines target-pos line-assert)))))
+    (cl-loop
+     while (re-search-forward "!@\\(def\\|ref\\) \\(.+\\)" nil t)
+     for type = (if (string= (match-string 1) "def") 'def 'ref)
+     for raw-line = (match-string 2)
+     for target-pos = (save-excursion
+                        (goto-char (line-beginning-position))
+                        (while (progn (forward-line -1)
+                                      (looking-at-p "[[:space:]]*!@")))
+                        (line-beginning-position))
+     nconc (cl-loop
+            for entry in (split-string raw-line "[[:space:]]+" t)
+            for parts = (split-string entry "#")
+            for sym = (car parts)
+            for line-assert = (line-number-at-pos)
+            ;; Parse comma-separated line numbers into a list of ints
+            for line-parts = (and (cadr parts) (split-string (cadr parts) "," t))
+            for expected-lines = (mapcar #'string-to-number line-parts)
+            collect (list type sym expected-lines target-pos line-assert)))))
 
 
 (defun f90-ts-mode-test--xref-extract-line-numbers (items)
@@ -818,8 +935,9 @@ derived from !@def and !@ref statements."
 
 (defun f90-ts-mode-test--xref-run-assertions ()
   "Run all parsed xref assertions."
-  (cl-loop for assertion in (f90-ts-mode-test--xref-parse-assertions)
-           do (f90-ts-mode-test--xref-check-assertion assertion)))
+  (cl-loop
+   for assertion in (f90-ts-mode-test--xref-parse-assertions)
+   do (f90-ts-mode-test--xref-check-assertion assertion)))
 
 
 (defun f90-ts-mode-test--xref-run-file (file)
@@ -1089,12 +1207,19 @@ Point is placed after the first \"[...]\" replacement."
    "comment_region.erts"
    "comment_prefix.erts"
    "modified_bit.erts"
+   "abbrev_expand.erts"
    "navigate_thing_procedure.erts"
    "navigate_thing_interface.erts"
    "navigate_thing_type.erts"
    "hideshow.erts"
    "outline_hide.erts"
    "outline_navigate.erts"))
+
+
+;; test cases in el resource files
+(f90-ts-mode-test--collection-register
+ "f90-ts-mode-test"
+ '("abbrev-table.el"))
 
 
 ;; register font lock tests

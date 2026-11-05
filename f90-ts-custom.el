@@ -664,17 +664,13 @@ seem to make much sense."
 
 (defun f90-ts--abbrev-set-extra (sym val)
   "Setter for `f90-ts-extra-abbrevs'.
-Set SYM to VAL and refresh the abbrev table.  On error, restore the old value.
+Set SYM to VAL and refresh the abbrev table.
 When the abbrev code is not loaded yet, only set the value."
-  (let ((had-old (default-boundp sym))
-        (old (and (default-boundp sym) (default-value sym))))
-    (set-default sym val)
-    (when (fboundp 'f90-ts--abbrev-refresh)
-      (condition-case err
-          (f90-ts--abbrev-refresh)
-        (error
-         (set-default sym (and had-old old))
-         (signal (car err) (cdr err)))))))
+  (when (fboundp 'f90-ts--abbrev-validate)
+    (f90-ts--abbrev-validate val))
+  (set-default sym val)
+  (when (fboundp 'f90-ts--abbrev-refresh)
+    (f90-ts--abbrev-refresh)))
 
 
 (defcustom f90-ts-extra-abbrevs nil
@@ -690,17 +686,18 @@ or with `setopt':
 
   (setopt f90-ts-extra-abbrevs
           \\='((\"my\" . \"my custom expansion\")
-            (\"00\"\ . \"!-----------\\n\")
+            (\"00\" . \"!-----------\\n\")
             (\"al\" . \"allocatable\")))
 
 Both validate the value and update the abbrev table and the abbrev
 menu.  Plain `setq' does neither, so do not use it for this variable."
-  :type '(alist :tag "Extra abbreviations (1 or two 2 chars without leading accent)"
+  :type '(alist :tag "Extra abbreviations (1 or 2 chars without leading accent)"
                 :key-type (string :tag "Abbrev"
                                   :size 2
                                   :valid-regexp "[a-z0-9]\\{1,2\\}")
                 :value-type (string :tag "Expansion" :format "  %t: %v"))
   :set #'f90-ts--abbrev-set-extra
+  :initialize #'custom-initialize-default
   :group 'f90-ts)
 
 
