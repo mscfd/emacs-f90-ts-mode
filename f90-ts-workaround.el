@@ -502,14 +502,16 @@ default."
      (t
       ;; try previous siblings first, then next siblings as fallback,
       ;; but for the intended case, one step to the prev-sibling resolves the issue
-      (or (cl-loop for n = (treesit-node-prev-sibling node)
-                   then (treesit-node-prev-sibling n)
-                   while n
-                   thereis (funcall orig n))
-          (cl-loop for n = (treesit-node-next-sibling node)
-                   then (treesit-node-next-sibling n)
-                   while n
-                   thereis (funcall orig n)))))))
+      (or (cl-loop
+           for n = (treesit-node-prev-sibling node)
+           then (treesit-node-prev-sibling n)
+           while n
+           thereis (funcall orig n))
+          (cl-loop
+           for n = (treesit-node-next-sibling node)
+           then (treesit-node-next-sibling n)
+           while n
+           thereis (funcall orig n)))))))
 
 
 ;;;-----------------------------------------------------------------------------

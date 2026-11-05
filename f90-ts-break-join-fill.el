@@ -509,8 +509,9 @@ available.  Cleared after each statement is joined and broken up completely.")
   "Reset `f90-ts--breakpoint-seed-markers', invalidating all markers."
   (when-let* ((m (car f90-ts--breakpoint-seed-markers)))
     (set-marker m nil))
-  (cl-loop for m in (cdr f90-ts--breakpoint-seed-markers)
-           do (set-marker m nil))
+  (cl-loop
+   for m in (cdr f90-ts--breakpoint-seed-markers)
+   do (set-marker m nil))
   (setq f90-ts--breakpoint-seed-markers (cons nil nil)))
 
 
@@ -540,8 +541,9 @@ Does nothing if a seed marker at that position already exists."
   (save-excursion
     (skip-chars-backward " \t")
     (let ((pos (point)))
-      (unless (cl-loop for m in (f90-ts--seed-markers-seeds)
-                       when (= (marker-position m) pos) return t)
+      (unless (cl-loop
+               for m in (f90-ts--seed-markers-seeds)
+               when (= (marker-position m) pos) return t)
         (unless f90-ts--breakpoint-seed-markers
           (setq f90-ts--breakpoint-seed-markers (cons nil nil)))
         (push (copy-marker pos) (cdr f90-ts--breakpoint-seed-markers))))))
@@ -673,9 +675,10 @@ otherwise return all positions."
                        (point)))))
       (if (null prefer)
           ;; take all positions, allow breaking at any point within the string
-          (cl-loop for pos from (1+ start) below end
-                   when (<= (f90-ts--column-number-at-pos pos) (1- fill-col))
-                   collect pos)
+          (cl-loop
+           for pos from (1+ start) below end
+           when (<= (f90-ts--column-number-at-pos pos) (1- fill-col))
+           collect pos)
         (goto-char start)
         (cl-loop
          ;; at whitespace boundary (\S- followed by \s-), or after punctuation
@@ -871,11 +874,12 @@ Remark: the `read-key' loop in `f90-ts--find-breakpoint-read-key' blocks other
 interaction (like scrolling in another buffer with mouse).  This might need
 some improvements."
   (when-let* ((initial-pos (or (f90-ts--find-breakpoint-initial-pos positions fill-col)
-                               ;; no previous breakpoint available, then look into positions
-                               ;; before fill-col
-                               (cl-loop for p in positions
-                                        when (<= (f90-ts--column-number-at-pos p) fill-col)
-                                        maximize p)
+                               ;; no previous breakpoint available, then look into
+                               ;; positions before fill-col
+                               (cl-loop
+                                for p in positions
+                                when (<= (f90-ts--column-number-at-pos p) fill-col)
+                                maximize p)
                                ;; use smallest position available as fallback
                                (car positions)))
               (idx (cl-position initial-pos positions))

@@ -409,14 +409,16 @@ nodes after struct.  For a struct without name, return the triple
                                    captures
                                    :initial-value nil)))))
 
-    (cl-mapcan (lambda (group)
-                 (let ((struct-node (cdar group))
-                       (names (cdr group)))
-                   (if names
-                       (cl-loop for (cap-sym . name-node) in names
-                                collect (list cap-sym struct-node name-node))
-                     (list (list nil struct-node nil)))))
-               groups)))
+    (cl-mapcan
+     (lambda (group)
+       (let ((struct-node (cdar group))
+             (names (cdr group)))
+         (if names
+             (cl-loop
+              for (cap-sym . name-node) in names
+              collect (list cap-sym struct-node name-node))
+           (list (list nil struct-node nil)))))
+     groups)))
 
 
 (defun f90-ts--toc-tree-node-hash-fn (node)
@@ -446,9 +448,10 @@ nested procedure or type does not contribute its own `contains'."
               ((gethash child node-table)
                nil)
               (t
-               (cl-loop for grandchild in (treesit-node-children child)
-                        when (contains-p grandchild)
-                        return (treesit-node-start grandchild)))))))
+               (cl-loop
+                for grandchild in (treesit-node-children child)
+                when (contains-p grandchild)
+                return (treesit-node-start grandchild)))))))
 
 
 (defun f90-ts--toc-anonymous-name (struct-node)
@@ -456,9 +459,10 @@ nested procedure or type does not contribute its own `contains'."
 Currently, this is \"abstract\" for an abstract interface."
   (let ((statement (treesit-node-child struct-node 0)))
     (and statement
-         (cl-some (lambda (child)
-                    (f90-ts--node-type-p child "abstract_specifier"))
-                  (treesit-node-children statement))
+         (cl-some
+          (lambda (child)
+            (f90-ts--node-type-p child "abstract_specifier"))
+          (treesit-node-children statement))
          "abstract")))
 
 
@@ -842,9 +846,10 @@ Return a flat list of `f90-ts-toc-buffer-node' structs."
 
 (defun f90-ts--toc-tail-to-width (string width)
   "Return the longest tail of STRING with display width at most WIDTH."
-  (cl-loop for start from 0
-           when (<= (string-width (substring string start)) width)
-           return (substring string start)))
+  (cl-loop
+   for start from 0
+   when (<= (string-width (substring string start)) width)
+   return (substring string start)))
 
 
 (defun f90-ts--toc-shorten-name (name width)

@@ -166,9 +166,10 @@ nodes also belong to the same group."
        (treesit-node-eq (treesit-node-parent node-beg)
                         (treesit-node-parent node-end))
        (f90-ts--nodes-same-group-p node-beg node-end)
-       (cl-loop for cur = node-beg then (treesit-node-next-sibling cur t)
-                while (and cur (not (treesit-node-eq cur node-end)))
-                always (f90-ts--nodes-same-group-p cur node-beg))))
+       (cl-loop
+        for cur = node-beg then (treesit-node-next-sibling cur t)
+        while (and cur (not (treesit-node-eq cur node-end)))
+        always (f90-ts--nodes-same-group-p cur node-beg))))
 
 
 (cl-defstruct (f90-ts--region-info

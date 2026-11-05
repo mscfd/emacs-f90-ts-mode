@@ -112,9 +112,10 @@ Return a list of xref-item instances suitable for consumption by
          (id-nodes (treesit-query-capture scope
                                           f90-ts--xref-def-query
                                           nil nil t)))
-    (cl-loop for node in id-nodes
-             when (string= (downcase (treesit-node-text node t)) id-lowcase)
-             collect (f90-ts--xref-make-item node))))
+    (cl-loop
+     for node in id-nodes
+     when (string= (downcase (treesit-node-text node t)) id-lowcase)
+     collect (f90-ts--xref-make-item node))))
 
 
 (defun f90-ts--xref-find-references (identifier)
@@ -137,9 +138,10 @@ Return a list of xref-item instances suitable for
          (id-nodes (treesit-query-capture scope
                                           f90-ts--xref-ref-query
                                           nil nil t)))
-    (cl-loop for node in id-nodes
-             when (string= (downcase (treesit-node-text node t)) id-lowcase)
-             collect (f90-ts--xref-make-item node))))
+    (cl-loop
+     for node in id-nodes
+     when (string= (downcase (treesit-node-text node t)) id-lowcase)
+     collect (f90-ts--xref-make-item node))))
 
 
 (defun f90-ts--xref-make-item (node)
@@ -189,8 +191,9 @@ deduplication if necessary."
                    (treesit-buffer-root-node)
                    '((identifier) @id)
                    nil nil t)))
-    (cl-loop for node in id-nodes
-             collect (treesit-node-text node t))))
+    (cl-loop
+     for node in id-nodes
+     collect (treesit-node-text node t))))
 
 
 (cl-defmethod xref-backend-definitions ((_backend (eql f90-ts)) identifier)
@@ -217,15 +220,16 @@ nodes and returns those whose textual representation matches PATTERN.
 
 The match is case-insensitive, following Fortran conventions."
   (let ((case-fold-search t))
-    (cl-loop for node
-             in (treesit-query-capture (treesit-buffer-root-node)
-                                       '((identifier) @id)
-                                       nil nil t)
-             for text = (buffer-substring-no-properties
-                         (treesit-node-start node)
-                         (treesit-node-end node))
-             when (string-match-p pattern text)
-             collect (f90-ts--xref-make-item node))))
+    (cl-loop
+     for node
+     in (treesit-query-capture (treesit-buffer-root-node)
+                               '((identifier) @id)
+                               nil nil t)
+     for text = (buffer-substring-no-properties
+                 (treesit-node-start node)
+                 (treesit-node-end node))
+     when (string-match-p pattern text)
+     collect (f90-ts--xref-make-item node))))
 
 
 (defun f90-ts-xref-backend ()

@@ -1076,13 +1076,14 @@ before and after \"::\")."
             attr-children
           ;; for init declarator children, add assignment nodes as well:
           ;; "=" for init_declarator, "=>" for pointer_init_declarator
-          (cl-mapcan (lambda (n)
-                       (cons n (when (f90-ts--node-type-p n '("init_declarator"
-                                                              "pointer_init_declarator"))
-                                 (cl-remove-if-not
-                                  (lambda (c) (f90-ts--node-type-p c '("=" "=>")))
-                                  (treesit-node-children n)))))
-                     decl-children))))))
+          (cl-mapcan
+           (lambda (n)
+             (cons n (when (f90-ts--node-type-p n '("init_declarator"
+                                                    "pointer_init_declarator"))
+                       (cl-remove-if-not
+                        (lambda (c) (f90-ts--node-type-p c '("=" "=>")))
+                        (treesit-node-children n)))))
+           decl-children))))))
 
 
 ;;++++++++++++++
@@ -1988,10 +1989,11 @@ column numbers."
 CPO-LIST is a non-empty list of (column position offset) triples.
 In general, the cpo item with the largest position is the most relevant,
 as it is closest to the current line."
-  (cl-reduce (lambda (cpo1 cpo2)
-               ;; extract and compare positions
-               (if (> (cadr cpo1) (cadr cpo2)) cpo1 cpo2))
-             cpo-list))
+  (cl-reduce
+   (lambda (cpo1 cpo2)
+     ;; extract and compare positions
+     (if (> (cadr cpo1) (cadr cpo2)) cpo1 cpo2))
+   cpo-list))
 
 
 (defun f90-ts--align-cpo-sort (cpo-list)
