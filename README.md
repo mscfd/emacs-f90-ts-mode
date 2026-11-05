@@ -14,6 +14,7 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Support for abbreviations through abbrev-mode and transient menu added.
 - Alignment rules for case statements of select case blocks added.
 - Alignment rules for trailing comments within continued lines as well as
   those following a statement added.
@@ -101,6 +102,7 @@ including syntax highlighting, indentation, navigation, and structural editing f
 - TOC side panel to show interactive table of content for a f90-ts buffer
   (see [optional package](#4-enable-optional-packages))
 - Hideshow, outline and treesit-fold support
+- Abbreviations via abbrev-mode or via a transient menu
 
 ## Keybindings
 
@@ -118,6 +120,7 @@ and a **transient popup** for discoverability of all commands:
 | `C-<return>`                   | Break line                             |
 | `C-c ;`                        | Comment region (default prefix)        |
 | `C-c '`                        | Comment region (custom prefix)         |
+| `C-`                           | Transient menu for abbreviations       |
 
 Pressing `C-c C-f` opens a transient popup, grouping all major commands by category.
 
@@ -199,9 +202,10 @@ It will automatically be loaded when opening a file with extension `.f90`.
   ;; uncomment if Imenu entry in menu bar is desired
   ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
-  ;; uncomment to switch on hideshow and outline minor mode automatically
+  ;; uncomment to switch on a minor mode automatically
   ;; :hook (f90-ts-mode . hs-minor-mode)
   ;; :hook (f90-ts-mode . outline-minor-mode)
+  ;; :hook (f90-ts-mode . abbrev-mode)
 
   :config
   (message "f90-ts-mode loaded")
@@ -273,8 +277,6 @@ The following list provides features planned for implementation (somewhat ordere
 - Fill operations with lower column width (before joining).
 - Fill operation similar to `f90-fill-paragraph`. In conjunction with mark operations: determine interesting
   nodes within tree as region (like: statements, structure block, subroutine/function level).
-- Node based sibling walk operations (like goto trimmed beginning or trimmed end of next sibling). This would
-  complement the mark region operations to easily extend an existing region.
 - Make indentation and alignment aware of fill-column: Do not suggest an indentation if the line exceeds fill-column.
 - Support for (context-aware) `completion-at-point-function` (capf).
 - Electric insert similar to `f90-electric-insert`.

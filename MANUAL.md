@@ -172,9 +172,10 @@ Example setups provided below should be adjusted to ones requirements.
   ;; uncomment if Imenu entry in menu bar is desired
   ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
-  ;; uncomment to switch on hideshow and outline minor mode automatically
+  ;; uncomment to switch on a minor mode automatically
   ;; :hook (f90-ts-mode . hs-minor-mode)
   ;; :hook (f90-ts-mode . outline-minor-mode)
+  ;; :hook (f90-ts-mode . abbrev-mode)
 
   :config
   (message "f90-ts-mode loaded")
@@ -283,19 +284,21 @@ The testing helpers are only required for development and repository testing.
 The mode sets the following default mode-local keybindings:
 
 ```elisp
-;; TAB family
-(define-key map (kbd "C-<tab>")           #'f90-ts-indent-and-complete-stmt)
-(define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
-(define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
-(define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+(defvar-keymap f90-ts-mode-map
+  ;; TAB commands
+  "C-<tab>"           #'f90-ts-indent-and-complete-stmt
+  "<backtab>"         #'f90-ts-indent-for-tab-command-2 ; S-<tab>
+  "C-S-<iso-lefttab>" #'f90-ts-indent-for-tab-command-3 ; Linux
+  "C-<backtab>"       #'f90-ts-indent-for-tab-command-3 ; Windows?
 
-;; other keybindings inspired by f90-mode
-(define-key map (kbd "C-<return>")        #'f90-ts-break-line)
-(define-key f90-ts-mode-map (kbd "C-c ;") #'f90-ts-comment-region-default)
-(define-key f90-ts-mode-map (kbd "C-c '") #'f90-ts-comment-region-custom)
+  ;; other keybindings inspired by f90-mode
+  "C-<return>" #'f90-ts-break-line
+  "C-c ;"      #'f90-ts-comment-region-default
+  "C-c '"      #'f90-ts-comment-region-custom
 
-;; C-c C-f — transient popup (see below)
-(define-key map (kbd "C-c C-f") #'f90-ts-transient)
+  ;; C-c C-f prefix for the transient menu
+  "C-c C-f" #'f90-ts-transient
+  "C-`"     #'f90-ts-abbrev-menu)
 ```
 
 #### Transient popup (`C-c C-f`)

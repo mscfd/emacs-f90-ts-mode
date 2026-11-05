@@ -33,6 +33,7 @@
 ;;
 ;; Changelog (recent):
 ;; [11-2026]
+;;   - Support for abbreviations through abbrev-mode and transient menu added.
 ;;   - Alignment rules for case statements of select case blocks added.
 ;;   - Alignment rules for trailing comments within continued lines as well as
 ;;     those following a statement added.
@@ -180,6 +181,7 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog (recent):
 
 [11-2026]
+- Support for abbreviations through abbrev-mode and transient menu added.
 - Alignment rules for case statements of select case blocks added.
 - Alignment rules for trailing comments within continued lines as well as
   those following a statement added.
@@ -234,7 +236,7 @@ Changelog (recent):
 
 
 ;;;-----------------------------------------------------------------------------
-;;; syntax table
+;; syntax table
 
 (defvar f90-ts-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -277,7 +279,7 @@ Changelog (recent):
 
 
 ;;;-----------------------------------------------------------------------------
-;;; keymap
+;; keymap
 
 (defvar-keymap f90-ts-mode-map
   :doc "Keymap for `f90-ts-mode'."
@@ -293,11 +295,215 @@ Changelog (recent):
   "C-c '"      #'f90-ts-comment-region-custom
 
   ;; C-c C-f prefix for the transient menu
-  "C-c C-f" #'f90-ts-transient)
+  "C-c C-f" #'f90-ts-transient
+  "C-`"     #'f90-ts-abbrev-menu)
+
 
 
 ;;;-----------------------------------------------------------------------------
-;;; about page and documentation
+;; abbrev table
+;; enabled by (abbrev-mode), or through a transient menu
+
+;; The abbrev definitions are derived from `f90-mode-abbrev-table' in
+;; f90.el (GNU Emacs), Copyright (C) 1995-2026 Free Software Foundation, Inc.
+;; Modified: three-letter names shortened for the transient menu, duplicate
+;; "`pr" fixed, newer Fortran keywords added. See trailing comments below.
+(defconst f90-ts--abbrev-definitions
+  '(;; From f90-mode.
+    ("`al"  . "allocate")
+    ("`ab"  . "allocatable")
+    ("`ai"  . "abstract interface")
+    ("`as"  . "assignment")
+    ("`ay"  . "asynchronous")           ; f90-mode: `asy
+    ("`ba"  . "backspace")
+    ("`bd"  . "block data")
+    ("`bl"  . "block")
+    ("`c"   . "character")              ; menu key: cc
+    ("`cl"  . "close")
+    ("`cm"  . "common")
+    ("`cx"  . "complex")
+    ("`cn"  . "contains")
+    ("`cr"  . "critical")
+    ("`cy"  . "cycle")
+    ("`de"  . "deallocate")
+    ("`df"  . "define")
+    ("`di"  . "dimension")
+    ("`dp"  . "double precision")
+    ("`dw"  . "do while")
+    ("`el"  . "else")
+    ("`ei"  . "else if")                ; f90-mode: `eli
+    ("`ew"  . "elsewhere")              ; f90-mode: `elw
+    ("`em"  . "elemental")
+    ("`e"   . "enumerator")             ; menu key: ee
+    ("`eq"  . "equivalence")
+    ("`ex"  . "external")
+    ("`ey"  . "entry")
+    ("`fl"  . "forall")
+    ("`fo"  . "format")
+    ("`fu"  . "function")
+    ("`fa"  . ".false.")
+    ("`im"  . "implicit none")
+    ("`in"  . "include")
+    ("`i"   . "integer")                ; menu key: ii
+    ("`it"  . "intent")
+    ("`if"  . "interface")
+    ("`lo"  . "logical")
+    ("`mo"  . "module")
+    ("`na"  . "namelist")
+    ("`nu"  . "nullify")
+    ("`op"  . "optional")
+    ("`pa"  . "parameter")
+    ("`po"  . "pointer")
+    ("`pr"  . "print")
+    ("`pi"  . "private")
+    ("`pm"  . "program")
+    ("`pt"  . "protected")              ; f90-mode: duplicate `pr
+    ("`pu"  . "public")
+    ("`r"   . "real")                   ; menu key: rr
+    ("`rc"  . "recursive")
+    ("`rt"  . "return")
+    ("`rw"  . "rewind")
+    ("`se"  . "select")
+    ("`sq"  . "sequence")
+    ("`su"  . "subroutine")
+    ("`ta"  . "target")
+    ("`tr"  . ".true.")
+    ("`t"   . "type")                   ; menu key: tt
+    ("`vo"  . "volatile")
+    ("`wh"  . "where")
+    ("`wr"  . "write")
+    ;; added: common statements missing in f90-mode (but maybe a bit short)
+    ("`en"  . "end")
+    ("`us"  . "use")
+    ("`sv"  . "save")
+    ("`va"  . "value")
+    ("`sp"  . "stop")
+    ("`xi"  . "exit")
+    ("`ca"  . "case")
+    ;; added: coarrays and parallel features
+    ("`cd"  . "codimension")
+    ("`dc"  . "do concurrent")
+    ("`es"  . "error stop")
+    ("`sa"  . "sync all")
+    ("`si"  . "sync images")
+    ("`sy"  . "sync memory")
+    ("`lk"  . "lock")
+    ("`ul"  . "unlock")
+    ("`ct"  . "contiguous")
+    ;; added: object-oriented features and procedures
+    ("`at"  . "abstract")
+    ("`cs"  . "class")
+    ("`dr"  . "deferred")
+    ("`xt"  . "extends")
+    ("`fi"  . "final")
+    ("`gn"  . "generic")
+    ("`pc"  . "procedure")
+    ("`mp"  . "module procedure")
+    ("`sm"  . "submodule")
+    ("`ac"  . "associate")
+    ("`st"  . "select type")
+    ("`sr"  . "select rank")
+    ("`bc"  . "bind(c)")
+    ("`kd"  . "kind")
+    ("`ma"  . "move_alloc")
+    ("`pe"  . "pure")
+    ("`ie"  . "impure"))
+  "Alist of (ABBREV . EXPANSION) for `f90-ts-mode'.
+Single-letter abbrevs (\"`c\", \"`e\", \"`i\", \"`r\", \"`t\") use a doubled
+key in the transient menu (cc, ee, ii, rr, tt) so that no menu key is
+a prefix of another.  Hence these doubled names are unavailable as
+abbrevs of their own.  All other abbrevs must have exactly two
+characters after the accent.")
+
+
+(define-abbrev-table 'f90-ts-mode-abbrev-table
+  (mapcar (lambda (e) (list (car e) (cdr e) nil :system t))
+          f90-ts--abbrev-definitions)
+  "Abbrev table for `f90-ts-mode'.
+Derived from the abbrev table of `f90-mode'."
+  ;; Accept ` as the first char of an abbrev.  Also allow _ in abbrevs.
+  :regexp "\\(?:[^[:word:]_`]\\|^\\)\\(`?[[:word:]_]+\\)[^[:word:]_]*")
+
+
+(defun f90-ts--abbrev-key (name)
+  "Return the transient key for abbrev NAME.
+Strip the leading accent.  A single remaining character is doubled (like `i'
+becomes `ii'), so that no key is a prefix of another key."
+  (let ((key (string-remove-prefix "`" name)))
+    (if (= (length key) 1)
+        (concat key key)
+        key)))
+
+
+(defun f90-ts--abbrev-make-command (key exp)
+  "Define and return a command that insert EXP, bound to menu key KEY.
+The command is named `f90-ts--abbrev-insert-KEY'."
+  (let ((cmd (intern (format "f90-ts--abbrev-insert-%s" key))))
+    (defalias cmd
+      (lambda ()
+        (interactive)
+        (insert exp))
+      (format "Insert \"%s\" (abbrev menu key `%s')." exp key))
+    cmd))
+
+
+(defun f90-ts--abbrev-check-keys (entries)
+  "Signal an error if the keys of ENTRIES clash.
+Two keys clash if they are equal or one is a prefix of the other,
+since transient cannot bind both."
+  (let ((clashes (cl-loop
+                  with keys = (mapcar #'car entries)
+                  for (key . others) on keys
+                  nconc (cl-loop
+                         for other in others
+                         when (or (string-prefix-p key other)
+                                  (string-prefix-p other key))
+                         collect (cons key other)))))
+    (cl-assert (null clashes) nil
+               "f90-ts abbrev menu: conflicting keys %S" clashes)))
+
+
+(defconst f90-ts--abbrev-menu-columns 12
+  "Maximum number of abbrevs per column in the abbrev menu.")
+
+
+(defconst f90-ts--abbrev-menu-entries
+  (cl-loop
+   for (name . exp) in (seq-sort-by (lambda (def) (f90-ts--abbrev-key (car def)))
+                                    #'string<
+                                    f90-ts--abbrev-definitions)
+   for key = (f90-ts--abbrev-key name)
+   collect (list key exp (f90-ts--abbrev-make-command key exp)))
+  "Transient suffix specs (KEY DESCRIPTION COMMAND), sorted by KEY.
+KEY is the abbrev name without the leading accent (doubled for single
+letters), DESCRIPTION is the expansion.  Built once at load time from
+`f90-ts--abbrev-definitions'.")
+
+
+;; static data, checking once at load time
+(f90-ts--abbrev-check-keys f90-ts--abbrev-menu-entries)
+
+
+(defun f90-ts--abbrev-menu-groups (_children)
+  "Return the column groups of the abbrev menu.
+Used as `:setup-children' function of `f90-ts-abbrev-menu'."
+  (transient-parse-suffixes
+   'f90-ts-abbrev-menu
+   (cl-loop
+    for chunk in (seq-partition f90-ts--abbrev-menu-entries
+                                f90-ts--abbrev-menu-columns)
+    collect (vconcat [""] chunk))))
+
+
+(transient-define-prefix f90-ts-abbrev-menu ()
+  "Insert one of the Fortran abbreviation expansions."
+  ["Fortran abbreviations (almost the same as in abbrev-mode)"
+   :class transient-columns
+   :setup-children f90-ts--abbrev-menu-groups])
+
+
+;;;-----------------------------------------------------------------------------
+;; about page and documentation
 
 (defun f90-ts--snapshot-version-p ()
   "Return non-nil if this is a snapshot version."
@@ -671,6 +877,7 @@ package `markdown-mode' are available, then use these."
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
   :syntax-table f90-ts-mode-syntax-table
+  :abbrev-table f90-ts-mode-abbrev-table
 
   ;; check if treesit has a ready parser for 'fortran
   (unless (treesit-available-p)
