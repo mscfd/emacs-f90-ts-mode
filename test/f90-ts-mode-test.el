@@ -506,7 +506,7 @@ PREFIX is the test name prefix (like \"f90-ts-mode-test\")."
                       "\\1--"
                       (file-name-sans-extension file))))
    for test-name = (intern
-                    (format "%s--custom--%s"
+                    (format "%s--%s"
                             prefix
                             name-base))
    do (eval
@@ -526,9 +526,7 @@ PREFIX is the test name prefix (like \"f90-ts-mode-test\")."
   (cl-loop
    for file in files
    for name-base = (string-replace
-                    "_" "-" (string-remove-prefix
-                             "indent_"
-                             (file-name-sans-extension file)))
+                    "_" "-" (file-name-sans-extension file))
    do (cl-loop
        ;; prep-fn is optional, nil means no preparation
        for prep-fn in prep-fns
@@ -538,14 +536,14 @@ PREFIX is the test name prefix (like \"f90-ts-mode-test\")."
        do (cl-loop
            for action-fn in action-fns
            for action-name = (replace-regexp-in-string
-                              "^f90-ts\\(?:-mode-test--\\|-\\)" ""
+                              "^f90-ts\\(?:-mode-test--\\(indent-\\)?\\|-\\)" ""
                               (symbol-name action-fn))
            for test-name = (intern
                             (format "%s--%s--%s--%s"
                                     prefix
+                                    name-base
                                     action-name
-                                    prep-name
-                                    name-base))
+                                    prep-name))
            for info-text = (format "prep-fn: %s, action-fn: %s"
                                    prep-name action-name)
            do (eval
