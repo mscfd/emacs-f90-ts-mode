@@ -13,13 +13,36 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 
 ### Changelog (recent)
 
+**11-2026**
+- Function `f90-ts-install-grammar` added to provide a pinned grammar
+  tested against this version.
+- Mode adjusted to finally merged grammar variant of the string_literal
+  patch set.  Update grammar to avoid broken setup!
+- Mode adjusted to grammar changes concerning "block_label_start_expression".
+- Support for abbreviations through abbrev-mode and transient menu added.
+  New abbrevs can be added via defcustom `f90-ts-extra-abbrevs`.
+- Alignment rules for case statements of select case blocks added.
+- Alignment rules for trailing comments within continued lines as well as
+  those following a statement added.
+
 **10-2026**
+- Extend/reduce variants for mark region operations based on siblings
+  (first, last, previous, next) added.
+- Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel with a
+  table of content of a f90 buffer, see `MANUAL.md` for details.  This
+  optional package requires its own use-package statement.
+- Alignment rules for improved indentation of variable declarations with
+  initialisation added.
+- Infinite loop caused by `f90-ts-indent-delete-trailing-whitespace` fixed.
+  This happened if region ended at last line without a trailing newline.
+- Right-align-at-comma options for array literals added,
+  see `f90-ts-indent-array-align`.
 - Changes required by updates to the proposed string_literal branch added.
 - Support for new keyword `non_recursive` added (requires new grammar).
 - Support for new grammar version with a different tree structure in some
   type related statements (allocate, select type) added.  Both new and old
   grammar CST variants are supported.
-- Prefix of ERT test names shortened `f90-ts-mode-test--' (no distinction
+- Prefix of ERT test names shortened `f90-ts-mode-test--` (no distinction
   between std and extra anymore).
 - Transient menu restructured and decomposed.
 - Support for hideshow and outline added.
@@ -55,25 +78,6 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
    It resides in the feature branch `string_literal_emacs`.
  - Testing with emacs 31.1 and tree-sitter 0.26 added.
 
-**08-2026**
- - `f90-ts-shift-line-break` as combined break/join function added.
- - Defcustom `f90-ts-font-lock-error` replaced by `f90-ts-font-lock-error-show`.
-   Errors are now always fontified by f90-ts-font-lock-error-face.
-   The new defcustom `f90-ts-font-lock-error-show` can be used to turn ERROR node
-   highlighting on and off, or the number of lines to be highlighted for each ERROR node.
- - Jump-to-rightmost-position (within fill-column) to the interactive
-   fill operation added.
- - Mark region operations fixed: always consider trimmed region of nodes.
-   Some nodes like a whole `subroutine..end subroutine` block contains a trailing
-   newline, which should not be considered. Not consequently trimming all spans
-   broke some mark region operations.
- - About, README and MANUAL entries in the fortran and transient
-   popup menu to view information about the mode added.
- - Additional font-locking for error regions added.  This can be customized by
-   `f90-ts-font-lock-error` and `f90-ts-font-lock-error-face`.
- - Smart end completion of coarray "change team ... end team" blocks fixed. It was
-   wrongly assumed that the end statement is "end change team".
-
 
 ## Overview
 
@@ -100,8 +104,11 @@ including syntax highlighting, indentation, navigation, and structural editing f
 - OpenMP and preprocessor directives
 - Coarray keywords and statements
 - Imenu and a Fortran menu in the menu bar
-- Navigation (defun, things, Xref, side panel tree)
+- Navigation (defun, things, Xref)
+- TOC side panel to show interactive table of content for a f90-ts buffer
+  (see [optional package](#4-enable-optional-packages))
 - Hideshow, outline and treesit-fold support
+- Abbreviations via abbrev-mode or via a transient menu
 
 ## Keybindings
 
@@ -119,6 +126,7 @@ and a **transient popup** for discoverability of all commands:
 | `C-<return>`                   | Break line                             |
 | `C-c ;`                        | Comment region (default prefix)        |
 | `C-c '`                        | Comment region (custom prefix)         |
+| `C-`                           | Transient menu for abbreviations       |
 
 Pressing `C-c C-f` opens a transient popup, grouping all major commands by category.
 
@@ -131,14 +139,21 @@ For the full keybinding reference see the
 This mode requires **Emacs 29+** and a compatible Tree-sitter Fortran grammar and compatible
 shared core libraries.
 
-The mode is tested with:
-* Emacs 29.1 + tree-sitter 0.20.8 (ABI version 14)
-* Emacs 29.3 + tree-sitter 0.20.8 (ABI version 14)
-* Emacs 30.1 + tree-sitter 0.24.7 (ABI version 14)
-* Emacs 30.1 + tree-sitter 0.25.10 (ABI version 15)
-* Emacs 30.2 + tree-sitter 0.24.7 (ABI version 14)
-* Emacs 30.2 + tree-sitter 0.25.10 (ABI version 15)
-* Emacs 31.1 + tree-sitter 0.26.11 (ABI version 15)
+The mode is tested in CI (Ubuntu 24.04) with the following combinations, each against the `master`
+branch and the compatibility tag of the grammar fork (see below):
+
+| Emacs | tree-sitter library | grammar ABI |
+|-------|---------------------|-------------|
+| 29.1  | 0.20.8              | 14          |
+| 29.3  | 0.20.8 (apt)        | 14          |
+| 30.1  | 0.24.7              | 14          |
+| 30.1  | 0.25.10             | 15          |
+| 30.2  | 0.24.7              | 14          |
+| 30.2  | 0.25.10             | 15          |
+| 31.1  | 0.26.11             | 15          |
+
+The grammar ABI must lie within the range supported by the tree-sitter library linked into Emacs.
+But expect possible minor glitches with non-tested versions (like in between tree-sitter libraries).
 
 Detailed technical requirements and troubleshooting can be found
 in [MANUAL.md](MANUAL.md#installation).
@@ -152,23 +167,24 @@ Installation steps are:
 1. Install a compatible Tree-sitter Fortran grammar.
 
 The mode relies on the `tree-sitter-fortran` grammar.
-Register the grammar repository in Emacs:
+
+There is pinned version in "https://github.com/mscfd/tree-sitter-fortran" tagged with "emacs-f90-ts-mode-v0.7.x".
+It can be installed by executing `M-x f90-ts-install-grammar`.
+
+If more control is desired, register the grammar repository in Emacs:
 
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
               '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
 ```
-For improved string literal parsing, use:
+Grammar versions tested with f90-ts-mode are tagged. Use matching version (like emacs-f90-ts-mode-0.7.x for 0.7.x
+versions for the mode) if problems occur:
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
-              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "string_literal_emacs"))))
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.7.x"))))
 ```
-This feature branch has not yet been merged. The mode will use the additional parser data
-to improve syntax highlighting, indentation and break/join/fill operations. It also parses
-valid syntax not handled by the official grammar.
-
 
 Then compile and install it once with:
 
@@ -200,9 +216,10 @@ It will automatically be loaded when opening a file with extension `.f90`.
   ;; uncomment if Imenu entry in menu bar is desired
   ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
-  ;; uncomment to switch on hideshow and outline minor mode automatically
+  ;; uncomment to switch on a minor mode automatically
   ;; :hook (f90-ts-mode . hs-minor-mode)
   ;; :hook (f90-ts-mode . outline-minor-mode)
+  ;; :hook (f90-ts-mode . abbrev-mode)
 
   :config
   (message "f90-ts-mode loaded")
@@ -231,13 +248,13 @@ It will automatically be loaded when opening a file with extension `.f90`.
 
 4. Enable optional packages
 
-A navigation tree in the fortran menu and a side panel with the tree
-can be enabled by loading optional package `f90-ts-nav`:
+A TOC side panel with a table-of-content tree (see [TOC buffer](MANUAL.md#toc-buffer)) can be
+enabled by loading the optional package `f90-ts-toc`:
 
 ```elisp
-(use-package f90-ts-nav
+(use-package f90-ts-toc
   :after f90-ts-mode
-  ;; demand loading after f90-ts-mode, otherwise entries for nav-tree functions
+  ;; demand loading after f90-ts-mode, otherwise entries for TOC functions
   ;; do not show up in menus
   :demand t)
 ```
@@ -274,8 +291,6 @@ The following list provides features planned for implementation (somewhat ordere
 - Fill operations with lower column width (before joining).
 - Fill operation similar to `f90-fill-paragraph`. In conjunction with mark operations: determine interesting
   nodes within tree as region (like: statements, structure block, subroutine/function level).
-- Node based sibling walk operations (like goto trimmed beginning or trimmed end of next sibling). This would
-  complement the mark region operations to easily extend an existing region.
 - Make indentation and alignment aware of fill-column: Do not suggest an indentation if the line exceeds fill-column.
 - Support for (context-aware) `completion-at-point-function` (capf).
 - Electric insert similar to `f90-electric-insert`.

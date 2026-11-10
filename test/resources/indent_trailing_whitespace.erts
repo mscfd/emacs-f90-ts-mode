@@ -151,3 +151,34 @@ subroutine sub()
      end do
 end subroutine sub|
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-delete-trailing-whitespace t))
+      (goto-char (point-max))
+      (delete-char -1)
+      (f90-ts-indent-region (point-min) (point-max))
+      (goto-char (point-max))
+      (insert "\n")))
+
+Name: indent region no trailing newline 1
+=-=
+! check that no infinite loop occurs without trailing newline,
+! without trailing whitespace
+subroutine sub()
+end subroutine sub
+=-=-=
+
+Name: indent region no trailing newline 2
+=-=
+! check that no infinite loop occurs without trailing newline,
+! with trailing whitespace
+subroutine sub()  
+end subroutine sub  
+=-=
+! check that no infinite loop occurs without trailing newline,
+! with trailing whitespace
+subroutine sub()
+end subroutine sub
+=-=-=

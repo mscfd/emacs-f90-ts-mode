@@ -1,0 +1,505 @@
+oint-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--indent-by-region))
+
+Name: align array literal 1
+=-=
+subroutine arr1()
+     ! list context alignment of numbers in array
+     integer, dimension(1:3,1:4), parameter:: &
+            facet_ix = reshape(&
+                               [2,3,4, &
+                                1,4,3, &
+                                1,2,4, &
+                                1,3,2 &
+                                  ], [3,4])
+end subroutine arr1
+=-=-=
+
+Name: align array literal 2
+=-=
+subroutine arr2()
+     real, dimension(1:10), parameter :: &
+            bernoulli = (/ 1.0, -0.5, 0.16667, 0.0, &
+                          -0.03333, 0.0, &
+                           0.0238, 0.0 &
+                            /)
+end subroutine arr2
+=-=-=
+
+Name: align array literal 3
+=-=
+subroutine arr3()
+     type(some_t), dimension(1:3) :: &
+            arr = [some_t(val=1, x=5.0), some_t(val=1, x=7.0), &
+                   some_t(), &
+                   some_t(x=-2.0), &
+                                         some_t(val=2, x=7.0) &
+                     ]
+end subroutine arr3
+=-=-=
+
+Name: align array literal 4
+=-=
+subroutine arr4()
+     character(len=5), dimension(1:3) :: rgb = &
+            (/ &
+              'red  ', &
+              'green', &
+              'blue ' /)
+end subroutine arr4
+=-=-=
+
+Name: align array literal 5
+=-=
+! note that "(/" after "rgb =" is aligned, and this alignment is preserved
+subroutine arr5()
+     character(len=5), dimension(1:3) :: & !! comment
+          
+          !! comment
+          
+                                  rgb = &
+                                  (/ &
+              'red  ', &
+              'green', &
+              'blue ' /), &
+           alpha = 'trnsp'
+end
+=-=
+! note that "(/" after "rgb =" is aligned, and this alignment is preserved
+subroutine arr5()
+     character(len=5), dimension(1:3) :: & !! comment
+          
+                                           !! comment
+          
+            rgb = &
+            (/ &
+              'red  ', &
+              'green', &
+              'blue ' /), &
+            alpha = 'trnsp'
+end subroutine arr5
+=-=-=
+
+Name: align array literal 6
+=-=
+subroutine arr5()
+     character(len=5), dimension(1:3) :: & ! comment
+          ! comment
+                                  rgb = &
+              [ &
+              'red  ', &
+              'green', &
+              'blue ' ], &
+           alpha = 'trnsp'
+end
+=-=
+subroutine arr5()
+     character(len=5), dimension(1:3) :: & ! comment
+                                           ! comment
+            rgb = &
+                   [ &
+                    'red  ', &
+                    'green', &
+                    'blue ' ], &
+            alpha = 'trnsp'
+end subroutine arr5
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-continued-line)
+          (f90-ts-indent-array-align 'right))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal keep 1
+=-=
+! right aligned matrix, rows are aligned at the commata and are kept
+module poly
+ real, dimension(1:3,1:12), parameter, public :: &
+        POLYHEDRON_icosahedron = reshape( &
+               [  -r,   s, 0.0, &
+                   r,   s, 0.0, &
+                  -r,  -s, 0.0, &
+                   r,  -s, 0.0, &
+                 0.0,  -r,   s, &
+                 0.0,   r,   s, &
+                 0.0,  -r,  -s, &
+                 0.0,   r,  -s, &
+                   s, 0.0,  -r, &
+                   s, 0.0,   r, &
+                  -s, 0.0,  -r, &
+                  -s, 0.0,   r &
+                  ], &
+               [3,12])
+end module poly
+=-=-=
+
+Name: array literal keep 2
+=-=
+! the whole block is moved to the continued line position of the opening
+! bracket, rows keep their column relative to their anchors: right aligned
+! at a comma, directly behind the bracket and at the hanging position
+module poly
+ real, dimension(1:6,1:4), parameter :: &
+        mat = reshape( &
+            (/   1.0, -0.25,  10.5, 100.0, &
+                -2.5,   3.0, 0.125,  -1.0, &
+                22.0,   0.5, -3.75,  25.0, &
+              0.0, -12.5,   7.0,   0.5, &
+               100.0,   1.0,   1.0,   1.0, &
+                   3.5,   4.5,   5.5,   6.5 &  ! continued line offset anchored at "mat..."
+                /), &
+            [6,4])
+end module poly
+=-=
+! the whole block is moved to the continued line position of the opening
+! bracket, rows keep their column relative to their anchors: right aligned
+! at a comma, directly behind the bracket and at the hanging position
+module poly
+ real, dimension(1:6,1:4), parameter :: &
+        mat = reshape( &
+        (/   1.0, -0.25,  10.5, 100.0, &
+            -2.5,   3.0, 0.125,  -1.0, &
+            22.0,   0.5, -3.75,  25.0, &
+          0.0, -12.5,   7.0,   0.5, &
+           100.0,   1.0,   1.0,   1.0, &
+               3.5,   4.5,   5.5,   6.5 &  ! continued line offset anchored at "mat..."
+            /), &
+        [6,4])
+end module poly
+=-=-=
+
+Name: array literal keep 3
+=-=
+! keep rows aligned at a comma
+! all others go to the continued line position
+subroutine edge()
+     x = [ 1.0, 22.0, 333.0, &
+           4.0, 55.0, 6.0, &
+              7777.0, 8.0, 9.0, &
+          10.0, 1.0, &
+    5.0, 6.0, 7.0, &
+                   8.0, 9.0, 1.0, &
+          11.0 &
+            ]
+end subroutine edge
+=-=
+! keep rows aligned at a comma
+! all others go to the continued line position
+subroutine edge()
+     x = [ 1.0, 22.0, 333.0, &
+           4.0, 55.0, 6.0, &
+              7777.0, 8.0, 9.0, &
+          10.0, 1.0, &
+            5.0, 6.0, 7.0, &
+            8.0, 9.0, 1.0, &
+          11.0 &
+            ]
+end subroutine edge
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-continued-line)
+          (f90-ts-indent-array-align 'both-left-primary))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal keep 4
+=-=
+! both-left-primary: the commata remain candidates, thus alignment is kept as is
+module poly
+ real, dimension(1:3,1:12), parameter, public :: &
+        POLYHEDRON_icosahedron = reshape( &
+               [  -r,   s, 0.0, &
+                   r,   s, 0.0, &
+                  -r,  -s, 0.0, &
+                   r,  -s, 0.0, &
+                 0.0,  -r,   s, &
+                 0.0,   r,   s, &
+                 0.0,  -r,  -s, &
+                 0.0,   r,  -s, &
+                   s, 0.0,  -r, &
+                   s, 0.0,   r, &
+                  -s, 0.0,  -r, &
+                  -s, 0.0,   r &
+                  ], &
+               [3,12])
+end module poly
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary)
+          (f90-ts-indent-array-align 'right))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal primary 1
+Skip: t
+=-=
+module poly
+real(dp), dimension(1:3,1:12), parameter, public :: &
+POLYHEDRON_icosahedron = reshape( &
+[       -r,   s, 0.0_dp, &
+r,   s, 0.0_dp, &
+-r,  -s, 0.0_dp, &
+r,  -s, 0.0_dp, &
+0.0_dp,  -r,   s, &
+0.0_dp,   r,   s, &
+0.0_dp,  -r,  -s, &
+0.0_dp,   r,  -s, &
+s, 0.0_dp,  -r, &
+s, 0.0_dp,   r, &
+-s, 0.0_dp,  -r, &
+-s, 0.0_dp,   r &
+], &
+[3,12])
+end module poly
+=-=
+module poly
+ real(dp), dimension(1:3,1:12), parameter, public :: &
+        POLYHEDRON_icosahedron = reshape( &
+               [       -r,   s, 0.0_dp, &
+                        r,   s, 0.0_dp, &
+                       -r,  -s, 0.0_dp, &
+                        r,  -s, 0.0_dp, &
+                   0.0_dp,  -r,   s, &
+                   0.0_dp,   r,   s, &
+                   0.0_dp,  -r,  -s, &
+                   0.0_dp,   r,  -s, &
+                        s, 0.0_dp,  -r, &
+                        s, 0.0_dp,   r, &
+                       -s, 0.0_dp,  -r, &
+                       -s, 0.0_dp,   r &
+               ], &
+               [3,12])
+end module poly
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary)
+          (f90-ts-indent-array-align 'right))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal primary 2
+=-=
+module poly
+real, dimension(1:6,1:4), parameter :: &
+mat = reshape( &
+(/   1.0, -0.25,  10.5, 100.0, &
+-2.5,   3.0, 0.125,  -1.0, &
+22.0,   0.5, -3.75,  25.0, &
+0.0, -12.5,   7.0,   0.5, &
+100.0,   1.0,   1.0,   1.0, &
+3.5,   4.5,   5.5,   6.5 &
+/), &
+[6,4])
+end module poly
+=-=
+module poly
+ real, dimension(1:6,1:4), parameter :: &
+        mat = reshape( &
+               (/   1.0, -0.25,  10.5, 100.0, &
+                   -2.5,   3.0, 0.125,  -1.0, &
+                   22.0,   0.5, -3.75,  25.0, &
+                    0.0, -12.5,   7.0,   0.5, &
+                  100.0,   1.0,   1.0,   1.0, &
+                    3.5,   4.5,   5.5,   6.5 &
+                   /), &
+               [6,4])
+end module poly
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary)
+          (f90-ts-indent-array-align 'right))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal primary 3
+=-=
+! some first commata are dropped, as they are too far left,
+! but the last two lines are too far left, why?
+! (a second f90-ts-mode-test--indent-by-region gives the expected)
+subroutine edge()
+x = (/ x+y, f(x), g(y), &
+4.0, 5.0, 6.0, &
+777777.0, 8.8, 9.9, &
+u .cross. v, 10.10, 1.111, &
+-12.13 &
+/)
+end subroutine edge
+=-=
+! some first commata are dropped, as they are too far left,
+! but the last two lines are too far left, why?
+! (a second f90-ts-mode-test--indent-by-region gives the expected)
+subroutine edge()
+     x = (/ x+y, f(x), g(y), &
+            4.0, 5.0, 6.0, &
+            777777.0, 8.8, 9.9, &
+              u .cross. v, 10.10, 1.111, &
+              -12.13 &
+             /)
+end subroutine edge
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary)
+          (f90-ts-indent-array-align 'both-right-primary))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal primary 4
+=-=
+! both-right-primary: right aligned is primary, the left aligned positions remain candidates
+module poly
+real, dimension(1:3,1:12), parameter, public :: &
+POLYHEDRON_icosahedron = reshape( &
+[  -r,   s, 0.0, &
+r,   s, 0.0, &
+-r,  -s, 0.0, &
+r,  -s, 0.0, &
+0.0,  -r,   s, &
+0.0,   r,   s, &
+0.0,  -r,  -s, &
+0.0,   r,  -s, &
+s, 0.0,  -r, &
+s, 0.0,   r, &
+-s, 0.0,  -r, &
+-s, 0.0,   r &
+], &
+[3,12])
+end module poly
+=-=
+! both-right-primary: right aligned is primary, the left aligned positions remain candidates
+module poly
+ real, dimension(1:3,1:12), parameter, public :: &
+        POLYHEDRON_icosahedron = reshape( &
+               [  -r,   s, 0.0, &
+                   r,   s, 0.0, &
+                  -r,  -s, 0.0, &
+                   r,  -s, 0.0, &
+                 0.0,  -r,   s, &
+                 0.0,   r,   s, &
+                 0.0,  -r,  -s, &
+                 0.0,   r,  -s, &
+                   s, 0.0,  -r, &
+                   s, 0.0,   r, &
+                  -s, 0.0,  -r, &
+                  -s, 0.0,   r &
+                  ], &
+               [3,12])
+end module poly
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary)
+          (f90-ts-indent-array-align 'both-left-primary))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array literal primary 5
+=-=
+! both-left-primary: the left aligned position is primary, the
+! first element is the anchor, content of an unary minus is aligned with the others
+module poly
+real, dimension(1:3,1:12), parameter, public :: &
+POLYHEDRON_icosahedron = reshape( &
+[  -r,   s, 0.0, &
+r,   s, 0.0, &
+-r,  -s, 0.0, &
+r,  -s, 0.0, &
+0.0,  -r,   s, &
+0.0,   r,   s, &
+0.0,  -r,  -s, &
+0.0,   r,  -s, &
+s, 0.0,  -r, &
+s, 0.0,   r, &
+-s, 0.0,  -r, &
+-s, 0.0,   r &
+], &
+[3,12])
+end module poly
+=-=
+! both-left-primary: the left aligned position is primary, the
+! first element is the anchor, content of an unary minus is aligned with the others
+module poly
+ real, dimension(1:3,1:12), parameter, public :: &
+        POLYHEDRON_icosahedron = reshape( &
+               [  -r,   s, 0.0, &
+                   r,   s, 0.0, &
+                  -r,  -s, 0.0, &
+                   r,  -s, 0.0, &
+                   0.0,  -r,   s, &
+                   0.0,   r,   s, &
+                   0.0,  -r,  -s, &
+                   0.0,   r,  -s, &
+                   s, 0.0,  -r, &
+                   s, 0.0,   r, &
+                  -s, 0.0,  -r, &
+                  -s, 0.0,   r &
+                  ], &
+               [3,12])
+end module poly
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary)
+          (f90-ts-indent-array-align 'both-right-primary))
+      (f90-ts-mode-test--indent-by-region)))
+
+Name: array keep upper triangle 1
+=-=
+subroutine deviatoric_strain_rate()
+     Tsym33 = [  (2*dx_du - div23),          dx_dv + dy_du,        dx_dw + dy_du, &
+                                         (2*dy_dv - div23),        dx_dw + dz_du, &
+                                                               (2*dz_dw - div23)  ]
+end subroutine deviatoric_strain_rate
+=-=-=
+
+Name: array keep upper triangle 2
+=-=
+subroutine array_literal_pattern()
+     Tsym33 = (/     "a11",        "a12",        "a13", &
+                             "a22+"//x22,        "a23", &
+                                          get_a33(x33)     /)
+end subroutine array_literal_pattern
+=-=-=
+
+Name: array keep upper triangle 3
+=-=
+subroutine array_literal_divers()
+real, dimension(1:10), parameter :: &
+      M = [       1.0,      2.0,    3.3,    4.567, &
+      ! comment
+                          (u+w),    5.0,      6.0, &
+                                 -1.234,    (x+y), &
+                                         sin(phi) &
+]
+end subroutine array_literal_divers
+=-=
+subroutine array_literal_divers()
+     real, dimension(1:10), parameter :: &
+            M = [       1.0,      2.0,    3.3,    4.567, &
+                 ! comment
+                                (u+w),    5.0,      6.0, &
+                                       -1.234,    (x+y), &
+                                               sin(phi) &
+                   ]
+end subroutine array_literal_divers
+=-=-=

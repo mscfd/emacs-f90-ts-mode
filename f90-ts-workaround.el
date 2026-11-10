@@ -663,12 +663,12 @@ Results are cached in `f90-ts--grammar-feature-cache', using TOKEN as key."
 (defun f90-ts--grammar-string-literal-decomposed-p ()
   "Return non-nil if string_literal is decomposed by the Fortran grammar.
 The original grammar provided `string_literal' as a named leaf node.
-Newer grammars decompose it into its parts (with `string_literal_part',
+Newer grammars decompose it into its parts (with `string_content',
 quotation, comment etc. as children of `string_literal').
 Result is detected once and cached for the session."
   (f90-ts--grammar-feature-p
-   'string_literal_part
-   '((string_literal_part) @x)))
+   'string_content
+   '((string_content) @x)))
 
 
 (defun f90-ts--grammar-derived-type-name-p ()

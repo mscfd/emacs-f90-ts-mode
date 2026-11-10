@@ -14,7 +14,7 @@ subroutine select_case()
      case ('version1')
           print *, 'version1'
      case ('version2', &
-            'extra')
+           'extra')
           call xyz()
      case default select_variant
           call uvw()

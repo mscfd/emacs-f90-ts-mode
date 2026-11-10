@@ -13,7 +13,9 @@ for implementation.
 
 - [Installation](#installation)
   - [Tree-sitter grammar](#tree-sitter-grammar)
-    -[Installing the grammar in Emacs](#installing-the-grammar-in-emacs)
+    - [Which grammar revision to use](#which-grammar-revision-to-use)
+    - [Installing the grammar in Emacs](#installing-the-grammar-in-emacs)
+    - [Tree-sitter library and ABI versions](#tree-sitter-library-and-abi-versions)
   - [Tree-sitter based mode](#tree-sitter-based-mode)
   - [Setup](#setup)
     - [Standard installation via package manager](#standard-installation-via-package-manager)
@@ -33,10 +35,10 @@ for implementation.
   - [Indentation of continued statements with leading ampersand](#indentation-of-continued-statements-with-leading-ampersand)
   - [Indentation of continued statements and blocks](#indentation-of-continued-statements-and-blocks)
   - [Indentation of statement labels](#indentation-of-statement-labels)
+  - [Abbreviations](#abbreviations)
   - [Xref](#xref)
   - [Imenu](#imenu)
-  - [Navigation menu](#navigation-menu)
-  - [Navigation buffer](#navigation-buffer)
+  - [TOC buffer](#toc-buffer)
   - [Comment prefix](#comment-prefix)
   - [Breaking and joining lines](#breaking-and-joining-lines)
     - [Breaking lines](#breaking-lines)
@@ -44,7 +46,8 @@ for implementation.
     - [Shifting line break](#Shifting-line-break)
   - [Filling lines and regions](#filling-lines-and-regions)
   - [Comment region](#comment-region)
-  - [Mark regions based on tree-sitter nodes](#mark-regions-based-on-tree-sitter-nodes)
+  - [Mark region based on tree-sitter nodes](#mark-region-based-on-tree-sitter-nodes)
+    - [Extending and reducing a region by siblings](#extending-and-reducing-a-region-by-siblings)
   - [Folding](#folding)
 - [Development and Testing](#development-and-testing)
   - [Logging](#logging)
@@ -60,32 +63,54 @@ for implementation.
 
 ### Tree-sitter grammar
 
-The mode relies on a recent tree-sitter grammar version of Fortran at
-[official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
+The mode relies on the Fortran grammar
+[stadelmanma/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran)
+(the upstream grammar).
 
-There is also an upstream Tree-sitter grammar fork, which might contain fixes or extensions not yet merged:
-[mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
-The parser in this fork was generated with treesitter `0.25.10`, in case `0.26` causes any problems with emacs,
+The fork [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran) might contain fixes and
+extensions not yet merged upstream. It also provides tags like `emacs-f90-ts-mode-v0.7.x` to pin
+grammar version compatible with corresponding f90-ts-mode versions. All minor releases (only changing the `x`)
+are compatible with the same grammar tag.
 
-Currently it also provides the `string_literal` extension not yet merged into the official grammar, in branch
-[mscfd/tree-sitter-fortran/string-literal-emacs](https://github.com/mscfd/tree-sitter-fortran/tree/string_literal_emacs).
+The pinned grammar version compatible with the current mode can be installed
+by executing `M-x f90-ts-install-grammar`.
 
+
+
+#### Which grammar revision to use
+
+Grammar changes can alter the tree structure, so a given version of the mode is only guaranteed to work
+with certain grammar revisions.
+For reproducible results, use the **tag** matching your mode version, for example
+`emacs-f90-ts-mode-v0.7.x` for f90-ts-mode 0.7.x. This tag marks the grammar revision, which is tested against
+all minor revisions including snapshots (like all `0.7.x` and `0.7.x-snapshot` commits on branch `main`, which
+are published on melpa).
+The `master` branch of the fork follows development and is tested in CI against
+the development version of the mode.
+If possible, the mode tries to be backwards compatible, so an older grammar version might work as well.
+
+If in doubt, `f90-ts-install-grammar` provides a safe way install a compatible grammar.
 
 
 #### Installing the grammar in Emacs
 
-Register the grammar repository in `treesit-language-source-alist`:
+This section describes how to install it by hand. Function `f90-ts-install-grammar` provides an easy way
+to install a compatible grammar.
+
+Register the grammar repository in `treesit-language-source-alist`.
+The optional third element is the revision (branch or tag):
 
 ```elisp
+;; upstream grammar
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
               '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
 ```
-or variants mentioned above, like:
+or, grammar revision matching the mode version:
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
-              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "string_literal_emacs"))))
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.7.x"))))
 ```
 
 Then compile and install the grammar once with:
@@ -100,42 +125,47 @@ The installation can be verified with:
 (treesit-ready-p 'fortran)
 ```
 
-**NOTE**:
-* Emacs 29.x:
-The mode has been tested with 29.1 and 29.3. and tree-sitter 0.20.8. There are a number fixes working around
-bugs the tree sitter core library. These might reduce performance in  some cases. Please open an issue
-if anything fails or performance is bad.
+#### Tree-sitter library and ABI versions
 
-The following can be used to check whether versions are correct:
+Emacs links against the tree-sitter C library, whose version determines the range of grammar ABI versions
+that can be loaded. `treesit-install-language-grammar` compiles the `src/parser.c` found in the grammar
+repository; it does **not** run `tree-sitter generate`. The ABI of the committed `src/parser.c`
+must therefore lie within the range supported by your Emacs. Otherwise regenerate the parser, e.g. with
+`tree-sitter generate --abi 14` (or a `tree-sitter-cli` release producing that ABI), and rebuild.
 
-(`M-:` = `eval-expression`)
+| Library | ABI range | Typical setup                            |
+|---------|-----------|------------------------------------------|
+| 0.20.x  | 13-14     | Emacs 29.x                               |
+| 0.24.x  | 13-14     | Emacs 30.x                               |
+| 0.25.x  | 13-15     | Emacs 30.x                               |
+| 0.26.x  | 13-15     | Emacs 31.x                               |
 
-- with `M-:` `(treesit-library-abi-version)` should be `14` (`13` is supposed to be ok as well)
-- with `M-:` `(treesit-language-abi-version 'fortran)` should be `14` (`13` is supposed to be ok as well)
-- emacs 29.x: `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0` or `libtree-sitter.so.0.20`
+Combinations tested in CI (see `.github/workflows`):
 
+| Emacs | tree-sitter library | grammar ABI |
+|-------|---------------------|-------------|
+| 29.1  | 0.20.8              | 14          |
+| 29.3  | 0.20.8 (apt)        | 14          |
+| 30.1  | 0.24.7              | 14          |
+| 30.1  | 0.25.10             | 15          |
+| 30.2  | 0.24.7              | 14          |
+| 30.2  | 0.25.10             | 15          |
+| 31.1  | 0.26.11             | 15          |
 
-* Emacs 30.x:
-The Fortran grammar should be compiled with Tree-sitter version `0.25.x`, as Emacs 30.x
-(including 30.2) does not yet support the `0.26` branch correctly.
+Each is tested with the current `master` and the compatibility tag of the grammar fork.
+Other combinations may work but are not tested. In particular, Emacs 30.x with tree-sitter 0.26 is not
+covered; if it causes problems, use 0.25.x.
 
-The master branch at `mscfd/tree-sitter-fortran` mentioned above provides the parser generated with `0.25.10` if required.
+The following can be used to check the versions of a running Emacs (`M-:` = `eval-expression`):
 
-The following can be used to check whether versions are correct:
+- `(treesit-library-abi-version)` gives the maximum ABI supported by the library
+  (`(treesit-library-abi-version t)` the minimum)
+- `(treesit-language-abi-version 'fortran)` gives the ABI of the installed grammar; it must be within that range
+- `ldd bin_path_to_emacs/emacs | grep libtree-sitter` shows the linked library
+  (e.g. `libtree-sitter.so.0.20` for Emacs 29.x from distribution packages)
 
-(`M-:` = `eval-expression`)
-
-- with `M-:` `(treesit-library-abi-version)` should be `15`
-- with `M-:` `(treesit-language-abi-version 'fortran)` should be `15`
-- emacs 30.x: `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25` or  `libtree-sitter.so.0.24`
-
-The parser generator step `tree-sitter generate` done with Tree-Sitter `0.26` seems to be
-compatible with Emacs 30.x, but the library and ABI versions listed above must match.
-This generator step of creating the parser source files is not necessary for emacs 30+ in general, as the
-parser source files are already provided in the grammar repositories.
-
-* `emacs 31.x`:
-This recently published version has not yet been tested. It is supposed to support tree-sitter `0.26`.
+**NOTE** (Emacs 29.x): there are a number of workarounds for bugs in the tree-sitter core library 0.20.x.
+These might reduce performance in some cases. Please open an issue if anything fails or performance is bad.
 
 
 ### Tree-sitter based mode
@@ -172,9 +202,10 @@ Example setups provided below should be adjusted to ones requirements.
   ;; uncomment if Imenu entry in menu bar is desired
   ;; :hook (f90-ts-mode . (lambda () (imenu-add-to-menubar "Imenu")))
 
-  ;; uncomment to switch on hideshow and outline minor mode automatically
+  ;; uncomment to switch on a minor mode automatically
   ;; :hook (f90-ts-mode . hs-minor-mode)
   ;; :hook (f90-ts-mode . outline-minor-mode)
+  ;; :hook (f90-ts-mode . abbrev-mode)
 
   :config
   (message "f90-ts-mode loaded")
@@ -200,19 +231,27 @@ Example setups provided below should be adjusted to ones requirements.
          ("A-{"           . #'f90-ts-mark-region-first-sibling)
          ("A-["           . #'f90-ts-mark-region-prev-sibling)
          ("A-]"           . #'f90-ts-mark-region-next-sibling)
-         ("A-}"           . #'f90-ts-mark-region-last-sibling)))
+         ("A-}"           . #'f90-ts-mark-region-last-sibling)
+
+         ;; extend or reduce the active region by siblings
+         ;; (no default bindings outside of the transient popup)
+         ("A-M-{"         . #'f90-ts-mark-region-extend-first-sibling)
+         ("A-M-["         . #'f90-ts-mark-region-extend-prev-sibling)
+         ("A-M-]"         . #'f90-ts-mark-region-extend-next-sibling)
+         ("A-M-}"         . #'f90-ts-mark-region-extend-last-sibling)))
 ```
 
 #### Optional packages
 
-A navigation tree in the fortran menu and a side panel with the tree
-can be enabled by loading optional package `f90-ts-nav`:
+A table-of-content (TOC) side panel showing the structure of the source buffer
+can be enabled by loading the optional package `f90-ts-toc`
+(see [TOC buffer](#toc-buffer)):
 
 ```elisp
-(use-package f90-ts-nav
+(use-package f90-ts-toc
   :after f90-ts-mode
-  ;; demand loading after f90-ts-mode, otherwise entries for nav-tree functions
-  ;; do not show up in menus
+  ;; demand loading after f90-ts-mode, otherwise entries for TOC functions
+  ;; do not show up in the fortran menu and the transient popup
   :demand t)
 ```
 
@@ -275,19 +314,21 @@ The testing helpers are only required for development and repository testing.
 The mode sets the following default mode-local keybindings:
 
 ```elisp
-;; TAB family
-(define-key map (kbd "C-<tab>")           #'f90-ts-indent-and-complete-stmt)
-(define-key map (kbd "<backtab>")         #'f90-ts-indent-for-tab-command-2) ; S-<tab>
-(define-key map (kbd "C-S-<iso-lefttab>") #'f90-ts-indent-for-tab-command-3) ; Linux
-(define-key map (kbd "C-<backtab>")       #'f90-ts-indent-for-tab-command-3) ; Windows?
+(defvar-keymap f90-ts-mode-map
+  ;; TAB commands
+  "C-<tab>"           #'f90-ts-indent-and-complete-stmt
+  "<backtab>"         #'f90-ts-indent-for-tab-command-2 ; S-<tab>
+  "C-S-<iso-lefttab>" #'f90-ts-indent-for-tab-command-3 ; Linux
+  "C-<backtab>"       #'f90-ts-indent-for-tab-command-3 ; Windows?
 
-;; other keybindings inspired by f90-mode
-(define-key map (kbd "C-<return>")        #'f90-ts-break-line)
-(define-key f90-ts-mode-map (kbd "C-c ;") #'f90-ts-comment-region-default)
-(define-key f90-ts-mode-map (kbd "C-c '") #'f90-ts-comment-region-custom)
+  ;; other keybindings inspired by f90-mode
+  "C-<return>" #'f90-ts-break-line
+  "C-c ;"      #'f90-ts-comment-region-default
+  "C-c '"      #'f90-ts-comment-region-custom
 
-;; C-c C-f — transient popup (see below)
-(define-key map (kbd "C-c C-f") #'f90-ts-transient)
+  ;; C-c C-f prefix for the transient menu
+  "C-c C-f" #'f90-ts-transient
+  "C-`"     #'f90-ts-abbrev-menu)
 ```
 
 #### Transient popup (`C-c C-f`)
@@ -296,23 +337,24 @@ Pressing `C-c C-f` opens a transient popup with the most frequently used command
 Less frequently used commands are grouped in sub-menus (`C-g` returns to the parent menu).
 Each sub-menu is also an ordinary command and can be bound directly.
 
-| Section                | Keys                  | Commands                                                |
-|------------------------|-----------------------|---------------------------------------------------------|
-| **Indentation**        | `TAB` `s` `I`         | Indent and complete line / statement / region           |
-|                        | `C-TAB` `C-I`         | Indent line / region                                    |
-| **Line editing**       | `b` `j` `J` `C-s`     | Break line, join with prev/next, shift line break       |
-| **Filling**            | `C-f` `C-b`           | Set fill column and fill method                         |
-|                        | `f` `M-f` `M-j` `M-J` | Fill region, line, with prev/next line                  |
-| **Mark region**        | `r` `0` `9`           | Enlarge, shrink to first / last child                   |
-|                        | `{` `[` `]` `}`       | First, prev, next and last sibling                      |
-|                        | `X`                   | Exchange mark and point                                 |
-| **Comment region**     | `c` `C`               | Default and custom prefix                               |
-| **Procedure**          | `a` `e` `p` `n`       | Beginning, end, previous, next                          |
-| **Xref**               | `.` `,` `/` `<` `>`   | Definitions, references, apropos, back, forward         |
-| **More...**            | `t`                   | Sub-menu: derived types (`a e p n`), interfaces (`A E P N`) |
-|                        | `h`                   | Sub-menu: hideshow (only if `hs-minor-mode` is active)  |
-|                        | `o`                   | Sub-menu: outline (only if `outline-minor-mode` is active) |
-|                        | `m`                   | Sub-menu: About, README, MANUAL (`a r m`), nav side panel (`B F`, if `f90-ts-nav` is loaded) |
+| Section                | Keys                    | Commands                                                |
+|------------------------|-------------------------|---------------------------------------------------------|
+| **Indentation**        | `TAB` `s` `I`           | Indent and complete line / statement / region           |
+|                        | `C-TAB` `C-I`           | Indent line / region                                    |
+| **Line editing**       | `b` `j` `J` `C-s`       | Break line, join with prev/next, shift line break       |
+| **Filling**            | `C-f` `C-b`             | Set fill column and fill method                         |
+|                        | `f` `M-f` `M-j` `M-J`   | Fill region, line, with prev/next line                  |
+| **Mark region**        | `r` `0` `9`             | Enlarge, shrink to first / last child                   |
+|                        | `{` `[` `]` `}`         | First, prev, next and last sibling                      |
+|                        | `M-{` `M-[` `M-]` `M-}` | Extend/reduce region to first, prev, next, last sibling |
+|                        | `X`                     | Exchange mark and point                                 |
+| **Comment region**     | `c` `C`                 | Default and custom prefix                               |
+| **Procedure**          | `a` `e` `p` `n`         | Beginning, end, previous, next                          |
+| **Xref**               | `.` `,` `/` `<` `>`     | Definitions, references, apropos, back, forward         |
+| **More...**            | `t`                     | Sub-menu: derived types (`a e p n`), interfaces (`A E P N`) |
+|                        | `h`                     | Sub-menu: hideshow (only if `hs-minor-mode` is active)  |
+|                        | `o`                     | Sub-menu: outline (only if `outline-minor-mode` is active) |
+|                        | `m`                     | Sub-menu: About, README, MANUAL (`a r m`), TOC side panel (`B F`, if `f90-ts-toc` is loaded) |
 
 
 The entire transient popup can be bound to a different prefix with a use-package statement
@@ -345,7 +387,10 @@ in the `:bind` section as shown above, or simply by:
 - OpenMP and preprocessor directives
 - Coarray keywords and statements
 - Imenu and a Fortran menu in the menu bar
-- Navigation (defun, things, Xref, side panel tree)
+- Navigation (defun, things, Xref)
+- TOC side panel to show interactive table of content for a f90-ts buffer (optional package)
+- Hideshow, outline and treesit-fold support
+- Abbreviations via abbrev-mode or via a transient menu
 
 
 
@@ -536,7 +581,21 @@ For the label itself there are two options. Either they are left-adjusted starti
 column number, or right-adjusted with last digit of the label at the fixed column number.
 If there is not enough space, the statement itself is moved to the right to ensure at least one
 blank after the label.
-This is controlled by custom variable `f90-ts-stmt-label-column'.
+This is controlled by custom variable `f90-ts-stmt-label-column`.
+
+
+### Abbreviations
+
+Emacs provides an abbrev-mode, which can be enabled by hand or automatically at load time, for example
+in the use-package setup.
+The mode provides abbreviations for many keywords. If the mode is enabled, typing "\`" followed by one or
+two letters and then some other key inserts the corresponding keyword. Example: "\`su " inserts "subroutine ".
+Abbreviations can be discovered by typing `` C-` ``, which opens a transient menu, showing the same
+two letter codes. There are a few one letter codes: "c", "i", "r" and "t". These are shown as
+"cc", "ii", "rr" and "tt" in the transient menu, to avoid common prefixes.
+
+New abbreviations can be added through defcustom variable `f90-ts-extra-abbrevs`. This also allows
+to overwrite default abbrevs.
 
 
 ### Xref
@@ -561,52 +620,147 @@ Entries are grouped by `module`, `submodule`, `subroutine`, `function`, `module 
 `derived type`, `interface` and `variable`.
 
 
-### Navigation menu
+### TOC buffer
 
-Additionally to the Imenu grouping, the optional `Fortran` menu offers a submenu where the
-same imenu items are structured as a tree reflecting the hierarchical structure of the source file,
-with submenus for structures that contain other items.
-This requires and extra use-package statement to load the optional package,
-see [Optional packages](#ptional-packages).
+The optional package `f90-ts-toc` provides a TOC buffer: a persistent side panel showing the
+structure of the current Fortran source buffer as a table of content tree. The tree is based on a
+sparse version of the tree-sitter tree, restricted to relevant nodes, and reflects the nesting of
+program units. The panel is used to get an overview, to jump to entries, and to mark, comment or
+narrow to whole structures.
 
-### Navigation buffer
+The package must be loaded explicitly, see [Optional packages](#optional-packages).
+It can be opened with `f90-ts-toc-buffer-open` (`B` in the transient popup, also in the fortran
+menu) and focused with `f90-ts-toc-buffer-focus` (`F` in the transient popup). Opening the panel
+never changes the source buffer. Pressing `q` (or `C-g`) in the panel closes it, kills the TOC
+buffer and stops all background activity.
 
-The optional navigation buffer provides a persistent side panel showing the structure of the current
-Fortran source buffer. It is based on the same tree as offered in
-the [Navigation menu](#navigation-menu) and a sparse version of the tree-sitter tree.
+#### Entries
 
-It can be opened with `f90-ts-nav-buffer-open` (`b` in the transient popup) and focused with
-`f90-ts-nav-buffer-focus` (`f` in the transient popup).
+The following entries are shown, each with a short label (see `f90-ts-toc-short-labels`) and the
+name of the entity:
 
-The panel prints the tree, reflecting the nesting of program units.
-Entries are colour-coded by kind using customizable faces:
+| Entry                                              | Label (short) | Face                        |
+|----------------------------------------------------|---------------|-----------------------------|
+| `program`, `module`, `submodule`                   | `prog` `mod` `smod` | `f90-ts-toc-module-face`    |
+| `subroutine`, `function`, `module procedure`      | `sub` `fun` `proc`  | `f90-ts-toc-procedure-face` |
+| `interface` blocks (also without a generic name)   | `ifc`         | `f90-ts-toc-procedure-face` |
+| procedure statements inside interface blocks       | `proc`        | `f90-ts-toc-procedure-face` |
+| derived type definitions                           | `type`        | `f90-ts-toc-type-face`      |
+| variable declarations                              | `var`         | `f90-ts-toc-variable-face`  |
+| `contains` separator                               |               | `f90-ts-toc-separator-face` |
 
-| Face                        | Used for                                      |
-|-----------------------------|-----------------------------------------------|
-| `f90-ts-nav-module-face`    | `program`, `module`, `submodule`              |
-| `f90-ts-nav-procedure-face` | `subroutine`, `function`, `interface`         |
-| `f90-ts-nav-type-face`      | derived type definitions                      |
-| `f90-ts-nav-variable-face`  | variable declarations                         |
+Procedure statements are only listed inside interface blocks, type-bound procedures are not shown.
+Entries are indented according to their nesting depth. If a module, submodule, program, procedure or
+type has entries after its `contains` keyword, a separator line with the text of
+`f90-ts-toc-contains-label` (default `---contains---`) is inserted. Set it to `nil` to omit the separator.
 
-Automatic synchronisation of the highlighted entry in the side panel with active source buffer is
-controlled by `f90-ts-nav-buffer-auto-sync`. The sync is debounced via an idle timer
-(see `f90-ts-nav-buffer-idle-delay`), so that rapid cursor movement does not cause
-excessive updates.
+#### Synchronisation with the source buffer
 
-The nav buffer is automatically refreshed after edits, also after the idle delay.
+The panel follows the selected window. A single idle timer (delay `f90-ts-toc-buffer-idle-delay`,
+default 0.5 s) takes care of
 
-Keybindings in the navigation buffer:
+- switching the panel to the current `f90-ts-mode` buffer, if another source buffer is selected,
+- refreshing the tree after edits in the source buffer,
+- moving point in the panel to the entry belonging to point in the source buffer, if
+  `f90-ts-toc-buffer-auto-sync` is non-nil.
 
-| Key     | Function                        |
-|---------|---------------------------------|
-| `RET`   | Jump to entry in source buffer  |
-| `SPC`   | Preview entry without leaving   |
-| `n`/`p` | Move to next/previous entry     |
-| `g`     | Refresh the navigation buffer   |
-| `q`/`C-g` | Quit the navigation buffer    |
+The timer only runs while the TOC buffer exists and does nothing unless the panel is visible,
+so the panel is never opened automatically. Because everything is debounced by the idle timer,
+rapid cursor movement does not cause excessive updates. A changed idle delay takes effect when
+the panel is opened again. The tree can also be rebuilt explicitly with `g`.
 
+The entry belonging to a position is the closest entry whose start is on or before the position.
+Variable entries and procedure statements in interfaces are only associated with positions on
+their own source line.
 
-Note: the navigation buffer is still missing some features to be really useful.
+#### Keybindings in the TOC buffer
+
+Pressing `?` in the panel opens a transient menu which lists all commands. Every key also works
+without opening the menu first.
+
+| Key              | Function                                                                  |
+|------------------|---------------------------------------------------------------------------|
+| `RET`            | Jump to entry in source buffer                                            |
+| `SPC`            | Preview entry: show it in the source window and flash its line, stay in panel |
+| `n` / `p`        | Next / previous line                                                      |
+| `m`              | Mark / unmark the node of the entry in the source buffer                  |
+| `M`              | Mark / unmark the node including preceding doc comments                   |
+| `c`              | Comment / uncomment the node with the default prefix                      |
+| `C`              | Comment / uncomment the node with a prefix chosen from a list             |
+| `w`              | Narrow the source buffer to the node / widen again                        |
+| `v`              | Toggle display of variable entries                                        |
+| `i`              | Toggle display of interface entries                                       |
+| `d`              | Toggle doc comments belonging to an entry                                 |
+| `a`              | Toggle abbreviated labels                                                 |
+| `t`              | Cycle shortening of long names (`truncate`, `left`, `right`)              |
+| `s`              | Toggle panel between left and right side of the frame                     |
+| `g`              | Rebuild the TOC buffer                                                    |
+| `?`              | Open the transient menu                                                   |
+| `q` / `C-g`      | Quit the panel                                                            |
+
+Mouse: a click previews the entry, a double click or middle click jumps to it, and a right click
+opens a context menu with the same commands.
+
+#### Node operations
+
+The operations `m`, `M`, `c`, `C` and `w` act on the tree-sitter node of the entry at point,
+trimmed in the same way as in the [mark region](#mark-regions-based-on-tree-sitter-nodes) operations.
+They signal an error if the source buffer was modified since the TOC buffer was last rendered
+(refresh with `g`) or if the node is outside of the accessible (narrowed) part of the source buffer.
+
+- *Mark* selects the node in the source buffer and, as a toggle, deactivates the mark again.
+  `M` extends the region to the start of the doc comments in front of the node.
+- *Comment* (un)comments the node using the [comment region](#comment-region) rules.
+  `c` uses the default prefix `f90-ts-comment-region-prefix`. `C` prompts for a prefix from
+  `f90-ts-extra-comment-prefixes` and the default prefix, like `f90-ts-comment-region-custom`.
+- *Narrow* narrows the source buffer to the node and puts point at its start. If the source buffer is
+  already narrowed to exactly this node, it is widened. On a variable entry the structure the variable
+  is declared in is used. Narrowing to a structure inside the narrowed region narrows further.
+
+While the source buffer is narrowed, all entries stay visible, but entries outside of the narrowed
+region are dimmed with `f90-ts-toc-dimmed-face`. Moving point (or clicking) to a dimmed line
+*walks* in the tree: the source buffer is widened and narrowed to the structure of that line.
+This allows to drill down or step up through modules, procedures and types by just moving in the panel.
+
+#### Doc comments
+
+If `f90-ts-toc-include-doc-comments` is non-nil (default), comments directly in front of a structure
+(subroutine, function, type, interface, ...) belong to its entry. This aims at documentation comments
+such as `!>` used by doxygen or FORD. The comment immediately preceding the structure always counts,
+even if separated by an empty line; further comments before it only count if there is no empty line
+between them. Point in such a comment is then synchronised to the entry, and narrowing includes the
+doc comments. Variable entries have no doc comments. Marking with (`M`) and without (`m`) doc comments
+is always available. Toggle with `d`.
+
+#### Customization
+
+All options are in the customization group `f90-ts-toc` (`M-x customize-group RET f90-ts-toc`).
+
+| Option                                 | Default          | Description                                                                          |
+|----------------------------------------|------------------|--------------------------------------------------------------------------------------|
+| `f90-ts-toc-buffer-side`               | `left`           | Side of the frame (`left` or `right`); toggle with `s`                               |
+| `f90-ts-toc-buffer-width`              | `40`             | Width of the panel                                                                   |
+| `f90-ts-toc-buffer-auto-sync`          | `t`              | Point in the panel follows point in the source buffer                                |
+| `f90-ts-toc-buffer-idle-delay`         | `0.5`            | Idle time in seconds before the panel is updated                                     |
+| `f90-ts-toc-show-variables`            | `t`              | Show variable declarations; toggle with `v`                                          |
+| `f90-ts-toc-show-interface-procedures` | `t`              | Show interface blocks; toggle with `i`                                               |
+| `f90-ts-toc-include-doc-comments`      | `t`              | Preceding doc comments belong to an entry; toggle with `d`                           |
+| `f90-ts-toc-abbreviate-labels`         | `t`              | Use short labels; toggle with `a`                                                    |
+| `f90-ts-toc-short-labels`              | see above        | Alist from entry kind to short label                                                 |
+| `f90-ts-toc-name-shortening`           | `truncate`       | How names not fitting into the panel are shown: `truncate`, `left`, `right`; cycle with `t` |
+| `f90-ts-toc-ellipsis`                  | `"…"`            | Single character marking a cut name for `left` and `right`                           |
+| `f90-ts-toc-contains-label`            | `---contains---` | Text of the `contains` separator, `nil` for none                                     |
+
+With `left` or `right`, long names are shortened from that side and the cut is marked by
+`f90-ts-toc-ellipsis`, so that the interesting end of a name stays visible
+(e.g. `…me_which_does_not_fit` or `very_long_name_which_…`). The panel is re-rendered if its
+window width changes. The full name is shown as tooltip.
+
+Changes of `f90-ts-toc-buffer-side` and `f90-ts-toc-buffer-idle-delay` take effect when the panel is
+opened again, the toggle command `s` moves a visible panel immediately.
+The faces `f90-ts-toc-module-face`, `f90-ts-toc-procedure-face`, `f90-ts-toc-type-face`,
+`f90-ts-toc-variable-face`, `f90-ts-toc-separator-face` and `f90-ts-toc-dimmed-face` can be customized
+as usual.
 
 
 ### Comment prefix
@@ -752,7 +906,7 @@ any blanks to keep original indentation of commented code.
 
 ### Mark region based on tree-sitter nodes
 
-Marked regions can be selected, enlarged, shrunk or moved based on the tree-sitter node structure.
+Marked regions can be selected, enlarged, shrunk, moved, extended or reduced based on the tree-sitter node structure.
 Defcustom variable `f90-ts-mark-region-order' can be used to configure whether the point after
 a marked region operation should be placed at start, at end or if order of active region should
 be preserved (defaulting to end position if no active region is present).
@@ -767,15 +921,44 @@ is particularly useful in conjunction with comment region operations.
 
 Key bindings are provided in the transient popup (`C-c C-f`) under the Region section:
 
-| Function                                | Popup key | Description                                                              |
-|-----------------------------------------|-----------|--------------------------------------------------------------------------|
-| `f90-ts-mark-region-enlarge`            | `r`       | Find smallest parent node of existing region which is strictly larger    |
-| `f90-ts-mark-region-shrink-child-first` | `0`       | Shrink region to a first (grand)child which is strictly smaller          |
-| `f90-ts-mark-region-shrink-child-last`  | `9`       | Shrink region to a last (grand)child which is strictly smaller           |
-| `f90-ts-mark-region-first-sibling`      | `{`       | Move selected region to first sibling                                    |
-| `f90-ts-mark-region-prev-sibling`       | `[`       | Move selected region to previous sibling                                 |
-| `f90-ts-mark-region-next-sibling`       | `]`       | Move selected region to next sibling                                     |
-| `f90-ts-mark-region-last-sibling`       | `}`       | Move selected region to last sibling                                     |
+| Function                                  | Popup key | Description                                                               |
+|-------------------------------------------|-----------|---------------------------------------------------------------------------|
+| `f90-ts-mark-region-enlarge`              | `r`       | Find smallest parent node of existing region which is strictly larger     |
+| `f90-ts-mark-region-shrink-child-first`   | `0`       | Shrink region to a first (grand)child which is strictly smaller           |
+| `f90-ts-mark-region-shrink-child-last`    | `9`       | Shrink region to a last (grand)child which is strictly smaller            |
+| `f90-ts-mark-region-first-sibling`        | `{`       | Move selected region to first sibling                                     |
+| `f90-ts-mark-region-prev-sibling`         | `[`       | Move selected region to previous sibling                                  |
+| `f90-ts-mark-region-next-sibling`         | `]`       | Move selected region to next sibling                                      |
+| `f90-ts-mark-region-last-sibling`         | `}`       | Move selected region to last sibling                                      |
+| `f90-ts-mark-region-extend-first-sibling` | `M-{`     | Extend region to first sibling, or reduce it to its first node (or group) |
+| `f90-ts-mark-region-extend-prev-sibling`  | `M-[`     | Extend region by previous sibling, or drop its last node (or group)       |
+| `f90-ts-mark-region-extend-next-sibling`  | `M-]`     | Extend region by next sibling, or drop its first node (or group)          |
+| `f90-ts-mark-region-extend-last-sibling`  | `M-}`     | Extend region to last sibling, or reduce it to its last node (or group)   |
+
+The last four operations are described in
+[Extending and reducing a region by siblings](#extending-and-reducing-a-region-by-siblings).
+
+
+#### Extending and reducing a region by siblings
+
+The sibling operations `{` `[` `]` `}` *move* the region to another node. The extend/reduce operations
+`M-{` `M-[` `M-]` `M-}` instead change the region by whole siblings, similar to growing or shrinking a selection
+of statements. They require an active region and are available in the transient popup (section
+*Mark sibling region*) and in the *Mark region* sub-menu of the Fortran menu. There are no default
+keybindings outside of the popup, see [Setup](#standard-installation-via-package-manager) for example bindings.
+
+Only the end of the region where point is located (the *active end*) is moved, the other end stays fixed.
+Whether the region grows or shrinks depends on the direction of the command and on which end point is at.
+The direction is the direction in which the active end travels through the siblings:
+
+| Point at | `M-[` (previous)   | `M-]` (next)        | `M-{` (first)                  | `M-}` (last)                   |
+|----------|--------------------|---------------------|--------------------------------|--------------------------------|
+| start    | extend by prev     | reduce (drop first) | extend start to first sibling  | reduce to last node or group   |
+| end      | reduce (drop last) | extend by next      | reduce to first node or group  | extend end to last sibling     |
+
+After the operation, point is at the same end of the region as before. Note that
+`f90-ts-mark-region-order` is not used here, as it would otherwise move the active end.
+Use `X` (`exchange-point-and-mark`) in the popup to switch the active end.
 
 
 ### Folding

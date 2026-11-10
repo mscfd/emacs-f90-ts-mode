@@ -59,7 +59,7 @@ SRCS = \
 	f90-ts-thing.el \
 	f90-ts-fold.el \
 	f90-ts-mode.el \
-	f90-ts-nav.el \
+	f90-ts-toc.el \
 	test/f90-ts-mode-test.el
 
 

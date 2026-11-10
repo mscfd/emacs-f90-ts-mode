@@ -90,13 +90,13 @@ associate ...) etc."
 
 
 (defconst f90-ts--indent-options-alist
-  '(("indent to first line of statement with offset `f90-ts-indent-continued'" . continued-line)
-    ("keep if aligned or indent to first line of statement with offset `f90-ts-indent-continued'" . keep-or-continued-line)
-    ("align with primary column" . primary)
-    ("keep if aligned or align to primary column" . keep-or-primary)
-    ("rotate columns" . rotate)
-    ("keep if aligned or rotate to next column" . keep-or-rotate))
-  "Options for indentation of list like structures on continued lines.")
+  '(("continued-line: indent relative to the first line of the statement" . continued-line)
+    ("keep-or-continued-line: preserve alignment or indent relative to the first line" . keep-or-continued-line)
+    ("primary: align with the primary column" . primary)
+    ("keep-or-primary: preserve alignment or align with the primary column" . keep-or-primary)
+    ("rotate: cycle through indentation columns" . rotate)
+    ("keep-or-rotate: preserve alignment or cycle to the next indentation column" . keep-or-rotate))
+  "Available indentation options for continued lines in list-like structures.")
 
 
 (defconst f90-ts--indent-region-options-alist
@@ -240,6 +240,52 @@ Primary alignment column for the second line of a declaration plus
 `f90-ts-indent-declaration'."
   :type  'integer
   :safe  #'integerp
+  :group 'f90-ts-indent)
+
+
+(defcustom f90-ts-indent-array-align 'left
+  "Alignment of the first element on continued lines in array literals.
+The value selects which alignment positions are available for rotation,
+keep and primary selection, and which one is the primary position:
+
+`left'               left-aligned only: position the first element on a
+                     continued line relative to earlier elements (usual
+                     left alignment).
+`right'              right-aligned only: right-align the comma after the
+                     first element of a line with commata on previous
+                     lines.  This is always the primary position, the
+                     left-aligned positions are not candidates.
+`both-left-primary'  left- and right-aligned positions are candidates,
+                     the left-aligned position is primary.
+`both-right-primary' left- and right-aligned positions are candidates,
+                     the right-aligned position is primary.
+
+Example for right alignment in matrices:
+
+   arr = reshape( &
+          [      g,      1.0_dp,     1.0_dp, &
+                -g,      2.0_dp,     2.0_dp, &
+            1.0_dp,           g,         -g, &
+           -1.0_dp,          -g,          g], &
+          [3,4])
+
+With `both-left-primary', the right alignment can be achieved by rotation,
+and `keep' preserves the alignment:
+
+   Msym33 = [  (x+y),      f(x,q),   1.23, &
+                       -(x+2.0*y),      y, &
+                                     4.56]
+
+Other secondary positions like at the opening bracket remain available for
+rotation and keep options.
+
+This applies only to array literals, delimited by \"[...]\" or \"(/.../)\"."
+  :type  '(radio (const :tag "Left-aligned with previous elements" left)
+                 (const :tag "Right-aligned at previous commata" right)
+                 (const :tag "Both, left-aligned is primary" both-left-primary)
+                 (const :tag "Both, right-aligned is primary" both-right-primary))
+  :safe  (lambda (val)
+           (memq val '(left right both-left-primary both-right-primary)))
   :group 'f90-ts-indent)
 
 
@@ -610,6 +656,53 @@ seem to make much sense."
   :group 'f90-ts-font-lock
   :group 'f90-ts-indent
   :group 'f90-ts-comment)
+
+
+;;;-----------------------------------------------------------------------------
+
+(declare-function f90-ts--abbrev-refresh "f90-ts-mode")
+
+(defun f90-ts--abbrev-set-extra (sym val)
+  "Setter for `f90-ts-extra-abbrevs'.
+Set SYM to VAL and refresh the abbrev table.  On error, restore the old value.
+When the abbrev code is not loaded yet, only set the value."
+  (let ((had-old (default-boundp sym))
+        (old (and (default-boundp sym) (default-value sym))))
+    (set-default sym val)
+    (when (fboundp 'f90-ts--abbrev-refresh)
+      (condition-case err
+          (f90-ts--abbrev-refresh)
+        (error
+         (set-default sym (and had-old old))
+         (signal (car err) (cdr err)))))))
+
+
+(defcustom f90-ts-extra-abbrevs nil
+  "Alist of (ABBREV . EXPANSION) added to or overriding the default abbrevs.
+ABBREV is one or two characters from [a-z0-9].  The leading accent is
+added automatically, so write \"my\" for the abbrev \"`my\".
+An entry that matches a default abbrev replaces it.
+
+An expansion may contain \\n for a newline.
+
+Set this variable through the Customize interface (\\[customize-variable])
+or with `setopt':
+
+  (setopt f90-ts-extra-abbrevs
+          \\='((\"my\" . \"my custom expansion\")
+            (\"00\"\ . \"!-----------\\n\")
+            (\"al\" . \"allocatable\")))
+
+Both validate the value and update the abbrev table and the abbrev
+menu.  Plain `setq' does neither, so do not use it for this variable."
+  :type '(alist :tag "Extra abbreviations (1 or two 2 chars without leading accent)"
+                :key-type (string :tag "Abbrev"
+                                  :size 2
+                                  :valid-regexp "[a-z0-9]\\{1,2\\}")
+                :value-type (string :tag "Expansion" :format "  %t: %v"))
+  :set #'f90-ts--abbrev-set-extra
+  :group 'f90-ts)
+
 
 ;;;-----------------------------------------------------------------------------
 

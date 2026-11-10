@@ -225,6 +225,15 @@ and ends at the last non-blank character of NODE."
       (f90-ts--line-empty-comment-p (point)))))
 
 
+(defun f90-ts--same-line-p (pos1 pos2)
+  "Return non-nil if POS1 and POS2 are on the same line.
+The implementation using line numbers, which might be expensive
+to determine."
+  (save-excursion
+    (goto-char (min pos1 pos2))
+    (<= (max pos1 pos2) (pos-eol))))
+
+
 (defun f90-ts--region-trimmed ()
   "Return (BEG . END) of trimmed active region.
 The trimming removes leading and trailing whitespace."
@@ -402,6 +411,20 @@ and `f90-ts-comment-prefix-regexp' to identify the prefix to extract."
       (goto-char (1+ start)))))
 
 
+(defun f90-ts--nodes-same-group-p (node1 node2)
+  "Return non-nil if NODE1 and NODE2 belong to the same group.
+
+Currently this predicate only groups comment nodes sharing the same comment
+prefix.  It is used for indentation and mark region operations."
+  ;; even if not belonging to any kind of group, a node is at least grouped with itself,
+  ;; this avoids any additional branches in other functions
+  (or (treesit-node-eq node1 node2)
+      (and (f90-ts--node-type-p node1 "comment")
+           (f90-ts--node-type-p node2 "comment")
+           (string= (f90-ts--comment-prefix node1 'trimmed)
+                    (f90-ts--comment-prefix node2 'trimmed)))))
+
+
 (defun f90-ts--node-special-var-p (node)
   "Check if NODE is an identifier and matches the special variable regexp.
 Note that the parse uses identifier not just for variables, but for types etc."
@@ -444,37 +467,33 @@ a virtual zero-length ampersand token."
   "Return block_label_start_expression ancestor of leaf NODE if there is one.
 NODE is assumed to be the leaf node at the start of a line.  The function
 checks whether it is part of a \"block_label_start_expression\"."
-  ;; Unfortunately, this comes in two variants (as a label name, which is a language
-  ;; keyword parses slightly differently):
+  ;; Unfortunately, this comes in two time two variants. First, a label name,
+  ;; which is a language keyword, parses slightly differently. Second, the
+  ;; grammar added a named node to capture the block_label itself.
+  ;; Old grammar (label is an anonymous node):
   ;;
-  ;;   (block_label_start_expression
-  ;;    'label'
-  ;;    :)
+  ;;   (block_label_start_expression 'label' :)
+  ;;   (block_label_start_expression 'label' keyword :)
   ;;
-  ;; and if the label is a reserved keyword:
+  ;; New grammar (label is the named node block_label):
   ;;
-  ;;   (block_label_start_expression
-  ;;    'label'
-  ;;     keyword
-  ;;    :)
+  ;;   (block_label_start_expression (block_label) :)
+  ;;   (block_label_start_expression (block_label keyword) :)
   ;;
-  ;; In both cases, 'label' is an anonymous node.  In the second case, it has the
-  ;; child keyword.
-  ;; In any case, the function should return \"block_label_start_expression\",
-  ;; or nil.
+  ;; Both variants are handled by `f90-ts--block-label-types'.  The function
+  ;; returns \"block_label_start_expression\", or nil.
   (cl-assert (or (not node)
                  (zerop (treesit-node-child-count node nil)))
              nil "node is not a leaf node: %s" node)
   (let* ((parent (and node (treesit-node-parent node)))
-         (grandparent (and parent (treesit-node-parent parent))))
+         (grandparent (and parent (treesit-node-parent parent)))
+         (block-label-types '("label" "block_label")))
     (cond
-     ((and (f90-ts--node-type-p node "label")
-           (f90-ts--node-type-p parent
-                                "block_label_start_expression"))
+     ((and (f90-ts--node-type-p node block-label-types)
+           (f90-ts--node-type-p parent "block_label_start_expression"))
       parent)
-     ((and (f90-ts--node-type-p parent "label")
-           (f90-ts--node-type-p grandparent
-                                "block_label_start_expression"))
+     ((and (f90-ts--node-type-p parent block-label-types)
+           (f90-ts--node-type-p grandparent "block_label_start_expression"))
       grandparent)
      (t nil))))
 
@@ -583,7 +602,7 @@ node."
 The associated string_literal is NODE itself or a parent of this type."
   ;; only ascend if node type is possible within a string
   (and (f90-ts--node-type-p node '("string_literal"
-                                   "string_literal_part"
+                                   "string_content"
                                    "comment"
                                    "&"
                                    "\""
@@ -711,6 +730,33 @@ NODE is assumed to be of type comment."
      f90-ts-special-comment-rules)))
 
 
+(defun f90-ts--comments-same-rule-p (node1 node2)
+  "Return non-nil if comments NODE1 and NODE2 match the same special rule.
+Comments matching no rule never match in this predicate."
+  (when-let* ((rule1 (f90-ts--comment-matching-rule node1))
+              (rule2 (f90-ts--comment-matching-rule node2)))
+    (eq rule1 rule2)))
+
+
+(defun f90-ts--comments-match-p (node1 node2)
+  "Return non-nil if kind of comment NODE1 and comment NODE2 match.
+A special rule of `f90-ts-special-comment-rules' is the first criterion:
+if either comment matches a rule, both must match the same rule.
+Comments matching no rule belong together if they share the same prefix,
+see `f90-ts--nodes-same-group-p'.
+
+Note that special comment rules might allow different prefixes (like matching
+both \"!<\" and \"!>\" for documentation text).
+On the other hand different rules never match, even if the prefixes
+agree, (for example `!$omp' versus `!$omp simd' can be different rules with
+different indentation etc.)."
+  (let ((rule1 (f90-ts--comment-matching-rule node1))
+        (rule2 (f90-ts--comment-matching-rule node2)))
+    (if (or rule1 rule2)
+        (eq rule1 rule2)
+      (f90-ts--nodes-same-group-p node1 node2))))
+
+
 (defun f90-ts--node-on-pos (pos side &optional named)
   "Return the smallest node covering position POS.
 If NAMED is non-nil, consider only named nodes, otherwise include anonymous
@@ -815,22 +861,34 @@ If NAMED is non-nil, return only named nodes."
              collect sib)))
 
 
-(defun f90-ts--prev-sibling-predicate (node predicate)
-  "Find previous sibling of NODE satisfying PREDICATE.
-Repeat `treesit-node-prev-sibling' until a suitable sibling is found,
+(defun f90-ts--sibling-predicate (node sibling-fn predicate)
+  "Find sibling of NODE satisfying PREDICATE using SIBLING-FN to walk siblings.
+Repeat SIBLING-FN until a suitable sibling is found,
 or return nil."
   (cl-loop
-   for sibling = (treesit-node-prev-sibling node)
-            then (treesit-node-prev-sibling sibling)
+   for sibling = (funcall sibling-fn node)
+            then (funcall sibling-fn sibling)
    while sibling
-   when (funcall predicate sibling) return sibling))
+   when (funcall predicate sibling)
+   return sibling))
 
 
 (defun f90-ts--prev-sibling-proper (node)
   "Determine previous \"proper\" sibling of NODE.
 Nodes of type comments and ampersand are not considered \"proper\"."
-  (f90-ts--prev-sibling-predicate
+  (f90-ts--sibling-predicate
    node
+   #'treesit-node-prev-sibling
+   (lambda (n)
+     (not (f90-ts--node-type-p n '("comment" "&"))))))
+
+
+(defun f90-ts--next-sibling-proper (node)
+  "Determine next \"proper\" sibling of NODE.
+Nodes of type comments and ampersand are not considered \"proper\"."
+  (f90-ts--sibling-predicate
+   node
+   #'treesit-node-next-sibling
    (lambda (n)
      (not (f90-ts--node-type-p n '("comment" "&"))))))
 
@@ -850,9 +908,24 @@ For empty NODES, return an empty list."
 
 
 (defun f90-ts--first-node-on-line (pos)
-  "Return the first node on the line at POS.
-Take virtual ampersand nodes into account, these are not returned by
-`treesit-node-at' and require extra work.  If the line is empty, return nil."
+"Return the first node on the line at POS, or nil if the line is empty.
+If the line is part of a continued line, it starts with a real or a virtual
+zero-width ampersand.  Return this ampersand as first node if present.
+
+`treesit-node-on' for (point) (point) usually returns the virtual
+ampersand directly.  Walking back over previous siblings starting at the
+same position is still necessary in one situation:
+Several zero-width nodes start at the same position, for example after a
+trailing comma in a call, with an incomplete argument list, like:
+
+      call foo(x, &
+               y, &
+               )
+
+Error recovery inserts a zero-width `assumed_size' node (with a MISSING
+\"*\") between the virtual ampersand and the closing parenthesis.
+`treesit-node-on' then returns the parenthesis, and the ampersand is
+reached only by walking back via `assumed_size'."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
@@ -862,15 +935,17 @@ Take virtual ampersand nodes into account, these are not returned by
       (cond
        ((and on-node
              (= (point) (treesit-node-start on-node)))
-        ;; in some cases, there might be other virtual nodes,
-        ;; or treesit-node-on returns a proper node starting at (point),
-        ;; walk back as long as start of node does not change
-        (cl-loop for node = on-node
-                 then (treesit-node-prev-sibling node)
-                 while (and node
-                            (= (treesit-node-start node) (point)))
-                 for last = node ; updates only if while condition is true
-                 finally return last))
+        ;; usually, (treesit-node-on (point) (point)) already returns the
+        ;; virtual ampersand if present, but in some cases, there might be
+        ;; other virtual nodes, or treesit-node-on returns a proper node
+        ;; starting at (point), walk back as long as start of node is at point
+        (cl-loop
+         for node = on-node
+         then (treesit-node-prev-sibling node)
+         while (and node
+                    (= (treesit-node-start node) (point)))
+         for last = node ; updates only if while condition is true
+         finally return last))
 
        ((and at-node
              (= line (f90-ts--node-line at-node)))
@@ -1270,7 +1345,7 @@ If the line is empty, return nil."
                        "  (pointer_init_declarator left: (identifier) @name_var_decl)"
                        "  (sized_declarator (identifier) @name_var_decl)])")
      :leaf t))
-  "Query specification and properties for Imenu, nav-buffer and nav-tree menu.
+  "Query specification and properties for Imenu and the TOC side panel buffer.
 Each entry is a list (KEY PLIST) where KEY is a string returned by the related
 Tree-sitter node type, and PLIST may contain:
   :label   Display string used in Imenu and menus.

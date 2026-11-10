@@ -6,7 +6,7 @@
 ;; Maintainer: Martin Stein <mscfd@gmx.net>
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
 ;; Keywords: languages, treesitter, fortran
-;; Version: 0.6.0
+;; Version: 0.7.0-snapshot
 ;; Package-Requires: ((emacs "29.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -32,7 +32,30 @@
 ;; files, based on Emacs's built-in tree-sitter support (requires Emacs 29+)
 ;;
 ;; Changelog (recent):
+;; [11-2026]
+;;   - Function `f90-ts-install-grammar' added to provide a pinned grammar
+;;     tested against this version.
+;;   - Mode adjusted to finally merged grammar variant of the string_literal
+;;     patch set.  Update grammar to avoid broken setup!
+;;   - Mode adjusted to grammar changes concerning
+;;     \"block_label_start_expression\".
+;;   - Support for abbreviations through abbrev-mode and transient menu added.
+;;     New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
+;;   - Alignment rules for case statements of select case blocks added.
+;;   - Alignment rules for trailing comments within continued lines as well as
+;;     those following a statement added.
 ;; [10-2026]
+;;   - Extend/reduce variants for mark region operations based on siblings
+;;     (first, last, previous, next) added.
+;;   - Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel with a
+;;     table of content of a f90 buffer, see `MANUAL.md' for details.  This
+;;     optional package requires its own use-package statement.
+;;   - Alignment rules for improved indentation of variable declarations with
+;;     initialisation added.
+;;   - Infinite loop caused by `f90-ts-indent-delete-trailing-whitespace' fixed.
+;;     This happened if region ended at last line without a trailing newline.
+;;   - Right-align-at-comma options for array literals added,
+;;     see `f90-ts-indent-array-align'.
 ;;   - Changes required by updates to the proposed string_literal branch added.
 ;;   - Support for new keyword "non_recursive" added (requires new grammar).
 ;;   - Support for new grammar version with a different tree structure in some
@@ -70,27 +93,6 @@
 ;;     language grammar extension.  See README.md for more details.
 ;;   - Testing with Emacs 31.1 and tree-sitter 0.26 added.
 ;;
-;; [08-2026]
-;;   - `f90-ts-shift-line-break' as combined break/join function added.
-;;   - Defcustom `f90-ts-font-lock-error` replaced by
-;;     `f90-ts-font-lock-error-show'.  Errors are now always fontified by
-;;     `f90-ts-font-lock-error-face'.  The new defcustom
-;;     `f90-ts-font-lock-error-show' can be used to turn ERROR node
-;;     highlighting on and off, or the number of lines to be highlighted for
-;;     each ERROR node.
-;;   - Jump-to-rightmost-position (within fill-column) to the interactive fill
-;;     operation added.
-;;   - Mark region operations fixed: always consider trimmed region of nodes.
-;;     Some nodes like a whole "subroutine..end subroutine" block contains a
-;;     trailing newline, which should not be considered.  Not consequently
-;;     trimming all spans broke some mark region operations.
-;;   - About, README and MANUAL entries in the fortran and transient popup menu
-;;     to view information about the mode added.
-;;   - Additional font-locking for error regions added.  This can be customized
-;;     by `f90-ts-font-lock-error' and `f90-ts-font-lock-error-face'.
-;;   - Smart end completion of coarray "change team ... end team" blocks fixed.
-;;     It was wrongly assumed that the end statement is "end change team".
-;;
 ;; Features:
 ;;   - Almost all statements up to F2023
 ;;   - Syntax highlighting, including syntactically incorrect code
@@ -109,8 +111,11 @@
 ;;   - OpenMP and preprocessor directives
 ;;   - Coarray keywords and statements
 ;;   - Imenu and a Fortran menu in the menu bar
-;;   - Navigation (defun, things, Xref, side panel tree)
-;;   - Hideshow and outline support (support for external treesit-fold is pending)
+;;   - Navigation (defun, things, Xref)
+;;   - TOC side panel to show interactive table of content for a f90-ts buffer
+;;    (optional package)
+;;   - Hideshow and outline support (support for external treesit-fold is
+;;     pending)
 ;;
 ;; Features can be found by the fortran menu or a transient popup bound
 ;; to the key C-c C-f.
@@ -184,7 +189,30 @@ source files, based on Emacs's built-in tree-sitter support
 
 Changelog (recent):
 
+[11-2026]
+- Function `f90-ts-install-grammar' added to provide a pinned grammar
+  tested against this version.
+- Mode adjusted to finally merged grammar variant of the string_literal
+  patch set.  Update grammar to avoid broken setup!
+- Mode adjusted to grammar changes concerning \"block_label_start_expression\".
+- Support for abbreviations through abbrev-mode and transient menu added.
+  New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
+- Alignment rules for case statements of select case blocks added.
+- Alignment rules for trailing comments within continued lines as well as
+  those following a statement added.
+
 [10-2026]
+- Extend/reduce variants for mark region operations based on siblings
+  (first, last, previous, next) added.
+- Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel with a
+  table of content of a f90 buffer, see `MANUAL.md' for details.  This
+  optional package requires its own use-package statement.
+- Alignment rules for improved indentation of variable declarations with
+  initialisation added.
+- Infinite loop caused by `f90-ts-indent-delete-trailing-whitespace' fixed.
+  This happened if region ended at last line without a trailing newline.
+- Right-align-at-comma options for array literals added,
+  see `f90-ts-indent-array-align'.
 - Changes required by updates to the proposed string_literal branch added.
 - Support for new keyword \"non_recursive\" added (requires new grammar).
 - Support for new grammar version with a different tree structure in some
@@ -219,34 +247,11 @@ Changelog (recent):
   literals.  This requires a proposed (but not yet merged) tree-sitter
   language grammar extension.  See README.md for more details.
 - Testing with emacs 31.1 and tree-sitter 0.26 added.
-
-[08-2026]
-- `f90-ts-shift-line-break' as combined break/join function added.
-- Defcustom `f90-ts-font-lock-error' replaced by `f90-ts-font-lock-error-show'.
-  Errors are now always fontified by f90-ts-font-lock-error-face.
-  The new defcustom `f90-ts-font-lock-error-show' can be used to turn ERROR
-  node highlighting on and off, or the number of lines to be highlighted for
-  each ERROR node.
-- Jump-to-rightmost-position (within fill-column) to the interactive
-  fill operation added.
-- Mark region operations fixed: always consider trimmed region
-  of nodes. Some nodes like a whole \"subroutine..end subroutine\"
-  block contains a trailing newline, which should not be
-  considered. Not consequently trimming all spans broke some mark
-  region operations.
-- About, README and MANUAL entries in the fortran and transient
-  popup menu to view information about the mode added.
-- Additional font-locking for error regions added.  This can be
-  customized by `f90-ts-font-lock-error' and
-  `f90-ts-font-lock-error-face'.
-- Smart end completion of coarray \"change team ... end team\"
-  blocks fixed.  It was wrongly assumed that the end statement is
-  \"end change team\".
 ")
 
 
 ;;;-----------------------------------------------------------------------------
-;;; syntax table
+;; syntax table
 
 (defvar f90-ts-mode-syntax-table
   (let ((table (make-syntax-table)))
@@ -289,7 +294,7 @@ Changelog (recent):
 
 
 ;;;-----------------------------------------------------------------------------
-;;; keymap
+;; keymap
 
 (defvar-keymap f90-ts-mode-map
   :doc "Keymap for `f90-ts-mode'."
@@ -305,11 +310,294 @@ Changelog (recent):
   "C-c '"      #'f90-ts-comment-region-custom
 
   ;; C-c C-f prefix for the transient menu
-  "C-c C-f" #'f90-ts-transient)
+  "C-c C-f" #'f90-ts-transient
+  "C-`"     #'f90-ts-abbrev-menu)
+
 
 
 ;;;-----------------------------------------------------------------------------
-;;; about page and documentation
+;; abbrev table
+;; enabled by (abbrev-mode), or through a transient menu
+
+(defvar f90-ts--abbrev-installed nil
+  "Non-nil once the abbrevs have been installed into the abbrev table.")
+
+;; The abbrev definitions are derived from `f90-mode-abbrev-table' in
+;; f90.el (GNU Emacs), Copyright (C) 1995-2026 Free Software Foundation, Inc.
+;; Modified: three-letter names shortened for the transient menu, duplicate
+;; "`pr" fixed, newer Fortran keywords added. See trailing comments below.
+(defconst f90-ts--abbrev-definitions
+  '(;; From f90-mode.
+    ("`al"  . "allocate")
+    ("`ab"  . "allocatable")
+    ("`ai"  . "abstract interface")
+    ("`as"  . "assignment")
+    ("`ay"  . "asynchronous")           ; f90-mode: `asy
+    ("`ba"  . "backspace")
+    ("`bd"  . "block data")
+    ("`bl"  . "block")
+    ("`c"   . "character")              ; menu key: cc
+    ("`cl"  . "close")
+    ("`cm"  . "common")
+    ("`cx"  . "complex")
+    ("`cn"  . "contains")
+    ("`cr"  . "critical")
+    ("`cy"  . "cycle")
+    ("`de"  . "deallocate")
+    ("`df"  . "define")
+    ("`di"  . "dimension")
+    ("`dp"  . "double precision")
+    ("`dw"  . "do while")
+    ("`el"  . "else")
+    ("`ei"  . "else if")                ; f90-mode: `eli
+    ("`ew"  . "elsewhere")              ; f90-mode: `elw
+    ("`em"  . "elemental")
+    ("`en"  . "enumerator")             ; f90-mode: `e
+    ("`eq"  . "equivalence")
+    ("`ex"  . "external")
+    ("`ey"  . "entry")
+    ("`fl"  . "forall")
+    ("`fo"  . "format")
+    ("`fu"  . "function")
+    ("`fa"  . ".false.")
+    ("`im"  . "implicit none")
+    ("`in"  . "include")
+    ("`i"   . "integer")                ; menu key: ii
+    ("`it"  . "intent")
+    ("`if"  . "interface")
+    ("`lo"  . "logical")
+    ("`mo"  . "module")
+    ("`na"  . "namelist")
+    ("`nu"  . "nullify")
+    ("`op"  . "optional")
+    ("`pa"  . "parameter")
+    ("`po"  . "pointer")
+    ("`pr"  . "print")
+    ("`pi"  . "private")
+    ("`pm"  . "program")
+    ("`pt"  . "protected")              ; f90-mode: duplicate `pr
+    ("`pu"  . "public")
+    ("`r"   . "real")                   ; menu key: rr
+    ("`rc"  . "recursive")
+    ("`rt"  . "return")
+    ("`rw"  . "rewind")
+    ("`se"  . "select")
+    ("`sq"  . "sequence")
+    ("`su"  . "subroutine")
+    ("`ta"  . "target")
+    ("`tr"  . ".true.")
+    ("`t"   . "type")                   ; menu key: tt
+    ("`vo"  . "volatile")
+    ("`wh"  . "where")
+    ("`wr"  . "write")
+    ;; added: common statements missing in f90-mode (but maybe a bit short)
+    ("`sv"  . "save")
+    ("`va"  . "value")
+    ("`sp"  . "stop")
+    ("`xi"  . "exit")
+    ("`ca"  . "case")
+    ;; added: coarrays and parallel features
+    ("`cd"  . "codimension")
+    ("`dc"  . "do concurrent")
+    ("`es"  . "error stop")
+    ("`sa"  . "sync all")
+    ("`si"  . "sync images")
+    ("`sy"  . "sync memory")
+    ("`lk"  . "lock")
+    ("`ul"  . "unlock")
+    ("`ct"  . "contiguous")
+    ;; added: object-oriented features and procedures
+    ("`at"  . "abstract")
+    ("`cs"  . "class")
+    ("`dr"  . "deferred")
+    ("`xt"  . "extends")
+    ("`fi"  . "final")
+    ("`gn"  . "generic")
+    ("`pc"  . "procedure")
+    ("`mp"  . "module procedure")
+    ("`sm"  . "submodule")
+    ("`ac"  . "associate")
+    ("`st"  . "select type")
+    ("`sr"  . "select rank")
+    ("`bc"  . "bind(c)")
+    ("`kd"  . "kind")
+    ("`ma"  . "move_alloc")
+    ("`pe"  . "pure")
+    ("`ie"  . "impure"))
+  "Alist of (ABBREV . EXPANSION) for `f90-ts-mode'.
+Single-letter abbrevs (\"`c\", \"`i\", \"`r\", \"`t\") use a doubled
+key in the transient menu (cc, ee, ii, rr, tt) so that no menu key is
+a prefix of another.  Hence these doubled names are unavailable as
+abbrevs of their own.  All other abbrevs must have exactly two
+characters after the accent.")
+
+
+(define-abbrev-table 'f90-ts-mode-abbrev-table nil
+  "Abbrev table for `f90-ts-mode'.
+Derived from the abbrev table of `f90-mode'.  Populated by
+`f90-ts--abbrev-refresh' from `f90-ts--abbrev-definitions' and
+`f90-ts-extra-abbrevs'."
+  ;; accept ` as the first char of an abbrev, also allow _ in abbrevs
+  :regexp "\\(?:[^[:word:]`]\\|^\\)\\(`?[[:word:]]+\\)[^[:word:]]*")
+
+
+(defun f90-ts--abbrev-key (name)
+  "Return the transient key for abbrev NAME.
+Strip the leading accent.  A single remaining character is doubled (like `i'
+becomes `ii'), so that no key is a prefix of another key."
+  (let ((key (string-remove-prefix "`" name)))
+    (if (= (length key) 1)
+        (concat key key)
+      key)))
+
+
+(defun f90-ts--abbrev-make-command (key exp)
+  "Define and return a command that insert EXP, bound to menu key KEY.
+The command is named `f90-ts--abbrev-insert-KEY'."
+  (let ((cmd (intern (format "f90-ts--abbrev-insert-%s" key))))
+    (defalias cmd
+      (lambda ()
+        (interactive)
+        (insert exp))
+      (format "Insert \"%s\" (abbrev menu key `%s')." exp key))
+    cmd))
+
+
+(defun f90-ts--abbrev-check-keys (entries)
+  "Signal a `user-error' if the keys of ENTRIES clash.
+Two keys clash if they are equal or one is a prefix of the other,
+since transient cannot bind both."
+  (let ((clashes (cl-loop
+                  with keys = (mapcar #'car entries)
+                  for (key . others) on keys
+                  nconc (cl-loop
+                         for other in others
+                         when (or (string-prefix-p key other)
+                                  (string-prefix-p other key))
+                         collect (cons key other)))))
+    (when clashes
+      (user-error "Abbrev table in f90-ts-mode: conflicting keys %S" clashes))))
+
+
+(defun f90-ts--abbrev-check-extra (abbrevs)
+  "Signal a `user-error' if ABBREVS is not a valid extra abbrev alist."
+  (cl-loop
+   for abl in abbrevs
+   do (unless (and (consp abl)
+                   (stringp (car abl))
+                   (stringp (cdr abl))
+                   (string-match-p "\\`[a-z0-9]\\{1,2\\}\\'" (car abl)))
+        (user-error "Abbrev table in f90-ts-mode: abbrev %S needs (\"xy\" . \"expansion\") with \
+one or two characters [a-z0-9] and without the leading accent"
+                    abl))))
+
+
+(defconst f90-ts--abbrev-menu-columns 12
+  "Maximum number of abbrevs per column in the abbrev menu.")
+
+
+(defun f90-ts--abbrev-unescape (str)
+  "Translate the escape \\n in STR into a proper newline character."
+  (replace-regexp-in-string "\\\\n" "\n" str t t))
+
+
+(defun f90-ts--abbrev-effective-definitions ()
+  "Return default abbrevs, overridden and extended by `f90-ts-extra-abbrevs'.
+The mandatory leading accent is added to the extra abbrevs here, and
+their escapes are translated by `f90-ts--abbrev-unescape'.
+If a name occurs more than once, the last definition wins."
+  (let ((all (append f90-ts--abbrev-definitions
+                     (cl-loop for (name . exp) in f90-ts-extra-abbrevs
+                              collect (cons (concat "`" name)
+                                            (f90-ts--abbrev-unescape exp))))))
+    (cl-loop for (def . rest) on all
+             unless (assoc (car def) rest #'string=)
+             collect def)))
+
+
+(defconst f90-ts--abbrev-menu-max-width 20
+  "Maximum number of expansion characters shown in the abbrev menu.
+Longer expansions are cut off and followed by \"...\".")
+
+
+(defconst f90-ts--abbrev-menu-newline "\\n"
+  "String shown in the abbrev menu in place of a newline in an expansion.
+Use \"\\\\n\" if your font lacks the return symbol.")
+
+
+(defun f90-ts--abbrev-menu-label (exp)
+  "Return EXP shortened for display in the abbrev menu.
+Newlines are shown as `f90-ts--abbrev-menu-newline'."
+  (let ((shown (replace-regexp-in-string
+                "\n" f90-ts--abbrev-menu-newline exp t t)))
+    (if (> (length shown) f90-ts--abbrev-menu-max-width)
+        (concat (substring shown 0 f90-ts--abbrev-menu-max-width) "...")
+      shown)))
+
+
+(defun f90-ts--abbrev-menu-entries ()
+  "Return transient suffix specs (KEY DESCRIPTION COMMAND), sorted by KEY.
+KEY is the abbrev name without the leading accent (doubled for single
+letters), DESCRIPTION is the expansion, shortened by
+`f90-ts--abbrev-menu-label'.  Signal a `user-error' on key clashes."
+  (let ((entries
+         (cl-loop
+          for (name . exp) in (f90-ts--abbrev-effective-definitions)
+          for key = (f90-ts--abbrev-key name)
+          collect (list key
+                        (f90-ts--abbrev-menu-label exp)
+                        (f90-ts--abbrev-make-command key exp)))))
+    (setq entries (seq-sort-by #'car #'string< entries))
+    (f90-ts--abbrev-check-keys entries)
+    entries))
+
+
+(defun f90-ts--abbrev-menu-groups (_children)
+  "Return the column groups of the abbrev menu.
+Used as `:setup-children' function of `f90-ts-abbrev-menu'."
+  (transient-parse-suffixes
+   'f90-ts-abbrev-menu
+   (cl-loop
+    for chunk in (seq-partition (f90-ts--abbrev-menu-entries)
+                                f90-ts--abbrev-menu-columns)
+    collect (vconcat [""] chunk))))
+
+
+(transient-define-prefix f90-ts-abbrev-menu ()
+  "Insert one of the Fortran abbreviation expansions."
+  ["Fortran abbreviations (almost the same as in abbrev-mode)"
+   :class transient-columns
+   :setup-children f90-ts--abbrev-menu-groups])
+
+
+(defun f90-ts--abbrev-refresh ()
+  "Validate and (re)install all abbrevs into `f90-ts-mode-abbrev-table'.
+Validation happens first, so a bad configuration leaves the table untouched."
+  (f90-ts--abbrev-check-extra f90-ts-extra-abbrevs)
+  (f90-ts--abbrev-menu-entries)         ; signals on key clashes
+  (cl-loop
+   for (name . exp) in (f90-ts--abbrev-effective-definitions)
+   do (define-abbrev f90-ts-mode-abbrev-table name exp nil :system t))
+  (setq f90-ts--abbrev-installed t))
+
+
+(defun f90-ts-add-custom-abbrevs (abbrevs)
+  "Add ABBREVS, a list of (ABBREV . EXPANSION), to `f90-ts-extra-abbrevs'.
+ABBREV is given without the leading accent."
+  (setopt f90-ts-extra-abbrevs (append f90-ts-extra-abbrevs abbrevs)))
+
+
+(defun f90-ts--abbrev-ensure-installed ()
+  "Install the abbrevs once at first load if not yet installed.
+Later changes of the custom abbreviations invoke the setter directly to
+update changes."
+  (unless f90-ts--abbrev-installed
+    (f90-ts--abbrev-refresh)
+    (setq f90-ts--abbrev-installed t)))
+
+
+;;;-----------------------------------------------------------------------------
+;; about page and documentation
 
 (defun f90-ts--snapshot-version-p ()
   "Return non-nil if this is a snapshot version."
@@ -525,11 +813,7 @@ package `markdown-mode' are available, then use these."
 
 (transient-define-prefix f90-ts-transient-misc ()
   "Miscellaneous commands for `f90-ts-mode'."
-  [["Side panel (alpha!)"
-    :if (lambda () (featurep 'f90-ts-nav))
-    ("B" "Open nav buffer"          f90-ts-nav-buffer-open)
-    ("F" "Focus nav buffer"         f90-ts-nav-buffer-focus)]
-   ["About & Doc"
+  [["About & Doc"
     ("a" "About"                    f90-ts-mode-about)
     ("r" "README"                   f90-ts--browse-readme)
     ("m" "MANUAL"                   f90-ts--browse-manual)]])
@@ -556,14 +840,22 @@ package `markdown-mode' are available, then use these."
     ("r"   "Enlarge"                    f90-ts-mark-region-enlarge)
     ("0"   "Shrink to first child"      f90-ts-mark-region-shrink-child-first)
     ("9"   "Shrink to last child"       f90-ts-mark-region-shrink-child-last)
+    ("X"   "Exchange point and mark"    exchange-point-and-mark)
+    ("c"   "Comment region (default)"   f90-ts-comment-region-default)
+    ("C"   "Comment region (custom)"    f90-ts-comment-region-custom)]
+   ["Mark sibling region"
     ("{"   "First sibling"              f90-ts-mark-region-first-sibling)
     ("["   "Previous sibling"           f90-ts-mark-region-prev-sibling)
     ("]"   "Next sibling"               f90-ts-mark-region-next-sibling)
     ("}"   "Last sibling"               f90-ts-mark-region-last-sibling)
-    ("X"   "Exchange point and mark"    exchange-point-and-mark)
-    ("c"   "Comment region (default)"   f90-ts-comment-region-default)
-    ("C"   "Comment region (custom)"    f90-ts-comment-region-custom)]
-   ["Fill/Rebalance"
+    ("M-{" "Extend/reduce to first"     f90-ts-mark-region-extend-first-sibling)
+    ("M-[" "Extend/reduce to previous"  f90-ts-mark-region-extend-prev-sibling)
+    ("M-]" "Extend/reduce to next"      f90-ts-mark-region-extend-next-sibling)
+    ("M-}" "Extend/reduce to last"      f90-ts-mark-region-extend-last-sibling)
+    ("X"   "Exchange point and mark"    exchange-point-and-mark)]]
+
+  ;; Navigate and sub-menus
+  [["Fill/Rebalance"
     ("C-f" "Fill column:"               f90-ts-transient--fill-column)
     ;; description text for "C-b" is in description slot
     ;; of `f90-ts-transient--fill-select-breakpoint-by'
@@ -571,10 +863,8 @@ package `markdown-mode' are available, then use these."
     ("f"   "Fill region/buffer"         f90-ts-fill-region)
     ("M-f" "Fill at line"               f90-ts-fill-at-line)
     ("M-j" "Fill with prev line"        f90-ts-fill-prev-line)
-    ("M-J" "Fill with next line"        f90-ts-fill-next-line)]]
-
-  ;; Navigate and sub-menus
-  [["Procedure"
+    ("M-J" "Fill with next line"        f90-ts-fill-next-line)]
+   ["Procedure"
     ("a"   "Beginning"                  f90-ts-thing-beginning-of-procedure)
     ("e"   "End"                        f90-ts-thing-end-of-procedure)
     ("p"   "Previous"                   f90-ts-thing-prev-procedure)
@@ -586,6 +876,10 @@ package `markdown-mode' are available, then use these."
     ("<"   "Go back"                    xref-go-back)
     (">"   "Go forward"                 xref-go-forward)]
    ["More"
+    ("B" "Open TOC side panel"          f90-ts-toc-buffer-open
+     :if (lambda () (featurep 'f90-ts-toc)))
+    ("F" "Focus TOC side panel"         f90-ts-toc-buffer-focus
+     :if (lambda () (featurep 'f90-ts-toc)))
     ("t"   "Types & interfaces..."      f90-ts-transient-things)
     ("@"   "Hideshow..."                f90-ts-transient-hideshow
      :if (lambda () (bound-and-true-p hs-minor-mode)))
@@ -624,7 +918,12 @@ package `markdown-mode' are available, then use these."
      ["First sibling"         f90-ts-mark-region-first-sibling      :active (region-active-p)]
      ["Previous sibling"      f90-ts-mark-region-prev-sibling       :active (region-active-p)]
      ["Next sibling"          f90-ts-mark-region-next-sibling       :active (region-active-p)]
-     ["Last sibling"          f90-ts-mark-region-last-sibling       :active (region-active-p)])
+     ["Last sibling"          f90-ts-mark-region-last-sibling       :active (region-active-p)]
+     "---"
+     ["Extend/reduce to first sibling"    f90-ts-mark-region-extend-first-sibling :active (region-active-p)]
+     ["Extend/reduce to previous sibling" f90-ts-mark-region-extend-prev-sibling  :active (region-active-p)]
+     ["Extend/reduce to next sibling"     f90-ts-mark-region-extend-next-sibling  :active (region-active-p)]
+     ["Extend/reduce to last sibling"     f90-ts-mark-region-extend-last-sibling  :active (region-active-p)])
     "---"
     ("Defun & Thing"
      ["Beginning of defun" beginning-of-defun :active t]
@@ -656,8 +955,8 @@ package `markdown-mode' are available, then use these."
      ["Go back"          xref-go-back          :active t]
      ["Go forward"       xref-go-forward       :active t])
     "---"
-    ["Open navigation side buffer" f90-ts-nav-buffer-open   :visible (featurep 'f90-ts-nav) :active t]
-    ["Focus navigation side buffer" f90-ts-nav-buffer-focus :visible (featurep 'f90-ts-nav) :active t]
+    ["Open TOC side panel"  f90-ts-toc-buffer-open   :visible (featurep 'f90-ts-toc) :active t]
+    ["Focus TOC side panel" f90-ts-toc-buffer-focus  :visible (featurep 'f90-ts-toc) :active t]
     "---"
     ["Customize f90-ts"  (customize-group 'f90-ts) :active t]
     ["About f90-ts-mode" f90-ts-mode-about t]
@@ -667,11 +966,44 @@ package `markdown-mode' are available, then use these."
 
 ;;;-----------------------------------------------------------------------------
 
+(defconst f90-ts-grammar-source
+  '(fortran
+    "https://github.com/mscfd/tree-sitter-fortran"
+    "emacs-f90-ts-mode-v0.7.x")
+  "Tree-sitter source recipe of the grammar compatible with this version.
+Format is that of an element of `treesit-language-source-alist'.
+The revision must be a tag or branch name (Emacs 29 clones with
+\"--depth 1 -b REV\", which does not accept commit hashes).")
+
+;;;###autoload
+(defun f90-ts-install-grammar ()
+  "Install the Fortran tree-sitter grammar matching `f90-ts-mode'.
+The grammar is fetched and compiled from `f90-ts-grammar-source',
+independent of any user entry for `fortran' in
+`treesit-language-source-alist'.  Requires git, a C compiler and make.
+Use the default location (`user-emacs-directory'/tree-sitter).
+
+A grammar already loaded in the running session is not replaced;
+restart Emacs after installing."
+  (interactive (list (when current-prefix-arg
+                       (read-directory-name "Install grammar to: "))))
+  (when (or (not (treesit-language-available-p 'fortran))
+            (not (called-interactively-p 'any))
+            (y-or-n-p "Fortran grammar already available; reinstall pinned version? "))
+    (let ((treesit-language-source-alist (list f90-ts-grammar-source)))
+      (treesit-install-language-grammar 'fortran))
+    (message "f90-ts: installed Fortran grammar %s; restart Emacs to load it"
+             (nth 2 f90-ts-grammar-source))))
+
+
+;;;-----------------------------------------------------------------------------
+
 ;;;###autoload
 (define-derived-mode f90-ts-mode prog-mode "F90[TS]"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
   :syntax-table f90-ts-mode-syntax-table
+  :abbrev-table f90-ts-mode-abbrev-table
 
   ;; check if treesit has a ready parser for 'fortran
   (unless (treesit-available-p)
@@ -720,6 +1052,9 @@ package `markdown-mode' are available, then use these."
 
   ;; hideshow and outline support (hs-minor-mode, outline-minor-mode)
   (f90-ts-fold-setup)
+
+  ;; install abbrev table, including custom abbrevs
+  (f90-ts--abbrev-ensure-installed)
 
   ;;(setq-local treesit--font-lock-verbose t)
   ;;(setq-local treesit--indent-verbose t)

@@ -1219,3 +1219,568 @@ subroutine sub_start_2()
 end subroutine sub_start_2
 =-=-=
 
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-extend-prev-sibling))
+
+Name: mark extend prev sibling 1 extend
+=-=
+subroutine sub()
+   x = 1
+   x = 2
+   |x = 3@
+   x = 4
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   |x = 2
+   x = 3@
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling 2 extend
+=-=
+subroutine sub()
+   x = 1
+   |x = 2
+   x = 3@
+   x = 4
+end subroutine sub
+=-=
+subroutine sub()
+   |x = 1
+   x = 2
+   x = 3@
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling 3 reduce
+=-=
+subroutine sub()
+   x = 1
+   @x = 2
+   x = 3|
+   x = 4
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling 4 no-reduce
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling 5 no-extend
+=-=
+|subroutine sub()@
+   x = 1
+end subroutine sub
+=-=
+|subroutine sub()@
+   x = 1
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling group 1 extend
+=-=
+subroutine sub()
+   x = 1
+   !: c1
+   !: c2
+   !: c3
+   |x = 2@
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   |!: c1
+   !: c2
+   !: c3
+   x = 2@
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling group 2 reduce
+=-=
+subroutine sub()
+   @x = 1
+   !: c1
+   !: c2
+   !: c3|
+   x = 2
+end subroutine sub
+=-=
+subroutine sub()
+   @x = 1|
+   !: c1
+   !: c2
+   !: c3
+   x = 2
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling group 3 extend
+=-=
+subroutine sub()
+   !: c1
+   |!: c2
+   !: c3@
+   x = 1
+end subroutine sub
+=-=
+subroutine sub()
+   |!: c1
+   !: c2
+   !: c3@
+   x = 1
+end subroutine sub
+=-=-=
+
+Name: mark extend prev sibling group 4 reduce
+=-=
+subroutine sub()
+   @!: c1
+   !: c2|
+   !: c3
+   x = 1
+end subroutine sub
+=-=
+subroutine sub()
+   @!: c1|
+   !: c2
+   !: c3
+   x = 1
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-extend-next-sibling))
+
+Name: mark extend next sibling 1 extend
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+   x = 4
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @x = 2
+   x = 3|
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend next sibling 2 reduce
+=-=
+subroutine sub()
+   x = 1
+   |x = 2
+   x = 3@
+   x = 4
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   x = 2
+   |x = 3@
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend next sibling 3 no-reduce
+=-=
+subroutine sub()
+   x = 1
+   |x = 2@
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   |x = 2@
+   x = 3
+end subroutine sub
+=-=-=
+
+Name: mark extend next sibling 4 no-extend
+=-=
+subroutine sub()
+   x = 1
+@end subroutine sub|
+=-=
+subroutine sub()
+   x = 1
+@end subroutine sub|
+=-=-=
+
+Name: mark extend next sibling group 1 extend
+=-=
+subroutine sub()
+   @x = 1|
+   !: c1
+   !: c2
+   !: c3
+   x = 2
+end subroutine sub
+=-=
+subroutine sub()
+   @x = 1
+   !: c1
+   !: c2
+   !: c3|
+   x = 2
+end subroutine sub
+=-=-=
+
+Name: mark extend next sibling group 2 reduce
+=-=
+subroutine sub()
+   |!: c1
+   !: c2
+   !: c3
+   x = 2@
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   !: c1
+   !: c2
+   !: c3
+   |x = 2@
+   x = 3
+end subroutine sub
+=-=-=
+
+Name: mark extend next sibling group 3 extend
+=-=
+subroutine sub()
+   @!: c1|
+   !: c2
+   !: c3
+   x = 1
+end subroutine sub
+=-=
+subroutine sub()
+   @!: c1
+   !: c2|
+   !: c3
+   x = 1
+end subroutine sub
+=-=-=
+
+Name: mark extend next sibling group 4 reduce
+=-=
+subroutine sub()
+   |!: c1
+   !: c2@
+   !: c3
+   x = 1
+end subroutine sub
+=-=
+subroutine sub()
+   !: c1
+   |!: c2@
+   !: c3
+   x = 1
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-extend-first-sibling))
+
+Name: mark extend first sibling 1 extend
+=-=
+subroutine sub()
+   x = 1
+   x = 2
+   |x = 3@
+   x = 4
+end subroutine sub
+=-=
+|subroutine sub()
+   x = 1
+   x = 2
+   x = 3@
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend first sibling 2 reduce
+=-=
+subroutine sub()
+   x = 1
+   @x = 2
+   x = 3
+   x = 4|
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+   x = 4
+end subroutine sub
+=-=-=
+
+Name: mark extend first sibling 3 no-extend
+=-=
+|subroutine sub()
+   x = 1@
+end subroutine sub
+=-=
+|subroutine sub()
+   x = 1@
+end subroutine sub
+=-=-=
+
+Name: mark extend first sibling 4 no-reduce
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+end subroutine sub
+=-=-=
+
+Name: mark extend first sibling group 1 extend
+=-=
+subroutine sub()
+   !: c1
+   !: c2
+   |x = 1@
+end subroutine sub
+=-=
+|subroutine sub()
+   !: c1
+   !: c2
+   x = 1@
+end subroutine sub
+=-=-=
+
+Name: mark extend first sibling group 2 reduce
+=-=
+subroutine sub()
+   @!: c1
+   !: c2
+   !: c3
+   x = 1
+   x = 2|
+end subroutine sub
+=-=
+subroutine sub()
+   @!: c1
+   !: c2
+   !: c3|
+   x = 1
+   x = 2
+end subroutine sub
+=-=-=
+
+Name: mark extend first sibling group 3 reduce
+=-=
+subroutine sub()
+   x = 1
+   @!: c1
+   !: c2
+   !: c3|
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @!: c1|
+   !: c2
+   !: c3
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-extend-last-sibling))
+
+Name: mark extend last sibling 1 extend
+=-=
+subroutine sub()
+   x = 1
+   @x = 2|
+   x = 3
+   x = 4
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   @x = 2
+   x = 3
+   x = 4
+end subroutine sub|
+=-=-=
+
+Name: mark extend last sibling 2 reduce
+=-=
+subroutine sub()
+   |x = 1
+   x = 2
+   x = 3
+   x = 4@
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   x = 2
+   x = 3
+   |x = 4@
+end subroutine sub
+=-=-=
+
+Name: mark extend last sibling 3 no-extend
+=-=
+subroutine sub()
+   @x = 1
+end subroutine sub|
+=-=
+subroutine sub()
+   @x = 1
+end subroutine sub|
+=-=-=
+
+Name: mark extend last sibling 4 no-reduce
+=-=
+subroutine sub()
+   x = 1
+   |x = 2@
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   |x = 2@
+   x = 3
+end subroutine sub
+=-=-=
+
+Name: mark extend last sibling group 1 extend
+=-=
+subroutine sub()
+   @x = 1|
+   !: c1
+   !: c2
+end subroutine sub
+=-=
+subroutine sub()
+   @x = 1
+   !: c1
+   !: c2
+end subroutine sub|
+=-=-=
+
+Name: mark extend last sibling group 2 reduce
+=-=
+subroutine sub()
+   |x = 1
+   x = 2
+   !: c1
+   !: c2
+   !: c3@
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   x = 2
+   |!: c1
+   !: c2
+   !: c3@
+end subroutine sub
+=-=-=
+
+Name: mark extend last sibling group 3 reduce
+=-=
+subroutine sub()
+   x = 1
+   |!: c1
+   !: c2
+   !: c3@
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   !: c1
+   !: c2
+   |!: c3@
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'start))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-extend-next-sibling)))
+
+Name: mark extend next sibling order 1
+=-=
+subroutine sub()
+   @x = 1|
+   x = 2
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   @x = 1
+   x = 2|
+   x = 3
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-mark-region-order 'end))
+      (f90-ts-mode-test--mark-region-modify #'f90-ts-mark-region-extend-next-sibling)))
+
+Name: mark extend next sibling order 2
+=-=
+subroutine sub()
+   |x = 1
+   x = 2@
+   x = 3
+end subroutine sub
+=-=
+subroutine sub()
+   x = 1
+   |x = 2@
+   x = 3
+end subroutine sub
+=-=-=

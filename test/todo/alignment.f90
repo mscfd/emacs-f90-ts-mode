@@ -1,74 +1,3 @@
-! use commata as anchor, maybe like:
-! if node is not a commata and directly followed by a commata, then a previous commata
-! is a good anchor with offset -lenght of node?
-subroutine array
-   use, intrinsic :: iso_fortran_env, only : real64
-   integer, parameter :: dp = real64
-   real(kind=dp), parameter :: g = (1.0 + sqrt(5.0)) / 2.0
-
-   real(kind=dp), dimension(1:3,1:4), parameter :: &
-          arr = reshape( &
-          [      g,      1.0_dp,     1.0_dp, &
-                -g,      2.0_dp,     2.0_dp, &
-            1.0_dp,           g,         -g, &
-           -1.0_dp,          -g,          g], &
-          [3,4])
-end subroutine array
-
-
-! there is no proper context node for "! comment 2", but "! comment 1"
-! would be a proper primary or secondary choice, besides default indentation shown below
-! in both cases: add assignment_statement as list context and extract part after "="
-subroutine math()
-     integer, parameter :: x = 5 + 6
-     x1234567890 = & ! comment 1
-            ! comment 2
-            5 + 6
-end subroutine math
-
-! y is not a math-expression, just an identifier,
-! should identifier be added?
-! (in order to get column after = as suggestion,
-! especially if a comment is present, this makes sense)
-subroutine math()
-     x1234567890 = &
-            (x+y)
-     x1234567890 = & ! commen
-            (x+y)
-     z = &
-            y
-end subroutine math
-
-
-
-! we need to include init_declarator context to indent
-! "[ & ..." after "=" relative to "rgb =" ...
-subroutine arr3()
-     character(len=5), dimension(1:3) :: & ! comment
-                                         ! comment
-        &   rgb = &
-        &   [ &
-        &    'red  ', &
-        &    'green', &
-        &    'blue ' ], &
-        &   alpha = 'trnsp'
-end subroutine arr3
-
-
-! list context for case range
-subroutine select_case()
-     select_variant: select case (variant)
-     case ('version1')
-          print *, 'version1'
-     case ('version2', &
-            'extra')
-          call xyz()
-     case default
-          call uvw()
-     end select select_variant
-end subroutine select_case
-
-
 ! read/write lists
 subroutine sub()
      write(*,format_string_for_testing) val1, &       !comment
@@ -90,13 +19,7 @@ end subroutine sub
 module foo
  use mod1
  use mod2, only: sub1, &
-        sub2
- use mod3, &
-        mod4
- ! another
- mod5, only: baz1,&
-           baz2
-
+       sub2
 contains
  subroutine sub_bar()
       use mod3, only: fun1 => mod3_fun1, &

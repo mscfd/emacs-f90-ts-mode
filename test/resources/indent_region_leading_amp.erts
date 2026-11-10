@@ -217,7 +217,7 @@ subroutine arr3()
           
           ! comment
           
-                                  rgb = &
+                                  rgb_colours = &
                                          (/ &
               'red  ', &
               'green', &
@@ -228,13 +228,13 @@ end
 subroutine arr3()
      character(len=5), dimension(1:3) :: & ! comment
           
-                                         ! comment
+                                           ! comment
           
-        &   rgb = &
-        &                                (/ &
-        &                                  'red  ', &
-        &                                  'green', &
-        &                                  'blue ' /), &
+        &   rgb_colours = &
+        &          (/ &
+        &            'red  ', &
+        &            'green', &
+        &            'blue ' /), &
         &   alpha = 'trnsp'
 end subroutine arr3
 =-=-=
@@ -254,12 +254,12 @@ end
 =-=
 subroutine arr4()
      character(len=5), dimension(1:3) :: & ! comment
-                                         ! comment
+                                           ! comment
         &   rgb = &
-        &   [ &
-        &    'red  ', &
-        &    'green', &
-        &    'blue ' ], &
+        &          [ &
+        &           'red  ', &
+        &           'green', &
+        &           'blue ' ], &
         &   alpha = 'trnsp'
 end subroutine arr4
 =-=-=

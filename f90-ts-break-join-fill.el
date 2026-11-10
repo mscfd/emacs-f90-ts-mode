@@ -113,7 +113,7 @@
         (insert "&\n&")
       ;; first determine where point is within string
       (let ((node (treesit-node-on (1- (point)) (point))))
-        (if (or (f90-ts--node-type-p node '("string_literal_part"
+        (if (or (f90-ts--node-type-p node '("string_content"
                                             "\""
                                             "\\"))
                 (and (f90-ts--node-type-p node "&")
@@ -172,7 +172,7 @@ If the grammar variant does not decompose the string_literal, then NODE is
 of type string_literal.  For the decomposed variant, NODE is the first
 ampersand before POS1 and within the string_literal to be joined."
   (cl-assert (if (f90-ts--grammar-string-literal-decomposed-p)
-                 (and (f90-ts--node-type-p node '("&" "string_literal_part" "\""))
+                 (and (f90-ts--node-type-p node '("&" "string_content" "\""))
                       (f90-ts--node-type-p (treesit-node-parent node) "string_literal"))
                (f90-ts--node-type-p node "string_literal"))
              nil "node is not within a string literal")
@@ -294,11 +294,11 @@ parse comments within strings)."
       (and (f90-ts--node-type-p first '("&"
                                         ;; these are only posssible within a
                                         ;; malformed continued string without &
-                                        "string_literal_part" "\""))
+                                        "string_content" "\""))
            (f90-ts--node-type-p secnd '("&"
                                         ;; these are only posssible within a
                                         ;; malformed continued string without &
-                                        "string_literal_part" "\"" "\\"))
+                                        "string_content" "\"" "\\"))
            (f90-ts--node-type-p (treesit-node-parent first) "string_literal"))
     (and (f90-ts--node-type-p first "string_literal")
          (f90-ts--node-type-p secnd "string_literal")
@@ -577,7 +577,7 @@ account for the blank and ampersand appended by the break operation."
          (cond
           ((f90-ts--node-type-p node "comment")
            fill-col)
-          ((f90-ts--node-type-p node '("string_literal_part"))
+          ((f90-ts--node-type-p node '("string_content"))
            (- fill-col 1))
           (t
            (- fill-col 2)))))
@@ -730,7 +730,7 @@ restricted to preferred positions."
     (f90-ts--find-breakpoint-in-comment node fill-col))
 
    ((and (f90-ts--grammar-string-literal-decomposed-p)
-         (f90-ts--node-type-p node "string_literal_part"))
+         (f90-ts--node-type-p node "string_content"))
     (f90-ts--find-breakpoint-in-string (treesit-node-parent node)
                                        beg fill-col
                                        prefer))
