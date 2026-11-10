@@ -68,9 +68,13 @@ The mode relies on the Fortran grammar
 (the upstream grammar).
 
 The fork [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran) might contain fixes and
-extensions not yet merged upstream. It also provides tags like `emacs-f90-ts-mode-v0.6.x` to pin
+extensions not yet merged upstream. It also provides tags like `emacs-f90-ts-mode-v0.7.x` to pin
 grammar version compatible with corresponding f90-ts-mode versions. All minor releases (only changing the `x`)
 are compatible with the same grammar tag.
+
+The pinned grammar version compatible with the current mode can be installed
+by executing `M-x f90-ts-install-grammar`.
+
 
 
 #### Which grammar revision to use
@@ -78,15 +82,20 @@ are compatible with the same grammar tag.
 Grammar changes can alter the tree structure, so a given version of the mode is only guaranteed to work
 with certain grammar revisions.
 For reproducible results, use the **tag** matching your mode version, for example
-`emacs-f90-ts-mode-v0.6.x` for f90-ts-mode 0.6.x. This tag marks the grammar revision, which is tested against
-all minor revisions including snapshots (like all `0.6.x` and `0.6.x-snapshot` commits on branch `main`, which
+`emacs-f90-ts-mode-v0.7.x` for f90-ts-mode 0.7.x. This tag marks the grammar revision, which is tested against
+all minor revisions including snapshots (like all `0.7.x` and `0.7.x-snapshot` commits on branch `main`, which
 are published on melpa).
 The `master` branch of the fork follows development and is tested in CI against
 the development version of the mode.
 If possible, the mode tries to be backwards compatible, so an older grammar version might work as well.
 
+If in doubt, `f90-ts-install-grammar` provides a safe way install a compatible grammar.
+
 
 #### Installing the grammar in Emacs
+
+This section describes how to install it by hand. Function `f90-ts-install-grammar` provides an easy way
+to install a compatible grammar.
 
 Register the grammar repository in `treesit-language-source-alist`.
 The optional third element is the revision (branch or tag):
@@ -101,7 +110,7 @@ or, grammar revision matching the mode version:
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
-              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.6.x"))))
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.7.x"))))
 ```
 
 Then compile and install the grammar once with:

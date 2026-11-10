@@ -14,6 +14,11 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Function `f90-ts-install-grammar` added to provide a pinned grammar
+  tested against this version.
+- Mode adjusted to finally merged grammar variant of the string_literal
+  patch set.  Update grammar to avoid broken setup!
+- Mode adjusted to grammar changes concerning "block_label_start_expression".
 - Support for abbreviations through abbrev-mode and transient menu added.
   New abbrevs can be added via defcustom `f90-ts-extra-abbrevs`.
 - Alignment rules for case statements of select case blocks added.
@@ -37,7 +42,7 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 - Support for new grammar version with a different tree structure in some
   type related statements (allocate, select type) added.  Both new and old
   grammar CST variants are supported.
-- Prefix of ERT test names shortened `f90-ts-mode-test--' (no distinction
+- Prefix of ERT test names shortened `f90-ts-mode-test--` (no distinction
   between std and extra anymore).
 - Transient menu restructured and decomposed.
 - Support for hideshow and outline added.
@@ -162,19 +167,23 @@ Installation steps are:
 1. Install a compatible Tree-sitter Fortran grammar.
 
 The mode relies on the `tree-sitter-fortran` grammar.
-Register the grammar repository in Emacs:
+
+There is pinned version in "https://github.com/mscfd/tree-sitter-fortran" tagged with "emacs-f90-ts-mode-v0.7.x".
+It can be installed by executing `M-x f90-ts-install-grammar`.
+
+If more control is desired, register the grammar repository in Emacs:
 
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
               '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
 ```
-Grammar versions tested with f90-ts-mode are tagged. Use matching version (like emacs-f90-ts-mode-0.6.x for 0.6.x
+Grammar versions tested with f90-ts-mode are tagged. Use matching version (like emacs-f90-ts-mode-0.7.x for 0.7.x
 versions for the mode) if problems occur:
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
-              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.6.x"))))
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.7.x"))))
 ```
 
 Then compile and install it once with:
