@@ -349,8 +349,8 @@ This is for Emacs 31+."
 
 ;; executed once at load time to populate `hs-special-modes-alist'
 (when (< emacs-major-version 31)
-  (with-eval-after-load 'hideshow
-    (f90-ts--hs-register-alist-prior-31)))
+  (require 'hideshow)
+  (f90-ts--hs-register-alist-prior-31))
 
 
 (defun f90-ts-hideshow-setup ()

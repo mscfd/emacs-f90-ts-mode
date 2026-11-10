@@ -467,37 +467,33 @@ a virtual zero-length ampersand token."
   "Return block_label_start_expression ancestor of leaf NODE if there is one.
 NODE is assumed to be the leaf node at the start of a line.  The function
 checks whether it is part of a \"block_label_start_expression\"."
-  ;; Unfortunately, this comes in two variants (as a label name, which is a language
-  ;; keyword parses slightly differently):
+  ;; Unfortunately, this comes in two time two variants. First, a label name,
+  ;; which is a language keyword, parses slightly differently. Second, the
+  ;; grammar added a named node to capture the block_label itself.
+  ;; Old grammar (label is an anonymous node):
   ;;
-  ;;   (block_label_start_expression
-  ;;    'label'
-  ;;    :)
+  ;;   (block_label_start_expression 'label' :)
+  ;;   (block_label_start_expression 'label' keyword :)
   ;;
-  ;; and if the label is a reserved keyword:
+  ;; New grammar (label is the named node block_label):
   ;;
-  ;;   (block_label_start_expression
-  ;;    'label'
-  ;;     keyword
-  ;;    :)
+  ;;   (block_label_start_expression (block_label) :)
+  ;;   (block_label_start_expression (block_label keyword) :)
   ;;
-  ;; In both cases, 'label' is an anonymous node.  In the second case, it has the
-  ;; child keyword.
-  ;; In any case, the function should return \"block_label_start_expression\",
-  ;; or nil.
+  ;; Both variants are handled by `f90-ts--block-label-types'.  The function
+  ;; returns \"block_label_start_expression\", or nil.
   (cl-assert (or (not node)
                  (zerop (treesit-node-child-count node nil)))
              nil "node is not a leaf node: %s" node)
   (let* ((parent (and node (treesit-node-parent node)))
-         (grandparent (and parent (treesit-node-parent parent))))
+         (grandparent (and parent (treesit-node-parent parent)))
+         (block-label-types '("label" "block_label")))
     (cond
-     ((and (f90-ts--node-type-p node "label")
-           (f90-ts--node-type-p parent
-                                "block_label_start_expression"))
+     ((and (f90-ts--node-type-p node block-label-types)
+           (f90-ts--node-type-p parent "block_label_start_expression"))
       parent)
-     ((and (f90-ts--node-type-p parent "label")
-           (f90-ts--node-type-p grandparent
-                                "block_label_start_expression"))
+     ((and (f90-ts--node-type-p parent block-label-types)
+           (f90-ts--node-type-p grandparent "block_label_start_expression"))
       grandparent)
      (t nil))))
 
@@ -606,7 +602,7 @@ node."
 The associated string_literal is NODE itself or a parent of this type."
   ;; only ascend if node type is possible within a string
   (and (f90-ts--node-type-p node '("string_literal"
-                                   "string_literal_part"
+                                   "string_content"
                                    "comment"
                                    "&"
                                    "\""

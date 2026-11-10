@@ -13,7 +13,9 @@ for implementation.
 
 - [Installation](#installation)
   - [Tree-sitter grammar](#tree-sitter-grammar)
-    -[Installing the grammar in Emacs](#installing-the-grammar-in-emacs)
+    - [Which grammar revision to use](#which-grammar-revision-to-use)
+    - [Installing the grammar in Emacs](#installing-the-grammar-in-emacs)
+    - [Tree-sitter library and ABI versions](#tree-sitter-library-and-abi-versions)
   - [Tree-sitter based mode](#tree-sitter-based-mode)
   - [Setup](#setup)
     - [Standard installation via package manager](#standard-installation-via-package-manager)
@@ -61,32 +63,54 @@ for implementation.
 
 ### Tree-sitter grammar
 
-The mode relies on a recent tree-sitter grammar version of Fortran at
-[official/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran).
+The mode relies on the Fortran grammar
+[stadelmanma/tree-sitter-fortran](https://github.com/stadelmanma/tree-sitter-fortran)
+(the upstream grammar).
 
-There is also an upstream Tree-sitter grammar fork, which might contain fixes or extensions not yet merged:
-[mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran).
-The parser in this fork was generated with treesitter `0.25.10`, in case `0.26` causes any problems with emacs,
+The fork [mscfd/tree-sitter-fortran](https://github.com/mscfd/tree-sitter-fortran) might contain fixes and
+extensions not yet merged upstream. It also provides tags like `emacs-f90-ts-mode-v0.7.x` to pin
+grammar version compatible with corresponding f90-ts-mode versions. All minor releases (only changing the `x`)
+are compatible with the same grammar tag.
 
-Currently it also provides the `string_literal` extension not yet merged into the official grammar, in branch
-[mscfd/tree-sitter-fortran/string-literal-emacs](https://github.com/mscfd/tree-sitter-fortran/tree/string_literal_emacs).
+The pinned grammar version compatible with the current mode can be installed
+by executing `M-x f90-ts-install-grammar`.
 
+
+
+#### Which grammar revision to use
+
+Grammar changes can alter the tree structure, so a given version of the mode is only guaranteed to work
+with certain grammar revisions.
+For reproducible results, use the **tag** matching your mode version, for example
+`emacs-f90-ts-mode-v0.7.x` for f90-ts-mode 0.7.x. This tag marks the grammar revision, which is tested against
+all minor revisions including snapshots (like all `0.7.x` and `0.7.x-snapshot` commits on branch `main`, which
+are published on melpa).
+The `master` branch of the fork follows development and is tested in CI against
+the development version of the mode.
+If possible, the mode tries to be backwards compatible, so an older grammar version might work as well.
+
+If in doubt, `f90-ts-install-grammar` provides a safe way install a compatible grammar.
 
 
 #### Installing the grammar in Emacs
 
-Register the grammar repository in `treesit-language-source-alist`:
+This section describes how to install it by hand. Function `f90-ts-install-grammar` provides an easy way
+to install a compatible grammar.
+
+Register the grammar repository in `treesit-language-source-alist`.
+The optional third element is the revision (branch or tag):
 
 ```elisp
+;; upstream grammar
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
               '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
 ```
-or variants mentioned above, like:
+or, grammar revision matching the mode version:
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
-              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "string_literal_emacs"))))
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.7.x"))))
 ```
 
 Then compile and install the grammar once with:
@@ -101,42 +125,47 @@ The installation can be verified with:
 (treesit-ready-p 'fortran)
 ```
 
-**NOTE**:
-* Emacs 29.x:
-The mode has been tested with 29.1 and 29.3. and tree-sitter 0.20.8. There are a number fixes working around
-bugs the tree sitter core library. These might reduce performance in  some cases. Please open an issue
-if anything fails or performance is bad.
+#### Tree-sitter library and ABI versions
 
-The following can be used to check whether versions are correct:
+Emacs links against the tree-sitter C library, whose version determines the range of grammar ABI versions
+that can be loaded. `treesit-install-language-grammar` compiles the `src/parser.c` found in the grammar
+repository; it does **not** run `tree-sitter generate`. The ABI of the committed `src/parser.c`
+must therefore lie within the range supported by your Emacs. Otherwise regenerate the parser, e.g. with
+`tree-sitter generate --abi 14` (or a `tree-sitter-cli` release producing that ABI), and rebuild.
 
-(`M-:` = `eval-expression`)
+| Library | ABI range | Typical setup                            |
+|---------|-----------|------------------------------------------|
+| 0.20.x  | 13-14     | Emacs 29.x                               |
+| 0.24.x  | 13-14     | Emacs 30.x                               |
+| 0.25.x  | 13-15     | Emacs 30.x                               |
+| 0.26.x  | 13-15     | Emacs 31.x                               |
 
-- with `M-:` `(treesit-library-abi-version)` should be `14` (`13` is supposed to be ok as well)
-- with `M-:` `(treesit-language-abi-version 'fortran)` should be `14` (`13` is supposed to be ok as well)
-- emacs 29.x: `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0` or `libtree-sitter.so.0.20`
+Combinations tested in CI (see `.github/workflows`):
 
+| Emacs | tree-sitter library | grammar ABI |
+|-------|---------------------|-------------|
+| 29.1  | 0.20.8              | 14          |
+| 29.3  | 0.20.8 (apt)        | 14          |
+| 30.1  | 0.24.7              | 14          |
+| 30.1  | 0.25.10             | 15          |
+| 30.2  | 0.24.7              | 14          |
+| 30.2  | 0.25.10             | 15          |
+| 31.1  | 0.26.11             | 15          |
 
-* Emacs 30.x:
-The Fortran grammar should be compiled with Tree-sitter version `0.25.x`, as Emacs 30.x
-(including 30.2) does not yet support the `0.26` branch correctly.
+Each is tested with the current `master` and the compatibility tag of the grammar fork.
+Other combinations may work but are not tested. In particular, Emacs 30.x with tree-sitter 0.26 is not
+covered; if it causes problems, use 0.25.x.
 
-The master branch at `mscfd/tree-sitter-fortran` mentioned above provides the parser generated with `0.25.10` if required.
+The following can be used to check the versions of a running Emacs (`M-:` = `eval-expression`):
 
-The following can be used to check whether versions are correct:
+- `(treesit-library-abi-version)` gives the maximum ABI supported by the library
+  (`(treesit-library-abi-version t)` the minimum)
+- `(treesit-language-abi-version 'fortran)` gives the ABI of the installed grammar; it must be within that range
+- `ldd bin_path_to_emacs/emacs | grep libtree-sitter` shows the linked library
+  (e.g. `libtree-sitter.so.0.20` for Emacs 29.x from distribution packages)
 
-(`M-:` = `eval-expression`)
-
-- with `M-:` `(treesit-library-abi-version)` should be `15`
-- with `M-:` `(treesit-language-abi-version 'fortran)` should be `15`
-- emacs 30.x: `ldd bin_path_to_emacs/emacs | grep libtree-sitter` should show `libtree-sitter.so.0.25` or  `libtree-sitter.so.0.24`
-
-The parser generator step `tree-sitter generate` done with Tree-Sitter `0.26` seems to be
-compatible with Emacs 30.x, but the library and ABI versions listed above must match.
-This generator step of creating the parser source files is not necessary for emacs 30+ in general, as the
-parser source files are already provided in the grammar repositories.
-
-* `emacs 31.x`:
-This recently published version has not yet been tested. It is supposed to support tree-sitter `0.26`.
+**NOTE** (Emacs 29.x): there are a number of workarounds for bugs in the tree-sitter core library 0.20.x.
+These might reduce performance in some cases. Please open an issue if anything fails or performance is bad.
 
 
 ### Tree-sitter based mode

@@ -14,6 +14,11 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Function `f90-ts-install-grammar` added to provide a pinned grammar
+  tested against this version.
+- Mode adjusted to finally merged grammar variant of the string_literal
+  patch set.  Update grammar to avoid broken setup!
+- Mode adjusted to grammar changes concerning "block_label_start_expression".
 - Support for abbreviations through abbrev-mode and transient menu added.
   New abbrevs can be added via defcustom `f90-ts-extra-abbrevs`.
 - Alignment rules for case statements of select case blocks added.
@@ -24,7 +29,7 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 - Extend/reduce variants for mark region operations based on siblings
   (first, last, previous, next) added.
 - Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel with a
-  table of content of a f90 buffer, see `MANUAL.md' for details.  This
+  table of content of a f90 buffer, see `MANUAL.md` for details.  This
   optional package requires its own use-package statement.
 - Alignment rules for improved indentation of variable declarations with
   initialisation added.
@@ -37,7 +42,7 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 - Support for new grammar version with a different tree structure in some
   type related statements (allocate, select type) added.  Both new and old
   grammar CST variants are supported.
-- Prefix of ERT test names shortened `f90-ts-mode-test--' (no distinction
+- Prefix of ERT test names shortened `f90-ts-mode-test--` (no distinction
   between std and extra anymore).
 - Transient menu restructured and decomposed.
 - Support for hideshow and outline added.
@@ -134,14 +139,21 @@ For the full keybinding reference see the
 This mode requires **Emacs 29+** and a compatible Tree-sitter Fortran grammar and compatible
 shared core libraries.
 
-The mode is tested with:
-* Emacs 29.1 + tree-sitter 0.20.8 (ABI version 14)
-* Emacs 29.3 + tree-sitter 0.20.8 (ABI version 14)
-* Emacs 30.1 + tree-sitter 0.24.7 (ABI version 14)
-* Emacs 30.1 + tree-sitter 0.25.10 (ABI version 15)
-* Emacs 30.2 + tree-sitter 0.24.7 (ABI version 14)
-* Emacs 30.2 + tree-sitter 0.25.10 (ABI version 15)
-* Emacs 31.1 + tree-sitter 0.26.11 (ABI version 15)
+The mode is tested in CI (Ubuntu 24.04) with the following combinations, each against the `master`
+branch and the compatibility tag of the grammar fork (see below):
+
+| Emacs | tree-sitter library | grammar ABI |
+|-------|---------------------|-------------|
+| 29.1  | 0.20.8              | 14          |
+| 29.3  | 0.20.8 (apt)        | 14          |
+| 30.1  | 0.24.7              | 14          |
+| 30.1  | 0.25.10             | 15          |
+| 30.2  | 0.24.7              | 14          |
+| 30.2  | 0.25.10             | 15          |
+| 31.1  | 0.26.11             | 15          |
+
+The grammar ABI must lie within the range supported by the tree-sitter library linked into Emacs.
+But expect possible minor glitches with non-tested versions (like in between tree-sitter libraries).
 
 Detailed technical requirements and troubleshooting can be found
 in [MANUAL.md](MANUAL.md#installation).
@@ -155,23 +167,24 @@ Installation steps are:
 1. Install a compatible Tree-sitter Fortran grammar.
 
 The mode relies on the `tree-sitter-fortran` grammar.
-Register the grammar repository in Emacs:
+
+There is pinned version in "https://github.com/mscfd/tree-sitter-fortran" tagged with "emacs-f90-ts-mode-v0.7.x".
+It can be installed by executing `M-x f90-ts-install-grammar`.
+
+If more control is desired, register the grammar repository in Emacs:
 
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
               '((fortran "https://github.com/stadelmanma/tree-sitter-fortran"))))
 ```
-For improved string literal parsing, use:
+Grammar versions tested with f90-ts-mode are tagged. Use matching version (like emacs-f90-ts-mode-0.7.x for 0.7.x
+versions for the mode) if problems occur:
 ```elisp
 (setq treesit-language-source-alist
       (append treesit-language-source-alist
-              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "string_literal_emacs"))))
+              '((fortran "https://github.com/mscfd/tree-sitter-fortran" "emacs-f90-ts-mode-v0.7.x"))))
 ```
-This feature branch has not yet been merged. The mode will use the additional parser data
-to improve syntax highlighting, indentation and break/join/fill operations. It also parses
-valid syntax not handled by the official grammar.
-
 
 Then compile and install it once with:
 

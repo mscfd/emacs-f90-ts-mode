@@ -6,7 +6,7 @@
 ;; Maintainer: Martin Stein <mscfd@gmx.net>
 ;; URL: https://github.com/mscfd/emacs-f90-ts-mode
 ;; Keywords: languages, treesitter, fortran
-;; Version: 0.6.1-snapshot
+;; Version: 0.7.0-snapshot
 ;; Package-Requires: ((emacs "29.1"))
 
 ;; This file is NOT part of GNU Emacs.
@@ -33,6 +33,12 @@
 ;;
 ;; Changelog (recent):
 ;; [11-2026]
+;;   - Function `f90-ts-install-grammar' added to provide a pinned grammar
+;;     tested against this version.
+;;   - Mode adjusted to finally merged grammar variant of the string_literal
+;;     patch set.  Update grammar to avoid broken setup!
+;;   - Mode adjusted to grammar changes concerning
+;;     \"block_label_start_expression\".
 ;;   - Support for abbreviations through abbrev-mode and transient menu added.
 ;;     New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
 ;;   - Alignment rules for case statements of select case blocks added.
@@ -106,8 +112,10 @@
 ;;   - Coarray keywords and statements
 ;;   - Imenu and a Fortran menu in the menu bar
 ;;   - Navigation (defun, things, Xref)
-;;   - TOC side panel to show interactive table of content for a f90-ts buffer (optional package)
-;;   - Hideshow and outline support (support for external treesit-fold is pending)
+;;   - TOC side panel to show interactive table of content for a f90-ts buffer
+;;    (optional package)
+;;   - Hideshow and outline support (support for external treesit-fold is
+;;     pending)
 ;;
 ;; Features can be found by the fortran menu or a transient popup bound
 ;; to the key C-c C-f.
@@ -182,6 +190,11 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog (recent):
 
 [11-2026]
+- Function `f90-ts-install-grammar' added to provide a pinned grammar
+  tested against this version.
+- Mode adjusted to finally merged grammar variant of the string_literal
+  patch set.  Update grammar to avoid broken setup!
+- Mode adjusted to grammar changes concerning \"block_label_start_expression\".
 - Support for abbreviations through abbrev-mode and transient menu added.
   New abbrevs can be added via defcustom `f90-ts-extra-abbrevs'.
 - Alignment rules for case statements of select case blocks added.
@@ -949,6 +962,38 @@ package `markdown-mode' are available, then use these."
     ["About f90-ts-mode" f90-ts-mode-about t]
     ["README (GitHub)"   f90-ts--browse-readme t]
     ["MANUAL (GitHub)"   f90-ts--browse-manual t]))
+
+
+;;;-----------------------------------------------------------------------------
+
+(defconst f90-ts-grammar-source
+  '(fortran
+    "https://github.com/mscfd/tree-sitter-fortran"
+    "emacs-f90-ts-mode-v0.7.x")
+  "Tree-sitter source recipe of the grammar compatible with this version.
+Format is that of an element of `treesit-language-source-alist'.
+The revision must be a tag or branch name (Emacs 29 clones with
+\"--depth 1 -b REV\", which does not accept commit hashes).")
+
+;;;###autoload
+(defun f90-ts-install-grammar ()
+  "Install the Fortran tree-sitter grammar matching `f90-ts-mode'.
+The grammar is fetched and compiled from `f90-ts-grammar-source',
+independent of any user entry for `fortran' in
+`treesit-language-source-alist'.  Requires git, a C compiler and make.
+Use the default location (`user-emacs-directory'/tree-sitter).
+
+A grammar already loaded in the running session is not replaced;
+restart Emacs after installing."
+  (interactive (list (when current-prefix-arg
+                       (read-directory-name "Install grammar to: "))))
+  (when (or (not (treesit-language-available-p 'fortran))
+            (not (called-interactively-p 'any))
+            (y-or-n-p "Fortran grammar already available; reinstall pinned version? "))
+    (let ((treesit-language-source-alist (list f90-ts-grammar-source)))
+      (treesit-install-language-grammar 'fortran))
+    (message "f90-ts: installed Fortran grammar %s; restart Emacs to load it"
+             (nth 2 f90-ts-grammar-source))))
 
 
 ;;;-----------------------------------------------------------------------------

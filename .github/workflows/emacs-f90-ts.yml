@@ -353,72 +353,74 @@ jobs:
           make test-byte-compile
 
       # -------------------------
-      # Test both grammar versions
+      # Test several grammar revisions
       # -------------------------
+      #
+      # GRAMMAR_REFS: one ref per line (branch, tag or full commit SHA of
+      # mscfd/tree-sitter-fortran). Text after '#' is ignored.
+      #
+      #   master                      moving target, tests "latest"
+      #   emacs-f90-ts-mode-v0.y.x    compatibility tag of the CURRENT f90-ts
+      #                               release series 0.y.*; adjust y when a
+      #                               grammar change breaks compatibility
+      #   <sha>                       temporary checkpoint of an older grammar,
+      #                               to check backwards compatibility; remove
+      #                               after a few months
+      #
+      # NOTE: "git clone --branch <sha>" does NOT work (only branch and tag
+      # names are accepted), hence init + fetch, which accepts all three.
+      # A failure in one revision does not stop the others from running.
+      #
       - name: Test grammar versions
+        env:
+          GRAMMAR_REFS: |
+            emacs-f90-ts-mode-v0.7.x
+            7ff6e504bed78ca71828c8a086bc12b3603bd476   # older version, temporary checkpoint for backwards compatibility
         run: |
-          set -e
+          failed=""
+          refs=$(printf '%s\n' "$GRAMMAR_REFS" | sed 's/#.*//' | awk 'NF { print $1 }')
 
-          # Ensure target directory exists for tree-sitter libraries
-          mkdir -p ~/.emacs.d/tree-sitter
-
-          for branch in master string_literal_emacs; do
+          for ref in $refs; do
             echo
             echo "========================================"
-            echo "Testing grammar branch: $branch"
+            echo "Testing grammar ref: $ref"
             echo "========================================"
 
-            rm -rf tree-sitter-fortran
+            if ! (
+              set -e
+              mkdir -p ~/.emacs.d/tree-sitter
+              rm -rf tree-sitter-fortran
+              git init -q tree-sitter-fortran
+              cd tree-sitter-fortran
+              git remote add origin https://github.com/mscfd/tree-sitter-fortran.git
+              git fetch --depth 1 origin "$ref"
+              git checkout -q FETCH_HEAD
+              echo "Grammar ref:    $ref"
+              echo "Grammar commit: $(git rev-parse HEAD)"
 
-            git clone \
-              --depth 1 \
-              --single-branch \
-              --branch "$branch" \
-              https://github.com/mscfd/tree-sitter-fortran.git
+              # Regenerate the parser with the CLI selected by the matrix,
+              # so that the grammar ABI matches the Emacs under test.
+              tree-sitter generate
+              grep -q "#define LANGUAGE_VERSION ${{ matrix.tree-sitter-abi }}" src/parser.c \
+                || { echo "Error: generated grammar has unexpected ABI"; exit 1; }
 
-            cd tree-sitter-fortran
-
-            echo "Grammar branch: $branch"
-            echo "Grammar commit: $(git rev-parse HEAD)"
-
-            # Generate parser source files.
-            #
-            # The CLI version is selected by the matrix, so this
-            # produces the ABI appropriate for the Emacs under test.
-            tree-sitter generate
-
-            # Verify the generated grammar ABI explicitly.
-            echo "Grammar ABI:"
-            grep LANGUAGE_VERSION src/parser.c
-
-            if ! grep -q "#define LANGUAGE_VERSION ${{ matrix.tree-sitter-abi }}" src/parser.c; then
-              echo "Error: generated grammar has unexpected ABI"
-              exit 1
-            fi
-
-            # Compile directly to Emacs tree-sitter directory.
-            #tree-sitter build \
-            #  --output ~/.emacs.d/tree-sitter/libtree-sitter-fortran.so
-
-            OUT_SO="$HOME/.emacs.d/tree-sitter/libtree-sitter-fortran.so"
-
-            # Check if 'tree-sitter build' is supported by the installed CLI
-            if tree-sitter build --help >/dev/null 2>&1; then
-              echo "Using 'tree-sitter build'..."
-              tree-sitter build --output "$OUT_SO"
-            else
-              echo "Legacy CLI detected; falling back to direct gcc compilation..."
-              if [ -f src/scanner.c ]; then
+              OUT_SO="$HOME/.emacs.d/tree-sitter/libtree-sitter-fortran.so"
+              if tree-sitter build --help >/dev/null 2>&1; then
+                tree-sitter build --output "$OUT_SO"
+              elif [ -f src/scanner.c ]; then
                 gcc -O2 -shared -fPIC -I src src/parser.c src/scanner.c -o "$OUT_SO"
               else
                 gcc -O2 -shared -fPIC -I src src/parser.c -o "$OUT_SO"
               fi
+
+              cd ..
+              make test-ert
+            ); then
+              failed="$failed $ref"
             fi
-
-            cd ..
-
-            echo
-            echo "Running ERT tests for $branch"
-
-            make test-ert
           done
+
+          if [ -n "$failed" ]; then
+            echo "FAILED grammar refs:$failed"
+            exit 1
+          fi
