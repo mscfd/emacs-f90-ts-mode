@@ -33,6 +33,7 @@
 ;;
 ;; Changelog (recent):
 ;; [11-2026]
+;;   - Header in TOC buffer added which shows the name of the associated buffer.
 ;;   - Abbrev expansion at start of `f90-ts-indent-and-complete-line' added.
 ;;     In particular, TAB-based indentation and completion functions also check
 ;;     for abbrev expansion.
@@ -196,6 +197,7 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog (recent):
 
 [11-2026]
+- Header in TOC buffer added which shows the name of the associated buffer.
 - Abbrev expansion at start of `f90-ts-indent-and-complete-line' added.
   In particular, TAB-based indentation and completion functions also check
   for abbrev expansion.

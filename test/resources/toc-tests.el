@@ -170,9 +170,18 @@ default display options, and clean up afterwards."
 
 
 (defun f90-ts-mode-test--toc-lines ()
-  "Return the lines of the toc buffer as plain strings."
+  "Return the lines of the toc buffer below the header as plain strings."
   (with-current-buffer f90-ts--toc-buffer-name
-    (split-string (buffer-substring-no-properties (point-min) (point-max))
+    (split-string (buffer-substring-no-properties
+                   (f90-ts--toc-buffer-body-start) (point-max))
+                  "\n" t)))
+
+
+(defun f90-ts-mode-test--toc-header-lines ()
+  "Return the header lines of the toc buffer as plain strings."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (split-string (buffer-substring-no-properties
+                   (point-min) (f90-ts--toc-buffer-body-start))
                   "\n" t)))
 
 
@@ -197,9 +206,9 @@ default display options, and clean up afterwards."
 
 
 (defun f90-ts-mode-test--toc-goto-line (n)
-  "Move point in the toc buffer to line N (1-based)."
+  "Move point in the toc buffer to line N (1-based) below the header."
   (with-current-buffer f90-ts--toc-buffer-name
-    (goto-char (point-min))
+    (goto-char (f90-ts--toc-buffer-body-start))
     (forward-line (1- n))))
 
 
@@ -246,7 +255,7 @@ default display options, and clean up afterwards."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
     (with-current-buffer f90-ts--toc-buffer-name
-      (goto-char (point-min))
+      (goto-char (f90-ts--toc-buffer-body-start))
       (forward-line 4)
       (let ((pos (line-beginning-position)))
         (should (markerp (get-text-property pos 'f90-ts-toc-marker)))
@@ -254,6 +263,230 @@ default display options, and clean up afterwards."
         (should (eq (get-text-property pos 'mouse-face) 'highlight))
         (should (equal (get-text-property pos 'help-echo)
                        (f90-ts--toc-entry-label 'subroutine "s")))))))
+
+
+;;;-----------------------------------------------------------------------------
+;; header
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-lines ()
+  "The first two lines are the buffer name and a separator of the same width."
+  (f90-ts-mode-test--toc-with-sources ((src "my_code.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (should (equal (f90-ts-mode-test--toc-header-lines)
+                   '("my_code.f90" "===========")))
+    ;; the entries follow directly, the header does not change them
+    (should (equal (car (f90-ts-mode-test--toc-lines)) "mod: m"))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (should (= (f90-ts--toc-buffer-body-start)
+                 (save-excursion (goto-char (point-min))
+                                 (forward-line 2)
+                                 (point)))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-separator-width ()
+  "The separator is as wide as the name, whatever its length."
+  (f90-ts-mode-test--toc-with-sources ((src "a_longer_name.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (let ((header (f90-ts-mode-test--toc-header-lines)))
+      (should (equal (car header) "a_longer_name.f90"))
+      (should (equal (cadr header) (make-string (length "a_longer_name.f90") ?=))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-properties ()
+  "Header lines are marked, have faces and a tooltip, but no marker or kind."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (cl-loop
+       for pos in (list (point-min)
+                        (save-excursion (goto-char (point-min))
+                                        (forward-line 1)
+                                        (point)))
+       do (progn
+            (should (get-text-property pos 'f90-ts-toc-header))
+            (should-not (get-text-property pos 'f90-ts-toc-marker))
+            (should-not (get-text-property pos 'f90-ts-toc-kind))
+            (should-not (get-text-property pos 'mouse-face))
+            (should (eq (get-text-property pos 'keymap) f90-ts--toc-header-map))))
+
+      (should (eq (get-text-property (point-min) 'face) 'f90-ts-toc-header-face))
+      (should (eq (get-text-property
+                   (save-excursion (goto-char (point-min))
+                                   (forward-line 1)
+                                   (point))
+                   'face)
+                  'f90-ts-toc-separator-face))
+      ;; no file: the tooltip is the buffer name
+      (should (equal (get-text-property (point-min) 'help-echo) "a.f90"))
+      ;; the first entry is not part of the header
+      (should-not (get-text-property (f90-ts--toc-buffer-body-start)
+                                     'f90-ts-toc-header)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-tooltip-file ()
+  "For a buffer visiting a file the tooltip is the file name."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src
+      (setq buffer-file-name "/tmp/some/dir/a.f90")
+      (f90-ts-toc-buffer-open))
+    (unwind-protect
+        (with-current-buffer f90-ts--toc-buffer-name
+          (should (equal (get-text-property (point-min) 'help-echo)
+                         "/tmp/some/dir/a.f90")))
+      ;; do not leave a file name on a buffer which is about to be killed
+      (with-current-buffer src (setq buffer-file-name nil)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-mouse-ignored ()
+  "Mouse clicks on the header do nothing."
+  (cl-loop
+   for key in '([down-mouse-1] [mouse-1] [double-mouse-1] [mouse-2] [mouse-3])
+   do (should (eq (lookup-key f90-ts--toc-header-map key) #'ignore))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-not-selectable ()
+  "Point never stays in the header, so no entry command works on it."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (select-window (get-buffer-window f90-ts--toc-buffer-name))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (should (memq #'f90-ts--toc-buffer-keep-off-header post-command-hook))
+      ;; the hook runs before walking, so walking never sees the header
+      (should (< (cl-position #'f90-ts--toc-buffer-keep-off-header
+                              post-command-hook)
+                 (cl-position #'f90-ts--toc-buffer-walk post-command-hook)))
+      (let ((body (f90-ts--toc-buffer-body-start)))
+        ;; first line of the header, second line, end of the separator
+        (cl-loop
+         for pos in (list (point-min)
+                          (1+ (point-min))
+                          (1- body))
+         do (progn
+              (goto-char pos)
+              (f90-ts--toc-buffer-keep-off-header)
+              (should (= (point) body))))
+
+        ;; positions below the header stay
+        (goto-char (1+ body))
+        (f90-ts--toc-buffer-keep-off-header)
+        (should (= (point) (1+ body)))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-motion-commands ()
+  "Check that point does not move into the header.
+Moving up from the first entry or going to the buffer start should leave point
+below the header."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (select-window (get-buffer-window f90-ts--toc-buffer-name))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (let ((body (f90-ts--toc-buffer-body-start)))
+        ;; the motion, followed by the hook as after a command
+        (goto-char body)
+        (forward-line -1)              ; `previous-line' from the first entry
+        (should (< (point) body))
+        (f90-ts--toc-buffer-keep-off-header)
+        (should (= (point) body))
+        (goto-char (point-min))        ; `beginning-of-buffer'
+        (f90-ts--toc-buffer-keep-off-header)
+        (should (= (point) body))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-is-no-entry ()
+  "Entry commands on a header line signal a user error, jump does nothing."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (select-window (get-buffer-window f90-ts--toc-buffer-name))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (goto-char (point-min))
+      (should-not (f90-ts--toc-buffer-marker-at-point))
+      (should-error (f90-ts-toc-buffer-narrow-node) :type 'user-error)
+      (should-error (f90-ts-toc-buffer-mark-node) :type 'user-error)
+      (should-error (f90-ts-toc-buffer-comment-node) :type 'user-error)
+      (let ((point-before (with-current-buffer src (point))))
+        (f90-ts-toc-buffer-jump)
+        (f90-ts-toc-buffer-preview)
+        (should (eq (window-buffer (selected-window))
+                    (get-buffer f90-ts--toc-buffer-name)))
+        (should (= point-before (with-current-buffer src (point))))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-switches-with-source ()
+  "The header shows the name of the buffer the panel belongs to."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90") (src2 "bb.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (should (equal (f90-ts-mode-test--toc-header-lines) '("a.f90" "=====")))
+    (switch-to-buffer src2)
+    (f90-ts--toc-tick)
+    (should (equal (f90-ts-mode-test--toc-header-lines) '("bb.f90" "======")))
+    ;; and back
+    (switch-to-buffer src)
+    (f90-ts--toc-tick)
+    (should (equal (f90-ts-mode-test--toc-header-lines) '("a.f90" "=====")))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-follows-rename ()
+  "Renaming the source buffer updates the header at the next tick."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (with-current-buffer src (rename-buffer "renamed.f90"))
+    (f90-ts--toc-tick)
+    (should (equal (f90-ts-mode-test--toc-header-lines)
+                   '("renamed.f90" "===========")))
+    ;; nothing is rebuilt as long as the name stays
+    (let ((n f90-ts-mode-test--toc-build-count))
+      (f90-ts--toc-tick)
+      (should (= n f90-ts-mode-test--toc-build-count)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-survives-refresh ()
+  "Refresh and display toggles keep exactly one header."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (f90-ts-toc-buffer-refresh)
+      (f90-ts-toc-buffer-toggle-variables)
+      (f90-ts-toc-buffer-toggle-variables))
+    (should (equal (f90-ts-mode-test--toc-header-lines) '("a.f90" "=====")))
+    (should (= 7 (length (f90-ts-mode-test--toc-lines))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-refresh-keeps-point ()
+  "Rendering again keeps point on its entry, never in the header."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (select-window (get-buffer-window f90-ts--toc-buffer-name))
+    (f90-ts-mode-test--toc-goto-line 5)
+    (with-current-buffer f90-ts--toc-buffer-name
+      (f90-ts-toc-buffer-refresh))
+    (should (equal (f90-ts-mode-test--toc-current-line) "subr: s"))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (should (>= (point) (f90-ts--toc-buffer-body-start))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-shortened ()
+  "A long buffer name in the header is shortened as the entries are."
+  (f90-ts-mode-test--toc-with-sources ((src "a_rather_long_buffer_name_of_a_source.f90"))
+    (let ((f90-ts-toc-buffer-width 24))
+      (with-current-buffer src (f90-ts-toc-buffer-open)))
+    ;; truncate: the name stays whole, the window cuts it
+    (should (equal (car (f90-ts-mode-test--toc-header-lines))
+                   "a_rather_long_buffer_name_of_a_source.f90"))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (f90-ts-toc-buffer-set-shortening 'left))
+    (let ((header (f90-ts-mode-test--toc-header-lines))
+          (width  (f90-ts-mode-test--toc-panel-width)))
+      (should (<= (string-width (car header)) width))
+      (should (string-prefix-p "…" (car header)))
+      (should (string-suffix-p "source.f90" (car header)))
+      (should (= (string-width (cadr header)) (string-width (car header)))))
+    (with-current-buffer f90-ts--toc-buffer-name
+      (f90-ts-toc-buffer-set-shortening 'right))
+    (let ((header (f90-ts-mode-test--toc-header-lines)))
+      (should (<= (string-width (car header)) (f90-ts-mode-test--toc-panel-width)))
+      (should (string-suffix-p "…" (car header)))
+      (should (string-prefix-p "a_rather" (car header)))
+      (should (= (string-width (cadr header)) (string-width (car header)))))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -366,7 +599,7 @@ inside a keyword."
     (with-current-buffer src (f90-ts-toc-buffer-open))
     (should (equal (nth 3 (f90-ts-mode-test--toc-lines)) "  ---contains---"))
     (with-current-buffer f90-ts--toc-buffer-name
-      (goto-char (point-min))
+      (goto-char (f90-ts--toc-buffer-body-start))
       (forward-line 3)
       (let ((pos (line-beginning-position)))
         (should (equal (get-text-property pos 'f90-ts-toc-kind) "contains"))
@@ -1481,12 +1714,10 @@ See `f90-ts-mode-test--toc-text-tree'.")
 
 
 (defun f90-ts-mode-test--toc-line-number (text)
-  "Return the number of the toc line showing TEXT after trimming."
-  (with-current-buffer f90-ts--toc-buffer-name
-    (1+ (cl-position text (split-string (buffer-substring-no-properties
-                                         (point-min) (point-max))
-                                        "\n" t)
-                     :test (lambda (a b) (equal a (string-trim b)))))))
+  "Return the number of the toc line showing TEXT after trimming.
+Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
+  (1+ (cl-position text (f90-ts-mode-test--toc-lines)
+                   :test (lambda (a b) (equal a (string-trim b))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-narrow-node ()
@@ -1546,6 +1777,20 @@ See `f90-ts-mode-test--toc-text-tree'.")
     (f90-ts-mode-test--toc-select-entry "subr: t")
     (f90-ts-toc-buffer-narrow-node)
     (should-not (f90-ts-mode-test--toc-dimmed-lines))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-not-dimmed ()
+  "The header stays undimmed while the source is narrowed."
+  (f90-ts-mode-test--toc-with-real src f90-ts-mode-test--toc-nested-text
+    (f90-ts-mode-test--toc-select-entry "subr: s")
+    (f90-ts-toc-buffer-narrow-node)
+    (should (f90-ts-mode-test--toc-dimmed-lines))
+    ;; the header is "real.f90" and its separator
+    (should-not (member "real.f90" (f90-ts-mode-test--toc-dimmed-lines)))
+    (should-not (member "========" (f90-ts-mode-test--toc-dimmed-lines)))
+    ;; point stays on a confined line, not in the header
+    (with-current-buffer f90-ts--toc-buffer-name
+      (should (>= (point) (car f90-ts--toc-buffer-confine))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--narrow-variable-parent ()
@@ -1861,6 +2106,127 @@ See `f90-ts-mode-test--toc-text-tree'.")
     (should (equal (f90-ts-mode-test--toc-current-line) "subr: s"))))
 
 
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--quick-switch-to-panel ()
+  "Buffer A to buffer B to the panel quickly: the panel shows B afterwards.
+The timer only runs when Emacs is idle, so it may first see the panel selected."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90") (src2 "b.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (switch-to-buffer src2)
+    (with-current-buffer src2
+      (goto-char (f90-ts-mode-test--toc-pos "subroutine s")))
+    ;; no tick in between: the user is faster than the idle timer
+    (select-window (get-buffer-window f90-ts--toc-buffer-name))
+    (f90-ts--toc-tick)
+    (should (eq (buffer-local-value 'f90-ts--toc-buffer-source
+                                    (get-buffer f90-ts--toc-buffer-name))
+                src2))
+    (should (equal (f90-ts-mode-test--toc-header-lines) '("b.f90" "=====")))
+    (should (equal (f90-ts-mode-test--toc-current-line) "subr: s"))
+    ;; the panel keeps the focus
+    (should (eq (window-buffer (selected-window))
+                (get-buffer f90-ts--toc-buffer-name)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--panel-follows-last-source-window ()
+  "With the panel selected, the f90-ts window selected before it is followed."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90") (src2 "b.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (let* ((left  (selected-window))
+           (mid   (split-window left nil 'right))
+           (panel (get-buffer-window f90-ts--toc-buffer-name 'visible)))
+      (set-window-buffer mid src2)
+      ;; A, then B, then the panel
+      (select-window left)
+      (select-window mid)
+      (select-window panel)
+      (f90-ts--toc-tick)
+      (should (eq (buffer-local-value 'f90-ts--toc-buffer-source
+                                      (get-buffer f90-ts--toc-buffer-name))
+                  src2))
+      ;; B, then A, then the panel
+      (select-window mid)
+      (select-window left)
+      (select-window panel)
+      (f90-ts--toc-tick)
+      (should (eq (buffer-local-value 'f90-ts--toc-buffer-source
+                                      (get-buffer f90-ts--toc-buffer-name))
+                  src)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--panel-follow-uses-window-point ()
+  "A source window which is not selected is followed at the point of its window."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90") (src2 "b.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (let* ((left  (selected-window))
+           (mid   (split-window left nil 'right))
+           (panel (get-buffer-window f90-ts--toc-buffer-name 'visible)))
+      (set-window-buffer mid src2)
+      (set-window-point mid (with-current-buffer src2
+                              (f90-ts-mode-test--toc-pos "function f")))
+      (select-window left)
+      (select-window mid)
+      (select-window panel)
+      (f90-ts--toc-tick)
+      (should (equal (f90-ts-mode-test--toc-current-line) "fun: f")))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--panel-selected-no-needless-work ()
+  "With the panel selected and its source followed already, nothing is rebuilt.
+Point in the panel is not moved either, it belongs to the user then."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (f90-ts--toc-tick)
+    (select-window (get-buffer-window f90-ts--toc-buffer-name))
+    (f90-ts-mode-test--toc-goto-line 6)
+    (let ((n f90-ts-mode-test--toc-build-count))
+      (f90-ts--toc-tick)
+      (f90-ts--toc-tick)
+      (should (= n f90-ts-mode-test--toc-build-count))
+      (should (equal (f90-ts-mode-test--toc-current-line) "var: x")))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--panel-selected-without-source-window ()
+  "If no window shows a f90-ts buffer, the selected panel is left as it is."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (let ((other (generate-new-buffer "other"))
+          (panel (get-buffer-window f90-ts--toc-buffer-name 'visible)))
+      (unwind-protect
+          (progn
+            (set-window-buffer (get-buffer-window src) other)
+            (select-window panel)
+            (should-not (f90-ts--toc-followed-window
+                         (get-buffer f90-ts--toc-buffer-name)))
+            (f90-ts--toc-tick)
+            (should (eq (buffer-local-value 'f90-ts--toc-buffer-source
+                                            (get-buffer f90-ts--toc-buffer-name))
+                        src)))
+        (set-window-buffer (get-buffer-window other) src)
+        (kill-buffer other)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--followed-window ()
+  "The followed window: the selected source window, or the last used one."
+  (f90-ts-mode-test--toc-with-sources ((src "a.f90") (src2 "b.f90"))
+    (with-current-buffer src (f90-ts-toc-buffer-open))
+    (let* ((toc-buf (get-buffer f90-ts--toc-buffer-name))
+           (left    (selected-window))
+           (mid     (split-window left nil 'right))
+           (panel   (get-buffer-window toc-buf 'visible)))
+      (set-window-buffer mid src2)
+      ;; a source window selected: it is followed
+      (select-window left)
+      (should (eq (f90-ts--toc-followed-window toc-buf) left))
+      (select-window mid)
+      (should (eq (f90-ts--toc-followed-window toc-buf) mid))
+      ;; the panel selected: the source window used last
+      (select-window panel)
+      (should (eq (f90-ts--toc-followed-window toc-buf) mid))
+      (select-window left)
+      (select-window panel)
+      (should (eq (f90-ts--toc-followed-window toc-buf) left)))))
+
+
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--other-buffer-leaves-panel ()
   "Selecting an unrelated buffer neither rebuilds nor changes the panel."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
@@ -1893,7 +2259,10 @@ See `f90-ts-mode-test--toc-text-tree'.")
             (switch-to-buffer other)
             (kill-buffer src)
             (f90-ts--toc-tick)
-            (should (null (f90-ts-mode-test--toc-lines))))
+            (should (null (f90-ts-mode-test--toc-lines)))
+            ;; no header for a buffer which is gone either
+            (should (null (f90-ts-mode-test--toc-header-lines)))
+            (should (zerop (buffer-size (get-buffer f90-ts--toc-buffer-name)))))
         (kill-buffer other)))))
 
 
@@ -1945,12 +2314,12 @@ While hidden, a position on a variable maps to the enclosing entry."
 ;; Jump, preview, mouse
 
 (defun f90-ts-mode-test--toc-click-event (line)
-  "Return a fake click event on LINE (1-based) of the toc window."
+  "Return a fake click event on LINE (1-based, below the header) of the toc window."
   ;; the list has the shape of a `mouse-1' event: (POSN-WINDOW POS
   ;; (X . Y) TIMESTAMP ...); only window and buffer position are used
   (let* ((win (get-buffer-window f90-ts--toc-buffer-name 'visible))
          (pos (with-current-buffer f90-ts--toc-buffer-name
-                (goto-char (point-min))
+                (goto-char (f90-ts--toc-buffer-body-start))
                 (forward-line (1- line))
                 (point))))
     (list 'mouse-1
