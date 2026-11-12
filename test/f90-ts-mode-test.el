@@ -256,12 +256,12 @@ test values for specific tests."
         do (set var val))
        (unwind-protect
            (progn
-             (f90-ts-mode-test--font-lock-recompute-features))
-             (progn ,@body))
+             (f90-ts-mode-test--font-lock-recompute-features)
+             ,@body)
          (cl-loop
           for (var . val) in saved-locals
           do (set var val))
-         (f90-ts-mode-test--font-lock-recompute-features))))
+         (f90-ts-mode-test--font-lock-recompute-features)))))
 
 
 (defun f90-ts-mode-test--run-with-testing (file body-fn)
@@ -1219,7 +1219,9 @@ Point is placed after the first \"[...]\" replacement."
 ;; test cases in el resource files
 (f90-ts-mode-test--collection-register
  "f90-ts-mode-test"
- '("abbrev-table.el"))
+ '("abbrev-table.el"
+   "imenu-tests.el"
+   "toc-tests.el"))
 
 
 ;; register font lock tests

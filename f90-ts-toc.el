@@ -29,7 +29,12 @@
 ;;
 ;; The panel follows the selected window: a single idle timer switches the
 ;; panel to the current f90-ts buffer, refreshes it after edits, and moves
-;; point in the panel to the entry belonging to point in the source.
+;; point in the panel to the entry belonging to point in the source.  If the
+;; panel itself is selected, it follows the f90-ts window selected last, so
+;; that a quick switch from one source buffer to another and then to the panel
+;; does not leave the panel behind.
+;; The first two lines of the panel are a header: the name of the source buffer
+;; the panel belongs to, underlined by a line of "=".  Point never rests there.
 ;; Several keys in the panel are bound.  To find and discover them, ? can
 ;; be pressed to open a transient menu, where all key and there operations
 ;; are listed.  Each key works without pressing ? first
@@ -113,6 +118,13 @@ This is part of `f90-ts-mode'."
 (defface f90-ts-toc-separator-face
   '((t :inherit shadow))
   "Face for the `contains' separator in toc buffer."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-header-face
+  '((t :inherit font-lock-keyword-face :weight bold))
+  "Face for the name of the source buffer in the header of the toc buffer.
+The line below it uses `f90-ts-toc-separator-face'."
   :group 'f90-ts-toc)
 
 
@@ -652,6 +664,8 @@ children, so ENTRIES=nil but CHILDREN is non-empty."
 ;; The timer follows the selected window: whenever Emacs is idle and the
 ;; selected window shows an f90-ts buffer, the toc buffer is switched to that
 ;; buffer, refreshed if the buffer was modified and synced to point.
+;; If the toc buffer itself is selected, the f90-ts window selected last is
+;; followed instead, see `f90-ts--toc-followed-window'.
 ;; Polling is used to discover changes or point movement in the source buffer.
 ;; The timer is cancelled when the toc buffer is killed.
 
@@ -665,6 +679,11 @@ children, so ENTRIES=nil but CHILDREN is non-empty."
 
 (defvar-local f90-ts--toc-buffer-source-tick nil
   "`buffer-chars-modified-tick' of the source buffer at the last render.")
+
+
+(defvar-local f90-ts--toc-buffer-rendered-name nil
+  "Name of the source buffer shown in the header at the last render.
+This is used to notice that the source buffer was renamed.")
 
 
 (defvar-local f90-ts--toc-buffer-restriction nil
@@ -691,6 +710,18 @@ and `f90-ts--toc-stop'.")
 
 
 (defvar f90-ts-toc-mode-menu)
+
+
+(defvar-keymap f90-ts--toc-header-map
+  :doc "Keymap of the header lines of the toc buffer.
+Clicks there do nothing, so point stays where it is."
+  "<down-mouse-1>"   #'ignore
+  "<mouse-1>"        #'ignore
+  "<double-mouse-1>" #'ignore
+  "<triple-mouse-1>" #'ignore
+  "<drag-mouse-1>"   #'ignore
+  "<mouse-2>"        #'ignore
+  "<mouse-3>"        #'ignore)
 
 
 (defvar-keymap f90-ts-toc-mode-map
@@ -901,6 +932,51 @@ since the last render."
                                      toc-buf)))))
 
 
+(defun f90-ts--toc-buffer-body-start ()
+  "Return the start of the first line of the toc buffer below its header.
+Without header this is the start of the buffer, and if there is nothing below
+the header it is the end of the buffer.  The header lines carry the text
+property `f90-ts-toc-header'."
+  (or (text-property-not-all (point-min) (point-max) 'f90-ts-toc-header t)
+      (point-max)))
+
+
+(defun f90-ts--toc-buffer-render-header ()
+  "Insert the header for `f90-ts--toc-buffer-source' into the toc buffer.
+The header has two lines: the name of the source buffer, shortened as the
+names of the entries, see `f90-ts-toc-name-shortening', and a line of \"=\" of
+the same width.  The tooltip is the file name of the source buffer, if it
+visits a file.  The lines are not entries, so they have no marker.  Do nothing
+if there is no live source buffer.  See `f90-ts--toc-buffer-body-start'
+and `f90-ts--toc-buffer-keep-off-header'."
+  (when (buffer-live-p f90-ts--toc-buffer-source)
+    (let* ((src   f90-ts--toc-buffer-source)
+           (name  (buffer-name src))
+           (shown (if f90-ts--toc-render-width
+                      (f90-ts--toc-shorten-name name f90-ts--toc-render-width)
+                    name))
+           (props (list 'f90-ts-toc-header t
+                        'keymap           f90-ts--toc-header-map
+                        'help-echo        (or (buffer-file-name src) name))))
+      (setq f90-ts--toc-buffer-rendered-name name)
+      (insert
+       (apply #'propertize (concat shown "\n")
+              'face 'f90-ts-toc-header-face props)
+       (apply #'propertize (concat (make-string (string-width shown) ?=) "\n")
+              'face 'f90-ts-toc-separator-face props)))))
+
+
+(defun f90-ts--toc-buffer-keep-off-header ()
+  "Move point out of the header lines onto the first line below them.
+This makes the header non-selectable for motion commands such as
+`previous-line' or `beginning-of-buffer'.  Clicks on the header are ignored by
+`f90-ts--toc-header-map'.  This is a `post-command-hook' function of the toc
+buffer, it runs before `f90-ts--toc-buffer-walk'."
+  (let ((start (f90-ts--toc-buffer-body-start)))
+    (when (< (point) start)
+      (goto-char start))))
+
+
 (defun f90-ts--toc-buffer-render-nodes (nodes depth)
   "Insert NODES at DEPTH into the toc buffer and recurse into children.
 Variable entries are skipped unless `f90-ts-toc-show-variables' is non-nil,
@@ -946,10 +1022,13 @@ afterwards, so that re-rendering the same source does not scroll the panel."
          (f90-ts--toc-render-width (f90-ts--toc-buffer-text-width win)))
     (setq f90-ts--toc-buffer-rendered-width f90-ts--toc-render-width)
     (erase-buffer)
+    (f90-ts--toc-buffer-render-header)
     (f90-ts--toc-buffer-render-nodes tree-nodes 0)
     (goto-char (point-min))
     (when point-line
       (forward-line (1- point-line)))
+    ;; point is never in the header
+    (goto-char (max (point) (f90-ts--toc-buffer-body-start)))
     (when win
       (set-window-point win (point))
       (when start-line
@@ -972,23 +1051,23 @@ afterwards, so that re-rendering the same source does not scroll the panel."
 RESTRICTION is a pair of positions in the source buffer.  BEG is the start of
 the first such line, END the end of the last one.
 If there are no such lines, return nil."
-  (pcase-let ((`(,lo . ,hi) restriction))
+  (let ((lo (car restriction))
+        (hi (cdr restriction)))
     (save-excursion
       (goto-char (point-min))
       (cl-loop
-       for pos = (point) then (progn
-                                (forward-line 1)
-                                (point))
+       while (not (eobp))
+       for pos = (point)
        for marker = (get-text-property pos 'f90-ts-toc-marker)
-       for mpos   = (and marker (marker-position marker))
-       while (or (not (eobp))
-                 (= pos (point)))
+       for mpos = (and marker
+                       (marker-position marker))
        when (and mpos
                  (<= lo mpos hi))
        minimize pos into beg
        and maximize (line-end-position) into end
-       finally return (when beg
-                        (cons beg end))))))
+       do (forward-line 1)
+       finally return (and beg
+                           (cons beg end))))))
 
 
 (defun f90-ts--toc-buffer-clamp (pos)
@@ -1001,11 +1080,11 @@ If there are no such lines, return nil."
 
 (defun f90-ts--toc-buffer-update-dimming ()
   "Dim the lines of the current toc buffer outside `f90-ts--toc-buffer-confine'.
-Remove all dimming if there is no confinement."
+The header is not dimmed.  Remove all dimming if there is no confinement."
   (remove-overlays (point-min) (point-max) 'f90-ts-toc-dim t)
   (when f90-ts--toc-buffer-confine
     (cl-loop
-     for (beg . end) in (list (cons (point-min)
+     for (beg . end) in (list (cons (f90-ts--toc-buffer-body-start)
                                     (car f90-ts--toc-buffer-confine))
                               (cons (cdr f90-ts--toc-buffer-confine)
                                     (point-max)))
@@ -1026,10 +1105,11 @@ point out of the confined lines afterwards is walking, see
 `f90-ts--toc-buffer-walk'.  Nothing is confined if the source buffer is not
 narrowed, or if the narrowed region contains no entry."
   (let* ((restriction (f90-ts--toc-source-restriction f90-ts--toc-buffer-source))
-         (win         (get-buffer-window (current-buffer) 'visible)))
-    (setq f90-ts--toc-buffer-restriction restriction
-          f90-ts--toc-buffer-confine
-          (and restriction (f90-ts--toc-buffer-confine-bounds restriction)))
+         (win (get-buffer-window (current-buffer) 'visible)))
+    (setq f90-ts--toc-buffer-restriction restriction)
+    (setq f90-ts--toc-buffer-confine
+          (and restriction
+               (f90-ts--toc-buffer-confine-bounds restriction)))
     (f90-ts--toc-buffer-update-dimming)
     (when f90-ts--toc-buffer-confine
       (goto-char (f90-ts--toc-buffer-clamp (point)))
@@ -1046,6 +1126,7 @@ narrowed, or if the narrowed region contains no entry."
     (erase-buffer))
   (setq f90-ts--toc-buffer-source         nil
         f90-ts--toc-buffer-source-tick    nil
+        f90-ts--toc-buffer-rendered-name  nil
         f90-ts--toc-buffer-restriction    nil
         f90-ts--toc-buffer-confine        nil
         f90-ts--toc-buffer-last-sync-pos  nil)
@@ -1242,8 +1323,8 @@ The source window is the one selected last, see
       (narrow-to-region beg end)
       (goto-char beg)
       (recenter 0))
-    ;; A window which is not selected is not necessarily redisplayed
-    ;; after the restriction changed.
+    ;; a window which is not selected is not necessarily redisplayed
+    ;; after the restriction changed
     (force-window-update src)))
 
 
@@ -1411,7 +1492,7 @@ this entry."
          (bol (car bounds))
          (eol (cdr bounds)))
     (save-excursion
-      (goto-char (point-min))
+      (goto-char (f90-ts--toc-buffer-body-start))
       (or (cl-loop
            with found = nil
            with var-seen = nil
@@ -1434,8 +1515,9 @@ this entry."
            do (forward-line 1)
            finally return found)
           ;; point is before the first entry: use the first entry
-          (and (get-text-property (point-min) 'f90-ts-toc-marker)
-               (point-min))))))
+          (let ((start (f90-ts--toc-buffer-body-start)))
+            (and (get-text-property start 'f90-ts-toc-marker)
+                 start))))))
 
 
 (defun f90-ts--toc-buffer-sync-now (&optional pos)
@@ -1660,45 +1742,79 @@ It drives switching, refreshing and syncing of the toc buffer."
                              #'f90-ts--toc-tick)))
 
 
+(defun f90-ts--toc-followed-window (toc-buf)
+  "Return window showing the f90-ts buffer, which panel TOC-BUF should follow.
+That is the selected window if it shows a f90-ts buffer.  If the selected window
+is the panel itself, it is the f90-ts window which was selected last.  Without
+this, a quick switch from one source buffer to another and then to the panel
+leaves the panel with the first buffer, because the timer only ever saw the
+panel selected.  Return nil in all other cases, for example for the minibuffer
+or other modes, which leave the panel as it is."
+  (let* ((win (selected-window))
+         (buf (window-buffer win)))
+    (cond
+     ((eq buf toc-buf)
+      (car (sort (cl-remove-if-not
+                  (lambda (w)
+                    (with-current-buffer (window-buffer w)
+                      (derived-mode-p 'f90-ts-mode)))
+                  (window-list nil 'no-minibuf))
+                 (lambda (w1 w2)
+                   (> (window-use-time w1)
+                      (window-use-time w2))))))
+     ((with-current-buffer buf (derived-mode-p 'f90-ts-mode))
+      win))))
+
+
 (defun f90-ts--toc-update-visible (toc-buf)
-  "Switch, refresh and sync the visible TOC-BUF as needed."
-  (let ((buf (window-buffer (selected-window))))
-    ;; the source buffer was killed: do not keep dead entries around
-    (unless (buffer-live-p (buffer-local-value 'f90-ts--toc-buffer-source toc-buf))
-      (with-current-buffer toc-buf
-        (f90-ts--toc-buffer-clear)))
-    ;; the panel was resized: shortened names must fit again
-    (when-let* ((win (get-buffer-window toc-buf 'visible))
-                ((f90-ts--toc-width-stale-p toc-buf win)))
-      (with-current-buffer toc-buf
-        (f90-ts--toc-buffer-rerender)))
-    ;; Follow the selected window, but only if it shows a f90-ts buffer.
-    ;; Everything else (toc panel itself, minibuffer, helm, other modes)
-    ;; leaves the panel as it is.
-    (when (and (not (eq buf toc-buf))
-               (with-current-buffer buf (derived-mode-p 'f90-ts-mode)))
-      (let* ((pos   (with-current-buffer buf (point)))
-             (stale (or (not (eq buf (buffer-local-value
-                                      'f90-ts--toc-buffer-source toc-buf)))
-                        (not (eql (buffer-chars-modified-tick buf)
-                                  (buffer-local-value
-                                   'f90-ts--toc-buffer-source-tick toc-buf))))))
-        (when stale
-          (f90-ts--toc-buffer-update buf))
-        ;; the source was narrowed or widened (either from panel or externally)
-        (when (not (equal (f90-ts--toc-source-restriction buf)
-                          (buffer-local-value 'f90-ts--toc-buffer-restriction
-                                              toc-buf)))
-          (with-current-buffer toc-buf
-            (f90-ts--toc-buffer-apply-confine))
-          (setq stale t))
-        (when (and f90-ts-toc-buffer-auto-sync
-                   (or stale
-                       (not (eql pos (buffer-local-value
-                                      'f90-ts--toc-buffer-last-sync-pos toc-buf)))))
-          (f90-ts--toc-buffer-sync-now pos)
-          (with-current-buffer toc-buf
-            (setq f90-ts--toc-buffer-last-sync-pos pos)))))))
+  "Switch, refresh and sync the visible TOC-BUF as needed.
+The source buffer is the one of `f90-ts--toc-followed-window'.  Point in the
+panel is only synced if the panel is not selected, so that it does not move
+while the user works in it, unless the source buffer was switched or rebuilt."
+  ;; the source buffer was killed: do not keep dead entries around
+  (unless (buffer-live-p (buffer-local-value 'f90-ts--toc-buffer-source toc-buf))
+    (with-current-buffer toc-buf
+      (f90-ts--toc-buffer-clear)))
+  ;; the panel was resized: shortened names must fit again
+  (when-let* ((win (get-buffer-window toc-buf 'visible))
+              ((f90-ts--toc-width-stale-p toc-buf win)))
+    (with-current-buffer toc-buf
+      (f90-ts--toc-buffer-rerender)))
+  ;; follow a f90-ts window, see `f90-ts--toc-followed-window'
+  (when-let* ((src-win (f90-ts--toc-followed-window toc-buf)))
+    (let* ((buf      (window-buffer src-win))
+           (in-panel (eq (window-buffer (selected-window)) toc-buf))
+           ;; not the buffer point, which is the one of another window if
+           ;; the buffer is shown in several windows
+           (pos      (window-point src-win))
+           (stale    (or (not (eq buf (buffer-local-value
+                                       'f90-ts--toc-buffer-source toc-buf)))
+                         (not (eql (buffer-chars-modified-tick buf)
+                                   (buffer-local-value
+                                    'f90-ts--toc-buffer-source-tick toc-buf)))
+                         ;; renamed: the header shows the name
+                         (not (equal (buffer-name buf)
+                                     (buffer-local-value
+                                      'f90-ts--toc-buffer-rendered-name
+                                      toc-buf))))))
+      (when stale
+        (f90-ts--toc-buffer-update buf))
+      ;; the source was narrowed or widened (either from panel or externally)
+      (when (not (equal (f90-ts--toc-source-restriction buf)
+                        (buffer-local-value 'f90-ts--toc-buffer-restriction
+                                            toc-buf)))
+        (with-current-buffer toc-buf
+          (f90-ts--toc-buffer-apply-confine))
+        (setq stale t))
+      (when (and f90-ts-toc-buffer-auto-sync
+                 (or stale
+                     (and (not in-panel)
+                          (not (eql pos (buffer-local-value
+                                         'f90-ts--toc-buffer-last-sync-pos
+                                         toc-buf))))))
+        (f90-ts--toc-buffer-sync-now pos)
+        (with-current-buffer toc-buf
+          (setq f90-ts--toc-buffer-last-sync-pos pos))))))
 
 
 (defun f90-ts--toc-tick ()
@@ -1729,7 +1845,9 @@ up on its own.  The timer cancels itself once the toc buffer is gone."
   ;; no background activity without a toc buffer
   (add-hook 'kill-buffer-hook #'f90-ts--toc-stop nil t)
   ;; walking: moving point to a dimmed line narrows to its structure
-  (add-hook 'post-command-hook #'f90-ts--toc-buffer-walk nil t))
+  (add-hook 'post-command-hook #'f90-ts--toc-buffer-walk nil t)
+  ;; the header is not selectable; this must run before walking
+  (add-hook 'post-command-hook #'f90-ts--toc-buffer-keep-off-header -50 t))
 
 
 (defun f90-ts--toc-buffer-show (toc-buf)
