@@ -634,3 +634,183 @@ module poly
                [3,12])
 end module poly
 =-=-=
+
+Name: array bounds 1
+=-=
+subroutine sub_decl(a, b, w, t, n, m, k)
+integer, intent(in) :: n, m, k
+real, intent(inout) :: a(n, &
+m)
+real, intent(in)    :: b(1: &
+n, &
+1: & ! comment
+m)
+real, intent(inout) :: w(0: &
+n+1, 0:m+1)
+real, intent(inout) :: t(-n: &
+n)
+real, allocatable   :: s(:, &
+:), &
+v(: &
+)
+integer             :: i, j
+end subroutine sub_decl
+=-=
+subroutine sub_decl(a, b, w, t, n, m, k)
+     integer, intent(in) :: n, m, k
+     real, intent(inout) :: a(n, &
+                              m)
+     real, intent(in)    :: b(1: &
+                              n, &
+                              1: & ! comment
+                              m)
+     real, intent(inout) :: w(0: &
+                              n+1, 0:m+1)
+     real, intent(inout) :: t(-n: &
+                               n)
+     real, allocatable   :: s(:, &
+                              :), &
+                            v(: &
+                                )
+     integer             :: i, j
+end subroutine sub_decl
+=-=-=
+
+Name: array bounds 2
+=-=
+subroutine sub_alloc()
+! allocate: bound after the colon, comments between the dimensions
+allocate(s(0: &
+n+1, & ! comment
+! comment
+0: &
+m+1))
+allocate(v(-n: &
+n))
+end subroutine sub_alloc
+=-=
+subroutine sub_alloc()
+     ! allocate: bound after the colon, comments between the dimensions
+     allocate(s(0: &
+                n+1, & ! comment
+                       ! comment
+                0: &
+                m+1))
+     allocate(v(-n: &
+                 n))
+end subroutine sub_alloc
+=-=-=
+
+Name: array bounds 3
+=-=
+subroutine sub()
+! array sections in argument lists, break at the comma
+s(1:3, &
+2:4) = b(1:3, &
+2:4)
+end subroutine sub
+=-=
+subroutine sub()
+     ! array sections in argument lists, break at the comma
+     s(1:3, &
+       2:4) = b(1:3, &
+                2:4)
+end subroutine sub
+=-=-=
+
+Name: array bounds 4
+=-=
+subroutine sub()
+! break after the colon, upper bound is the first item on the line
+s(2: &
+n-1, 1: &
+m) = a(2: &
+n-1, 1: &
+m)
+end subroutine sub
+=-=
+subroutine sub()
+     ! break after the colon, upper bound is the first item on the line
+     s(2: &
+       n-1, 1: &
+            m) = a(2: &
+                   n-1, 1: &
+                        m)
+end subroutine sub
+=-=-=
+
+Name: array bounds 5
+=-=
+subroutine sub()
+! colon at the start of the line
+v(1 &
+: n) = a(1 &
+: n, 1)
+end subroutine sub
+=-=
+subroutine sub()
+     ! colon at the start of the line
+     v(1 &
+       : n) = a(1 &
+                : n, 1)
+end subroutine sub
+=-=-=
+
+Name: array bounds 6
+=-=
+subroutine sub()
+! lower bound missing, stride, unary minus
+v(: &
+n) = 0.0
+v(-n: &
+n: &
+2) = 1.0
+v( n: &
+1: &
+-1) = t(1:n)
+end subroutine sub
+=-=
+subroutine sub()
+     ! lower bound missing, stride, unary minus
+     v(: &
+       n) = 0.0
+     v(-n: &
+        n: &
+        2) = 1.0
+     v( n: &
+        1: &
+       -1) = t(1:n)
+end subroutine sub
+=-=-=
+
+Name: array bounds 7
+=-=
+subroutine sub()
+! parenthesized lower bound, expression as upper bound
+s((abs(k) + 1): &
+abs(k)+3, 1:m) = 0.0
+end subroutine sub
+=-=
+subroutine sub()
+     ! parenthesized lower bound, expression as upper bound
+     s((abs(k) + 1): &
+       abs(k)+3, 1:m) = 0.0
+end subroutine sub
+=-=-=
+
+Name: array bounds 8
+=-=
+subroutine sub()
+! upper bound is an expression and handled by expression context,
+! the extent_specifier context should not get into the way
+s(0: n + &
+1, 0) = 0.0
+end subroutine sub
+=-=
+subroutine sub()
+     ! upper bound is an expression and handled by expression context,
+     ! the extent_specifier context should not get into the way
+     s(0: n + &
+          1, 0) = 0.0
+end subroutine sub
+=-=-=
