@@ -870,6 +870,7 @@ If NODE is nil return nil."
             ((or "(" ")" "[" "]" "(/" "/)")
              'parenthesis)
             (","  'comma)
+            (":"  'colon)
             ("=>" 'associate)
             ("="  'assignment)
             ((or "\"" "'")
@@ -1037,7 +1038,7 @@ parenthesis node if present as cdr of CONTEXT."
   "Return all children of CONTEXT except for parenthesis.
 This is used for a context where all direct children are relevant,
 which are \"parenthesized_expression\", \"argument_list\",
-\"array_literal\", \"parameters\", and the parenthesis free item lists
+\"array_literal\", \"parameters\", \"size\", and the parenthesis free item lists
 \"output_item_list\" and \"input_item_list\" of print, write and read
 statements."
   (let ((list-context (car context)))
@@ -1046,6 +1047,7 @@ statements."
                                       "argument_list"
                                       "array_literal"
                                       "parameters"
+                                      "size"
                                       "output_item_list"
                                       "input_item_list"))
                nil "align-list-items-children: wrong context, got '%s'" list-context)
@@ -1163,6 +1165,23 @@ children are the \"=\" or \"=>\" symbol and the initialisation expression."
                "expected list context: init_declarator, got '%s'" list-context)
     (when-let* ((children (treesit-node-children list-context)))
       ;; drop the declared variable (the left field)
+      (seq-drop children 1))))
+
+
+;;++++++++++++++
+;; list context: extent_specifier
+
+(defun f90-ts--align-items-extent (context _loc)
+  "Determine relevant children of CONTEXT = \"extent_specifier\".
+An extent specifier is \"lower:upper\" or \"lower:upper:stride\", where
+each bound is optional.  Drop the first child, which is the lower bound or, if
+that is missing, the first colon.  The remaining children are the colons, the
+other bounds, and continuation symbols and comments.  This is the same pattern
+as for init declarators, \"left symbol right\"."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "extent_specifier")
+               nil "expected list context: extent_specifier, got '%s'" list-context)
+    (when-let* ((children (treesit-node-children list-context)))
       (seq-drop children 1))))
 
 
@@ -1386,7 +1405,8 @@ the align-list-other family."
                                   '("parenthesized_expression"
                                     "argument_list"
                                     "array_literal"
-                                    "parameters"))
+                                    "parameters"
+                                    "size"))
              nil
              "align-list-other-paren: wrong context, got '%s'"
              (car context))
@@ -1610,6 +1630,53 @@ align-list-other family."
           :others  (append (and symbol-p (list anoff-hang))
                            anoffs-sym
                            (list (cons (treesit-node-start left) 0))))))
+
+
+(defun f90-ts--align-other-extent (context loc _items-plist)
+  "Return the other plist for extent specifier nodes.
+An extent specifier is \"lower:upper\" (optionally with a stride), spread
+over several lines.  Examples:
+
+  allocate(T(1: &      ! lower bound and colon on the head line
+             n, &      ! upper bound: aligned with the lower bound
+             1: &
+             n))
+  a(1 &
+    : m)               ! colon: aligned with the lower bound as well
+  a(-n: &
+     n)                ! aligned with the body of a unary minus
+
+Like for init declarators, the pattern is \"left symbol right\", but unlike
+there, all nodes on continued lines (colons and further bounds) are aligned
+with the left part, the lower bound, not hanging.  If the lower bound is
+missing, the left part is the first colon.  The hanging
+position (`f90-ts-indent-continued' relative to the indentation of the line
+holding the specifier) is a further candidate.
+
+The offset relative to the left part is determined as for list items, see
+`f90-ts--align-nsym-offset': If the lower bound starts with a unary minus,
+other nodes are aligned with the unary argument, and vice versa, a unary minus
+on a continued line is placed left of the column of the lower bound.
+
+The :primary position has :force t, as there is no earlier item compatible with
+the current node, except for the upper bound if there is a stride.
+
+CONTEXT and LOC are as described in the calling convention of the
+align-list-other family."
+  (let* ((list-context (car context))
+         ;; lower bound, or colon if the lower bound is missing
+         (left (treesit-node-child list-context 0 nil))
+         (anoff-left (cons (treesit-node-start left)
+                           (f90-ts--align-nsym-offset
+                            loc
+                            (cons left (f90-ts--align-node-symbol left)))))
+         (anoff-hang (cons (f90-ts--indent-pos-at-node list-context)
+                           f90-ts-indent-continued)))
+    (cl-assert (f90-ts--node-type-p list-context "extent_specifier")
+               nil "wrong context, got '%s'" list-context)
+    (list :primary anoff-left
+          :force   t
+          :others  (list anoff-hang))))
 
 
 (defun f90-ts--align-other-string (context loc items-plist)
@@ -2405,6 +2472,7 @@ Finally use VARIANT to select one pair to align with."
               '(:get-items-fn f90-ts--align-items-string
                 :get-other-fn f90-ts--align-other-string)))
       (cons "parameters"               paren-prop)
+      (cons "size"                     paren-prop)
       (cons "output_item_list"         io-item-prop)
       (cons "input_item_list"          io-item-prop)
       (cons "case_statement"
@@ -2422,6 +2490,9 @@ Finally use VARIANT to select one pair to align with."
       (cons "pointer_init_declarator"
             '(:get-items-fn f90-ts--align-items-init-decl
               :get-other-fn f90-ts--align-other-init-decl))
+      (cons "extent_specifier"
+            '(:get-items-fn f90-ts--align-items-extent
+              :get-other-fn f90-ts--align-other-extent))
       (cons "function_statement"
             '(:get-items-fn nil
               :get-other-fn f90-ts--align-other-function-result))
