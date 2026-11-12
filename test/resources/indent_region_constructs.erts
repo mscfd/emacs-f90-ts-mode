@@ -205,8 +205,7 @@ function outer(a, b, n) result(T)
      real                :: T(n, n)
      integer             :: i, j
 
-     prod: do concurrent (i = 1:n,&
-            j = 1:n)
+     prod: do concurrent (i = 1:n, j = 1:n)
           T(i, j) = a(i) * b(j)
      end do prod
 end function outer

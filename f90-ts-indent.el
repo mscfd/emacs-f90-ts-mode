@@ -1169,20 +1169,44 @@ children are the \"=\" or \"=>\" symbol and the initialisation expression."
 
 
 ;;++++++++++++++
-;; list context: extent_specifier
+;; list context: extent_specifier, concurrent_control, triplet_spec
 
-(defun f90-ts--align-items-extent (context _loc)
-  "Determine relevant children of CONTEXT = \"extent_specifier\".
-An extent specifier is \"lower:upper\" or \"lower:upper:stride\", where
-each bound is optional.  Drop the first child, which is the lower bound or, if
-that is missing, the first colon.  The remaining children are the colons, the
-other bounds, and continuation symbols and comments.  This is the same pattern
-as for init declarators, \"left symbol right\"."
+(defun f90-ts--align-items-drop-left (context _loc)
+  "Determine relevant children of CONTEXT by dropping the left part.
+This is used for the nodes \"extent_specifier\", \"concurrent_control\" and
+\"triplet_spec\", which follow the pattern \"left symbol right\", like
+\"lower:upper:stride\" or \"i = initial:final:step\".  Drop the first child, which
+is the lower bound or, if that is missing, the first colon for an extent
+specifier, and the loop variable for the other two.  The remaining children are
+the symbols, the other bounds, continuation symbols and comments."
   (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "extent_specifier")
-               nil "expected list context: extent_specifier, got '%s'" list-context)
+    (cl-assert (f90-ts--node-type-p list-context '("extent_specifier"
+                                                   "concurrent_control"
+                                                   "triplet_spec"))
+               nil "expected list context: extent_specifier or concurrent_control, got '%s'"
+               list-context)
     (when-let* ((children (treesit-node-children list-context)))
       (seq-drop children 1))))
+
+
+;;++++++++++++++
+;; list context: concurrent_header
+
+(defun f90-ts--align-items-concurrent-header (context _loc)
+  "Determine relevant children of CONTEXT = \"concurrent_header\".
+The header is \"concurrent ([type ::] control, control, ..., [mask])\".  Return
+the controls, the mask, commas, continuation symbols and comments.  Drop the
+keyword, the parentheses and the optional type specification with its \"::\",
+as the controls are aligned with each other, not with the type."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "concurrent_header")
+               nil "expected list context: concurrent_header, got '%s'" list-context)
+    (seq-filter
+     (lambda (n)
+       (not (or (eq (f90-ts--align-node-symbol n) 'parenthesis)
+                (f90-ts--node-type-p n '("intrinsic_type" "::")))))
+     ;; drop the keyword
+     (seq-drop (treesit-node-children list-context) 1))))
 
 
 ;;++++++++++++++
@@ -1400,25 +1424,33 @@ anything else: 0."
 See `f90-ts--align-other-paren-expr-core' for the shared logic.
 
 CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
+the align-list-other family.
+The opening parenthesis is the first parenthesis child of the context."
   (cl-assert (f90-ts--node-type-p (car context)
                                   '("parenthesized_expression"
                                     "argument_list"
                                     "array_literal"
                                     "parameters"
-                                    "size"))
+                                    "size"
+                                    "concurrent_header"))
              nil
              "align-list-other-paren: wrong context, got '%s'"
              (car context))
   (let* ((list-context    (car context))
          (node-sym        (alist-get 'nsym loc))
-         (open-paren      (treesit-node-at (treesit-node-start list-context)))
+         ;; the list context might start with a keyword (concurrent_header),
+         ;; thus do not use the node at the start of the context
+         (open-paren      (or (seq-find (lambda (n)
+                                          (eq (f90-ts--align-node-symbol n)
+                                              'parenthesis))
+                                        (treesit-node-children list-context))
+                              (treesit-node-at (treesit-node-start list-context))))
          (indent-at-paren (f90-ts--indent-pos-at-node open-paren))
          (start-paren     (treesit-node-start open-paren))
          (offset-paren    (+ (1- (length (treesit-node-text open-paren)))
                              (f90-ts--align-other-paren-offset node-sym))))
     (f90-ts--align-other-paren-expr-core
-     node-sym list-context start-paren offset-paren indent-at-paren items-plist)))
+     node-sym open-paren start-paren offset-paren indent-at-paren items-plist)))
 
 
 (defun f90-ts--align-other-op-expr (context loc items-plist)
@@ -1632,6 +1664,19 @@ align-list-other family."
                            (list (cons (treesit-node-start left) 0))))))
 
 
+(defun f90-ts--align-anoff-node (node loc)
+  "Return an anchor-offset pair to align the current node with NODE.
+START is the start of NODE.  The offset is determined as for items of a list
+context, see `f90-ts--align-nsym-offset', so that unary minus signs are taken
+into account: the current node is aligned with the unary argument if NODE
+starts with a unary minus, and a unary minus on the current line is placed left
+of NODE.  LOC provides the data of the current node."
+  (cons (treesit-node-start node)
+        (f90-ts--align-nsym-offset
+         loc
+         (cons node (f90-ts--align-node-symbol node)))))
+
+
 (defun f90-ts--align-other-extent (context loc _items-plist)
   "Return the other plist for extent specifier nodes.
 An extent specifier is \"lower:upper\" (optionally with a stride), spread
@@ -1653,10 +1698,8 @@ missing, the left part is the first colon.  The hanging
 position (`f90-ts-indent-continued' relative to the indentation of the line
 holding the specifier) is a further candidate.
 
-The offset relative to the left part is determined as for list items, see
-`f90-ts--align-nsym-offset': If the lower bound starts with a unary minus,
-other nodes are aligned with the unary argument, and vice versa, a unary minus
-on a continued line is placed left of the column of the lower bound.
+The offset relative to the left part is determined by
+`f90-ts--align-anoff-node'.
 
 The :primary position has :force t, as there is no earlier item compatible with
 the current node, except for the upper bound if there is a stride.
@@ -1666,10 +1709,7 @@ align-list-other family."
   (let* ((list-context (car context))
          ;; lower bound, or colon if the lower bound is missing
          (left (treesit-node-child list-context 0 nil))
-         (anoff-left (cons (treesit-node-start left)
-                           (f90-ts--align-nsym-offset
-                            loc
-                            (cons left (f90-ts--align-node-symbol left)))))
+         (anoff-left (f90-ts--align-anoff-node left loc))
          (anoff-hang (cons (f90-ts--indent-pos-at-node list-context)
                            f90-ts-indent-continued)))
     (cl-assert (f90-ts--node-type-p list-context "extent_specifier")
@@ -1677,6 +1717,53 @@ align-list-other family."
     (list :primary anoff-left
           :force   t
           :others  (list anoff-hang))))
+
+
+(defun f90-ts--align-other-control (context loc _items-plist)
+  "Return the other plist for loop control nodes.
+These are \"concurrent_control\" and \"triplet_spec\", like \"i = 1:n:2\", in
+the header of a do concurrent or forall statement.  The pattern is \"left
+symbol right\" with the loop variable as left part, the symbol \"=\", and the
+range \"initial:final:step\" as right part.  Examples:
+
+  do concurrent (i = &
+       1: &            ! initial value: hangs relative to the line of \"i\"
+       n, &            ! final value: aligned with the initial value
+                 j = 1:m)
+  do concurrent (i = 1 &
+                     : n)   ! colon: aligned with the initial value
+
+As for init declarators, a node starting the right part (the initial value, or
+a comment before it) hangs relative to the loop variable.  The symbol \"=\" on
+a continued line is positioned at the standard continued line position.  All
+other nodes (colons, final value, step) are aligned with the initial value,
+see `f90-ts--align-anoff-node' for the offset.  The hanging position and the
+loop variable are further candidates.
+
+The :primary position has :force t.
+
+CONTEXT and LOC are as described in the calling convention of the
+align-list-other family."
+  (let* ((list-context (car context))
+         (pos (alist-get 'pos loc))
+         (symbol-p (eq (alist-get 'nsym loc) 'assignment))
+         (left (treesit-node-child list-context 0 nil))
+         (initial (treesit-node-child-by-field-name list-context "initial"))
+         (anoff-hang (cons (f90-ts--indent-pos-at-node left)
+                           f90-ts-indent-continued))
+         (anoff-left (cons (treesit-node-start left) 0))
+         (start-p (or (null initial)
+                      (<= pos (treesit-node-start initial)))))
+    (cl-assert (f90-ts--node-type-p list-context '("concurrent_control"
+                                                   "triplet_spec"))
+               nil "wrong context, got '%s'" list-context)
+    (list :primary (cond
+                    ;; nil: forced primary becomes the continued line position
+                    (symbol-p nil)
+                    (start-p  anoff-hang)
+                    (t        (f90-ts--align-anoff-node initial loc)))
+          :force   t
+          :others  (list anoff-hang anoff-left))))
 
 
 (defun f90-ts--align-other-string (context loc items-plist)
@@ -2451,7 +2538,9 @@ Finally use VARIANT to select one pair to align with."
                         :get-other-fn f90-ts--align-other-paren))
         (bind-prop    '(:get-items-fn f90-ts--align-items-children2))
         (io-item-prop '(:get-items-fn f90-ts--align-items-children-no-paren
-                        :get-other-fn f90-ts--align-other-item-list)))
+                        :get-other-fn f90-ts--align-other-item-list))
+        (control-prop '(:get-items-fn f90-ts--align-items-drop-left
+                        :get-other-fn f90-ts--align-other-control)))
     (cl-remove-if
      #'null
      (list
@@ -2491,8 +2580,13 @@ Finally use VARIANT to select one pair to align with."
             '(:get-items-fn f90-ts--align-items-init-decl
               :get-other-fn f90-ts--align-other-init-decl))
       (cons "extent_specifier"
-            '(:get-items-fn f90-ts--align-items-extent
+            '(:get-items-fn f90-ts--align-items-drop-left
               :get-other-fn f90-ts--align-other-extent))
+      (cons "concurrent_header"
+            '(:get-items-fn f90-ts--align-items-concurrent-header
+              :get-other-fn f90-ts--align-other-paren))
+      (cons "concurrent_control"       control-prop)
+      (cons "triplet_spec"             control-prop)
       (cons "function_statement"
             '(:get-items-fn nil
               :get-other-fn f90-ts--align-other-function-result))
