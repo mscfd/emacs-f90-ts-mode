@@ -1,0 +1,179 @@
+Point-Char: |
+
+No-Before-Newline
+No-After-Newline
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (indent-region (point-min) (point-max))))
+
+Name: keep aligned 1
+
+=-=
+subroutine sub()
+x=f( &
+x, y, &
+   z)
+end subroutine sub
+=-=
+subroutine sub()
+     x=f( &
+         x, y, &
+            z)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-continued-line))
+      (indent-region (point-min) (point-max))))
+
+Name: keep aligned 2
+=-=
+subroutine sub()
+x = some_fun( &
+x, y, &
+   z)
+end subroutine sub
+=-=
+subroutine sub()
+     x = some_fun( &
+            x, y, &
+               z)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (indent-region (point-min) (point-max))))
+
+Name: primary 1
+=-=
+! original column of u is the same as final column of y
+! do not keep this accidental alignment
+subroutine sub()
+x=fun( &
+x, y, z, &
+              u)
+end subroutine sub
+=-=
+! original column of u is the same as final column of y
+! do not keep this accidental alignment
+subroutine sub()
+     x=fun( &
+           x, y, z, &
+           u)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary))
+      (indent-region (point-min) (point-max))))
+
+Name: primary 2
+=-=
+! original column of u is the same as final column of y
+! do not keep this accidental alignment
+subroutine sub()
+x=fun( &
+x, y, z, &
+              u)
+end subroutine sub
+=-=
+! original column of u is the same as final column of y
+! do not keep this accidental alignment
+subroutine sub()
+     x=fun( &
+           x, y, z, &
+           u)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'continued-line))
+      (indent-region (point-min) (point-max))))
+
+Name: continued 1
+=-=
+subroutine sub()
+x = some_fun( &
+x, y, z, &
+      u)
+end subroutine sub
+=-=
+subroutine sub()
+     x = some_fun( &
+            x, y, z, &
+            u)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-continued-line))
+      (indent-region (point-min) (point-max))))
+
+Name: continued 2
+=-=
+! original column of u is the same as final column of z
+! do not keep this accidental alignment
+subroutine sub()
+x = some_fun( &
+x, y, z, &
+                  u)
+end subroutine sub
+=-=
+! original column of u is the same as final column of z
+! do not keep this accidental alignment
+subroutine sub()
+     x = some_fun( &
+            x, y, z, &
+            u)
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-line 'keep-or-continued-line))
+      (f90-ts-mode-test--indent-by-line)))
+
+
+Name: align arg keep or continued 1
+=-=
+! keep aligned args, the rest is moved to statement anchor + continued line offset
+subroutine sub()
+     call test(  arg1, arg2, arg3, &
+            arg4, &
+              arg5, &
+               arg6, &
+                arg7, &
+                 arg8, &
+                       arg9, &
+                        argA, &
+                             argB)
+end subroutine sub
+=-=
+! keep aligned args, the rest is moved to statement anchor + continued line offset
+subroutine sub()
+     call test(  arg1, arg2, arg3, &
+            arg4, &
+            arg5, &
+               arg6, &
+            arg7, &
+                 arg8, &
+                       arg9, &
+            argA, &
+                             argB)
+end subroutine sub
+=-=-=

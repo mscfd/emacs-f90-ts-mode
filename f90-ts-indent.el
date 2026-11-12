@@ -2038,6 +2038,35 @@ If there is no such cpo item, return nil."
       (f90-ts--align-cpo-max-pos aligned))))
 
 
+(defun f90-ts--align-orig-col (cpo)
+  "Return the original column of the candidate CPO = (COLUMN POSITION OFFSET).
+This is the column the candidate had before indentation of earlier lines of the
+continued statement, see `f90-ts--continued-line-cache-get-orig'."
+  (f90-ts--continued-line-cache-get-orig (car cpo) (cadr cpo)))
+
+
+(defun f90-ts--align-next-orig (cpo-list col-cur)
+  "Return the entry of CPO-LIST with the smallest original column above COL-CUR.
+Among several entries with that original column take the one with the largest
+position.  Return nil if there is no entry with original column above COL-CUR."
+  (when-let* ((greater (seq-filter (lambda (cpo)
+                                     (< col-cur (f90-ts--align-orig-col cpo)))
+                                   cpo-list))
+              (col-min (apply #'min (mapcar #'f90-ts--align-orig-col greater))))
+    (f90-ts--align-cpo-max-pos
+     (seq-filter (lambda (cpo) (= col-min (f90-ts--align-orig-col cpo)))
+                 greater))))
+
+
+
+;; General note on columns in `f90-ts--align-select': the column COL-CUR of the
+;; line to be indented is the original column, but the columns of the
+;; candidates are final columns, which include the shift of the (already
+;; indented) lines the candidates are on.  Comparing COL-CUR with them directly
+;; is wrong in `indent-region' for input whose indentation differs from the
+;; final one.  Thus all comparisons with COL-CUR use the original columns of the
+;; candidates, see `f90-ts--align-orig-col'.
+
 (defun f90-ts--align-select (variant col-cur primary items)
   "Select (anchor offset) from PRIMARY and ITEMS.
 Depending on VARIANT and current column COL-CUR, select the relevant
@@ -2069,8 +2098,10 @@ selected."
     (cond
      ;; special case (e.g. after inserting newline by <return> or f90-line-break)
      ;; check whether we are before first entry in col-pos-off,
-     ;; if this is the case we go to primary, not to first entry in col-pos-off
-     ((< col-cur (caar col-pos-off))
+     ;; if this is the case we go to primary, not to first entry in col-pos-off;
+     ;; compare original columns, see note above
+     ((< col-cur (apply #'min (mapcar #'f90-ts--align-orig-col
+                                      col-pos-off-unsorted)))
       (cdr primary-col-pos-off))
 
      ;; cases: (aligned, rotate), (not-aligned, rotate),
@@ -2078,10 +2109,10 @@ selected."
      ((or (eq variant 'rotate)
           (and (not aligned-at)
                (eq variant 'keep-or-rotate)))
-      ;; go to next column or wrap around,
-      ;; recall that col-pos-off is sorted by columns
-      (let ((aligned-next (seq-find (lambda (cpo) (< col-cur (car cpo)))
-                                    col-pos-off)))
+      ;; go to next column (in original columns, see note above) or wrap
+      ;; around, recall that col-pos-off is sorted by final columns
+      (let ((aligned-next (f90-ts--align-next-orig col-pos-off-unsorted
+                                                   col-cur)))
         ;; next if there is a next, otherwise first entry (not necessarily primary)
         (or (cdr aligned-next)
             (cdar col-pos-off))))
