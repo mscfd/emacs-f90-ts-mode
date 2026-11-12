@@ -75,22 +75,3 @@ program int23
       int3 = int3 + z(i)
  end do integrate
 end program int23
-
-
-! align "result" below predicate_ifc?
-module mod
- abstract interface
-      impure function predicate_ifc(self, k1, k2, &
-                                          x1, x2) &
-             result(flag)
-           import some_t, other_t, &
-                  key_t
-           logical :: flag
-           class(some_t), intent(in) :: self
-           class(key_t),  intent(in) :: k1, &
-                                        k2
-           class(*),      intent(in) :: x1
-           type(other_t), intent(in) :: x2
-      end function predicate_ifc
- end interface
-end module mod
