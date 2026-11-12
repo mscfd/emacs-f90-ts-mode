@@ -673,3 +673,160 @@ subroutine select_case()
      end select select_variant
 end subroutine select_case
 =-=-=
+
+Name: do concurrent 1
+=-=
+subroutine sub()
+! break at the comma: second control aligned with the first one
+do concurrent (i = 1:n, &
+j = 1:m)
+c(i, j) = a(i) * b(j)
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! break at the comma: second control aligned with the first one
+     do concurrent (i = 1:n, &
+                    j = 1:m)
+          c(i, j) = a(i) * b(j)
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 2
+=-=
+subroutine sub()
+! type specification: controls and mask are aligned with the first control,
+! not with the type; comments between continued lines
+do concurrent (integer :: i = 1:n, & ! comment
+! comment
+j = 1:m, &
+i /= j)
+c(i, j) = c(i, j) + 1.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! type specification: controls and mask are aligned with the first control,
+     ! not with the type; comments between continued lines
+     do concurrent (integer :: i = 1:n, & ! comment
+                                          ! comment
+                               j = 1:m, &
+                               i /= j)
+          c(i, j) = c(i, j) + 1.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 3
+=-=
+subroutine sub()
+! break after "=": initial value hangs relative to the line of the loop
+! variable, final value is aligned with the initial value
+do concurrent (i = &
+1: &
+n, &
+j = 1:m)
+c(i, j) = 0.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! break after "=": initial value hangs relative to the line of the loop
+     ! variable, final value is aligned with the initial value
+     do concurrent (i = &
+            1: &
+            n, &
+                    j = 1:m)
+          c(i, j) = 0.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 4
+=-=
+subroutine sub()
+! colon at the start of the line: aligned with the initial value
+do concurrent (i = 1 &
+: n, &
+j = 1:m)
+c(i, j) = 1.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! colon at the start of the line: aligned with the initial value
+     do concurrent (i = 1 &
+                        : n, &
+                    j = 1:m)
+          c(i, j) = 1.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 5
+=-=
+subroutine sub()
+! step, unary minus: aligned with the initial value, a leading "-1" is placed
+! one column to the left
+do concurrent (i = n: &
+1: &
+-1, &
+j = 1:m)
+c(i, j) = 2.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! step, unary minus: aligned with the initial value, a leading "-1" is placed
+     ! one column to the left
+     do concurrent (i = n: &
+                        1: &
+                       -1, &
+                    j = 1:m)
+          c(i, j) = 2.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 6
+=-=
+subroutine sub()
+! "=" on a continued line: standard continued line position
+do concurrent (i &
+= 1:n, &
+j = 1:m)
+c(i, j) = 3.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! "=" on a continued line: standard continued line position
+     do concurrent (i &
+            = 1:n, &
+                    j = 1:m)
+          c(i, j) = 3.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 7
+=-=
+subroutine sub()
+! closing parenthesis on its own line: aligned with the opening one
+do concurrent (i = 1:n, &
+j = 1:m &
+)
+c(i, j) = 4.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! closing parenthesis on its own line: aligned with the opening one
+     do concurrent (i = 1:n, &
+                    j = 1:m &
+                      )
+          c(i, j) = 4.0
+     end do
+end subroutine sub
+=-=-=

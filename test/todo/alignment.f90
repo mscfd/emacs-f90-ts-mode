@@ -45,20 +45,6 @@ module foo
 end module foo
 
 
-! alignment in loop part
-function outer(a, b, n) result(T)
-     integer, intent(in) :: n
-     real, intent(in)    :: a(n), b(n)
-     real                :: T(n, n)
-     integer             :: i, j
-
-     prod: do concurrent (i = 1:n,&
-            j = 1:n)
-          T(i, j) = a(i) * b(j)
-     end do prod
-end function outer
-
-
 ! alignment within reduce, shared, local, local_init
 program int23
  integrate: do, concurrent (i = 1:n) default(none) &
