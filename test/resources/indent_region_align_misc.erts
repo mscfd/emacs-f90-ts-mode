@@ -202,11 +202,11 @@ Name: align variable init declaration 1
 subroutine init_decl()
 real, target  :: x &
 = 1, &
-y0123456789 &
+ y0123456789 &
 = 1
 real, pointer :: p &
 => null(), &
-p0123456789 &
+ p0123456789 &
 => null()
 end subroutine init_decl
 =-=
@@ -228,10 +228,10 @@ Name: align variable init declaration 2
 subroutine init_decl()
 real, target  :: x = 1, &
 y0123456789 & ! comment
-= 1
+ = 1
 real, pointer :: p => null(), &
 p0123456789 &
-=> null()
+ => null()
 end subroutine init_decl
 =-=
 ! "=" from x = 1 is not primary anchor
