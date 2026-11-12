@@ -989,6 +989,7 @@ end subroutine sub
 =-=-=
 
 Name: mark next region partial 1
+Skip: t
 =-=
 subro@utine su|b()
    x = 1
@@ -999,7 +1000,7 @@ subro@utine su|b()
    x = 6
 end subroutine sub
 =-=
-@subroutine sub()|
+subroutine sub@()|
    x = 1
    !: x = 2
    !: x = 3

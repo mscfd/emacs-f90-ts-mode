@@ -118,6 +118,152 @@ function fun(x1, x2, x3, &
 end function fun
 =-=-=
 
+Name: align function result keyword 1
+=-=
+function fun &
+result(f)
+end function fun
+=-=
+function fun &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 2
+Skip: t
+=-=
+function fun() &
+result(f)
+end function fun
+=-=
+function fun() &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 3
+Skip: t
+=-=
+function fun( &
+) &
+result(f)
+end function fun
+=-=
+function fun( &
+       ) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 4
+Skip: t
+=-=
+function fun( &
+) &
+         result(f)
+end function fun
+=-=
+function fun( &
+       ) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 5
+=-=
+function fun(x, y, z) &
+result(f)
+end function fun
+=-=
+function fun(x, y, z) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 6
+=-=
+function fun(x, &
+y, &
+z) &
+result(f)
+end function fun
+=-=
+function fun(x, &
+             y, &
+             z) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 7
+=-=
+function fun(x, &
+             y, &
+             z) &
+result(f)
+end function fun
+=-=
+function fun(x, &
+             y, &
+             z) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 8
+=-=
+function fun( &
+       x, y, z) &
+result(f)
+end function fun
+=-=
+function fun( &
+       x, y, z) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 9
+=-=
+function fun(x, &
+       y, z) &
+result(f)
+end function fun
+=-=
+function fun(x, &
+       y, z) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 10
+=-=
+function fun(x &
+             ! comment
+       , y &
+       , z) &
+result(f)
+end function fun
+=-=
+function fun(x &
+             ! comment
+       , y &
+       , z) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 11
+=-=
+! keep aligned at secondary position
+function fun( &
+       x, &
+       y, &
+       z) &
+         result(f)
+end function fun
+=-=-=
+
 Name: align associate list 1
 =-=
 subroutine sub()

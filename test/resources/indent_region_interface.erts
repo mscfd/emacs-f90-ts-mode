@@ -36,7 +36,7 @@ module mod
       impure function predicate_ifc(self, &
                                     k1, k2, &
                                     x1, x2) &
-             result(flag)
+                      result(flag)
            import some_t, other_t, &
                   key_t
            logical :: flag
