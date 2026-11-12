@@ -516,7 +516,7 @@ Code:
     (f90-ts-mode)
     (f90-ts--fill-region-aux 33 41 40))
 
-Name: fill region partial 4
+Name: fill region partial 6
 =-=
 program prog
  print *, 12, 123, |234, 345, 456, 567, 678, 789, 890, 901
@@ -524,7 +524,7 @@ end program prog
 =-=
 program prog
  print *, 12, 123, |234, 345, 456, 567, &
-        678, 789, 890, 901
+          678, 789, 890, 901
 end program prog
 =-=-=
 

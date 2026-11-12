@@ -1037,13 +1037,17 @@ parenthesis node if present as cdr of CONTEXT."
   "Return all children of CONTEXT except for parenthesis.
 This is used for a context where all direct children are relevant,
 which are \"parenthesized_expression\", \"argument_list\",
-\"array_literal\" and \"parameters\"."
+\"array_literal\", \"parameters\", and the parenthesis free item lists
+\"output_item_list\" and \"input_item_list\" of print, write and read
+statements."
   (let ((list-context (car context)))
     (cl-assert (f90-ts--node-type-p list-context
                                     '("parenthesized_expression"
                                       "argument_list"
                                       "array_literal"
-                                      "parameters"))
+                                      "parameters"
+                                      "output_item_list"
+                                      "input_item_list"))
                nil "align-list-items-children: wrong context, got '%s'" list-context)
     ;; drop parenthesis, as these are dealt with directly
     (seq-filter
@@ -1713,6 +1717,38 @@ the align-list-other family."
 
 
 ;;++++++++++++++
+;; list context: output_item_list, input_item_list
+
+(defun f90-ts--align-other-item-list (context loc _items-plist)
+  "Return the other plist for the item lists of print, write and read.
+These lists have no parentheses, but the statement head provides an anchor for
+a comma starting a continued line.  These are closing parenthesis of the
+control list of write and read, or the comma after the format of print:
+
+    write(*,*) a1 &
+             , a2         ! comma below the closing parenthesis
+    print fmt, x1 &
+             , x2         ! comma below the comma after fmt
+
+This anchor is the primary position for a comma, but only if there is no earlier
+comma in the list on a previous line, otherwise the usual selection among
+earlier items takes over (the smallest column).  It is a candidate for
+rotation anyway.  There is nothing to add for other node symbols.
+
+CONTEXT and LOC are as described in the calling convention of the
+align-list-other family."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context '("output_item_list"
+                                                   "input_item_list"))
+               nil "wrong context, got '%s'" list-context)
+    (when (eq (alist-get 'nsym loc) 'comma)
+      ;; skips ampersands and comments between statement head and list
+      (when-let* ((psib (f90-ts--prev-sibling-proper list-context))
+                  ((f90-ts--node-type-p psib '(")" ","))))
+        (list :primary (cons psib 0))))))
+
+
+;;++++++++++++++
 ;; list context: array literals, alignment at commata
 
 (defun f90-ts--align-comma-delta (node)
@@ -2287,11 +2323,13 @@ Finally use VARIANT to select one pair to align with."
 ;; alignment (see the calling convention above `f90-ts--align-other-paren-expr-core'),
 ;; if not provided, only earlier items and the standard continued line position are used
 (defconst f90-ts--align-list-context-properties
-  (let ((expr-prop  '(:get-items-fn f90-ts--align-items-op-expr
-                      :get-other-fn f90-ts--align-other-op-expr))
-        (paren-prop '(:get-items-fn f90-ts--align-items-children-no-paren
-                      :get-other-fn f90-ts--align-other-paren))
-        (bind-prop  '(:get-items-fn f90-ts--align-items-children2)))
+  (let ((expr-prop    '(:get-items-fn f90-ts--align-items-op-expr
+                        :get-other-fn f90-ts--align-other-op-expr))
+        (paren-prop   '(:get-items-fn f90-ts--align-items-children-no-paren
+                        :get-other-fn f90-ts--align-other-paren))
+        (bind-prop    '(:get-items-fn f90-ts--align-items-children2))
+        (io-item-prop '(:get-items-fn f90-ts--align-items-children-no-paren
+                        :get-other-fn f90-ts--align-other-item-list)))
     (cl-remove-if
      #'null
      (list
@@ -2312,8 +2350,8 @@ Finally use VARIANT to select one pair to align with."
               '(:get-items-fn f90-ts--align-items-string
                 :get-other-fn f90-ts--align-other-string)))
       (cons "parameters"               paren-prop)
-      ;; the list context is the case statement: parentheses and comments around
-      ;; the list are its children (but also the body of the case branch)
+      (cons "output_item_list"         io-item-prop)
+      (cons "input_item_list"          io-item-prop)
       (cons "case_statement"
             '(:get-items-fn f90-ts--align-items-case
               :get-other-fn f90-ts--align-other-case))

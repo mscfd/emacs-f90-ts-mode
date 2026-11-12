@@ -1,20 +1,3 @@
-! read/write lists
-subroutine sub()
-     write(*,format_string_for_testing) val1, &       !comment
-            ! comment
-            val2, val3, &
-                  val4, & ! comment
-
-            ! some more comment
-
-
-            ! comment
-
-            final_val
-end subroutine sub
-
-
-
 ! align use-only statements
 module foo
  use mod1

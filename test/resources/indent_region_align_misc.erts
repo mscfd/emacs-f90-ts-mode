@@ -291,21 +291,55 @@ subroutine arr3()
 end subroutine arr3
 =-=-=
 
-Name: write/read item list
+Name: io item lists 1
 =-=
-subroutine sub()
+subroutine io_item_lists()
+write(*,format_string_for_testing) val1, &       !comment
+! comment
+val2, val3, &
+fun(x1, x2), &
+        val4, &
+      val5, & ! comment
+! some more comment
+final_val
+read(u, fmt) &
+x, y, &
+name1
+
+print '(a20,es15.5,f12.3)', 'diag = ', mat(1,1), &
+mat(2,2)
+
+write(*,*) A1 &
+, A2 &
+, A3, B1 &
+    , B2
+print fmt, X1 &
+, X2
+end subroutine io_item_lists
+=-=
+subroutine io_item_lists()
      write(*,format_string_for_testing) val1, &       !comment
-            ! comment
-            val2, val3, &
-            val4, & ! comment
+                                                      ! comment
+                                        val2, val3, &
+                                        fun(x1, x2), &
+                                        val4, &
+                                              val5, & ! comment
+                                                      ! some more comment
+                                        final_val
+     read(u, fmt) &
+            x, y, &
+            name1
 
-            ! some more comment
+     print '(a20,es15.5,f12.3)', 'diag = ', mat(1,1), &
+                                 mat(2,2)
 
-
-            ! comment
-
-            final_val
-end subroutine sub
+     write(*,*) A1 &
+              , A2 &
+              , A3, B1 &
+                  , B2
+     print fmt, X1 &
+              , X2
+end subroutine io_item_lists
 =-=-=
 
 
