@@ -67,33 +67,36 @@ regardless of the capture name symbol used."
          (spec  (f90-ts--imenu-spec-for-type type))
          (query (plist-get spec :query))
          (caps  (and query (treesit-query-capture node query))))
-    (cl-loop for (_ . node) in caps
-             collect (cons (treesit-node-text node t)
-                           (treesit-node-start node)))))
+    (cl-loop
+     for (_ . node) in caps
+     collect (cons (treesit-node-text node t)
+                   (treesit-node-start node)))))
 
 
 (defun f90-ts--imenu-group-items (items)
   "Group flat ITEMS list into ((LABEL (NAME . MARKER) ...) ...) for Imenu.
 Each element of ITEMS is (LABEL NAME . MARKER)."
-  (cl-loop for (label . group) in (seq-group-by #'car items)
-           collect (cons label
-                         (mapcar (lambda (item)
-                                   (cons (cadr item) (caddr item)))
-                                 group))))
+  (cl-loop
+   for (label . group) in (seq-group-by #'car items)
+   collect (cons label
+                 (mapcar (lambda (item)
+                           (cons (cadr item) (caddr item)))
+                         group))))
 
 
 (defun f90-ts--imenu-captures-to-items (captures)
   "Convert raw CAPTURES from `treesit-query-capture' to a flat list of items.
 Items are triples (LABEL NAME MARKER), where LABEL is derived from the
 capture symbol via `f90-ts--nav-queries'."
-  (cl-loop for (cap-sym . node) in captures
-           for key   = (alist-get cap-sym f90-ts--nav-capture-key-alist)
-           for label = (and key (plist-get (alist-get key f90-ts--nav-queries) :label))
-           when label
-           collect (list label
-                         (treesit-node-text node t)
-                         (set-marker (make-marker)
-                                     (treesit-node-start node)))))
+  (cl-loop
+   for (cap-sym . node) in captures
+   for key   = (alist-get cap-sym f90-ts--nav-capture-key-alist)
+   for label = (and key (plist-get (alist-get key f90-ts--nav-queries) :label))
+   when label
+   collect (list label
+                 (treesit-node-text node t)
+                 (set-marker (make-marker)
+                             (treesit-node-start node)))))
 
 
 (defun f90-ts-simple-imenu ()

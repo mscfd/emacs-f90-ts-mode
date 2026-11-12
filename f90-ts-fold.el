@@ -390,9 +390,10 @@ same lookup `treesit-outline-search' itself uses to test `looking-at', which
 is unambiguous because `pos-eol' sits inside the heading's own node."
   (when-let* ((node (or (f90-ts--thing-at (pos-eol) f90-ts--outline-predicate)
                   (f90-ts--thing-at (pos-bol) f90-ts--outline-predicate))))
-    (cl-loop for n = node then (treesit-node-parent n)
-             while n
-             count (f90-ts--node-match-p n f90-ts--outline-predicate))))
+    (cl-loop
+     for n = node then (treesit-node-parent n)
+     while n
+     count (f90-ts--node-match-p n f90-ts--outline-predicate))))
 
 
 (defun f90-ts--outline-heading-bol (node)

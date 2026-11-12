@@ -854,11 +854,12 @@ If NAMED is non-nil, return only named nodes."
   (let ((parent (treesit-node-parent node1))
         (ix1 (treesit-node-index node1))
         (ix2 (treesit-node-index node2)))
-    (cl-loop for i from ix1 below ix2
-             for sib = (treesit-node-child parent i)
-             when (or (not named)
-                      (treesit-node-check sib 'named))
-             collect sib)))
+    (cl-loop
+     for i from ix1 below ix2
+     for sib = (treesit-node-child parent i)
+     when (or (not named)
+              (treesit-node-check sib 'named))
+     collect sib)))
 
 
 (defun f90-ts--sibling-predicate (node sibling-fn predicate)
@@ -971,9 +972,10 @@ Walk from NODE via SIBLING-FN across comment nodes, and return
 the ampersand node reached once comments end.  Return nil if NODE
 is nil, not a comment, or if the node reached after skipping comments
 is not an ampersand."
-  (cl-loop for n = node then (funcall sibling-fn n)
-           while (f90-ts--node-type-p n "comment")
-           finally return (and (f90-ts--node-ampersand-p n) n)))
+  (cl-loop
+   for n = node then (funcall sibling-fn n)
+   while (f90-ts--node-type-p n "comment")
+   finally return (and (f90-ts--node-ampersand-p n) n)))
 
 
 (defun f90-ts--find-ampersand-boundary (node sibling-fn)
@@ -1069,20 +1071,22 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
   (let* ((predicate #'f90-ts--node-not-comment-error-preproc-p)
          ;; ascend until a previous ancestor is found
          (prev-sib-of-anc
-          (cl-loop for ancestor = node then (treesit-node-parent ancestor)
-                   while ancestor
-                   for relative = (f90-ts--before-child ancestor line-num predicate)
-                   when relative return relative))
+          (cl-loop
+           for ancestor = node then (treesit-node-parent ancestor)
+           while ancestor
+           for relative = (f90-ts--before-child ancestor line-num predicate)
+           when relative return relative))
          ;; descend prev-sib-of-anc to find the deepest node still before current line
          (prev-descend
           (and prev-sib-of-anc
-               (cl-loop for sib = prev-sib-of-anc then next
-                        for next = (and (> (treesit-node-child-count sib) 0)
-                                        (f90-ts--before-child sib line-num predicate))
-                        ;; if there is a next, continue and shift next to sib
-                        ;; with "for sib=next" in the first cl-loop line
-                        while next
-                        finally return sib)))
+               (cl-loop
+                for sib = prev-sib-of-anc then next
+                for next = (and (> (treesit-node-child-count sib) 0)
+                                (f90-ts--before-child sib line-num predicate))
+                ;; if there is a next, continue and shift next to sib
+                ;; with "for sib=next" in the first cl-loop line
+                while next
+                finally return sib)))
          ;; take continuation lines into account and go to beginning of statement
          (first (and prev-descend
                      (f90-ts--first-node-of-stmt prev-descend))))
@@ -1113,12 +1117,13 @@ until a non-preprocessor statement is found.
 It starts at NODE, and if it is nil, it uses PARENT.  The function is used by
 the indent engine, which does not have a NODE but always has a PARENT (for
 example on empty lines)."
-  (cl-loop for ancestor = (or node parent) then pstmt-1
-           for cur-line =    (f90-ts--line-number-at-node-or-pos node)
-                        then (f90-ts--node-line pstmt-1)
-           for pstmt-1 = (f90-ts--previous-stmt-first-line ancestor cur-line)
-           while pstmt-1
-           when (not (f90-ts--node-preproc-p pstmt-1)) return pstmt-1))
+  (cl-loop
+   for ancestor = (or node parent) then pstmt-1
+   for cur-line =    (f90-ts--line-number-at-node-or-pos node)
+   then (f90-ts--node-line pstmt-1)
+   for pstmt-1 = (f90-ts--previous-stmt-first-line ancestor cur-line)
+   while pstmt-1
+   when (not (f90-ts--node-preproc-p pstmt-1)) return pstmt-1))
 
 
 (defun f90-ts--previous-stmt-keyword-by-first (first)
@@ -1355,8 +1360,9 @@ Tree-sitter node type, and PLIST may contain:
 
 
 (defconst f90-ts--nav-capture-key-alist
-  (cl-loop for (key . plist) in f90-ts--nav-queries
-           collect (cons (plist-get plist :capture) key))
+  (cl-loop
+   for (key . plist) in f90-ts--nav-queries
+   collect (cons (plist-get plist :capture) key))
   "Alist mapping Tree-sitter capture symbols to query-key.
 Each entry is (CAPTURE-SYMBOL . KEY) where KEY is the
 car of the corresponding entry in `f90-ts--nav-queries'.")

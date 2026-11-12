@@ -75,11 +75,12 @@ Restrict fontification to the region between START and END."
     (when f90-ts-comment-keyword-regexp
       (save-excursion
         (goto-char comment-start)
-        (cl-loop while (re-search-forward f90-ts-comment-keyword-regexp comment-end t)
-                 do (treesit-fontify-with-override
-                       (match-beginning 0) (match-end 0)
-                       'font-lock-warning-face t
-                       start end))))))
+        (cl-loop
+         while (re-search-forward f90-ts-comment-keyword-regexp comment-end t)
+         do (treesit-fontify-with-override
+             (match-beginning 0) (match-end 0)
+             'font-lock-warning-face t
+             start end))))))
 
 
 (defun f90-ts--fontify-error (node override start end &rest _)

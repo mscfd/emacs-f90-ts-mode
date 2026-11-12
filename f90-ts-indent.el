@@ -1076,13 +1076,14 @@ before and after \"::\")."
             attr-children
           ;; for init declarator children, add assignment nodes as well:
           ;; "=" for init_declarator, "=>" for pointer_init_declarator
-          (cl-mapcan (lambda (n)
-                       (cons n (when (f90-ts--node-type-p n '("init_declarator"
-                                                              "pointer_init_declarator"))
-                                 (cl-remove-if-not
-                                  (lambda (c) (f90-ts--node-type-p c '("=" "=>")))
-                                  (treesit-node-children n)))))
-                     decl-children))))))
+          (cl-mapcan
+           (lambda (n)
+             (cons n (when (f90-ts--node-type-p n '("init_declarator"
+                                                    "pointer_init_declarator"))
+                       (cl-remove-if-not
+                        (lambda (c) (f90-ts--node-type-p c '("=" "=>")))
+                        (treesit-node-children n)))))
+           decl-children))))))
 
 
 ;;++++++++++++++
@@ -1988,10 +1989,11 @@ column numbers."
 CPO-LIST is a non-empty list of (column position offset) triples.
 In general, the cpo item with the largest position is the most relevant,
 as it is closest to the current line."
-  (cl-reduce (lambda (cpo1 cpo2)
-               ;; extract and compare positions
-               (if (> (cadr cpo1) (cadr cpo2)) cpo1 cpo2))
-             cpo-list))
+  (cl-reduce
+   (lambda (cpo1 cpo2)
+     ;; extract and compare positions
+     (if (> (cadr cpo1) (cadr cpo2)) cpo1 cpo2))
+   cpo-list))
 
 
 (defun f90-ts--align-cpo-sort (cpo-list)
@@ -3678,6 +3680,14 @@ completion for a region, like indent-stmt operations on an end struct line."
       (when end-marker (set-marker end-marker nil)))))
 
 
+(defun f90-ts--indent-abbrev-expand ()
+  "Expand abbrev at point if there is one.
+This is done as part of `f90-ts--indent-and-complete-line', to allow hitting
+TAB right after typing an abbrevation with proper expansion and indentation."
+  (when abbrev-mode
+    (expand-abbrev)))
+
+
 ;;;------------------------------------------------------------------------------
 ;;; Indentation and smart end completion
 
@@ -3697,9 +3707,10 @@ bound to <tab>.  More advanced indentations of involved continued lines and
 block structures is done by `f90-ts--indent-and-complete-stmt'"
   (interactive)
   (f90-ts--with-check-modified-line
-   (f90-ts--indent-and-complete-line-aux
-    f90-ts-indent-list-line
-    nil)))
+    (f90-ts--indent-abbrev-expand)
+    (f90-ts--indent-and-complete-line-aux
+     f90-ts-indent-list-line
+     nil)))
 
 
 (defun f90-ts-indent-line (&optional variant)
@@ -3710,7 +3721,7 @@ If provided VARIANT is the variant symbol for how to compute alignment in
 multi-line statements.  Default value is `f90-ts-indent-list-line'."
   (interactive)
   (f90-ts--with-check-modified-line
-   (f90-ts--indent-line-aux variant)))
+    (f90-ts--indent-line-aux variant)))
 
 
 (defun f90-ts--complete-end-node-p (node pos end-marker at-col0)
