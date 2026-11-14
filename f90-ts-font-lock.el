@@ -180,7 +180,8 @@ Restrict fontification to the region between START and END, using OVERRIDE."
            "sync" "all" "images" "memory"
            "form" "team" "change"
            "lock" "unlock"
-           "fail" "image"]
+           "fail" "image"
+           "goto" "continue"]
           ;; keywords which only exist in some grammar variants
           (when (f90-ts--grammar-keyword-p "non_recursive")
             ["non_recursive"]))))
@@ -488,7 +489,13 @@ Restrict fontification to the region between START and END, using OVERRIDE."
    :feature 'constant
    '(((boolean_literal) @font-lock-constant-face)
      ((null_literal) @font-lock-constant-face)
-     ((statement_label) @font-lock-constant-face))))
+     ((statement_label) @font-lock-constant-face)
+     ;; label references, like the do_label of a labelled do statement or the
+     ;; target of a goto
+     ((statement_label_reference) @font-lock-constant-face)
+     ;; label text of the terminating statement of nested do loops sharing
+     ;; one label: it is covered by the (virtual) do_label nodes
+     ((do_label_virtual) @font-lock-constant-face))))
 
 
 (defun f90-ts--font-lock-rules-delimiter ()
