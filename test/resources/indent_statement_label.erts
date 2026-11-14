@@ -1,0 +1,91 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-indent-region (point-min) (point-max)))
+
+Name: labelled do 1
+=-=
+! check indentation after continue statement
+! (covered by catch-all rule to find the proper previous statement)
+program p
+do 10 i = 1, 3
+do 20 j = 1, 3
+x = 1
+20 continue
+x = 2
+10 continue
+end program p
+=-=
+! check indentation after continue statement
+! (covered by catch-all rule to find the proper previous statement)
+program p
+ do 10 i = 1, 3
+      do 20 j = 1, 3
+           x = 1
+20    continue
+      x = 2
+10 continue
+end program p
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-indent-region 193 (point-max)))
+
+Name: labelled do 2
+=-=
+! check indentation with region starting after the continue statement
+! (covered by catch-all rule to find the proper previous statement)
+program p
+ do 10 i = 1, 3
+      do 20 j = 1, 3
+           x = 1
+20    continue
+x = 2
+10 continue
+end program p
+=-=
+! check indentation with region starting after the continue statement
+! (covered by catch-all rule to find the proper previous statement)
+program p
+ do 10 i = 1, 3
+      do 20 j = 1, 3
+           x = 1
+20    continue
+      x = 2
+10 continue
+end program p
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (f90-ts-indent-and-complete-line))
+
+Name: labelled do 3
+=-=
+! check indentation at line after continue statement
+! (covered by catch-all rule to find the proper previous statement)
+program p
+ do 10 i = 1, 3
+      do 20 j = 1, 3
+           x = 1
+20    continue
+|x = 2
+10 continue
+end program p
+=-=
+! check indentation at line after continue statement
+! (covered by catch-all rule to find the proper previous statement)
+program p
+ do 10 i = 1, 3
+      do 20 j = 1, 3
+           x = 1
+20    continue
+      x = 2
+10 continue
+end program p
+=-=-=

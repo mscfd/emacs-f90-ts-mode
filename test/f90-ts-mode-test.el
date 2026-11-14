@@ -564,7 +564,7 @@ can be observed and checked."
        (message "error: %s" (error-message-string err))))))
 
 
-(defun f90-ts-mode-test--erts-simple-register (prefix files)
+(defun f90-ts-mode-test--erts-custom-register (prefix files)
   "Dynamically generate ert-tests for FILES.
 All FILES are assumed to be in erts format.  One ert-test per file is created.
 Preparations and actions to test must be given in the Code preamble
@@ -1190,7 +1190,7 @@ Point is placed after the first \"[...]\" replacement."
 
 
 ;; indentation tests with custom erts Code block
-(f90-ts-mode-test--erts-simple-register
+(f90-ts-mode-test--erts-custom-register
  "f90-ts-mode-test"
  '("indent_region_partial.erts"
    "indent_line_align.erts"
@@ -1199,6 +1199,7 @@ Point is placed after the first \"[...]\" replacement."
    "indent_region_align_columns.erts"
    "indent_region_align_array_literal.erts"
    "indent_trailing_whitespace.erts"
+   "indent_statement_label.erts"
    "break_line.erts"
    "join_line.erts"
    "fill_region_aux.erts"

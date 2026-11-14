@@ -244,6 +244,49 @@ program int23
 end program int23
 =-=-=
 
+Name: do loop labelled 1
+=-=
+subroutine once_upon_a_time()
+     goto 10
+     if (just_ugly()) then
+          do 100, i = 1,10
+               do 1000, j = 1,10
+                    do 1000, k = 1,10
+                         do 1000, m = 1,10
+                              call neither_good_nor_bad()
+1000           continue  ! comment
+100       continue
+     end if
+10   continue
+end subroutine once_upon_a_time
+=-=-=
+
+Name: do loop labelled 2
+=-=
+subroutine do_a_few_loops_more()
+do 100, i = 1,10
+65 do 100, j = 1,10
+normal: do std = 1,100
+do 1000, k = 1,10
+do 1000, m = 1,10
+76 call take_a_fistful()
+1000 end do
+end do
+100 end do
+end subroutine do_a_few_loops_more
+=-=
+subroutine do_a_few_loops_more()
+     do 100, i = 1,10
+65        do 100, j = 1,10
+               normal: do std = 1,100
+                    do 1000, k = 1,10
+                         do 1000, m = 1,10
+76                            call take_a_fistful()
+1000                end do
+               end do normal
+100  end do
+end subroutine do_a_few_loops_more
+=-=-=
 
 
 Name: constructs with io operations

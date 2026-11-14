@@ -1095,12 +1095,14 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
       (if (not (f90-ts--node-type-p first "statement_label"))
           ;; standard case, no statement label present
           first
-        ;; first should be the unnamed node in (statement_label "statement_label")
-        ;; we need the parent, first ensure that this assumption is correct
-        (cl-assert (f90-ts--node-type-p (treesit-node-parent first) "statement_label")
-                   nil "unexpected tree structure at leaf node of type statement_label")
-        (let ((next (treesit-node-next-sibling
-                     (treesit-node-parent first))))
+        ;; first is either the unnamed node in (statement_label "statement_label")
+        ;; (like in "10    x = 65"), or the statement_label itself (as in a
+        ;; terminating statement of a labelled do loop, part of
+        ;; end_do_label_loop_statement node)
+        (let* ((label (if (f90-ts--node-type-p (treesit-node-parent first) "statement_label")
+                          (treesit-node-parent first)
+                        first))
+               (next (treesit-node-next-sibling label)))
           (if (and next
                    (= (f90-ts--node-line first)
                       (f90-ts--node-line next)))
@@ -1260,22 +1262,34 @@ If PARENT is a normal node, then return PARENT."
 (defun f90-ts--indent-pos-at-node (node)
   "Determine indentation position of line where start of NODE is located.
 Besides blanks, skip leading ampersands as well.
-This does not anchor at NODE, just at indentation of first statement node
-on the line.
 
-Note: ampersands and statement_label's are removed for indented lines, but
-node might not be on such a line (for line indentation of region indention
-with relevant nodes outside of marked region), thus we need to actively skip
-them.
+Note: ampersand and statement_label are removed for lines within the indented
+region, but NODE might not be on such a line (for example single line
+indentation or a region indention with relevant nodes like NODE being outside
+of marked region), thus we need to actively skip them.
 
 Note: the determined position can be used as anchor in indentation even within
 `treesit-indent-region', which uses buffering of computed (anchor offset).
 
-TODO: besides ampersands also skip statement_label's."
+A leading statement label is skipped as well, the code following the label is
+the relevant part of such a line."
   (save-excursion
     (goto-char (treesit-node-start node))
     (beginning-of-line)
     (skip-chars-forward "& \t")
+    ;; skip a statement label, the label of nested labelled do loops sharing the
+    ;; terminating statement is a do_label_virtual node covering the label text
+    (when-let* (((looking-at-p "[0-9]"))
+                (leaf (treesit-node-at (point)))
+                ((= (point) (treesit-node-start leaf)))
+                (label (treesit-parent-until
+                        leaf
+                        (lambda (n)
+                          (f90-ts--node-type-p n '("statement_label"
+                                                   "do_label_virtual")))
+                        t)))
+      (goto-char (treesit-node-end label))
+      (skip-chars-forward " \t"))
     (point)))
 
 

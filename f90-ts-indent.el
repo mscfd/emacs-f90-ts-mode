@@ -622,6 +622,69 @@ caching."
     t))
 
 
+(defun f90-ts--do-terminal-end-statement (node)
+  "Return the end_do_label_loop_statement if NODE is part of its label.
+The label of a labelled do loop is either a statement_label, or, if several
+nested loops share the same terminating statement, for all but the outermost
+loop a do_label_virtual node.  The virtual nodes cover the text of the label as
+well, and as they are nested deeper than the statement_label, the node at the
+beginning of the terminating line is in general such a virtual node.
+Return nil if NODE is not part of such a label."
+  (when-let* ((label (treesit-parent-until
+                      node
+                      (lambda (n) (f90-ts--node-type-p n '("statement_label"
+                                                           "do_label_virtual")))
+                      t))
+              (end-stmt (treesit-node-parent label))
+              ((f90-ts--node-type-p end-stmt "end_do_label_loop_statement")))
+    end-stmt))
+
+
+(defun f90-ts--node-do-terminal-label-p (node)
+  "Return non-nil if NODE belongs to the label of a labelled do loop end.
+This label is part of the loop structure, hence it cannot be blanked
+temporarily during indentation like other statement labels."
+  (and node
+       (f90-ts--do-terminal-end-statement node)))
+
+
+(defun f90-ts--do-loop-outermost-sharing-label (do-loop)
+  "Return outermost do_loop sharing the terminating statement with DO-LOOP.
+If the end statement of DO-LOOP has a virtual label, then the terminating
+statement belongs to the enclosing do_loop, which is considered next."
+  (cl-loop
+   for loop = do-loop then parent
+   for end-stmt = (treesit-node-child loop -1)
+   for parent = (treesit-node-parent loop)
+   while (and parent
+              (f90-ts--node-type-p parent "do_loop")
+              (f90-ts--node-type-p end-stmt "end_do_label_loop_statement")
+              (f90-ts--node-type-p
+               (treesit-node-child-by-field-name end-stmt "do_label")
+               "do_label_virtual"))
+   finally return loop))
+
+
+(defun f90-ts--do-terminal-label-is (node _parent _bol &rest _)
+  "Succeed if NODE is the end statement of a labelled do loop.
+The indentation engine passes the largest node starting at the beginning of the
+line, which for the line \"100 continue\" is the
+end_do_label_loop_statement.  If several nested loops share the label, then the
+first line of the terminating statement is the end statement of the innermost
+loop, consisting just of a virtual label."
+  (f90-ts--node-type-p node "end_do_label_loop_statement"))
+
+
+(defun f90-ts--do-terminal-label-anchor (node _parent bol &rest _)
+  "Return anchor for the end statement NODE of a labelled do loop.
+It is the start of the outermost do_loop sharing the end statement.  If it
+cannot be determined, return BOL."
+  (if-let* ((do-loop (treesit-node-parent node))
+            ((f90-ts--node-type-p do-loop "do_loop")))
+      (treesit-node-start (f90-ts--do-loop-outermost-sharing-label do-loop))
+    bol))
+
+
 (defun f90-ts--nopp-parent-is (type-p)
   "Provide patched matcher `parent-is' as used by `treesit-simple-indent'.
 TYPE-P is expected to be a regular expressions.  It is matched against type
@@ -731,6 +794,22 @@ then BOL is returned as anchor position."
     bol))
 
 
+(defun f90-ts--do-loop-terminated-by (node)
+  "Return the outermost do_loop terminated by the statement containing NODE.
+If NODE is not a node of the terminating statement of a labelled do loop,
+then nil is returned.  Several nested loops may share the terminating
+statement.  Aligning with the start of the returned loop is the same as
+aligning with the statement following \"end do\"."
+  (when-let* ((end-stmt (treesit-parent-until
+                         node
+                         (lambda (n) (f90-ts--node-type-p
+                                      n "end_do_label_loop_statement"))
+                         t))
+              (do-loop (treesit-node-parent end-stmt))
+              ((f90-ts--node-type-p do-loop "do_loop")))
+    (f90-ts--do-loop-outermost-sharing-label do-loop)))
+
+
 (defun f90-ts--catch-all-anchor (node parent bol &rest _rest)
   "Provide a fallback anchor for the catch-all case.
 Use NODE and PARENT to select a relevant node to align.  Use BOL if no relevant
@@ -745,9 +824,21 @@ with the previous relevant line."
                        psibp
                        parent
                        node)))
-    (if node-sel
-        (f90-ts--indent-pos-at-node node-sel)
-      bol)))
+    (cond
+     ;; if previous statement terminates a labelled do loop (like in
+     ;; "65 continue"), then align with the do statement;
+     ;; note that the position of the terminating line is not suitable, as it
+     ;; starts with the label, which is at a different column;
+     ;; during indent-region covering the continue line, the label is not
+     ;; removed (as is done for normal non-do labels) and the line is
+     ;; temporarily indented with the label sitting at the column where
+     ;; continue is finally placed, thus indentation without this cond-branch
+     ;; works in this case
+     ((and pstmt-1 (f90-ts--do-loop-terminated-by pstmt-1))
+      (treesit-node-start (f90-ts--do-loop-terminated-by pstmt-1)))
+     (node-sel
+      (f90-ts--indent-pos-at-node node-sel))
+     (t bol))))
 
 
 (defun f90-ts--cached-anchor (_node _parent _bol &rest _rest)
@@ -2874,6 +2965,7 @@ passed through unchanged."
                        openmp-comment-is
                        preproc-node-is
                        preproc-at-toplevel-is
+                       do-terminal-label-is
                        special-comment-is
                        comment-region-is
                        trailing-comment-region-is
@@ -2882,6 +2974,7 @@ passed through unchanged."
                        nopp-grandparent
                        continued-line-anchor
                        previous-stmt-anchor
+                       do-terminal-label-anchor
                        catch-all-anchor
                        cached-anchor
                        ;; offset
@@ -3176,6 +3269,12 @@ and in case of ERROR nodes with incomplete code."
 These are do loops, block statements, associate construct and forall statements."
   (f90-ts--with-map-rules
    ;; structures with a single region block and linear execution
+   ;; labelled do loop: the terminating statement keeps its label during
+   ;; indentation, as it is required to build the tree, the label is
+   ;; moved to its column afterwards by `f90-ts--indent-restore-do-label-line'
+   (do-terminal-label-is do-terminal-label-anchor 0)
+
+   ;; standard do loops
    ((nopp-n-p-gp     "end_do_loop" "do_loop"      nil)  nopp-parent 0)
    ((nopp-n-p-pstmtk nil                "do_loop" "do") nopp-parent f90-ts-indent-block)  ;; proper do block (with or without while)
    ((nopp-n-p-pstmtk nil                "ERROR"   "do") previous-stmt-anchor f90-ts-indent-block)
@@ -3728,20 +3827,34 @@ followed by a comment), which is left untouched."
 (defun f90-ts--blank-label-at-point ()
   "Blank a statement label at point, if present.
 Point is assumed to be at the first non-blank character of the current line.
-Return \\='(label . label-text) if a label was blanked, nil otherwise."
+Return \\='(label . label-text) if a label was blanked, nil otherwise.
+The label of the terminating statement of a labelled do loop is not blanked,
+as the loop structure depends on it.  In this case return
+\\='(do-label . label-text) and leave the buffer unchanged."
   (when-let* ((node (treesit-node-at (point)))
               ((= (point) (treesit-node-start node)))
-              ((f90-ts--node-type-p node "statement_label"))
               (text (treesit-node-text node)))
-    (delete-char (length text))
-    (insert (make-string (length text) ?\s))
-    (cons 'label text)))
+    (cond
+     ((f90-ts--node-do-terminal-label-p node)
+      (cons 'do-label text))
+     ((f90-ts--node-type-p node "statement_label")
+      (delete-char (length text))
+      (insert (make-string (length text) ?\s))
+      (cons 'label text)))))
 
 
 (defun f90-ts--indent-blank-leading-amp-or-label-line ()
   "Blank a leading ampersand or statement label on the current line.
 Return nil if neither was found, \\='(amp) if an ampersand was
-blanked, or \\='(label . label-text) if a statement label was blanked."
+blanked, or \\='(label . label-text) if a statement label was blanked.
+For the label of a labelled do loop end statement nothing is blanked, and
+\\='(do-label . label-text) is returned.
+
+The difference between ampersand and labels versus labelled do is that the
+treesit indent and the modes alignment engines would be become much more
+complicated if these leading nodes (ampersand and label) would be present.
+For the labelled do, it is mandatory to keep the label and easy to fix
+indentation afterwards."
   (unless (f90-ts--point-on-empty-line-p)
     (save-excursion
       (back-to-indentation)
@@ -3797,6 +3910,18 @@ positioned as it is.  A blank is ensured after the label."
         (delete-char (min label-len (1- delta)))))))
 
 
+(defun f90-ts--indent-restore-do-label-line (label-text)
+  "Restore the label LABEL-TEXT of a labelled do loop end statement.
+In contrast to other labels, it was not blanked before indentation.  Hence
+`treesit-indent' has moved the label itself to the indentation column.
+Remove it together with the following blanks, so that the code starts at the
+indentation column, and then proceed as for a blanked label."
+  (back-to-indentation)
+  (when (looking-at (concat (regexp-quote label-text) "[ \t]*"))
+    (replace-match ""))
+  (f90-ts--indent-restore-label-line label-text))
+
+
 (defun f90-ts--indent-restore-leading-amp-or-label-line (amp-or-label)
   "Restore a leading ampersand or statement label from AMP-OR-LABEL.
 AMP-OR-LABEL is a value previously returned by
@@ -3812,6 +3937,8 @@ AMP-OR-LABEL is a value previously returned by
        (f90-ts--indent-restore-leading-ampersand-line))
       (`(label . ,label-text)
        (f90-ts--indent-restore-label-line label-text))
+      (`(do-label . ,label-text)
+       (f90-ts--indent-restore-do-label-line label-text))
       (_ (cl-assert nil nil "unexpected value %S" amp-or-label)))))
 
 
@@ -3840,6 +3967,7 @@ Return a vector (one entry per line) of values as returned by
       ;;   nil               – no amp, no label on the line
       ;;   (amp)             – had a leading & on the line
       ;;   (label . "12345") – had a statement label on the line
+      ;;   (do-label . "12345") – had the label of a labelled do loop end (not blanked)
       (cl-loop
        for ix   from 0
        for line from line-beg to line-end

@@ -67,3 +67,30 @@ subroutine sub()
             |= 2
 end subroutine sub
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-line 'continued-line))
+      (f90-ts-indent-and-complete-line)))
+
+Name: align with label at first statement line
+=-=
+subroutine sub()
+     if (cond1) then
+          if (cond2) then
+10             x0123456789 = x0123456789 + &
+|5
+          end if
+     end if
+end subroutine sub
+=-=
+subroutine sub()
+     if (cond1) then
+          if (cond2) then
+10             x0123456789 = x0123456789 + &
+                      |5
+          end if
+     end if
+end subroutine sub
+=-=-=
