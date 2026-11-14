@@ -1173,7 +1173,8 @@ Point is placed after the first \"[...]\" replacement."
  '("indent_region_smart_end.erts")
  '(nil ; no modification
    f90-ts-mode-test--shorten-to-end)
- '(f90-ts-mode-test--indent-by-region))
+ '(f90-ts-mode-test--indent-by-region
+   f90-ts-mode-test--indent-by-line))
 
 
 ;; alignment tests, leave as is, apply no preparation,

@@ -89,3 +89,92 @@ program p
 10 continue
 end program p
 =-=-=
+
+Name: labelled do smart end 1
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+     do 123, i = 1,234
+          do 123, i = 1,234
+|end
+end
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+     do 123, i = 1,234
+          do 123, i = 1,234
+123  end do|
+end
+=-=-=
+
+Name: labelled do smart end 2
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+     do 123, i = 1,234
+          do 123, i = 1,234
+|continue
+end
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+     do 123, i = 1,234
+          do 123, i = 1,234
+123  continue|
+end
+=-=-=
+
+Name: labelled do smart end 3
+=-=
+subroutine sub()
+     do 123, i = 1,234
+|continue
+continue
+end
+=-=
+subroutine sub()
+     do 123, i = 1,234
+123  continue|
+continue
+end
+=-=-=
+
+Name: labelled do smart end 4
+=-=
+subroutine sub()
+     do 123, i = 1,234
+continue
+|continue
+end
+=-=
+subroutine sub()
+     do 123, i = 1,234
+continue
+123  continue|
+end
+=-=-=
+
+Name: labelled do smart end 5
+=-=
+subroutine sub()
+     do 123, i = 1,234
+          do 123, j = 1,345
+          if (cond) then
+continue
+end
+|end
+end
+=-=
+subroutine sub()
+     do 123, i = 1,234
+          do 123, j = 1,345
+          if (cond) then
+continue
+end
+123  end do|
+end
+=-=-=

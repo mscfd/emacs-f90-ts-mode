@@ -3442,7 +3442,7 @@ Return non-nil if something was changed and text actually replaced."
     ("derived_type_definition" . "(derived_type_definition (derived_type_statement \"type\" @construct (_) * (type_name) @name))")
     ("if_statement"            . "(if_statement (block_label_start_expression _ @name \":\")? \"if\" @construct)")
     ("where_statement"         . "(where_statement (block_label_start_expression _ @name \":\")? \"where\" @construct)")
-    ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct))")
+    ("do_loop"                 . "(do_loop (block_label_start_expression _ @name \":\")? (do_statement \"do\" @construct (statement_label_reference)? @label))")
     ("block_construct"         . "(block_construct (block_label_start_expression _ @name \":\")? \"block\" @construct)")
     ("associate_statement"     . "(associate_statement (block_label_start_expression _ @name \":\")? \"associate\" @construct)")
     ("forall_statement"        . "(forall_statement (block_label_start_expression _ @name \":\")? \"forall\" @construct)")
@@ -3481,12 +3481,12 @@ which are optional and possibly not present or in different order."
 
 (defun f90-ts--complete-smart-end-name (node)
   "Extract construct type and name from NODE.
-Return a list containing name, construct type and second construct type if
-present or nil.  For example, for \"end enumeration type xyz\", return
-the list (\"xyz\" \"enumeration\" \"type\".
-Depending on type of NODE, extraction is different, as subtrees are built
-differently.  The construct type itself is fixed, but lower/upper/title case
-and the related start of the structure are also required for completion."
+Return a list containing name, construct type, second construct type if
+present or nil, and the label of a labelled do loop or nil.  For example, for
+\"end enumeration type xyz\", return the list (\"xyz\" \"enumeration\" \"type\"
+nil).  Depending on type of NODE, extraction is different, as subtrees are
+built differently.  The construct type itself is fixed, but lower/upper/title
+case and the related start of the structure are also required for completion."
   (when-let* ((query (alist-get (treesit-node-type node)
                                 f90-ts--complete-smart-end-query
                                 nil
@@ -3504,7 +3504,8 @@ and the related start of the structure are also required for completion."
     ;; this could be done with the :anchor pattern, but it is rejected... syntax not valid?
     (let* ((construct-node (alist-get 'construct capture))
            (construct2-node (alist-get 'construct2 capture))
-           (name-node (alist-get 'name capture)))
+           (name-node (alist-get 'name capture))
+           (label-node (alist-get 'label capture)))
       (cl-assert construct-node
                  nil
                  "complete-smart-end: no construct node found")
@@ -3512,7 +3513,8 @@ and the related start of the structure are also required for completion."
       (list
        (and name-node (treesit-node-text name-node t))
        (and construct-node (treesit-node-text construct-node t))
-       (and construct2-node (treesit-node-text construct2-node t))))))
+       (and construct2-node (treesit-node-text construct2-node t))
+       (and label-node (treesit-node-text label-node t))))))
 
 
 (defun f90-ts--complete-smart-end-compose (node)
@@ -3529,6 +3531,9 @@ not happen, as `f90-ts--complete-end-structs' lists all supported structures."
     (let* ((name (car construct-name))
            (construct (cadr construct-name))
            (construct2 (caddr construct-name))
+           ;; label of a labelled do loop: an unlabelled end does not terminate
+           ;; such a loop, thus the completion has to start with the label
+           (label (nth 3 construct-name))
            (c0 (substring construct 0 1))
            (end
             (cond
@@ -3538,7 +3543,7 @@ not happen, as `f90-ts--complete-end-structs' lists all supported structures."
               "End")
              (t
               "end"))))
-      (string-join (delq nil (list end construct construct2 name))
+      (string-join (delq nil (list label end construct construct2 name))
                    " "))))
 
 
@@ -3630,6 +3635,110 @@ option or statement indentation."
               node-struct))))))
 
 
+(defun f90-ts--complete-prev-do-statement (node)
+  "Return the closest preceding named sibling of NODE of type do_statement.
+Siblings of other types are skipped, in particular closed do_loop nodes, which
+contain their own do_statement.  Return nil if there is no such sibling."
+  (cl-loop
+   for sib = (treesit-node-prev-sibling node t)
+   then (treesit-node-prev-sibling sib t)
+   while sib
+   when (f90-ts--node-type-p sib "do_statement")
+   return sib))
+
+
+(defun f90-ts--complete-following-siblings (node)
+  "Return the list of all named siblings following NODE, in buffer order.
+Return nil if NODE is the last named child of its parent."
+  (cl-loop
+   for sib = (treesit-node-next-sibling node t)
+   then (treesit-node-next-sibling sib t)
+   while sib
+   collect sib))
+
+
+(defun f90-ts--complete-do-label-closed-p (label following)
+  "Return non-nil if a node in FOLLOWING already terminates a loop labelled LABEL.
+FOLLOWING is a list of nodes.  A terminating statement is either an
+end_do_label_loop_statement or a statement starting with LABEL."
+  (cl-some (lambda (n)
+             (or (f90-ts--node-type-p n "end_do_label_loop_statement")
+                 (string-match-p
+                  (concat "\\`" (regexp-quote label) "\\(?:[^0-9]\\|\\'\\)")
+                  (treesit-node-text n t))))
+           following))
+
+
+(defun f90-ts--complete-continue-open-do (node)
+  "Return the do_statement of the open labelled do loop terminated by NODE.
+NODE is a keyword_statement consisting of a bare \"continue\".  In incomplete
+code it is completed without further checks, as it is not possible to tell an
+ordinary continue from a terminating one.  The only exception is a loop which
+is already terminated, in which case NODE is an ordinary statement.
+
+The open loop is either the do_loop containing NODE, or, if the parser could not
+build a do_loop, the closest preceding do_statement among the siblings of NODE
+within an ERROR node.  A do_loop is terminated if its last child is an
+\"end_do_label_loop_statement\".  A loose do_statement is terminated if a
+following sibling is such a statement or starts with the label.
+Return nil if there is no open loop or its do_statement has no label."
+  (when-let* (((f90-ts--node-type-p node "keyword_statement"))
+              ((string= (downcase (treesit-node-text node t)) "continue"))
+              (parent (treesit-node-parent node)))
+    (cond
+     ((f90-ts--node-type-p parent "do_loop")
+      (unless (f90-ts--node-type-p (treesit-node-child parent -1 t)
+                                   "end_do_label_loop_statement")
+        (cl-find-if (lambda (c)
+                      (f90-ts--node-type-p c "do_statement"))
+                    (treesit-node-children parent t))))
+     ((f90-ts--node-type-p parent "ERROR")
+      ;; closed do_loop nodes are skipped, an unlabelled open do loop gets
+      ;; matched to the continue keyword
+      (when-let* ((do-stmt (f90-ts--complete-prev-do-statement node))
+                  (label (treesit-node-child-by-field-name do-stmt
+                                                           "do_label")))
+        (unless (f90-ts--complete-do-label-closed-p
+                 (treesit-node-text label t)
+                 (f90-ts--complete-following-siblings node))
+          do-stmt))))))
+
+
+(defun f90-ts--complete-continue-label (node)
+  "Return label text if NODE is an unlabelled continue ending a labelled do loop.
+Otherwise return nil.  See `f90-ts--complete-continue-open-do'."
+  (when-let* ((do-stmt (f90-ts--complete-continue-open-do node))
+              (label (treesit-node-child-by-field-name do-stmt "do_label")))
+    (treesit-node-text label t)))
+
+
+(defun f90-ts--complete-do-continue-node (node)
+  "If NODE is a continue closing a labelled do loop, prefix the label.
+Example: complete \"continue\" in \"do 100 i = 1, n\" by \"100 continue\".
+Return the structure node for blink and indentation, or nil if nothing applies.
+This is the do_loop containing NODE, or the do_statement if no do_loop exists."
+  (when-let* ((label (f90-ts--complete-continue-label node))
+              (beg (treesit-node-start node))
+              (end (f90-ts--complete-smart-end-end node))
+              ((save-excursion
+                 (goto-char beg)
+                 (<= end (line-end-position)))))
+    (let* ((parent (treesit-node-parent node))
+           (node-struct (if (f90-ts--node-type-p parent "do_loop")
+                            parent
+                          (f90-ts--complete-continue-open-do node)))
+           (completion (concat label " " (treesit-node-text node t))))
+      (or (f90-ts--complete-replace-end-struct node-struct beg end completion)
+          node-struct))))
+
+
+(defun f90-ts--complete-smart-node (node)
+  "Apply smart completion to NODE, an end statement or a terminating continue.
+Return the structure node if something applies, otherwise nil."
+  (or (f90-ts--complete-smart-end-node node)
+      (f90-ts--complete-do-continue-node node)))
+
+
 (defun f90-ts--complete-smart-end-indent (node-struct)
   "Indent block represented by NODE-STRUCT.
 This can be optionally invoked after smart end completion to indent the whole
@@ -3690,7 +3799,13 @@ If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
                 (end (treesit-node-end node)))
       (when (= (line-number-at-pos)
                (f90-ts--node-line node))
-        (when-let* ((node-struct (f90-ts--complete-smart-end-node node)))
+        (when-let* ((node-struct (f90-ts--complete-smart-node node)))
+          ;; a label inserted for a labelled do loop sits behind the
+          ;; indentation, indent again to move it to the label column
+          (when (save-excursion
+                  (back-to-indentation)
+                  (looking-at-p "[0-9]"))
+            (f90-ts--indent-line-aux nil))
           (when indent-struct
             ;; update node-struct, if indent changes anything
             (setq node-struct (or (f90-ts--complete-smart-end-indent node-struct)
@@ -4172,8 +4287,9 @@ no abort mechanism for `treesit-search-foward'."
       ;; without this, the search exhausts the whole remaining tree
       (throw 'f90-ts--past-end nil))
     (and (<= pos end-n)
-         (member (treesit-node-type node)
-                 f90-ts--complete-end-structs))))
+         (or (member (treesit-node-type node)
+                     f90-ts--complete-end-structs)
+             (f90-ts--complete-continue-label node)))))
 
 
 ;; used by f90-ts-indent-and-complete-region
@@ -4203,7 +4319,7 @@ no abort mechanism for `treesit-search-foward'."
                          nil) ; only named nodes (end-structs are always named nodes)
              while node
              do (let ((node-start (treesit-node-start node)))
-                  (f90-ts--complete-smart-end-node node)
+                  (f90-ts--complete-smart-node node)
                   (goto-char node-start)
                   (forward-line 1))
              until (eobp)
