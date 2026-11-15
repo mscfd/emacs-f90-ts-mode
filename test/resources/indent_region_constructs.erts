@@ -211,19 +211,29 @@ function outer(a, b, n) result(T)
 end function outer
 =-=-=
 
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'continued-line)
+          (f90-ts-indent-list-line 'continued-line))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
 Name: do loop constructs 9
 =-=
+! continued line offset (to allow for add/remove indent prepare functions)
 program int23
  implicit none
  integer, parameter :: n = 8
- real :: x(n), &
-         y(n), &
-         z(n)
- real :: scale, int2, int3
- real :: tmp, test
+ real(dp) :: x(n), &
+        y(n), &
+        z(n)
+ real(dp) :: scale, int2, int3
+ real(dp) :: tmp, test
  integer :: i
 
- scale = 1.0 / real(n)
+ scale = 1.0 / real(n,dp)
  test = -1.0
  int2 = 0.0
  int3 = 0.0
@@ -243,6 +253,13 @@ program int23
  end do integrate
 end program int23
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
 
 Name: do loop labelled 1
 =-=

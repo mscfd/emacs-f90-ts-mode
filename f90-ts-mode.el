@@ -37,7 +37,7 @@
 ;;     * io item lists,
 ;;     * result keyword for functions,
 ;;     * extent_specifier for array ranges,
-;;     * concurrent in do concurrent header line,
+;;     * do concurrent statement,
 ;;     * use, public and private statements and
 ;;     * procedure and generic binding lists.
 ;;   - Indentation for old-style labelled do loops added.
@@ -211,7 +211,7 @@ Changelog (recent):
   * io item lists,
   * result keyword for functions,
   * extent_specifier for array ranges,
-  * concurrent in do concurrent header line,
+  * do concurrent statement,
   * use, public and private statements and
   * procedure and generic binding lists.
 - Indentation for old-style labelled do loops added.

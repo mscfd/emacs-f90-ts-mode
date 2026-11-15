@@ -965,3 +965,86 @@ subroutine sub()
      end do
 end subroutine sub
 =-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: do concurrent 8
+=-=
+program int23
+integrate: do, concurrent (i = 1:n) default(none) &
+                                    shared (x, y, z, scale) &
+local (tmp) &
+local_init (test) &
+reduce     (+: int2, &
+int3)
+tmp  = (real(i)-0.5) * scale
+x(i) = tmp
+y(i) = tmp**2
+z(i) = tmp**3
+int2 = int2 + y(i)
+int3 = int3 + z(i)
+end do integrate
+end program int23
+=-=
+program int23
+ integrate: do, concurrent (i = 1:n) default(none) &
+                shared (x, y, z, scale) &
+                local (tmp) &
+                local_init (test) &
+                reduce     (+: int2, &
+                               int3)
+      tmp  = (real(i)-0.5) * scale
+      x(i) = tmp
+      y(i) = tmp**2
+      z(i) = tmp**3
+      int2 = int2 + y(i)
+      int3 = int3 + z(i)
+ end do integrate
+end program int23
+=-=-=
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: do concurrent 9
+=-=
+program int23
+integrate: do, concurrent (i = 1:n) default(none) &
+                                    shared (x, y, z, scale) &
+local (tmp) local_init (test) &
+            reduce (+: int2, &
+                    int3)
+tmp  = (real(i)-0.5) * scale
+x(i) = tmp
+y(i) = tmp**2
+z(i) = tmp**3
+int2 = int2 + y(i)
+int3 = int3 + z(i)
+end
+end
+=-=
+program int23
+ integrate: do, concurrent (i = 1:n) default(none) &
+                                     shared (x, y, z, scale) &
+                local (tmp) local_init (test) &
+                            reduce (+: int2, &
+                                    int3)
+      tmp  = (real(i)-0.5) * scale
+      x(i) = tmp
+      y(i) = tmp**2
+      z(i) = tmp**3
+      int2 = int2 + y(i)
+      int3 = int3 + z(i)
+ end do integrate
+end program int23
+=-=-=

@@ -1287,6 +1287,62 @@ as the controls are aligned with each other, not with the type."
      (seq-drop (treesit-node-children list-context) 1))))
 
 
+(defun f90-ts--align-isyms-concurrent-statement (context _loc)
+  "Determine relevant children of CONTEXT = \"concurrent_statement\".
+The statement is the header followed by the locality specifiers:
+
+  do concurrent (i = 1:n) default(none) &
+     shared(x, y) &
+     local(tmp) &
+     reduce(+: s)
+
+Return the locality specifiers (\"concurrent_locality\" nodes), continuation
+symbols and comments.  Drop the header, which is the \"concurrent_header\"
+list context of its own.  The specifiers are aligned with each other, and
+primarily with the keyword \"concurrent\", see
+`f90-ts--align-other-concurrent-statement'."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "concurrent_statement")
+               nil
+               "expected list context: concurrent_statement, got '%s'"
+               list-context)
+    (seq-remove
+     (lambda (n) (f90-ts--node-type-p n "concurrent_header"))
+     (treesit-node-children list-context))))
+
+
+(defun f90-ts--align-isyms-concurrent-locality (context _loc)
+  "Determine relevant children of CONTEXT = \"concurrent_locality\".
+A locality specifier is \"keyword (items)\" with keyword one of \"default\",
+\"shared\", \"local\", \"local_init\" and \"reduce\".  Return the items, commas,
+continuation symbols and comments.  Drop the keyword and the parentheses.
+
+For \"reduce (op: a, b, ...)\" additionally drop the reduction operator and
+the colon, as only the variables are aligned with each other:
+
+  reduce(+: int2, &
+            int3)
+
+No other locality specifier contains a colon."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "concurrent_locality")
+               nil
+               "expected list context: concurrent_locality, got '%s'"
+               list-context)
+    (let* (;; drop the keyword
+           (children (seq-drop (treesit-node-children list-context) 1))
+           (colon (seq-find (lambda (n)
+                              (eq (f90-ts--align-node-symbol n) 'colon))
+                            children)))
+      (seq-filter
+       (lambda (n)
+         (not (eq (f90-ts--align-node-symbol n) 'parenthesis)))
+       ;; reduce: items start after the colon
+       (if colon
+           (cdr (memq colon children))
+         children)))))
+
+
 (defun f90-ts--align-expand-assoc (nodes)
   "Replace association nodes in list NODES by their first two children.
 These are field \"name\" and \"=>\".  There is no handling of the selector
@@ -1637,7 +1693,8 @@ The opening parenthesis is the first parenthesis child of the context."
                                     "array_literal"
                                     "parameters"
                                     "size"
-                                    "concurrent_header"))
+                                    "concurrent_header"
+                                    "concurrent_locality"))
              nil
              "align-list-other-paren: wrong context, got '%s'"
              (car context))
@@ -1656,6 +1713,36 @@ The opening parenthesis is the first parenthesis child of the context."
                              (f90-ts--align-other-paren-offset node-sym))))
     (f90-ts--align-other-paren-expr-core
      node-sym open-paren start-paren offset-paren indent-at-paren items-plist)))
+
+
+(defun f90-ts--align-other-concurrent-statement (context _loc _items-plist)
+  "Return the alignment choice for the list context \"concurrent_statement\".
+The items are the locality specifiers following the header, like
+
+  integrate: do, concurrent (i = 1:n) default(none) &
+                 shared(x, y, z, scale) &
+                 local(tmp) &
+                 reduce(+: int2, &
+                           int3)
+
+The primary position is the column of the keyword \"concurrent\", which is
+the first child of the header.  The standard continued line position is always
+a candidate, the earlier specifiers on previous lines are candidates as
+well (`sym-items' is `candidate'), but they are not primary.  This applies to
+comments and continuation symbols on continued lines, too.
+
+CONTEXT is as described in the calling convention of the align-list-other
+family."
+  (let* ((list-context (car context))
+         (header (seq-find (lambda (n)
+                             (f90-ts--node-type-p n "concurrent_header"))
+                           (treesit-node-children list-context)))
+         (keyword (and header (treesit-node-child header 0 nil))))
+    (cl-assert (f90-ts--node-type-p list-context "concurrent_statement")
+               nil "wrong context, got '%s'" list-context)
+    (when keyword
+      (f90-ts--align-choice-create :default   (cons keyword 0)
+                                   :sym-items 'candidate))))
 
 
 (defun f90-ts--align-other-op-expr (context loc items-plist)
@@ -2956,6 +3043,12 @@ Finally use VARIANT to select one pair to align with."
               :get-other-fn f90-ts--align-other-extent))
       (cons "concurrent_header"
             '(:get-isyms-fn f90-ts--align-isyms-concurrent-header
+              :get-other-fn f90-ts--align-other-paren))
+      (cons "concurrent_statement"
+            '(:get-isyms-fn f90-ts--align-isyms-concurrent-statement
+              :get-other-fn f90-ts--align-other-concurrent-statement))
+      (cons "concurrent_locality"
+            '(:get-isyms-fn f90-ts--align-isyms-concurrent-locality
               :get-other-fn f90-ts--align-other-paren))
       (cons "concurrent_control"       control-prop)
       (cons "triplet_spec"             control-prop)
