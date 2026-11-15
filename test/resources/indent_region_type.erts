@@ -1,17 +1,18 @@
 Code:
   (lambda ()
     (f90-ts-mode)
-    (when f90-ts-mode-test--prepare-fn
-      (funcall f90-ts-mode-test--prepare-fn))
-    (funcall f90-ts-mode-test--action-fn))
+    (let ((f90-ts-indent-list-region 'continued-line)
+          (f90-ts-indent-list-line 'continued-line))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
 
 Point-Char: |
 
 Name: derived type declaration 1
 =-=
 module mytype
- use mod, only: sub_ifc, &
-        other
+ use mod, only: sub_ifc, other
  implicit none (type, external)
  private
 

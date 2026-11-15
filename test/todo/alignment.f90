@@ -1,16 +1,16 @@
-! align use-only statements
-module foo
- use mod1
- use mod2, only: sub1, &
-       sub2
-contains
- subroutine sub_bar()
-      use mod3, only: fun1 => mod3_fun1, &
-             fun2 => mod3_fun2, &
-             ! one more
-             fun3 => mod3_fun3
- end subroutine sub_bar
-end module foo
+! align like use statements, init_decl etc
+module m
+ type :: t
+ contains
+      procedure :: a0123, &
+             b0123
+      procedure :: c456 => impl_c456, &
+             d456 => impl_d456
+      generic :: generic_name => variant1, &
+             variant2, &
+             variant3
+ end type t
+end module m
 
 
 ! align public items statements

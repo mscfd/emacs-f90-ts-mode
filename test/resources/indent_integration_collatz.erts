@@ -16,7 +16,7 @@ module collatz_mod
 
  ! Public interfaces
  public :: collatz_processor, &
-        collatz_processor_t
+           collatz_processor_t
 
  ! Type for storing results for a single number
  type :: collatz_seq_t

@@ -1226,6 +1226,65 @@ This is used for nodes of type \"import_statement\"."
 
 
 ;;++++++++++++++
+;; list context: included_items of use statements
+
+(defun f90-ts--align-items-included (context _loc)
+  "Determine relevant children of CONTEXT = \"included_items\".
+This is the part of a use statement following the module name, like
+\", only: a, b => c\" or \", a => b\".  The items are the imported entities,
+either plain names or renaming nodes of type \"use_alias\".  Drop the leading
+comma, the keyword \"only\" and its colon (and continuation symbols and comments
+among them), as these are not aligned with the items.  Commas, continuation
+symbols and comments between the items are kept."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "included_items")
+               nil "expected list context: included_items, got '%s'" list-context)
+    (seq-drop-while
+     (lambda (n) (f90-ts--node-type-p n '("," "only" ":" "&" "comment")))
+     (treesit-node-children list-context))))
+
+
+;;++++++++++++++
+;; list context: use_statement (renaming without only)
+
+(defun f90-ts--align-items-use (context _loc)
+  "Determine relevant children of CONTEXT = \"use_statement\".
+This is for use statements without \"only\", like \"use mod, a => b, c => d\",
+where the renaming nodes are children of the use statement itself and not of
+an \"included_items\" node.  Drop everything up to and including the module
+name, and the following comma (and continuation symbols and comments).  Commas,
+continuation symbols and comments between the items are kept."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "use_statement")
+               nil "expected list context: use_statement, got '%s'" list-context)
+    (seq-drop-while
+     (lambda (n) (f90-ts--node-type-p n '("," "&" "comment")))
+     (cdr (seq-drop-while
+           (lambda (n) (not (f90-ts--node-type-p n "module_name")))
+           (treesit-node-children list-context))))))
+
+
+;;++++++++++++++
+;; list context: public_statement, private_statement
+
+(defun f90-ts--align-items-access (context _loc)
+  "Determine relevant children of CONTEXT being an access statement.
+This is used for nodes of type \"public_statement\" and \"private_statement\",
+like \"public :: a, b\" or \"private a, b\".  Drop the keyword and the
+optional \"::\", as these are not aligned with the items.  Commata,
+continuation symbols and comments in between are kept."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context '("public_statement"
+                                                   "private_statement"))
+               nil "expected list context: public_statement or private_statement, got '%s'"
+               list-context)
+    (seq-drop-while
+     (lambda (n) (f90-ts--node-type-p n '("::" "&" "comment")))
+     ;; drop the keyword itself
+     (seq-drop (treesit-node-children list-context) 1))))
+
+
+;;++++++++++++++
 ;; list context: binding_list, final_statement
 
 (defun f90-ts--align-items-children2 (context _loc)
@@ -1242,20 +1301,28 @@ Both occur in the contains part of a derived type definition."
 
 
 ;;++++++++++++++
-;; list context: init_declarator, pointer_init_declarator
+;; list context: assign-like nodes (association, init_declarator,
+;; pointer_init_declarator, use_alias)
 
-(defun f90-ts--align-items-init-decl (context _loc)
-  "Determine relevant children of CONTEXT by dropping the declared variable.
-This is used for nodes of type \"init_declarator\" and
-\"pointer_init_declarator\", like \"a = 1\" or \"p => null()\".  The remaining
-children are the \"=\" or \"=>\" symbol and the initialisation expression."
+(defconst f90-ts--align-assign-like-types
+  '("association" "init_declarator" "pointer_init_declarator" "use_alias")
+  "Node types of assign-like items, which are \"lhs = rhs\" or \"lhs => rhs\".
+These are the associations in \"associate(x => y)\", the init declarators in
+variable declarations, and the use aliases in use statements.")
+
+
+(defun f90-ts--align-items-assign-like (context _loc)
+  "Determine relevant children of CONTEXT by dropping the left hand side.
+This is used for assign-like nodes, see `f90-ts--align-assign-like-types',
+like \"x => y\" in an association, \"a = 1\" or \"p => null()\" in a variable
+declaration, or \"local => remote\" in a use statement.  The remaining
+children are the \"=\" or \"=>\" symbol and the right hand side."
   (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context '("init_declarator"
-                                                   "pointer_init_declarator"))
+    (cl-assert (f90-ts--node-type-p list-context f90-ts--align-assign-like-types)
                nil
-               "expected list context: init_declarator, got '%s'" list-context)
+               "expected assign-like list context, got '%s'" list-context)
     (when-let* ((children (treesit-node-children list-context)))
-      ;; drop the declared variable (the left field)
+      ;; drop the lhs
       (seq-drop children 1))))
 
 
@@ -1636,15 +1703,15 @@ the align-list-other family."
 
 
 (defun f90-ts--align-other-association (context loc _items-plist)
-  "Return the other plist for association nodes.
+  "Return the other plist for the list context \"association_list\".
 For association lists (associate(x => y, ...)), the primary position is to
-align with the initial opening parenthesis plus some offset.
-However, if node is the =>, then apply indent with `f90-ts-indent-continued'
-relative to opening parenthesis.
+align with the initial opening parenthesis plus some offset.  Line breaks
+within an association, like before or after \"=>\", are handled by the context
+of the association itself, see `f90-ts--align-other-assign-like'.
 
 CONTEXT and LOC are as described in the calling convention of the
 align-list-other family."
-  ;; for argument_list, there should always be the opening parenthesis
+  ;; for association_list, there should always be the opening parenthesis
   (let* ((list-context (car context))
          (nsym (alist-get 'nsym loc))
          (child-paren (treesit-node-child list-context 0 nil)))
@@ -1657,30 +1724,56 @@ align-list-other family."
     (list :primary
           (cons (treesit-node-start child-paren)
                 (pcase nsym
-                  ('associate   f90-ts-indent-continued)     ; indents "=>"
                   ('parenthesis f90-ts-indent-paren-close)   ; indents ")"
                   (_            f90-ts-indent-paren-default) ; all other kind of nodes
                   )))))
 
 
-(defun f90-ts--align-init-decl-prev-symbols (init nsym line)
-  "Return anoffs of earlier \"=\" or \"=>\" symbols of init declarators.
-INIT is an init declarator (or pointer init declarator) node.  Collect the
-assignment symbol of NSYM (`assignment': \"=\", `associate': \"=>\") of all init
-declarators in the same variable_declaration which precede INIT, and which are
-on a line before LINE.  Return a list of pairs (node . 0), or nil for other
-values of NSYM."
-  (let ((decl (treesit-node-parent init))
+(defun f90-ts--align-other-entity-list (context _loc items-plist)
+  "Return the other plist for lists of items which are aligned with each other.
+This is used for the list contexts \"included_items\", \"use_statement\",
+\"public_statement\" and \"private_statement\":
+
+  use mod2, only: sub1, &
+                  sub2
+  public :: sub3, &
+            ! comment aligned as well
+            sub4
+
+Nodes compatible with earlier items are aligned with the earlier item with the
+smallest column, see `f90-ts--align-anchor-offset'.  Other nodes, like
+comments, use the first item before the current line as primary position.  If
+there is no such item yet, as in \"only: &\" followed by the first item, no
+primary is provided and the standard continued line position is used.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
+align-list-other family."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context '("included_items"
+                                                   "use_statement"
+                                                   "public_statement"
+                                                   "private_statement"))
+               nil "wrong context, got '%s'" list-context)
+    (when-let* ((first-item (seq-find (lambda (ni) (eq (cdr ni) 'named))
+                                      (plist-get items-plist :prev))))
+      (list :primary (cons (car first-item) 0)))))
+
+
+(defun f90-ts--align-assign-like-prev-symbols (item nsym line)
+  "Return anoffs of earlier \"=\" or \"=>\" symbols of assign-like items.
+ITEM is an assign-like node.  Collect the assignment symbol of
+NSYM (`assignment': \"=\", `associate': \"=>\") of all assign-like siblings
+of ITEM which precede ITEM, and which are on a line before LINE.  Return a
+list of pairs (node . 0), or nil for other values of NSYM."
+  (let ((parent (treesit-node-parent item))
         (sym-type (pcase nsym
                     ('assignment "=")
                     ('associate  "=>"))))
-    (when (and sym-type
-               (f90-ts--node-type-p decl "variable_declaration"))
+    (when sym-type
       (cl-loop
-       for n in (f90-ts--children-by-fields decl '("declarator"))
-       when (and (< (treesit-node-start n) (treesit-node-start init))
-                 (f90-ts--node-type-p n '("init_declarator"
-                                          "pointer_init_declarator")))
+       for n in (treesit-node-children parent)
+       when (and (< (treesit-node-start n) (treesit-node-start item))
+                 (f90-ts--node-type-p n f90-ts--align-assign-like-types))
        append (cl-loop
                for c in (treesit-node-children n)
                when (and (f90-ts--node-type-p c sym-type)
@@ -1688,29 +1781,48 @@ values of NSYM."
                collect (cons c 0))))))
 
 
-(defun f90-ts--align-other-init-decl (context loc _items-plist)
-  "Return the other plist for init declarator nodes.
-An init declarator is \"left = value\" or \"left => value\" in a variable
-declaration, spread over several lines.  Examples:
+(defun f90-ts--align-assign-like-parent-anoff (item)
+  "Return the anoff relative to the parent construct of assign-like ITEM.
+For an association, this is the opening parenthesis of the association list
+plus `f90-ts-indent-continued'.  For init declarators and use aliases, there is
+no such anchor, and nil is returned.  The standard continued line position
+relative to the statement is always a candidate anyway."
+  (let* ((parent (treesit-node-parent item))
+         (paren (and (f90-ts--node-type-p parent "association_list")
+                     (treesit-node-child parent 0 nil))))
+    (when (f90-ts--node-type-p paren "(")
+      (cons (treesit-node-start paren) f90-ts-indent-continued))))
 
+
+(defun f90-ts--align-other-assign-like (context loc _items-plist)
+  "Return the other plist for assign-like nodes.
+An assign-like node is \"lhs = rhs\" or \"lhs => rhs\", spread over several
+lines, see `f90-ts--align-assign-like-types'.  Examples:
+
+  associate(p &
+              => self%points, &   ! \"=>\": relative to the lhs
+            q => &
+              other)              ! rhs: relative to the lhs
+  use mod, only: fun1 &
+                   => mod_fun1    ! \"=>\": relative to the lhs
   integer, dimension(1:6) :: &
-       lebedev_N = &          ! start of the init declarator
-            [6, 14, 26, &     ! value: hanging relative to the declarator
+       lebedev_N = &              ! start of the init declarator
+            [6, 14, 26, &         ! rhs: hanging relative to the lhs
              38, 50, 74]
-  integer, dimension(1:2), parameter :: &
-       lebedev_N &
-            = [6, 14]         ! \"=\": hanging as well
 
-There is no alignment with earlier rhs items, as there is only one value on the
-right hand side.  However, `f90-ts-indent-continued' relative to the indentation
-of the line holding the declared variable and the declared variable itself are
-further candidates.
+For associations and use aliases, the lhs is the start of the list item, and the
+primary position is `f90-ts-indent-continued' relative to the start of the lhs,
+for the symbol \"=>\" as well as for the rhs.
 
-If the current node is the symbol \"=\" or \"=>\", the primary position is the
-standard continued line position, unless an earlier init declarator in the
-variable declaration has the same symbol on an earlier line and this symbol is
-itself preceded by an ampersand, like the current one.  Then align with the one
-with the smallest column:
+For init declarators, the lhs follows the \"::\" and is not a good anchor.  If
+the current node is the symbol \"=\" or \"=>\", the primary position is the
+standard continued line position.  For all other nodes, like the rhs, it is
+`f90-ts-indent-continued' relative to the indentation of the line holding the
+lhs.
+
+In both cases, unless an earlier assign-like sibling has the same symbol on an
+earlier line and this symbol is itself preceded by an ampersand, like the
+current one.  Then align with the one with the smallest column:
 
     real, target :: x = 1, &
                     y &
@@ -1718,39 +1830,50 @@ with the smallest column:
                     z &
                       = 2       ! aligned with \"=\" in \"y = 1\", primary
 
-The :primary position has :forced t.  Positions relative to the whole variable
-declaration, like the one after \"::\", are not appropriate here.
+Further candidates are `f90-ts-indent-continued' relative to the indentation of
+the line holding the lhs, relative to the parent construct (the opening
+parenthesis of an association list, see
+`f90-ts--align-assign-like-parent-anoff'), the earlier symbols, and the lhs
+itself.  The standard continued line position is always a candidate.
+
+There is no alignment with earlier rhs items, as there is only one rhs.  The
+:primary position has :force t.  Positions relative to the whole declaration or
+statement, like the one after \"::\", are not appropriate here.
 
 CONTEXT and LOC are as described in the calling convention of the
 align-list-other family."
-  (let* ((list-context (car context))
+  (let* ((item (car context))
          (nsym (alist-get 'nsym loc))
          (symbol-p (memq nsym '(assignment associate)))
-         (left (or (treesit-node-child-by-field-name list-context "left")
-                   (treesit-node-child list-context 0 nil)))
+         ;; the lhs starts the list item, hence it is an anchor for the primary
+         (lhs-primary-p (f90-ts--node-type-p item '("association" "use_alias")))
+         (left (or (treesit-node-child-by-field-name item "left")
+                   (treesit-node-child item 0 nil)))
+         (anoff-lhs (cons (treesit-node-start left) f90-ts-indent-continued))
          (anoff-hang (cons (f90-ts--indent-pos-at-node left)
                            f90-ts-indent-continued))
-         (anoffs-sym (f90-ts--align-init-decl-prev-symbols
-                      list-context nsym (alist-get 'line loc)))
+         (anoff-parent (f90-ts--align-assign-like-parent-anoff item))
+         (anoffs-sym (f90-ts--align-assign-like-prev-symbols
+                      item nsym (alist-get 'line loc)))
          ;; only symbols which start a continued line are primary candidates
          (anoffs-amp (seq-filter
                       (lambda (anoff)
-                        (let ((n (car anoff)))
-                          (f90-ts--node-type-p (treesit-node-prev-sibling n)
-                                               "&")))
+                        (f90-ts--node-type-p
+                         (treesit-node-prev-sibling (car anoff)) "&"))
                       anoffs-sym))
          (anoff-amp  (and anoffs-amp
                           (f90-ts--align-smallest-anoff anoffs-amp))))
-    (cl-assert (f90-ts--node-type-p list-context '("init_declarator"
-                                                   "pointer_init_declarator"))
-               nil "wrong context, got '%s'" list-context)
+    (cl-assert (f90-ts--node-type-p item f90-ts--align-assign-like-types)
+               nil "wrong context, got '%s'" item)
     (list :primary (cond
                     (anoff-amp anoff-amp)
+                    (lhs-primary-p anoff-lhs)
                     ;; nil: forced primary becomes the continued line position
                     (symbol-p nil)
                     (t anoff-hang))
           :force   t
-          :others  (append (and symbol-p (list anoff-hang))
+          :others  (append (and (or symbol-p lhs-primary-p) (list anoff-hang))
+                           (and anoff-parent (list anoff-parent))
                            anoffs-sym
                            (list (cons (treesit-node-start left) 0))))))
 
@@ -2623,15 +2746,19 @@ Finally use VARIANT to select one pair to align with."
 ;; alignment (see the calling convention above `f90-ts--align-other-paren-expr-core'),
 ;; if not provided, only earlier items and the standard continued line position are used
 (defconst f90-ts--align-list-context-properties
-  (let ((expr-prop    '(:get-items-fn f90-ts--align-items-op-expr
-                        :get-other-fn f90-ts--align-other-op-expr))
-        (paren-prop   '(:get-items-fn f90-ts--align-items-children-no-paren
-                        :get-other-fn f90-ts--align-other-paren))
-        (bind-prop    '(:get-items-fn f90-ts--align-items-children2))
-        (io-item-prop '(:get-items-fn f90-ts--align-items-children-no-paren
-                        :get-other-fn f90-ts--align-other-item-list))
-        (control-prop '(:get-items-fn f90-ts--align-items-drop-left
-                        :get-other-fn f90-ts--align-other-control)))
+  (let ((expr-prop        '(:get-items-fn f90-ts--align-items-op-expr
+                            :get-other-fn f90-ts--align-other-op-expr))
+        (paren-prop       '(:get-items-fn f90-ts--align-items-children-no-paren
+                            :get-other-fn f90-ts--align-other-paren))
+        (bind-prop        '(:get-items-fn f90-ts--align-items-children2))
+        (io-item-prop     '(:get-items-fn f90-ts--align-items-children-no-paren
+                            :get-other-fn f90-ts--align-other-item-list))
+        (control-prop     '(:get-items-fn f90-ts--align-items-drop-left
+                            :get-other-fn f90-ts--align-other-control))
+        (assign-like-prop '(:get-items-fn f90-ts--align-items-assign-like
+                            :get-other-fn f90-ts--align-other-assign-like))
+        (access-prop      '(:get-items-fn f90-ts--align-items-access
+                            :get-other-fn f90-ts--align-other-entity-list)))
     (cl-remove-if
      #'null
      (list
@@ -2664,12 +2791,10 @@ Finally use VARIANT to select one pair to align with."
       (cons "variable_declaration"
             '(:get-items-fn f90-ts--align-items-var-decl
               :get-other-fn f90-ts--align-other-var-decl))
-      (cons "init_declarator"
-            '(:get-items-fn f90-ts--align-items-init-decl
-              :get-other-fn f90-ts--align-other-init-decl))
-      (cons "pointer_init_declarator"
-            '(:get-items-fn f90-ts--align-items-init-decl
-              :get-other-fn f90-ts--align-other-init-decl))
+      (cons "association"              assign-like-prop)
+      (cons "init_declarator"          assign-like-prop)
+      (cons "pointer_init_declarator"  assign-like-prop)
+      (cons "use_alias"                assign-like-prop)
       (cons "extent_specifier"
             '(:get-items-fn f90-ts--align-items-drop-left
               :get-other-fn f90-ts--align-other-extent))
@@ -2682,7 +2807,15 @@ Finally use VARIANT to select one pair to align with."
             '(:get-items-fn nil
               :get-other-fn f90-ts--align-other-function-result))
       (cons "import_statement"
-            '(:get-items-fn f90-ts--align-items-children1)))))
+            '(:get-items-fn f90-ts--align-items-children1))
+      (cons "use_statement"
+            '(:get-items-fn f90-ts--align-items-use
+              :get-other-fn f90-ts--align-other-entity-list))
+      (cons "included_items"
+            '(:get-items-fn f90-ts--align-items-included
+              :get-other-fn f90-ts--align-other-entity-list))
+      (cons "public_statement"         access-prop)
+      (cons "private_statement"        access-prop))))
   "List of tree-sitter node types presenting some kind of list context.
 A list context is a node with children which are suitable for alignment if
 spread over several lines in a continued line statement.
