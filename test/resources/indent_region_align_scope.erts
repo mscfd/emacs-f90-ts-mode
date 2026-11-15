@@ -71,9 +71,9 @@ end subroutine sub_use
 ! break before and after "=>": continued offset relative to the lhs
 subroutine sub_use()
      use mod6, only: fun1 => &
-                            mod6_fun1, &
+            mod6_fun1, &
                      fun2 &
-                            => mod6_fun2, &
+            => mod6_fun2, &
                      fun3 => mod6_fun3
 end subroutine sub_use
 =-=-=

@@ -1326,22 +1326,6 @@ the optional \"::\", as these are not aligned with the declarators."
       (treesit-node-children list-context)))))
 
 
-(defun f90-ts--align-other-procedure (context loc items-plist)
-  "Return the other plist for the list context \"procedure_statement\".
-Declarators and comments are aligned as for an entity list, see
-`f90-ts--align-other-entity-list'.  The symbol \"=>\" of a binding is only a
-secondary position, like the \"=\" of init declarators in variable declarations:
-for the symbol the primary position is the standard continued line position,
-even if there are earlier symbols compatible with the current one.
-
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
-align-list-other family."
-  (let ((other (f90-ts--align-other-entity-list context loc items-plist)))
-    (if (eq (alist-get 'nsym loc) 'associate)
-        (list :primary nil :force t)
-      other)))
-
-
 ;;++++++++++++++
 ;; list context: assign-like nodes (association, init_declarator,
 ;; pointer_init_declarator, use_alias, binding)
@@ -1453,26 +1437,49 @@ parentheses, like comments before the list or after the last item."
 ;;
 ;;   (FN CONTEXT LOC ITEMS-PLIST)
 ;;
-;; and return nil or a plist with the keys
-;;
-;;   :primary ANOFF      context specific default for the primary position
-;;   :force   BOOL       non-nil: :primary (or the standard continued line
-;;                       position if :primary is nil) is the primary position,
-;;                       even if there are earlier items compatible with the
-;;                       current node (see `f90-ts--align-other-var-decl'
-;;                       for an example)
-;;   :others  ANOFFS     further candidate positions
-;;   :no-items-sym BOOL  non-nil: the earlier items compatible with the current
-;;                       node are not candidate positions (see
-;;                       `f90-ts--align-other-array-commas' for an example)
-;;
-;; An ANOFF is a cons (ANCHOR . OFFSET) with ANCHOR a node or a buffer
-;; position.  :primary is the primary candidate position, it does not
-;; need to be repeated in :others.  The standard continued line position
-;; (pstmt-1 plus `f90-ts-indent-continued') is always a candidate, too.
-;;
-;; The final primary position is determined in one place, see
-;; `f90-ts--align-anchor-offset'.
+;; and return an alignment choice, see `f90-ts--align-choice', or nil, which is
+;; the same as `(f90-ts--align-choice-create)'.
+
+(cl-defstruct (f90-ts--align-choice
+               (:constructor f90-ts--align-choice-create)
+               (:copier nil))
+  "Context specific alignment choice returned by :get-other-fn functions.
+The slots are
+
+`default'    Context specific default ANOFF for the primary position.
+             If it is nil, the standard continued line position is used.
+`sym-items'  The role of the earlier items compatible with the current node
+             (same or compatible `nsym'):
+             `smallest'   the earlier item with the smallest column is the
+                          primary position, `default' is only used if there
+                          is no such item (this is the usual case),
+             `candidate'  `default' is the primary position, even if there are
+                          compatible earlier items, which remain candidates
+                          (see `f90-ts--align-other-var-decl' for an example),
+             `none'       `default' is the primary position, ignore compatible
+                          items even if present and use not even as candidates
+                          (see `f90-ts--align-other-array-commas').
+`others'     A list of ANOFFs, further candidate positions.
+
+An ANOFF is a cons (ANCHOR . OFFSET) with ANCHOR a node or a buffer
+position.  `default' does not need to be repeated in `others'.  The standard
+continued line position (pstmt-1 plus `f90-ts-indent-continued') is always a
+candidate, too.
+
+The final primary position is determined in one place, see
+`f90-ts--align-anchor-offset'."
+  (default nil)
+  (sym-items 'smallest)
+  (others nil))
+
+
+(defun f90-ts--align-choice-add-others (choice &rest anoffs)
+  "Return a copy of CHOICE with ANOFFS appended to its `others'.
+CHOICE is not modified."
+  (f90-ts--align-choice-create
+   :default   (f90-ts--align-choice-default choice)
+   :sym-items (f90-ts--align-choice-sym-items choice)
+   :others    (append (f90-ts--align-choice-others choice) anoffs)))
 
 (defun f90-ts--align-pstmt1-anoff ()
   "Return the standard continued line indentation.
@@ -1510,7 +1517,7 @@ is a node (in general it is a node or a buffer position) and offset is 0."
 
 (defun f90-ts--align-other-paren-expr-core
     (node-sym node-lead start-lead offset-lead indent-at-lead items-plist)
-  "Return the other plist shared by paren and op-expr contexts.
+  "Return the alignment choice shared by paren and op-expr contexts.
 The lead node is the token the continuation lines are positioned relative
 to: the opening parenthesis for paren contexts, and the preceding \"=\", \"(\"
 or \",\" (aux context) for op-expr contexts.  Examples for operator expressions:
@@ -1559,12 +1566,12 @@ column), ITEMS-PLIST the items lists from `f90-ts--align-anoff-items'."
         ;; item is to the left of the context column, otherwise use anchor,
         ;; the other one is secondary
         (if (and col-min (< col-min col-lead))
-            (list :primary anoff-hang
-                  :others  (list anoff-lead))
-          (list :primary anoff-lead
-                :others  (list anoff-hang)))
-      (list
-       :primary
+            (f90-ts--align-choice-create :default anoff-hang
+                                         :others  (list anoff-lead))
+          (f90-ts--align-choice-create :default anoff-lead
+                                       :others  (list anoff-hang)))
+      (f90-ts--align-choice-create
+       :default
        (cond
         ;; if there are items on the head line of context or all items on tail
         ;; lines have column at least as large as column of context node, use
@@ -1622,7 +1629,7 @@ anything else: 0."
 
 
 (defun f90-ts--align-other-paren (context loc items-plist)
-  "Return the other plist for parenthesized list contexts.
+  "Return the alignment choice for parenthesized list contexts.
 See `f90-ts--align-other-paren-expr-core' for the shared logic.
 
 CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
@@ -1656,7 +1663,7 @@ The opening parenthesis is the first parenthesis child of the context."
 
 
 (defun f90-ts--align-other-op-expr (context loc items-plist)
-  "Return the other plist for operator-expression contexts.
+  "Return the alignment choice for operator-expression contexts.
 There is only something to add if there is an auxiliary context.
 See `f90-ts--align-other-paren-expr-core' for the shared logic.
 
@@ -1705,7 +1712,7 @@ line.  Return nil if there is no such comment."
 
 
 (defun f90-ts--align-other-case (context loc items-plist)
-  "Return the other plist for the list context \"case_statement\".
+  "Return the alignment choice for the list context \"case_statement\".
 The list is the one in \"case (a, b, c)\", restricted to the header by
 `f90-ts--align-list-context-other-case-stmt'.  Unlike for argument lists, the
 context node starts with the keyword \"case\".  The lead node is the opening
@@ -1740,14 +1747,13 @@ the align-list-other family."
                  (f90-ts--comments-match-p node head-comment)
                  (not (let ((prev (f90-ts--trailing-comment-prev node)))
                         (and prev (treesit-node-eq prev head-comment)))))
-            (plist-put other :others
-                       (append (plist-get other :others)
-                               (list (cons head-comment 0))))
+            (f90-ts--align-choice-add-others other
+                                             (cons head-comment 0))
           other)))))
 
 
 (defun f90-ts--align-other-association (context loc _items-plist)
-  "Return the other plist for the list context \"association_list\".
+  "Return the alignment choice for the list context \"association_list\".
 For association lists (associate(x => y, ...)), the primary position is to
 align with the initial opening parenthesis plus some offset.  Line breaks
 within an association, like before or after \"=>\", are handled by the context
@@ -1765,16 +1771,16 @@ align-list-other family."
                nil
                "expected opening parenthesis as child-0, got '%s'"
                child-paren)
-    (list :primary
-          (cons (treesit-node-start child-paren)
-                (pcase nsym
-                  ('parenthesis f90-ts-indent-paren-close)   ; indents ")"
-                  (_            f90-ts-indent-paren-default) ; all other kind of nodes
-                  )))))
+    (f90-ts--align-choice-create
+     :default (cons (treesit-node-start child-paren)
+                    (pcase nsym
+                      ('parenthesis f90-ts-indent-paren-close)   ; indents ")"
+                      (_            f90-ts-indent-paren-default) ; all other kind of nodes
+                      )))))
 
 
 (defun f90-ts--align-other-entity-list (context _loc items-plist)
-  "Return the other plist for lists of items which are aligned with each other.
+  "Return the alignment choice for lists of items aligned with each other.
 This is used for the list contexts \"included_items\", \"use_statement\",
 \"public_statement\", \"private_statement\" and \"procedure_statement\":
 
@@ -1801,7 +1807,7 @@ align-list-other family."
                nil "wrong context, got '%s'" list-context)
     (when-let* ((first-item (seq-find (lambda (ni) (eq (cdr ni) 'named))
                                       (plist-get items-plist :prev))))
-      (list :primary (cons (car first-item) 0)))))
+      (f90-ts--align-choice-create :default (cons (car first-item) 0)))))
 
 
 (defun f90-ts--align-assign-like-prev-symbols (item nsym line)
@@ -1861,17 +1867,63 @@ line position is the primary one:
           anoff-lhs)))
 
 
+(defun f90-ts--align-assign-like-left (item)
+  "Return the lhs node of assign-like ITEM."
+  (or (treesit-node-child-by-field-name item "left")
+      (treesit-node-child item 0 nil)))
+
+
+(defun f90-ts--align-assign-like-amp (anoffs-sym)
+  "Return the anoff with the smallest column in ANOFFS-SYM, or nil.
+Only earlier symbols starting a continued line are considered, that is symbols
+preceded by an ampersand, like the current one.  Then the current node is
+aligned with that symbol, and it is primary."
+  (when-let* ((anoffs-amp (seq-filter
+                           (lambda (anoff)
+                             (f90-ts--node-type-p
+                              (treesit-node-prev-sibling (car anoff)) "&"))
+                           anoffs-sym)))
+    (f90-ts--align-smallest-anoff anoffs-amp)))
+
+
+(defun f90-ts--align-choice-lhs-rhs (left &optional anoff-amp anoffs-sym
+                                         anoff-parent)
+  "Return the alignment choice for a symbol or rhs after the lhs LEFT.
+This is shared by all items of the form \"lhs = rhs\" or \"lhs => rhs\", see
+`f90-ts--align-assign-like-types', and by binding lists.  The default position
+is the one of `f90-ts--align-lhs-symbol-anoff', which is
+`f90-ts-indent-continued' relative to the start of LEFT if that position is
+before the end of LEFT, and the standard continued line position otherwise.
+The default is forced (`sym-items' is `candidate').
+
+Further candidates are `f90-ts-indent-continued' relative to the indentation of
+the line holding LEFT, ANOFF-PARENT (the parent construct, if any),
+ANOFFS-SYM (earlier symbols), the lhs-relative position of
+`f90-ts--align-lhs-symbol-anoff' (which is secondary if it is not the default,
+and thus kept by the keep variants), and LEFT itself, which is always
+secondary.
+
+If ANOFF-AMP is non-nil, an earlier symbol on a continued line, it replaces
+the default."
+  (let ((lhs-sym (f90-ts--align-lhs-symbol-anoff left)))
+    (f90-ts--align-choice-create
+     :default   (or anoff-amp (car lhs-sym))
+     :sym-items 'candidate
+     :others    (append (list (cons (f90-ts--indent-pos-at-node left)
+                                    f90-ts-indent-continued))
+                        (and anoff-parent (list anoff-parent))
+                        anoffs-sym
+                        (list (cdr lhs-sym)
+                              (cons (treesit-node-start left) 0))))))
+
+
 ;; binding_list is "lhs => item, item, ..." (generic statement); the items
 ;; drop lhs and "=>", see `f90-ts--align-items-children2'.
 (defun f90-ts--align-other-binding-list (context _loc items-plist)
-  "Return the other plist for the list context \"binding_list\".
+  "Return the alignment choice for the list context \"binding_list\".
 A binding list is the \"generic_name => name1, name2\" part of a generic
-statement.  As for init declarators, the symbol \"=>\" and the first rhs item are
-`f90-ts-indent-continued' relative to the start of the lhs, see
-`f90-ts--align-lhs-symbol-anoff', which is primary only if that position is
-before the end of the lhs, otherwise the standard continued line position is
-primary.  The hang position (relative to the indentation of the line holding the
-lhs) and the lhs itself are secondary:
+statement.  As for init declarators, the symbol \"=>\" and the first rhs item
+are positioned by `f90-ts--align-choice-lhs-rhs':
 
   generic :: generic_name &
                 => variant1, &   ! \"=>\": relative to the lhs start
@@ -1881,138 +1933,87 @@ lhs) and the lhs itself are secondary:
                 variant1, &      ! first item: as for \"=>\"
                 variant2
 
-Later items align with earlier items, see `f90-ts--align-anchor-offset'.  For
-the symbol \"=>\" the primary position is forced, as for assign-like nodes.
-
-The positions derived from the lhs are only candidates as long as there is no
-earlier rhs item.  Afterwards they are out of context, the items are aligned
-with each other.
+Later items align with earlier items, see `f90-ts--align-anchor-offset'.  The
+positions derived from the lhs are only used as long as there is no earlier rhs
+item.  Afterwards they are out of context.
 
 CONTEXT and ITEMS-PLIST are as described in the calling convention of the
 align-list-other family."
-  (let* ((list-context (car context))
-         (first-p (null (plist-get items-plist :prev)))
-         (left (treesit-node-child list-context 0 nil))
-         (anoff-hang (cons (f90-ts--indent-pos-at-node left)
-                           f90-ts-indent-continued))
-         (lhs-sym (f90-ts--align-lhs-symbol-anoff left)))
+  (let ((list-context (car context)))
     (cl-assert (f90-ts--node-type-p list-context "binding_list")
                nil "wrong context, got '%s'" list-context)
-    (list :primary (and first-p
-                        (car lhs-sym))
-          :force   first-p
-          :others  (and first-p
-                        (list anoff-hang
-                              (cdr lhs-sym)
-                              ;; the start of the lhs itself is always secondary
-                              (cons (treesit-node-start left) 0))))))
+    (if (plist-get items-plist :prev)
+        (f90-ts--align-choice-create)
+      (f90-ts--align-choice-lhs-rhs (treesit-node-child list-context 0 nil)))))
 
 
 (defun f90-ts--align-other-assign-like (context loc _items-plist)
-  "Return the other plist for assign-like nodes.
-An assign-like node is \"lhs = rhs\" or \"lhs => rhs\", spread over several
+  "Return the alignment choice for assign-like items.
+An assign-like item is \"lhs = rhs\" or \"lhs => rhs\", spread over several
 lines, see `f90-ts--align-assign-like-types'.  Examples:
 
   associate(p &
-              => self%points, &   ! \"=>\": relative to the lhs
+       => self%points, &          ! \"=>\": lhs too short, continued position
             q => &
-              other)              ! rhs: relative to the lhs
-  use mod, only: fun1 &
-                   => mod_fun1    ! \"=>\": relative to the lhs
-  integer, dimension(1:6) :: &
-       lebedev_N = &              ! start of the init declarator
-            [6, 14, 26, &         ! rhs: hanging relative to the lhs
-             38, 50, 74]
-
-For associations and use aliases, the lhs is the start of the list item, and the
-primary position is `f90-ts-indent-continued' relative to the start of the lhs,
-for the symbol \"=>\" as well as for the rhs.
-
-For init declarators and bindings, the lhs follows the \"::\" and is no anchor
-for the whole item.  For the symbol \"=\" or \"=>\" as well as for the rhs, the
-primary position is `f90-ts-indent-continued' relative to the start of the lhs,
-if that position is before the end of the lhs, see
-`f90-ts--align-lhs-symbol-anoff'.  Otherwise it is the standard continued line
-position, which is where a symbol on its own line is placed:
-
+       other)                     ! rhs: same
+  use mod, only: very_long_name &
+                      => mod_name ! lhs long enough: below the lhs
   integer :: x0123456 = &
-                  5                ! lhs start + continued, below the lhs
+                  5               ! below the lhs, as it is long enough
   procedure :: x &
-       => y, &                     ! standard continued line position
-               u => &
-       v                           ! same, lhs too short
+       => y, &                    ! lhs too short: continued line position
+               u => &             ! next declarator: aligned with x, as for
+       v                          ! an entity list; rhs: as for \"=> y\"
 
-In both cases, unless an earlier assign-like sibling has the same symbol on an
-earlier line and this symbol is itself preceded by an ampersand, like the
-current one.  Then align with the one with the smallest column:
+The default position is determined by `f90-ts--align-choice-lhs-rhs', for the
+symbol \"=\" or \"=>\" as well as for the rhs, unless an earlier assign-like
+sibling has the same symbol on an earlier line and this symbol is itself
+preceded by an ampersand, like the current one.  Then align with the one with
+the smallest column, see `f90-ts--align-assign-like-amp':
 
     real, target :: x = 1, &
                     y &
-                      = 1, &    ! aligned und previous \"=\", but not primary
+                      = 1, &    ! aligned with previous \"=\", but not primary
                     z &
                       = 2       ! aligned with \"=\" in \"y = 1\", primary
 
-Further candidates are `f90-ts-indent-continued' relative to the indentation of
-the line holding the lhs, relative to the parent construct (the opening
-parenthesis of an association list, see
-`f90-ts--align-assign-like-parent-anoff'), the earlier symbols, and the lhs
-itself.  The standard continued line position is always a candidate.
-
-There is no alignment with earlier rhs items, as there is only one rhs.  The
-:primary position has :force t.  Positions relative to the whole declaration or
-statement, like the one after \"::\", are not appropriate here.
+For associations the opening parenthesis of the association list plus
+`f90-ts-indent-continued' is a further candidate, see
+`f90-ts--align-assign-like-parent-anoff'.  There is no alignment with earlier
+rhs items, as there is only one rhs.  Positions relative to the whole
+declaration or statement, like the one after \"::\", are not appropriate here.
 
 CONTEXT and LOC are as described in the calling convention of the
 align-list-other family."
   (let* ((item (car context))
-         (nsym (alist-get 'nsym loc))
-         (symbol-p (memq nsym '(assignment associate)))
-         ;; the lhs starts the list item, hence it is an anchor for the primary
-         (lhs-primary-p (f90-ts--node-type-p item '("association" "use_alias")))
-         ;; init declarators and bindings: the symbol is relative to the lhs start,
-         ;; but the lhs is no anchor for other nodes
-         (lhs-sym-p (f90-ts--node-type-p item '("init_declarator"
-                                                "pointer_init_declarator"
-                                                "binding")))
-         (left (or (treesit-node-child-by-field-name item "left")
-                   (treesit-node-child item 0 nil)))
-         (lhs-sym (and lhs-sym-p
-                       (f90-ts--align-lhs-symbol-anoff left)))
-         (anoff-lhs (cons (treesit-node-start left) f90-ts-indent-continued))
-         (anoff-hang (cons (f90-ts--indent-pos-at-node left)
-                           f90-ts-indent-continued))
-         (anoff-parent (f90-ts--align-assign-like-parent-anoff item))
          (anoffs-sym (f90-ts--align-assign-like-prev-symbols
-                      item nsym (alist-get 'line loc)))
-         ;; only symbols which start a continued line are primary candidates
-         (anoffs-amp (seq-filter
-                      (lambda (anoff)
-                        (f90-ts--node-type-p
-                         (treesit-node-prev-sibling (car anoff)) "&"))
-                      anoffs-sym))
-         (anoff-amp  (and anoffs-amp
-                          (f90-ts--align-smallest-anoff anoffs-amp))))
+                      item
+                      (alist-get 'nsym loc)
+                      (alist-get 'line loc))))
     (cl-assert (f90-ts--node-type-p item f90-ts--align-assign-like-types)
                nil "wrong context, got '%s'" item)
-    (list :primary (cond
-                    (anoff-amp anoff-amp)
-                    (lhs-primary-p anoff-lhs)
-                    ;; below the lhs, if that is before its end, otherwise nil:
-                    ;; the forced primary becomes the continued line position
-                    (lhs-sym-p (car lhs-sym))
-                    ;; nil: forced primary becomes the continued line position
-                    (symbol-p nil)
-                    (t anoff-hang))
-          :force   t
-          :others  (append (and (or symbol-p lhs-primary-p lhs-sym-p)
-                                (list anoff-hang))
-                           (and anoff-parent
-                                (list anoff-parent))
-                           anoffs-sym
-                           (and lhs-sym-p
-                                (list (cdr lhs-sym)))
-                           ;; the start of the lhs itself is always secondary
-                           (list (cons (treesit-node-start left) 0))))))
+    (f90-ts--align-choice-lhs-rhs
+     (f90-ts--align-assign-like-left item)
+     (f90-ts--align-assign-like-amp anoffs-sym)
+     anoffs-sym
+     (f90-ts--align-assign-like-parent-anoff item))))
+
+
+(defun f90-ts--align-other-procedure (context loc items-plist)
+  "Return the alignment choice for the list context \"procedure_statement\".
+Declarators and comments are aligned as for an entity list, see
+`f90-ts--align-other-entity-list'.  The symbol \"=>\" of a binding is only a
+secondary position, like the \"=\" of init declarators in variable declarations:
+for the symbol the primary position is the standard continued line position,
+even if there are earlier symbols compatible with the current one.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
+align-list-other family."
+    (cl-assert (f90-ts--node-type-p list-context "procedure_statement")
+               nil "wrong context, got '%s'" list-context)
+  (if (eq (alist-get 'nsym loc) 'associate)
+      (f90-ts--align-choice-create :sym-items 'candidate)
+    (f90-ts--align-other-entity-list context loc items-plist)))
 
 
 (defun f90-ts--align-anoff-node (node loc)
@@ -2029,7 +2030,7 @@ of NODE.  LOC provides the data of the current node."
 
 
 (defun f90-ts--align-other-extent (context loc _items-plist)
-  "Return the other plist for extent specifier nodes.
+  "Return the alignment choice for extent specifier nodes.
 An extent specifier is \"lower:upper\" (optionally with a stride), spread
 over several lines.  Examples:
 
@@ -2052,8 +2053,9 @@ holding the specifier) is a further candidate.
 The offset relative to the left part is determined by
 `f90-ts--align-anoff-node'.
 
-The :primary position has :force t, as there is no earlier item compatible with
-the current node, except for the upper bound if there is a stride.
+The default position is forced (`sym-items' is `candidate'), as there is no
+earlier item compatible with the current node, except for the upper bound if
+there is a stride.
 
 CONTEXT and LOC are as described in the calling convention of the
 align-list-other family."
@@ -2065,13 +2067,13 @@ align-list-other family."
                            f90-ts-indent-continued)))
     (cl-assert (f90-ts--node-type-p list-context "extent_specifier")
                nil "wrong context, got '%s'" list-context)
-    (list :primary anoff-left
-          :force   t
-          :others  (list anoff-hang))))
+    (f90-ts--align-choice-create :default   anoff-left
+                                 :sym-items 'candidate
+                                 :others    (list anoff-hang))))
 
 
 (defun f90-ts--align-other-control (context loc _items-plist)
-  "Return the other plist for loop control nodes.
+  "Return the alignment choice for loop control nodes.
 These are \"concurrent_control\" and \"triplet_spec\", like \"i = 1:n:2\", in
 the header of a do concurrent or forall statement.  The pattern is \"left
 symbol right\" with the loop variable as left part, the symbol \"=\", and the
@@ -2091,7 +2093,7 @@ other nodes (colons, final value, step) are aligned with the initial value,
 see `f90-ts--align-anoff-node' for the offset.  The hanging position and the
 loop variable are further candidates.
 
-The :primary position has :force t.
+The default position is forced (`sym-items' is `candidate').
 
 CONTEXT and LOC are as described in the calling convention of the
 align-list-other family."
@@ -2108,17 +2110,18 @@ align-list-other family."
     (cl-assert (f90-ts--node-type-p list-context '("concurrent_control"
                                                    "triplet_spec"))
                nil "wrong context, got '%s'" list-context)
-    (list :primary (cond
-                    ;; nil: forced primary becomes the continued line position
-                    (symbol-p nil)
-                    (start-p  anoff-hang)
-                    (t        (f90-ts--align-anoff-node initial loc)))
-          :force   t
-          :others  (list anoff-hang anoff-left))))
+    (f90-ts--align-choice-create
+     :default   (cond
+                 ;; nil: forced primary becomes the continued line position
+                 (symbol-p nil)
+                 (start-p  anoff-hang)
+                 (t        (f90-ts--align-anoff-node initial loc)))
+     :sym-items 'candidate
+     :others    (list anoff-hang anoff-left))))
 
 
 (defun f90-ts--align-other-string (context loc items-plist)
-  "Return the other plist for string nodes.
+  "Return the alignment choice for string nodes.
 A string_literal consists of opening and closing quoting symbol,
 string_content, ampersand, quote escape character and comments.
 Note that a leading ampersand cannot be removed, as following blank characters
@@ -2149,8 +2152,8 @@ the align-list-other family."
                            collect (cons n 0)))))
     (cl-assert (f90-ts--node-type-p list-context "string_literal")
                nil "wrong context, got '%s'" list-context)
-    (list :primary (or anoff-quote (car anoffs-opp))
-          :others anoffs-opp)))
+    (f90-ts--align-choice-create :default (or anoff-quote (car anoffs-opp))
+                                 :others  anoffs-opp)))
 
 
 (defun f90-ts--align-other-var-decl-anoff (decl cur-line)
@@ -2186,7 +2189,7 @@ CUR-LINE, otherwise there is no candidate."
 
 
 (defun f90-ts--align-other-var-decl (context loc items-plist)
-  "Return the other plist for variable declarations.
+  "Return the alignment choice for variable declarations.
 Car of CONTEXT is a variable_declaration.
 
 The position of \"::\" plus `f90-ts-indent-declaration' (or the end of the
@@ -2197,14 +2200,15 @@ head line and no earlier items compatible with the current node.
 For a continuation line starting with \"=\" (nsym `assignment') the standard
 continued line position (pstmt-1 plus `f90-ts-indent-continued') is the
 primary position, even if there are compatible earlier items.  This is what
-:force is used for.  Without it, the \"=\" of the earlier initialisation would
-be the smallest compatible earlier item and would be used:
+`sym-items' `candidate' is used for.  Without it, the \"=\" of the
+earlier initialisation would be the smallest compatible earlier item and would
+be used:
 
     integer :: a = 1, b &
-                 = 2        ! without force: under the \"=\" of \"a = 1\"
+                 = 2        ! `smallest': under the \"=\" of \"a = 1\"
 
     integer :: a = 1, b &
-       = 2                  ! with force: standard continued position
+       = 2                  ! `candidate': continued position
 
 The column of the earlier \"=\" is still a candidate for rotation and
 keep-or-* variants.
@@ -2215,9 +2219,15 @@ the align-list-other family."
          (assignment-p (eq (alist-get 'nsym loc) 'assignment))
          (anoff-decl   (f90-ts--align-other-var-decl-anoff (car context)
                                                            (alist-get 'line loc))))
-    (list :primary (and items-head (not assignment-p) anoff-decl)
-          :force   assignment-p
-          :others  (and anoff-decl (list anoff-decl)))))
+    (f90-ts--align-choice-create
+     :default   (and items-head
+                     (not assignment-p)
+                     anoff-decl)
+     :sym-items (if assignment-p
+                    'candidate
+                  'smallest)
+     :others    (and anoff-decl
+                     (list anoff-decl)))))
 
 
 
@@ -2225,7 +2235,7 @@ the align-list-other family."
 ;; list context: output_item_list, input_item_list
 
 (defun f90-ts--align-other-item-list (context loc _items-plist)
-  "Return the other plist for the item lists of print, write and read.
+  "Return the alignment choice for the item lists of print, write and read.
 These lists have no parentheses, but the statement head provides an anchor for
 a comma starting a continued line.  These are closing parenthesis of the
 control list of write and read, or the comma after the format of print:
@@ -2250,7 +2260,7 @@ align-list-other family."
       ;; skips ampersands and comments between statement head and list
       (when-let* ((psib (f90-ts--prev-sibling-proper list-context))
                   ((f90-ts--node-type-p psib '(")" ","))))
-        (list :primary (cons psib 0))))))
+        (f90-ts--align-choice-create :default (cons psib 0))))))
 
 
 ;;++++++++++++++
@@ -2291,7 +2301,7 @@ positions of the anchors, which must be nodes."
 
 
 (defun f90-ts--align-other-array-commas (context loc items-plist other)
-  "Return the other plist for alignment at commata, or nil if not applicable.
+  "Return the alignment choice for alignment at commata, or nil if not applicable.
 This is used for array literals, if `f90-ts-indent-array-align' is `right',
 `both-left-primary' or `both-right-primary', the node at LOC is a direct child
 of the array literal in CONTEXT, and it is followed by a comma or a closing
@@ -2308,7 +2318,7 @@ position).
 
 The value of `f90-ts-indent-array-align' selects:
 `right'               the right-aligned primary is forced, earlier items are
-                      no candidates (:no-items-sym),
+                      no candidates (`sym-items' is `none'),
 `both-right-primary'  the right-aligned primary is forced, earlier items
                       remain candidates,
 `both-left-primary'   the primary of OTHER and the usual selection among
@@ -2316,7 +2326,7 @@ The value of `f90-ts-indent-array-align' selects:
                       candidates.
 For `left' there is nothing to do and nil is returned.
 
-OTHER is the plist returned by `f90-ts--align-other-paren'; its :others (the
+OTHER is the choice returned by `f90-ts--align-other-paren'; its `others' (the
 positions relative to the opening bracket) are always kept as candidates.
 CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
 the align-list-other family."
@@ -2343,28 +2353,29 @@ the align-list-other family."
                                collect anoff))
                 (sorted       (seq-sort #'f90-ts--align-comma-anoff-less-p
                                         anoffs)))
-      (let ((others (append sorted (plist-get other :others))))
+      (let* ((other  (or other (f90-ts--align-choice-create)))
+             (others (append sorted (f90-ts--align-choice-others other))))
         (pcase f90-ts-indent-array-align
           ;; right-aligned only: forced primary, no left-aligned candidates
           ('right
-           (list :primary (car sorted)
-                 :force t
-                 :no-items-sym t
-                 :others others))
+           (f90-ts--align-choice-create :default   (car sorted)
+                                        :sym-items 'none
+                                        :others    others))
           ;; both: right-aligned is primary
           ('both-right-primary
-           (list :primary (car sorted)
-                 :force t
-                 :others others))
+           (f90-ts--align-choice-create :default   (car sorted)
+                                        :sym-items 'candidate
+                                        :others    others))
           ;; both: left-aligned is primary, the commata are further candidates
           (_
-           (list :primary (plist-get other :primary)
-                 :force   (plist-get other :force)
-                 :others  others)))))))
+           (f90-ts--align-choice-create
+            :default   (f90-ts--align-choice-default other)
+            :sym-items (f90-ts--align-choice-sym-items other)
+            :others    others)))))))
 
 
 (defun f90-ts--align-other-array (context loc items-plist)
-  "Return the other plist for array literals.
+  "Return the alignment choice for array literals.
 Use alignment at commata, if enabled and applicable, see
 `f90-ts--align-other-array-commas'.  Otherwise this is the same as for other
 parenthesized lists, see `f90-ts--align-other-paren'.
@@ -2401,7 +2412,7 @@ there are no parameters."
 
 
 (defun f90-ts--align-other-function-result (context _loc _items-plist)
-  "Return the other plist for the \"result\" keyword of a function statement.
+  "Return the alignment choice for the \"result\" keyword of a function statement.
 The function statement is provided as CONTEXT.
 The name of the function is the primary position, as in
 
@@ -2424,10 +2435,10 @@ instead, and the name is only a secondary candidate:
     (if (and name
              params
              (f90-ts--align-function-params-left-of-name-p params name))
-        (list :others (list anoff-name)
-              :no-items-sym t)
-      (list :primary anoff-name
-            :no-items-sym t))))
+        (f90-ts--align-choice-create :sym-items 'none
+                                     :others    (list anoff-name))
+      (f90-ts--align-choice-create :default   anoff-name
+                                   :sym-items 'none))))
 
 
 ;;++++++++++++++
@@ -2795,16 +2806,19 @@ the offset is assumed to be 0."
 
 
 (defun f90-ts--align-anoff-other (loc anoff-items-plist context)
-  "Return the other plist (:primary :force :others) for alignment in CONTEXT.
+  "Return the alignment choice (`f90-ts--align-choice') for CONTEXT.
 ANOFF-ITEMS-PLIST are some items lists of node items already obtained by
 `f90-ts--align-anoff-items'.
 These lists might be necessary to determine which primary and alternative
 alignment positions to select.
 LOC provides node and location data.
-Return nil if the list context has no :get-other-fn.
+If the list context has no :get-other-fn, or the function returns nil, return a
+choice with all defaults.
 See the calling convention of the align-list-other family."
-  (when-let* ((get-other (f90-ts--get-list-context-prop :get-other-fn context)))
-    (funcall get-other context loc anoff-items-plist)))
+  (or (when-let* ((get-other (f90-ts--get-list-context-prop :get-other-fn
+                                                            context)))
+        (funcall get-other context loc anoff-items-plist))
+      (f90-ts--align-choice-create)))
 
 
 (defun f90-ts--align-anchor-offset (variant loc context)
@@ -2826,30 +2840,30 @@ Finally use VARIANT to select one pair to align with."
          ;;     (f90-ts-log-msg :anoff "items-head = %s" (plist-get anoff-items-plist :head))
          ;;     (f90-ts-log-msg :anoff "items-tail = %s" (plist-get anoff-items-plist :tail))))
          (anoff-items-sym (plist-get anoff-items-plist :sym))
-         (anoff-other (f90-ts--align-anoff-other loc
-                                                 anoff-items-plist
-                                                 context))
+         (choice (f90-ts--align-anoff-other loc
+                                            anoff-items-plist
+                                            context))
+         (sym-items (f90-ts--align-choice-sym-items choice))
          ;; always add default continued offset position as possible anchor
          (anoff-continued (f90-ts--align-pstmt1-anoff))
          ;; anoff-default becomes anoff-primary in a number of cases, but not always
-         (anoff-default (plist-get anoff-other :primary))
+         (anoff-default (f90-ts--align-choice-default choice))
          ;; determine whether anoff-default, anoff-continued or something else is used as primary:
          ;; 1. keep-or-continued-line forces the continued line position
          ;; 2. a comment following a matching trailing comment aligns with it
-         ;; 3. the context may force its default
-         ;; 4. if there are earlier items compatible with the current node,
-         ;;    the one with the smallest column
-         ;; 5. the default of the context
-         ;; 6. the continued line position
+         ;; 3. if `sym-items' of the context is `smallest' and there are
+         ;;    earlier items compatible with the current node, the one with
+         ;;    the smallest column
+         ;; 4. the default of the context
+         ;; 5. the continued line position
          (anoff-primary
           (cond
            ((eq variant 'keep-or-continued-line)
             anoff-continued)
            (anoff-comment
             anoff-comment)
-           ((plist-get anoff-other :force)
-            (or anoff-default anoff-continued))
-           (anoff-items-sym
+           ((and anoff-items-sym
+                 (eq sym-items 'smallest))
             (f90-ts--align-smallest-anoff anoff-items-sym))
            (t
             (or anoff-default anoff-continued))))
@@ -2857,10 +2871,12 @@ Finally use VARIANT to select one pair to align with."
          (anoff-final (append (list anoff-continued)
                               (and anoff-comment (list anoff-comment))
                               (and anoff-default (list anoff-default))
-                              (plist-get anoff-other :others)
-                              (unless (plist-get anoff-other :no-items-sym)
+                              (f90-ts--align-choice-others choice)
+                              (unless (eq sym-items 'none)
                                 anoff-items-sym))))
-    ;;(f90-ts-log-msg :anoff "items-other = %s" anoff-other)
+    (cl-assert (memq sym-items '(smallest candidate none))
+               nil "invalid sym-items '%s'" sym-items)
+    ;;(f90-ts-log-msg :anoff "choice = %s" choice)
     ;;(f90-ts-log-msg :anoff "items-final = %s" anoff-final)
     ;;(f90-ts-log-msg :anoff "item-primary = %s" anoff-primary)
     ;; select the anoff among all the options determined so far
@@ -2878,10 +2894,12 @@ Finally use VARIANT to select one pair to align with."
 ;; function to determine node items in the list context relevant for alignment
 ;;
 ;; get-other: (optional)
-;; function which returns a plist (:primary :force :others) with the context
-;; specific default primary position and further candidate columns for
-;; alignment (see the calling convention above `f90-ts--align-other-paren-expr-core'),
-;; if not provided, only earlier items and the standard continued line position are used
+;; function which returns an alignment choice (`f90-ts--align-choice') with the
+;; context specific default primary position, the role of compatible items
+;; (selected by compatible nsym) and further candidate columns for alignment
+;; (see the calling convention above `f90-ts--align-choice');
+;; if not provided, only compatible items and the standard continued line
+;; position are used
 (defconst f90-ts--align-list-context-properties
   (let ((expr-prop        '(:get-items-fn f90-ts--align-items-op-expr
                             :get-other-fn f90-ts--align-other-op-expr))
@@ -2898,6 +2916,8 @@ Finally use VARIANT to select one pair to align with."
                             :get-other-fn f90-ts--align-other-assign-like))
         (access-prop      '(:get-items-fn f90-ts--align-items-access
                             :get-other-fn f90-ts--align-other-entity-list)))
+    ;; remove optional grammar variant specific entries, which evaluate to nil
+    ;; if not available
     (cl-remove-if
      #'null
      (list

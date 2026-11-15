@@ -1,50 +1,17 @@
-! align like use statements, init_decl etc
-module m
- type :: t
- contains
-      procedure :: a0123, &
-             b0123
-      procedure :: c456 => impl_c456, &
-             d456 => impl_d456
-      generic :: generic_name => variant1, &
-             variant2, &
-             variant3
- end type t
-end module m
+function formula(self)
+   x = dot_product(a,   (self%v(:,1) .cross. self%v(:,2)) &
+                      + (self%v(:,2) .cross. self%v(:,3)) &
+                      + (self%v(:,3) .cross. self%v(:,1)))
+
+   x = dot_product(a, &
+                   (self%v(:,1) .cross. self%v(:,2)) &
+                      + (self%v(:,2) .cross. self%v(:,3)) &
+                      + (self%v(:,3) .cross. self%v(:,1)))
+
+end function face_windingSign_
 
 
-! align public items statements
-module foo
- public sub1, sub2
- public :: sub3, &
-        sub4, &
-        ! comment
-        ! comment
-        sub5
- public    fun1, &
-        fun2, &
-        ! comment
-        ! comment
-        fun3
-end module foo
-
-
-! align private items statements
-module foo
- private sub1, sub2
- private :: sub3, &
-        sub4, &
-        ! comment
-        ! comment
-        sub5
- private    fun1, &
-        fun2, &
-        ! comment
-        ! comment
-        fun3
-end module foo
-
-
+! alignment of keywords below concurrent
 ! alignment within reduce, shared, local, local_init
 program int23
  integrate: do, concurrent (i = 1:n) default(none) &
