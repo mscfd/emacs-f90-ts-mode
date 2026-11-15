@@ -1039,7 +1039,253 @@ expression or a comma separated list, which are called auxiliary context."
 
 
 ;;++++++++++++++
-;; list context: association_list
+;; lists on continued lines: item-sym (abbreviated as isyms) functions
+;;
+;; The isyms functions are the :get-isyms-fn functions of the list contexts,
+;; see `f90-ts--align-list-context-properties'.  They are the counterpart of
+;; the `f90-ts--align-other-' functions further below.
+;;
+;; A function is called as (FN CONTEXT LOC) with the list context node as car of
+;; CONTEXT (and, for operator expressions, an auxiliary context as cdr) and the
+;; location data LOC of the node to be indented, see `f90-ts--align-location'.
+;; It returns all relevant items of the list context, dropping what is not part
+;; of the list structure itself, like the leading keyword, "::", the left hand
+;; side of an assignment or the parenthesis, and replacing nodes by their
+;; relevant children where the items are nested, like in operator expressions
+;; or associations.  Commas, continuation symbols and comments between the
+;; items are kept.
+;;
+;; The current node is then aligned with the earlier items on previous lines
+;; which have a compatible node symbol (nsym), providing a list item-syms, see
+;; `f90-ts--align-nsym-compatible-p'.  Which of these positions is primary, and
+;; which further positions are offered, is decided by the :get-other-fn
+;; function of the list context.
+
+(defun f90-ts--align-isyms-children-no-paren (context _loc)
+  "Return all children of CONTEXT except for parenthesis.
+This is used for a context where all direct children are relevant,
+which are \"parenthesized_expression\", \"argument_list\",
+\"array_literal\", \"parameters\", \"size\", and the parenthesis free item lists
+\"output_item_list\" and \"input_item_list\" of print, write and read
+statements."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context
+                                    '("parenthesized_expression"
+                                      "argument_list"
+                                      "array_literal"
+                                      "parameters"
+                                      "size"
+                                      "output_item_list"
+                                      "input_item_list"))
+               nil
+               "wrong list context, got '%s'"
+               list-context)
+    ;; drop parenthesis, as these are dealt with directly
+    (seq-filter
+     (lambda (n)
+       (not (eq (f90-ts--align-node-symbol n) 'parenthesis)))
+     (treesit-node-children list-context))))
+
+
+(defun f90-ts--align-isyms-children1 (context _loc)
+  "Determine relevant children of CONTEXT by dropping first child.
+This is used for nodes of type \"import_statement\"."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "import_statement")
+               nil "expected list context: import_statement, got '%s'" list-context)
+    (when-let* ((children (treesit-node-children list-context)))
+      ;; drop the "import" keyword
+      (seq-drop children 1))))
+
+
+(defun f90-ts--align-isyms-children2 (context _loc)
+  "Determine relevant children of CONTEXT by dropping first two children.
+This is used for nodes of type \"binding_list\" or \"final_statement\".
+Both occur in the contains part of a derived type definition."
+  (let ((list-context (car context)))
+    (cl-assert (or (f90-ts--node-type-p list-context "binding_list")
+                   (f90-ts--node-type-p list-context "final_statement"))
+               nil
+               "expected list context: binding_list or final_statement, got '%s'"
+               list-context)
+    (when-let* ((children (treesit-node-children list-context)))
+      ;; drop the (binding_name ...) part, and the => binding symbol
+      (seq-drop children 2))))
+
+
+(defun f90-ts--align-isyms-drop-left (context _loc)
+  "Determine relevant children of CONTEXT by dropping the left part.
+This is used for the nodes \"extent_specifier\", \"concurrent_control\" and
+\"triplet_spec\", which follow the pattern \"left symbol right\", like
+\"lower:upper:stride\" or \"i = initial:final:step\".  Drop the first child,
+which is the lower bound or, if that is missing, the first colon for an extent
+specifier, and the loop variable for the other two.  The remaining children are
+the symbols, the other bounds, continuation symbols and comments."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context '("extent_specifier"
+                                                   "concurrent_control"
+                                                   "triplet_spec"))
+               nil
+               "expected list context: extent_specifier or concurrent_control, got '%s'"
+               list-context)
+    (when-let* ((children (treesit-node-children list-context)))
+      (seq-drop children 1))))
+
+
+(defconst f90-ts--align-assign-like-types
+  '("association" "init_declarator" "pointer_init_declarator" "use_alias"
+    "binding")
+  "Node types of assign-like items, which are \"lhs = rhs\" or \"lhs => rhs\".
+These are the associations in \"associate(x => y)\", the init declarators in
+variable declarations, the use aliases in use statements, and the bindings in
+type bound procedure statements, like \"procedure :: name => impl\".")
+
+
+(defun f90-ts--align-isyms-assign-like (context _loc)
+  "Determine relevant children of CONTEXT by dropping the left hand side.
+This is used for assign-like nodes, see `f90-ts--align-assign-like-types',
+like \"x => y\" in an association, \"a = 1\" or \"p => null()\" in a variable
+declaration, or \"local => remote\" in a use statement.  The remaining
+children are the \"=\" or \"=>\" symbol and the right hand side."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context f90-ts--align-assign-like-types)
+               nil
+               "expected assign-like list context, got '%s'" list-context)
+    (when-let* ((children (treesit-node-children list-context)))
+      ;; drop the lhs
+      (seq-drop children 1))))
+
+
+(defun f90-ts--align-isyms-access (context _loc)
+  "Determine relevant children of CONTEXT being an access statement.
+This is used for nodes of type \"public_statement\" and \"private_statement\",
+like \"public :: a, b\" or \"private a, b\".  Drop the keyword and the
+optional \"::\", as these are not aligned with the items.  Commata,
+continuation symbols and comments in between are kept."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context '("public_statement"
+                                                   "private_statement"))
+               nil
+               "expected list context: public_statement or private_statement, got '%s'"
+               list-context)
+    (seq-drop-while
+     (lambda (n)
+       (f90-ts--node-type-p n '("::" "&" "comment")))
+     ;; drop the keyword itself
+     (seq-drop (treesit-node-children list-context) 1))))
+
+
+(defun f90-ts--align-isyms-use (context _loc)
+  "Determine relevant children of CONTEXT = \"use_statement\".
+This is for use statements without \"only\", like \"use mod, a => b, c => d\",
+where the renaming nodes are children of the use statement itself and not of
+an \"included_items\" node.  Drop everything up to and including the module
+name, and the following comma (and continuation symbols and comments).  Commas,
+continuation symbols and comments between the items are kept."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "use_statement")
+               nil
+               "expected list context: use_statement, got '%s'"
+               list-context)
+    (seq-drop-while
+     (lambda (n) (f90-ts--node-type-p n '("," "&" "comment")))
+     (cdr (seq-drop-while
+           (lambda (n)
+             (not (f90-ts--node-type-p n "module_name")))
+           (treesit-node-children list-context))))))
+
+
+(defun f90-ts--align-isyms-included (context _loc)
+  "Determine relevant children of CONTEXT = \"included_items\".
+This is the part of a use statement following the module name, like
+\", only: a, b => c\" or \", a => b\".  The items are the imported entities,
+either plain names or renaming nodes of type \"use_alias\".  Drop the leading
+comma, the keyword \"only\" and its colon (and continuation symbols and comments
+among them), as these are not aligned with the items.  Commas, continuation
+symbols and comments between the items are kept."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "included_items")
+               nil
+               "expected list context: included_items, got '%s'"
+               list-context)
+    (seq-drop-while
+     (lambda (n) (f90-ts--node-type-p n '("," "only" ":" "&" "comment")))
+     (treesit-node-children list-context))))
+
+
+(defun f90-ts--align-isyms-procedure (context _loc)
+  "Determine relevant children of CONTEXT = \"procedure_statement\".
+This is a type bound procedure statement in the contains part of a derived type,
+like \"procedure :: a, b => impl_b\".  The items are the declarators, which are
+method names or bindings (see `f90-ts--align-assign-like-types'), together with
+the commas, continuation symbols and comments in between.  Like for variable
+declarations, the symbol \"=>\" of a binding is an item as well.  Drop everything
+up to the first declarator: the keyword, the interface name, the attributes and
+the optional \"::\", as these are not aligned with the declarators."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "procedure_statement")
+               nil "expected list context: procedure_statement, got '%s'" list-context)
+    (cl-mapcan
+     (lambda (n)
+       (cons n (when (f90-ts--node-type-p n "binding")
+                 (cl-remove-if-not
+                  (lambda (c) (f90-ts--node-type-p c "=>"))
+                  (treesit-node-children n)))))
+     (seq-drop-while
+      (lambda (n) (not (f90-ts--field-names-any-p n '("declarator"))))
+      (treesit-node-children list-context)))))
+
+
+(defun f90-ts--align-isyms-var-decl (context loc)
+  "Determine relevant children of CONTEXT = \"variable_declaration\".
+Use LOC to determine whether attribute or declarator items are relevant (those
+before and after \"::\")."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "variable_declaration")
+               nil "expected list context: variable_declaration, got '%s'" list-context)
+    (when (< 0 (treesit-node-child-count list-context))
+      (let* ((pos (alist-get 'pos loc))
+             (attr-children (f90-ts--children-by-fields list-context '("attribute")))
+             (decl-children (f90-ts--children-by-fields list-context '("declarator")))
+
+             ;; decl-children should not be empty, but might be in incomplete code
+             ;; depending on how error recovery works out; just use first decl child,
+             ;; as the children should be sorted by buffer position
+             (first-decl (car decl-children)))
+        (if (or (null first-decl)
+                (< pos (treesit-node-start first-decl)))
+            attr-children
+          ;; for init declarator children, add assignment nodes as well:
+          ;; "=" for init_declarator, "=>" for pointer_init_declarator
+          (cl-mapcan
+           (lambda (n)
+             (cons n (when (f90-ts--node-type-p n '("init_declarator"
+                                                    "pointer_init_declarator"))
+                       (cl-remove-if-not
+                        (lambda (c)
+                          (f90-ts--node-type-p c '("=" "=>")))
+                        (treesit-node-children n)))))
+           decl-children))))))
+
+
+(defun f90-ts--align-isyms-concurrent-header (context _loc)
+  "Determine relevant children of CONTEXT = \"concurrent_header\".
+The header is \"concurrent ([type ::] control, control, ..., [mask])\".  Return
+the controls, the mask, commas, continuation symbols and comments.  Drop the
+keyword, the parentheses and the optional type specification with its \"::\",
+as the controls are aligned with each other, not with the type."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "concurrent_header")
+               nil
+               "expected list context: concurrent_header, got '%s'"
+               list-context)
+    (seq-filter
+     (lambda (n)
+       (not (or (eq (f90-ts--align-node-symbol n) 'parenthesis)
+                (f90-ts--node-type-p n '("intrinsic_type" "::")))))
+     ;; drop the keyword
+     (seq-drop (treesit-node-children list-context) 1))))
+
 
 (defun f90-ts--align-expand-assoc (nodes)
   "Replace association nodes in list NODES by their first two children.
@@ -1058,7 +1304,7 @@ part currently.  Skip continuation symbols, which might be between
    nodes))
 
 
-(defun f90-ts--align-items-assocation (context _loc)
+(defun f90-ts--align-isyms-association (context _loc)
   "Determine relevant childrens of \"association_list\" context.
 The list context is provided as car of CONTEXT."
   (let ((list-context (car context)))
@@ -1070,9 +1316,6 @@ The list context is provided as car of CONTEXT."
                (assocs (seq-drop children 1)))
       (f90-ts--align-expand-assoc assocs))))
 
-
-;;++++++++++++++
-;; list context: operator expressions
 
 (defun f90-ts--align-expand-op-expr (node)
   "Recursively compute relevant children of a expression tree NODE.
@@ -1092,7 +1335,7 @@ operator is a minus."
     (list node)))
 
 
-(defun f90-ts--align-items-op-expr (context _loc)
+(defun f90-ts--align-isyms-op-expr (context _loc)
   "Determine relevant children of CONTEXT being some operator expression.
 Check and include any assignment or parentheses directly prior to list-context.
 The expression node is provided as car of CONTEXT, and the assignment or
@@ -1122,71 +1365,43 @@ parenthesis node if present as cdr of CONTEXT."
       (append items-aux items-expr))))
 
 
-;;++++++++++++++
-;; list context: parenthesized expressions, arguments, array, parameters
-
-(defun f90-ts--align-items-children-no-paren (context _loc)
-  "Return all children of CONTEXT except for parenthesis.
-This is used for a context where all direct children are relevant,
-which are \"parenthesized_expression\", \"argument_list\",
-\"array_literal\", \"parameters\", \"size\", and the parenthesis free item lists
-\"output_item_list\" and \"input_item_list\" of print, write and read
-statements."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context
-                                    '("parenthesized_expression"
-                                      "argument_list"
-                                      "array_literal"
-                                      "parameters"
-                                      "size"
-                                      "output_item_list"
-                                      "input_item_list"))
-               nil "align-list-items-children: wrong context, got '%s'" list-context)
-    ;; drop parenthesis, as these are dealt with directly
-    (seq-filter
-     (lambda (n)
-       (not (eq (f90-ts--align-node-symbol n) 'parenthesis)))
-     (treesit-node-children list-context))))
+(defun f90-ts--align-items-case-paren-children (case-stmt)
+  "Return the pair (OPEN . CLOSE) of parentheses of the case statement CASE-STMT.
+Both are direct children of the statement.  Return nil if either is missing,
+as for \"case default\"."
+  (let* ((children (treesit-node-children case-stmt))
+         (open  (seq-find (lambda (n)
+                            (f90-ts--node-type-p n "("))
+                          children))
+         (close (seq-find (lambda (n)
+                            (f90-ts--node-type-p n ")"))
+                          children)))
+    (when (and open close)
+      (cons open close))))
 
 
-;;++++++++++++++
-;; list context: variable_declarations
-
-(defun f90-ts--align-items-var-decl (context loc)
-  "Determine relevant children of CONTEXT = \"variable_declaration\".
-Use LOC to determine whether attribute or declarator items are relevant (those
-before and after \"::\")."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "variable_declaration")
-               nil "expected list context: variable_declaration, got '%s'" list-context)
-    (when (< 0 (treesit-node-child-count list-context))
-      (let* ((pos (alist-get 'pos loc))
-             (attr-children (f90-ts--children-by-fields list-context '("attribute")))
-             (decl-children (f90-ts--children-by-fields list-context '("declarator")))
-
-             ;; decl-children should not be empty, but might be in incomplete code
-             ;; depending on how error recovery works out; just use first decl child,
-             ;; as the children should be sorted by buffer position
-             (first-decl (car decl-children)))
-        (if (or (null first-decl)
-                (< pos (treesit-node-start first-decl)))
-            attr-children
-          ;; for init declarator children, add assignment nodes as well:
-          ;; "=" for init_declarator, "=>" for pointer_init_declarator
-          (cl-mapcan
-           (lambda (n)
-             (cons n (when (f90-ts--node-type-p n '("init_declarator"
-                                                    "pointer_init_declarator"))
-                       (cl-remove-if-not
-                        (lambda (c) (f90-ts--node-type-p c '("=" "=>")))
-                        (treesit-node-children n)))))
-           decl-children))))))
+(defun f90-ts--align-isyms-case (context _loc)
+  "Return the items of the case statement CONTEXT between its parentheses.
+These are the children of the \"case_value_range_list\" (values, commas,
+ampersands and comments inside the list) and all further nodes between the
+parentheses, like comments before the list or after the last item."
+  (let* ((case-stmt (car context))
+         (parens (f90-ts--align-items-case-paren-children case-stmt))
+         (beg (and parens (treesit-node-start (car parens))))
+         (end (and parens (treesit-node-start (cdr parens)))))
+    (cl-assert (f90-ts--node-type-p case-stmt "case_statement")
+               nil "wrong context, got '%s'" case-stmt)
+    (when parens
+      (cl-loop
+       for n in (treesit-node-children case-stmt)
+       when (and (< beg (treesit-node-start n))
+                 (< (treesit-node-start n) end))
+       append (if (f90-ts--node-type-p n "case_value_range_list")
+                  (treesit-node-children n)
+                (list n))))))
 
 
-;;++++++++++++++
-;; list context: string_literal
-
-(defun f90-ts--align-items-string (context _loc)
+(defun f90-ts--align-isyms-string (context _loc)
   "Return almost all children of CONTEXT of type string_literal.
 There is one small exception:
 Always drop the second quote in an escape double quote sequence,
@@ -1209,225 +1424,6 @@ which is represented as a string_content."
            (and (f90-ts--node-type-p psib "\\")
                 (f90-ts--node-type-p n "string_content")))))
      children)))
-
-
-;;++++++++++++++
-;; list context: import statement
-
-(defun f90-ts--align-items-children1 (context _loc)
-  "Determine relevant children of CONTEXT by dropping first child.
-This is used for nodes of type \"import_statement\"."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "import_statement")
-               nil "expected list context: import_statement, got '%s'" list-context)
-    (when-let* ((children (treesit-node-children list-context)))
-      ;; drop the "import" keyword
-      (seq-drop children 1))))
-
-
-;;++++++++++++++
-;; list context: included_items of use statements
-
-(defun f90-ts--align-items-included (context _loc)
-  "Determine relevant children of CONTEXT = \"included_items\".
-This is the part of a use statement following the module name, like
-\", only: a, b => c\" or \", a => b\".  The items are the imported entities,
-either plain names or renaming nodes of type \"use_alias\".  Drop the leading
-comma, the keyword \"only\" and its colon (and continuation symbols and comments
-among them), as these are not aligned with the items.  Commas, continuation
-symbols and comments between the items are kept."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "included_items")
-               nil "expected list context: included_items, got '%s'" list-context)
-    (seq-drop-while
-     (lambda (n) (f90-ts--node-type-p n '("," "only" ":" "&" "comment")))
-     (treesit-node-children list-context))))
-
-
-;;++++++++++++++
-;; list context: use_statement (renaming without only)
-
-(defun f90-ts--align-items-use (context _loc)
-  "Determine relevant children of CONTEXT = \"use_statement\".
-This is for use statements without \"only\", like \"use mod, a => b, c => d\",
-where the renaming nodes are children of the use statement itself and not of
-an \"included_items\" node.  Drop everything up to and including the module
-name, and the following comma (and continuation symbols and comments).  Commas,
-continuation symbols and comments between the items are kept."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "use_statement")
-               nil "expected list context: use_statement, got '%s'" list-context)
-    (seq-drop-while
-     (lambda (n) (f90-ts--node-type-p n '("," "&" "comment")))
-     (cdr (seq-drop-while
-           (lambda (n) (not (f90-ts--node-type-p n "module_name")))
-           (treesit-node-children list-context))))))
-
-
-;;++++++++++++++
-;; list context: public_statement, private_statement
-
-(defun f90-ts--align-items-access (context _loc)
-  "Determine relevant children of CONTEXT being an access statement.
-This is used for nodes of type \"public_statement\" and \"private_statement\",
-like \"public :: a, b\" or \"private a, b\".  Drop the keyword and the
-optional \"::\", as these are not aligned with the items.  Commata,
-continuation symbols and comments in between are kept."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context '("public_statement"
-                                                   "private_statement"))
-               nil "expected list context: public_statement or private_statement, got '%s'"
-               list-context)
-    (seq-drop-while
-     (lambda (n) (f90-ts--node-type-p n '("::" "&" "comment")))
-     ;; drop the keyword itself
-     (seq-drop (treesit-node-children list-context) 1))))
-
-
-;;++++++++++++++
-;; list context: binding_list, final_statement
-
-(defun f90-ts--align-items-children2 (context _loc)
-  "Determine relevant children of CONTEXT by dropping first two children.
-This is used for nodes of type \"binding_list\" or \"final_statement\".
-Both occur in the contains part of a derived type definition."
-  (let ((list-context (car context)))
-    (cl-assert (or (f90-ts--node-type-p list-context "binding_list")
-                   (f90-ts--node-type-p list-context "final_statement"))
-               nil "expected list context: binding_list or final_statement, got '%s'" list-context)
-    (when-let* ((children (treesit-node-children list-context)))
-      ;; drop the (binding_name ...) part, and the => binding symbol
-      (seq-drop children 2))))
-
-
-;;++++++++++++++
-;; list context: procedure_statement (type bound procedures)
-
-(defun f90-ts--align-items-procedure (context _loc)
-  "Determine relevant children of CONTEXT = \"procedure_statement\".
-This is a type bound procedure statement in the contains part of a derived type,
-like \"procedure :: a, b => impl_b\".  The items are the declarators, which are
-method names or bindings (see `f90-ts--align-assign-like-types'), together with
-the commas, continuation symbols and comments in between.  Like for variable
-declarations, the symbol \"=>\" of a binding is an item as well.  Drop everything
-up to the first declarator: the keyword, the interface name, the attributes and
-the optional \"::\", as these are not aligned with the declarators."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "procedure_statement")
-               nil "expected list context: procedure_statement, got '%s'" list-context)
-    (cl-mapcan
-     (lambda (n)
-       (cons n (when (f90-ts--node-type-p n "binding")
-                 (cl-remove-if-not
-                  (lambda (c) (f90-ts--node-type-p c "=>"))
-                  (treesit-node-children n)))))
-     (seq-drop-while
-      (lambda (n) (not (f90-ts--field-names-any-p n '("declarator"))))
-      (treesit-node-children list-context)))))
-
-
-;;++++++++++++++
-;; list context: assign-like nodes (association, init_declarator,
-;; pointer_init_declarator, use_alias, binding)
-
-(defconst f90-ts--align-assign-like-types
-  '("association" "init_declarator" "pointer_init_declarator" "use_alias"
-    "binding")
-  "Node types of assign-like items, which are \"lhs = rhs\" or \"lhs => rhs\".
-These are the associations in \"associate(x => y)\", the init declarators in
-variable declarations, the use aliases in use statements, and the bindings in
-type bound procedure statements, like \"procedure :: name => impl\".")
-
-
-(defun f90-ts--align-items-assign-like (context _loc)
-  "Determine relevant children of CONTEXT by dropping the left hand side.
-This is used for assign-like nodes, see `f90-ts--align-assign-like-types',
-like \"x => y\" in an association, \"a = 1\" or \"p => null()\" in a variable
-declaration, or \"local => remote\" in a use statement.  The remaining
-children are the \"=\" or \"=>\" symbol and the right hand side."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context f90-ts--align-assign-like-types)
-               nil
-               "expected assign-like list context, got '%s'" list-context)
-    (when-let* ((children (treesit-node-children list-context)))
-      ;; drop the lhs
-      (seq-drop children 1))))
-
-
-;;++++++++++++++
-;; list context: extent_specifier, concurrent_control, triplet_spec
-
-(defun f90-ts--align-items-drop-left (context _loc)
-  "Determine relevant children of CONTEXT by dropping the left part.
-This is used for the nodes \"extent_specifier\", \"concurrent_control\" and
-\"triplet_spec\", which follow the pattern \"left symbol right\", like
-\"lower:upper:stride\" or \"i = initial:final:step\".  Drop the first child,
-which is the lower bound or, if that is missing, the first colon for an extent
-specifier, and the loop variable for the other two.  The remaining children are
-the symbols, the other bounds, continuation symbols and comments."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context '("extent_specifier"
-                                                   "concurrent_control"
-                                                   "triplet_spec"))
-               nil "expected list context: extent_specifier or concurrent_control, got '%s'"
-               list-context)
-    (when-let* ((children (treesit-node-children list-context)))
-      (seq-drop children 1))))
-
-
-;;++++++++++++++
-;; list context: concurrent_header
-
-(defun f90-ts--align-items-concurrent-header (context _loc)
-  "Determine relevant children of CONTEXT = \"concurrent_header\".
-The header is \"concurrent ([type ::] control, control, ..., [mask])\".  Return
-the controls, the mask, commas, continuation symbols and comments.  Drop the
-keyword, the parentheses and the optional type specification with its \"::\",
-as the controls are aligned with each other, not with the type."
-  (let ((list-context (car context)))
-    (cl-assert (f90-ts--node-type-p list-context "concurrent_header")
-               nil "expected list context: concurrent_header, got '%s'" list-context)
-    (seq-filter
-     (lambda (n)
-       (not (or (eq (f90-ts--align-node-symbol n) 'parenthesis)
-                (f90-ts--node-type-p n '("intrinsic_type" "::")))))
-     ;; drop the keyword
-     (seq-drop (treesit-node-children list-context) 1))))
-
-
-;;++++++++++++++
-;; list context: case_statement
-
-(defun f90-ts--align-items-case-paren-children (case-stmt)
-  "Return the pair (OPEN . CLOSE) of parentheses of the case statement CASE-STMT.
-Both are direct children of the statement.  Return nil if either is missing,
-as for \"case default\"."
-  (let* ((children (treesit-node-children case-stmt))
-         (open  (seq-find (lambda (n) (f90-ts--node-type-p n "(")) children))
-         (close (seq-find (lambda (n) (f90-ts--node-type-p n ")")) children)))
-    (when (and open close)
-      (cons open close))))
-
-
-(defun f90-ts--align-items-case (context _loc)
-  "Return the items of the case statement CONTEXT between its parentheses.
-These are the children of the \"case_value_range_list\" (values, commas,
-ampersands and comments inside the list) and all further nodes between the
-parentheses, like comments before the list or after the last item."
-  (let* ((case-stmt (car context))
-         (parens (f90-ts--align-items-case-paren-children case-stmt))
-         (beg (and parens (treesit-node-start (car parens))))
-         (end (and parens (treesit-node-start (cdr parens)))))
-    (cl-assert (f90-ts--node-type-p case-stmt "case_statement")
-               nil "align-items-case: wrong context, got '%s'" case-stmt)
-    (when parens
-      (cl-loop
-       for n in (treesit-node-children case-stmt)
-       when (and (< beg (treesit-node-start n))
-                 (< (treesit-node-start n) end))
-       append (if (f90-ts--node-type-p n "case_value_range_list")
-                  (treesit-node-children n)
-                (list n))))))
 
 
 ;;++++++++++++++
@@ -1918,7 +1914,7 @@ the default."
 
 
 ;; binding_list is "lhs => item, item, ..." (generic statement); the items
-;; drop lhs and "=>", see `f90-ts--align-items-children2'.
+;; drop lhs and "=>", see `f90-ts--align-isyms-children2'.
 (defun f90-ts--align-other-binding-list (context _loc items-plist)
   "Return the alignment choice for the list context \"binding_list\".
 A binding list is the \"generic_name => name1, name2\" part of a generic
@@ -2009,8 +2005,8 @@ even if there are earlier symbols compatible with the current one.
 
 CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
 align-list-other family."
-    (cl-assert (f90-ts--node-type-p list-context "procedure_statement")
-               nil "wrong context, got '%s'" list-context)
+  (cl-assert (f90-ts--node-type-p (car context) "procedure_statement")
+             nil "wrong context, got '%s'" (car context))
   (if (eq (alist-get 'nsym loc) 'associate)
       (f90-ts--align-choice-create :sym-items 'candidate)
     (f90-ts--align-other-entity-list context loc items-plist)))
@@ -2777,7 +2773,7 @@ the offset is assumed to be 0."
   (let* ((cur-line (alist-get 'line loc))
          (cntxt-line (f90-ts--node-line (or (cdr context) (car context))))
          (node-sym (alist-get 'nsym loc))
-         (get-items (f90-ts--get-list-context-prop :get-items-fn context))
+         (get-items (f90-ts--get-list-context-prop :get-isyms-fn context))
          (items-all (when get-items
                       (funcall get-items context loc)))
          (prev-sym (f90-ts--align-prev-nsym items-all cur-line))
@@ -2901,20 +2897,20 @@ Finally use VARIANT to select one pair to align with."
 ;; if not provided, only compatible items and the standard continued line
 ;; position are used
 (defconst f90-ts--align-list-context-properties
-  (let ((expr-prop        '(:get-items-fn f90-ts--align-items-op-expr
+  (let ((expr-prop        '(:get-isyms-fn f90-ts--align-isyms-op-expr
                             :get-other-fn f90-ts--align-other-op-expr))
-        (paren-prop       '(:get-items-fn f90-ts--align-items-children-no-paren
+        (paren-prop       '(:get-isyms-fn f90-ts--align-isyms-children-no-paren
                             :get-other-fn f90-ts--align-other-paren))
-        (bind-prop        '(:get-items-fn f90-ts--align-items-children2))
-        (bind-list-prop   '(:get-items-fn f90-ts--align-items-children2
+        (bind-prop        '(:get-isyms-fn f90-ts--align-isyms-children2))
+        (bind-list-prop   '(:get-isyms-fn f90-ts--align-isyms-children2
                             :get-other-fn f90-ts--align-other-binding-list))
-        (io-item-prop     '(:get-items-fn f90-ts--align-items-children-no-paren
+        (io-item-prop     '(:get-isyms-fn f90-ts--align-isyms-children-no-paren
                             :get-other-fn f90-ts--align-other-item-list))
-        (control-prop     '(:get-items-fn f90-ts--align-items-drop-left
+        (control-prop     '(:get-isyms-fn f90-ts--align-isyms-drop-left
                             :get-other-fn f90-ts--align-other-control))
-        (assign-like-prop '(:get-items-fn f90-ts--align-items-assign-like
+        (assign-like-prop '(:get-isyms-fn f90-ts--align-isyms-assign-like
                             :get-other-fn f90-ts--align-other-assign-like))
-        (access-prop      '(:get-items-fn f90-ts--align-items-access
+        (access-prop      '(:get-isyms-fn f90-ts--align-isyms-access
                             :get-other-fn f90-ts--align-other-entity-list)))
     ;; remove optional grammar variant specific entries, which evaluate to nil
     ;; if not available
@@ -2931,24 +2927,24 @@ Finally use VARIANT to select one pair to align with."
       (cons "parenthesized_expression" paren-prop)
       (cons "argument_list"            paren-prop)
       (cons "array_literal"
-            '(:get-items-fn f90-ts--align-items-children-no-paren
+            '(:get-isyms-fn f90-ts--align-isyms-children-no-paren
               :get-other-fn f90-ts--align-other-array))
       (when (f90-ts--grammar-string-literal-decomposed-p)
         (cons "string_literal"
-              '(:get-items-fn f90-ts--align-items-string
+              '(:get-isyms-fn f90-ts--align-isyms-string
                 :get-other-fn f90-ts--align-other-string)))
       (cons "parameters"               paren-prop)
       (cons "size"                     paren-prop)
       (cons "output_item_list"         io-item-prop)
       (cons "input_item_list"          io-item-prop)
       (cons "case_statement"
-            '(:get-items-fn f90-ts--align-items-case
+            '(:get-isyms-fn f90-ts--align-isyms-case
               :get-other-fn f90-ts--align-other-case))
       (cons "association_list"
-            '(:get-items-fn f90-ts--align-items-assocation
+            '(:get-isyms-fn f90-ts--align-isyms-association
               :get-other-fn f90-ts--align-other-association))
       (cons "variable_declaration"
-            '(:get-items-fn f90-ts--align-items-var-decl
+            '(:get-isyms-fn f90-ts--align-isyms-var-decl
               :get-other-fn f90-ts--align-other-var-decl))
       (cons "association"              assign-like-prop)
       (cons "init_declarator"          assign-like-prop)
@@ -2956,26 +2952,26 @@ Finally use VARIANT to select one pair to align with."
       (cons "use_alias"                assign-like-prop)
       (cons "binding"                  assign-like-prop)
       (cons "extent_specifier"
-            '(:get-items-fn f90-ts--align-items-drop-left
+            '(:get-isyms-fn f90-ts--align-isyms-drop-left
               :get-other-fn f90-ts--align-other-extent))
       (cons "concurrent_header"
-            '(:get-items-fn f90-ts--align-items-concurrent-header
+            '(:get-isyms-fn f90-ts--align-isyms-concurrent-header
               :get-other-fn f90-ts--align-other-paren))
       (cons "concurrent_control"       control-prop)
       (cons "triplet_spec"             control-prop)
       (cons "function_statement"
-            '(:get-items-fn nil
+            '(:get-isyms-fn nil
               :get-other-fn f90-ts--align-other-function-result))
       (cons "import_statement"
-            '(:get-items-fn f90-ts--align-items-children1))
+            '(:get-isyms-fn f90-ts--align-isyms-children1))
       (cons "use_statement"
-            '(:get-items-fn f90-ts--align-items-use
+            '(:get-isyms-fn f90-ts--align-isyms-use
               :get-other-fn f90-ts--align-other-entity-list))
       (cons "included_items"
-            '(:get-items-fn f90-ts--align-items-included
+            '(:get-isyms-fn f90-ts--align-isyms-included
               :get-other-fn f90-ts--align-other-entity-list))
       (cons "procedure_statement"
-            '(:get-items-fn f90-ts--align-items-procedure
+            '(:get-isyms-fn f90-ts--align-isyms-procedure
               :get-other-fn f90-ts--align-other-procedure))
       (cons "public_statement"         access-prop)
       (cons "private_statement"        access-prop))))
