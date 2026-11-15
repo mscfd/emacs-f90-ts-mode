@@ -41,7 +41,7 @@ module collatz_mod
       procedure :: compute => compute_all_sequences
       procedure :: print_summary
       procedure :: find_longest_sequence, &
-             find_most_visited
+                   find_most_visited
  end type collatz_processor_t
 
 contains

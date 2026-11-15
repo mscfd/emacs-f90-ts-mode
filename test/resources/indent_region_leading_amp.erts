@@ -256,10 +256,10 @@ subroutine arr4()
      character(len=5), dimension(1:3) :: & ! comment
                                            ! comment
         &   rgb = &
-        &          [ &
-        &           'red  ', &
-        &           'green', &
-        &           'blue ' ], &
+        &   [ &
+        &    'red  ', &
+        &    'green', &
+        &    'blue ' ], &
         &   alpha = 'trnsp'
 end subroutine arr4
 =-=-=

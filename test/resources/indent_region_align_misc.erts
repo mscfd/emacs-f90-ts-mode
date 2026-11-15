@@ -384,10 +384,10 @@ end subroutine init_decl
 subroutine init_decl()
      real, target  :: x = 1, &
                       y0123456789 & ! comment
-            = 1
+                             = 1
      real, pointer :: p => null(), &
                       p0123456789 &
-            => null()
+                             => null()
 end subroutine init_decl
 =-=-=
 
@@ -417,9 +417,9 @@ end subroutine init_decl
 ! "=" and "=>" from first init declarator is not a primary choice
 subroutine init_decl()
      real, target  :: x = 1, y0123456789 & ! comment
-            = 1
+                                    = 1
      real, pointer :: p => null(), p0123456789 &
-            => null()
+                                          => null()
 end subroutine init_decl
 =-=-=
 
@@ -436,6 +436,141 @@ subroutine arr3()
         &   alpha = 'trnsp'
 end subroutine arr3
 =-=-=
+
+Name: align variable init declaration 6
+=-=
+module m
+integer, parameter :: very_long_name_0123456789 &
+= 987654
+end module m
+=-=
+module m
+ integer, parameter :: very_long_name_0123456789 &
+                              = 987654
+end module m
+=-=-=
+
+
+Name: align procedure binding 1
+=-=
+module m
+ type :: t
+ contains
+      procedure :: a0123, &
+                   b0123
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 => impl_d45678
+      procedure :: &
+             a0123, &
+             b0123
+      procedure :: &
+             cccc456789 => impl_cccc456789, &
+             d45678 => impl_d45678
+ end type t
+end module m
+=-=-=
+
+Name: align procedure binding 2
+=-=
+module m
+ type :: t
+ contains
+      ! primary and all secondary positions
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+             => impl_d45678
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+                   => impl_d45678
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+                          => impl_d45678
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+                              => impl_d45678
+ end type t
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: align procedure binding 3
+=-=
+module m
+type :: t
+contains
+procedure :: a0123456 &
+=> b, &
+c0123456 => &
+d
+procedure :: x &
+=> y, &
+u => &
+v
+procedure :: u => &
+v
+end type t
+
+integer, parameter :: very_long_name_0123456789 &
+= 987654
+end module m
+=-=
+module m
+ type :: t
+ contains
+      procedure :: a0123456 &
+                          => b, &
+                   c0123456 => &
+                          d
+      procedure :: x &
+             => y, &
+                   u => &
+             v
+      procedure :: u => &
+             v
+ end type t
+
+ integer, parameter :: very_long_name_0123456789 &
+                              = 987654
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Name: align generic binding 1
+=-=
+module m
+ type :: t
+ contains
+      generic :: generic_name => variant1, &
+                                 variant2, &
+                                 variant3
+      generic :: generic_other &
+                 => variant1, variant2, &
+                    variant3
+
+      generic :: generic_other &
+                 => variant1, variant2, &
+                    variant3
+      generic :: &
+             some_more &
+                    => variant1, variant2, &
+                                 variant3
+ end type t
+end module m
+=-=-=
+
 
 Name: io item lists 1
 =-=

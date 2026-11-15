@@ -1301,14 +1301,58 @@ Both occur in the contains part of a derived type definition."
 
 
 ;;++++++++++++++
+;; list context: procedure_statement (type bound procedures)
+
+(defun f90-ts--align-items-procedure (context _loc)
+  "Determine relevant children of CONTEXT = \"procedure_statement\".
+This is a type bound procedure statement in the contains part of a derived type,
+like \"procedure :: a, b => impl_b\".  The items are the declarators, which are
+method names or bindings (see `f90-ts--align-assign-like-types'), together with
+the commas, continuation symbols and comments in between.  Like for variable
+declarations, the symbol \"=>\" of a binding is an item as well.  Drop everything
+up to the first declarator: the keyword, the interface name, the attributes and
+the optional \"::\", as these are not aligned with the declarators."
+  (let ((list-context (car context)))
+    (cl-assert (f90-ts--node-type-p list-context "procedure_statement")
+               nil "expected list context: procedure_statement, got '%s'" list-context)
+    (cl-mapcan
+     (lambda (n)
+       (cons n (when (f90-ts--node-type-p n "binding")
+                 (cl-remove-if-not
+                  (lambda (c) (f90-ts--node-type-p c "=>"))
+                  (treesit-node-children n)))))
+     (seq-drop-while
+      (lambda (n) (not (f90-ts--field-names-any-p n '("declarator"))))
+      (treesit-node-children list-context)))))
+
+
+(defun f90-ts--align-other-procedure (context loc items-plist)
+  "Return the other plist for the list context \"procedure_statement\".
+Declarators and comments are aligned as for an entity list, see
+`f90-ts--align-other-entity-list'.  The symbol \"=>\" of a binding is only a
+secondary position, like the \"=\" of init declarators in variable declarations:
+for the symbol the primary position is the standard continued line position,
+even if there are earlier symbols compatible with the current one.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
+align-list-other family."
+  (let ((other (f90-ts--align-other-entity-list context loc items-plist)))
+    (if (eq (alist-get 'nsym loc) 'associate)
+        (list :primary nil :force t)
+      other)))
+
+
+;;++++++++++++++
 ;; list context: assign-like nodes (association, init_declarator,
-;; pointer_init_declarator, use_alias)
+;; pointer_init_declarator, use_alias, binding)
 
 (defconst f90-ts--align-assign-like-types
-  '("association" "init_declarator" "pointer_init_declarator" "use_alias")
+  '("association" "init_declarator" "pointer_init_declarator" "use_alias"
+    "binding")
   "Node types of assign-like items, which are \"lhs = rhs\" or \"lhs => rhs\".
 These are the associations in \"associate(x => y)\", the init declarators in
-variable declarations, and the use aliases in use statements.")
+variable declarations, the use aliases in use statements, and the bindings in
+type bound procedure statements, like \"procedure :: name => impl\".")
 
 
 (defun f90-ts--align-items-assign-like (context _loc)
@@ -1732,7 +1776,7 @@ align-list-other family."
 (defun f90-ts--align-other-entity-list (context _loc items-plist)
   "Return the other plist for lists of items which are aligned with each other.
 This is used for the list contexts \"included_items\", \"use_statement\",
-\"public_statement\" and \"private_statement\":
+\"public_statement\", \"private_statement\" and \"procedure_statement\":
 
   use mod2, only: sub1, &
                   sub2
@@ -1752,7 +1796,8 @@ align-list-other family."
     (cl-assert (f90-ts--node-type-p list-context '("included_items"
                                                    "use_statement"
                                                    "public_statement"
-                                                   "private_statement"))
+                                                   "private_statement"
+                                                   "procedure_statement"))
                nil "wrong context, got '%s'" list-context)
     (when-let* ((first-item (seq-find (lambda (ni) (eq (cdr ni) 'named))
                                       (plist-get items-plist :prev))))
@@ -1794,6 +1839,75 @@ relative to the statement is always a candidate anyway."
       (cons (treesit-node-start paren) f90-ts-indent-continued))))
 
 
+(defun f90-ts--align-lhs-symbol-anoff (left)
+  "Return the primary candidate for a symbol \"=\" or \"=>\" after the lhs LEFT.
+This is a cons (PRIMARY . ANOFF-LHS).  ANOFF-LHS is the start of LEFT plus
+`f90-ts-indent-continued'.  PRIMARY is ANOFF-LHS if its column is before the
+end of LEFT, which means the symbol hangs below the lhs, and nil otherwise.  In
+that case ANOFF-LHS is only a secondary position, and the standard continued
+line position is the primary one:
+
+  integer, parameter :: very_long_name &
+                          = 1             ! primary: below the lhs
+  integer, parameter :: x &
+       = 1                                ! lhs is too short, secondary"
+  (let* ((anoff-lhs (cons (treesit-node-start left)
+                          f90-ts-indent-continued))
+         (col-sym   (f90-ts--continued-line-cache-get-col anoff-lhs))
+         (col-end   (f90-ts--continued-line-cache-get-col
+                     (cons (treesit-node-end left) 0))))
+    (cons (and (< col-sym col-end)
+               anoff-lhs)
+          anoff-lhs)))
+
+
+;; binding_list is "lhs => item, item, ..." (generic statement); the items
+;; drop lhs and "=>", see `f90-ts--align-items-children2'.
+(defun f90-ts--align-other-binding-list (context _loc items-plist)
+  "Return the other plist for the list context \"binding_list\".
+A binding list is the \"generic_name => name1, name2\" part of a generic
+statement.  As for init declarators, the symbol \"=>\" and the first rhs item are
+`f90-ts-indent-continued' relative to the start of the lhs, see
+`f90-ts--align-lhs-symbol-anoff', which is primary only if that position is
+before the end of the lhs, otherwise the standard continued line position is
+primary.  The hang position (relative to the indentation of the line holding the
+lhs) and the lhs itself are secondary:
+
+  generic :: generic_name &
+                => variant1, &   ! \"=>\": relative to the lhs start
+                   variant2      ! aligned with earlier items
+
+  generic :: generic_name => &
+                variant1, &      ! first item: as for \"=>\"
+                variant2
+
+Later items align with earlier items, see `f90-ts--align-anchor-offset'.  For
+the symbol \"=>\" the primary position is forced, as for assign-like nodes.
+
+The positions derived from the lhs are only candidates as long as there is no
+earlier rhs item.  Afterwards they are out of context, the items are aligned
+with each other.
+
+CONTEXT and ITEMS-PLIST are as described in the calling convention of the
+align-list-other family."
+  (let* ((list-context (car context))
+         (first-p (null (plist-get items-plist :prev)))
+         (left (treesit-node-child list-context 0 nil))
+         (anoff-hang (cons (f90-ts--indent-pos-at-node left)
+                           f90-ts-indent-continued))
+         (lhs-sym (f90-ts--align-lhs-symbol-anoff left)))
+    (cl-assert (f90-ts--node-type-p list-context "binding_list")
+               nil "wrong context, got '%s'" list-context)
+    (list :primary (and first-p
+                        (car lhs-sym))
+          :force   first-p
+          :others  (and first-p
+                        (list anoff-hang
+                              (cdr lhs-sym)
+                              ;; the start of the lhs itself is always secondary
+                              (cons (treesit-node-start left) 0))))))
+
+
 (defun f90-ts--align-other-assign-like (context loc _items-plist)
   "Return the other plist for assign-like nodes.
 An assign-like node is \"lhs = rhs\" or \"lhs => rhs\", spread over several
@@ -1814,11 +1928,19 @@ For associations and use aliases, the lhs is the start of the list item, and the
 primary position is `f90-ts-indent-continued' relative to the start of the lhs,
 for the symbol \"=>\" as well as for the rhs.
 
-For init declarators, the lhs follows the \"::\" and is not a good anchor.  If
-the current node is the symbol \"=\" or \"=>\", the primary position is the
-standard continued line position.  For all other nodes, like the rhs, it is
-`f90-ts-indent-continued' relative to the indentation of the line holding the
-lhs.
+For init declarators and bindings, the lhs follows the \"::\" and is no anchor
+for the whole item.  For the symbol \"=\" or \"=>\" as well as for the rhs, the
+primary position is `f90-ts-indent-continued' relative to the start of the lhs,
+if that position is before the end of the lhs, see
+`f90-ts--align-lhs-symbol-anoff'.  Otherwise it is the standard continued line
+position, which is where a symbol on its own line is placed:
+
+  integer :: x0123456 = &
+                  5                ! lhs start + continued, below the lhs
+  procedure :: x &
+       => y, &                     ! standard continued line position
+               u => &
+       v                           ! same, lhs too short
 
 In both cases, unless an earlier assign-like sibling has the same symbol on an
 earlier line and this symbol is itself preceded by an ampersand, like the
@@ -1847,8 +1969,15 @@ align-list-other family."
          (symbol-p (memq nsym '(assignment associate)))
          ;; the lhs starts the list item, hence it is an anchor for the primary
          (lhs-primary-p (f90-ts--node-type-p item '("association" "use_alias")))
+         ;; init declarators and bindings: the symbol is relative to the lhs start,
+         ;; but the lhs is no anchor for other nodes
+         (lhs-sym-p (f90-ts--node-type-p item '("init_declarator"
+                                                "pointer_init_declarator"
+                                                "binding")))
          (left (or (treesit-node-child-by-field-name item "left")
                    (treesit-node-child item 0 nil)))
+         (lhs-sym (and lhs-sym-p
+                       (f90-ts--align-lhs-symbol-anoff left)))
          (anoff-lhs (cons (treesit-node-start left) f90-ts-indent-continued))
          (anoff-hang (cons (f90-ts--indent-pos-at-node left)
                            f90-ts-indent-continued))
@@ -1868,13 +1997,21 @@ align-list-other family."
     (list :primary (cond
                     (anoff-amp anoff-amp)
                     (lhs-primary-p anoff-lhs)
+                    ;; below the lhs, if that is before its end, otherwise nil:
+                    ;; the forced primary becomes the continued line position
+                    (lhs-sym-p (car lhs-sym))
                     ;; nil: forced primary becomes the continued line position
                     (symbol-p nil)
                     (t anoff-hang))
           :force   t
-          :others  (append (and (or symbol-p lhs-primary-p) (list anoff-hang))
-                           (and anoff-parent (list anoff-parent))
+          :others  (append (and (or symbol-p lhs-primary-p lhs-sym-p)
+                                (list anoff-hang))
+                           (and anoff-parent
+                                (list anoff-parent))
                            anoffs-sym
+                           (and lhs-sym-p
+                                (list (cdr lhs-sym)))
+                           ;; the start of the lhs itself is always secondary
                            (list (cons (treesit-node-start left) 0))))))
 
 
@@ -2751,6 +2888,8 @@ Finally use VARIANT to select one pair to align with."
         (paren-prop       '(:get-items-fn f90-ts--align-items-children-no-paren
                             :get-other-fn f90-ts--align-other-paren))
         (bind-prop        '(:get-items-fn f90-ts--align-items-children2))
+        (bind-list-prop   '(:get-items-fn f90-ts--align-items-children2
+                            :get-other-fn f90-ts--align-other-binding-list))
         (io-item-prop     '(:get-items-fn f90-ts--align-items-children-no-paren
                             :get-other-fn f90-ts--align-other-item-list))
         (control-prop     '(:get-items-fn f90-ts--align-items-drop-left
@@ -2767,7 +2906,7 @@ Finally use VARIANT to select one pair to align with."
       (cons "relational_expression"    expr-prop)
       (cons "concatenation_expression" expr-prop)
       (cons "unary_expression"         expr-prop)
-      (cons "binding_list"             bind-prop)
+      (cons "binding_list"             bind-list-prop)
       (cons "final_statement"          bind-prop)
       (cons "parenthesized_expression" paren-prop)
       (cons "argument_list"            paren-prop)
@@ -2795,6 +2934,7 @@ Finally use VARIANT to select one pair to align with."
       (cons "init_declarator"          assign-like-prop)
       (cons "pointer_init_declarator"  assign-like-prop)
       (cons "use_alias"                assign-like-prop)
+      (cons "binding"                  assign-like-prop)
       (cons "extent_specifier"
             '(:get-items-fn f90-ts--align-items-drop-left
               :get-other-fn f90-ts--align-other-extent))
@@ -2814,6 +2954,9 @@ Finally use VARIANT to select one pair to align with."
       (cons "included_items"
             '(:get-items-fn f90-ts--align-items-included
               :get-other-fn f90-ts--align-other-entity-list))
+      (cons "procedure_statement"
+            '(:get-items-fn f90-ts--align-items-procedure
+              :get-other-fn f90-ts--align-other-procedure))
       (cons "public_statement"         access-prop)
       (cons "private_statement"        access-prop))))
   "List of tree-sitter node types presenting some kind of list context.
