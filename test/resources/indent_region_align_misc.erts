@@ -118,6 +118,152 @@ function fun(x1, x2, x3, &
 end function fun
 =-=-=
 
+Name: align function result keyword 1
+=-=
+function fun &
+result(f)
+end function fun
+=-=
+function fun &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 2
+Skip: t
+=-=
+function fun() &
+result(f)
+end function fun
+=-=
+function fun() &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 3
+Skip: t
+=-=
+function fun( &
+) &
+result(f)
+end function fun
+=-=
+function fun( &
+       ) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 4
+Skip: t
+=-=
+function fun( &
+) &
+         result(f)
+end function fun
+=-=
+function fun( &
+       ) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 5
+=-=
+function fun(x, y, z) &
+result(f)
+end function fun
+=-=
+function fun(x, y, z) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 6
+=-=
+function fun(x, &
+y, &
+z) &
+result(f)
+end function fun
+=-=
+function fun(x, &
+             y, &
+             z) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 7
+=-=
+function fun(x, &
+             y, &
+             z) &
+result(f)
+end function fun
+=-=
+function fun(x, &
+             y, &
+             z) &
+         result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 8
+=-=
+function fun( &
+       x, y, z) &
+result(f)
+end function fun
+=-=
+function fun( &
+       x, y, z) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 9
+=-=
+function fun(x, &
+       y, z) &
+result(f)
+end function fun
+=-=
+function fun(x, &
+       y, z) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 10
+=-=
+function fun(x &
+             ! comment
+       , y &
+       , z) &
+result(f)
+end function fun
+=-=
+function fun(x &
+             ! comment
+       , y &
+       , z) &
+       result(f)
+end function fun
+=-=-=
+
+Name: align function result keyword 11
+=-=
+! keep aligned at secondary position
+function fun( &
+       x, &
+       y, &
+       z) &
+         result(f)
+end function fun
+=-=-=
+
 Name: align associate list 1
 =-=
 subroutine sub()
@@ -202,11 +348,11 @@ Name: align variable init declaration 1
 subroutine init_decl()
 real, target  :: x &
 = 1, &
-y0123456789 &
+ y0123456789 &
 = 1
 real, pointer :: p &
 => null(), &
-p0123456789 &
+ p0123456789 &
 => null()
 end subroutine init_decl
 =-=
@@ -228,20 +374,20 @@ Name: align variable init declaration 2
 subroutine init_decl()
 real, target  :: x = 1, &
 y0123456789 & ! comment
-= 1
+ = 1
 real, pointer :: p => null(), &
 p0123456789 &
-=> null()
+ => null()
 end subroutine init_decl
 =-=
 ! "=" from x = 1 is not primary anchor
 subroutine init_decl()
      real, target  :: x = 1, &
                       y0123456789 & ! comment
-            = 1
+                             = 1
      real, pointer :: p => null(), &
                       p0123456789 &
-            => null()
+                             => null()
 end subroutine init_decl
 =-=-=
 
@@ -271,9 +417,9 @@ end subroutine init_decl
 ! "=" and "=>" from first init declarator is not a primary choice
 subroutine init_decl()
      real, target  :: x = 1, y0123456789 & ! comment
-            = 1
+                                    = 1
      real, pointer :: p => null(), p0123456789 &
-            => null()
+                                          => null()
 end subroutine init_decl
 =-=-=
 
@@ -291,21 +437,190 @@ subroutine arr3()
 end subroutine arr3
 =-=-=
 
-Name: write/read item list
+Name: align variable init declaration 6
 =-=
-subroutine sub()
+module m
+integer, parameter :: very_long_name_0123456789 &
+= 987654
+end module m
+=-=
+module m
+ integer, parameter :: very_long_name_0123456789 &
+                              = 987654
+end module m
+=-=-=
+
+
+Name: align procedure binding 1
+=-=
+module m
+ type :: t
+ contains
+      procedure :: a0123, &
+                   b0123
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 => impl_d45678
+      procedure :: &
+             a0123, &
+             b0123
+      procedure :: &
+             cccc456789 => impl_cccc456789, &
+             d45678 => impl_d45678
+ end type t
+end module m
+=-=-=
+
+Name: align procedure binding 2
+=-=
+module m
+ type :: t
+ contains
+      ! primary and all secondary positions
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+             => impl_d45678
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+                   => impl_d45678
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+                          => impl_d45678
+      procedure :: cccc456789 => impl_cccc456789, &
+                   d45678 &
+                              => impl_d45678
+ end type t
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: align procedure binding 3
+=-=
+module m
+type :: t
+contains
+procedure :: a0123456 &
+=> b, &
+c0123456 => &
+d
+procedure :: x &
+=> y, &
+u => &
+v
+procedure :: u => &
+v
+end type t
+
+integer, parameter :: very_long_name_0123456789 &
+= 987654
+end module m
+=-=
+module m
+ type :: t
+ contains
+      procedure :: a0123456 &
+                          => b, &
+                   c0123456 => &
+                          d
+      procedure :: x &
+             => y, &
+                   u => &
+             v
+      procedure :: u => &
+             v
+ end type t
+
+ integer, parameter :: very_long_name_0123456789 &
+                              = 987654
+end module m
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Name: align generic binding 1
+=-=
+module m
+ type :: t
+ contains
+      generic :: generic_name => variant1, &
+                                 variant2, &
+                                 variant3
+      generic :: generic_other &
+                 => variant1, variant2, &
+                    variant3
+
+      generic :: generic_other &
+                 => variant1, variant2, &
+                    variant3
+      generic :: &
+             some_more &
+                    => variant1, variant2, &
+                                 variant3
+ end type t
+end module m
+=-=-=
+
+
+Name: io item lists 1
+=-=
+subroutine io_item_lists()
+write(*,format_string_for_testing) val1, &       !comment
+! comment
+val2, val3, &
+fun(x1, x2), &
+        val4, &
+      val5, & ! comment
+! some more comment
+final_val
+read(u, fmt) &
+x, y, &
+name1
+
+print '(a20,es15.5,f12.3)', 'diag = ', mat(1,1), &
+mat(2,2)
+
+write(*,*) A1 &
+, A2 &
+, A3, B1 &
+    , B2
+print fmt, X1 &
+, X2
+end subroutine io_item_lists
+=-=
+subroutine io_item_lists()
      write(*,format_string_for_testing) val1, &       !comment
-            ! comment
-            val2, val3, &
-            val4, & ! comment
+                                                      ! comment
+                                        val2, val3, &
+                                        fun(x1, x2), &
+                                        val4, &
+                                              val5, & ! comment
+                                                      ! some more comment
+                                        final_val
+     read(u, fmt) &
+            x, y, &
+            name1
 
-            ! some more comment
+     print '(a20,es15.5,f12.3)', 'diag = ', mat(1,1), &
+                                 mat(2,2)
 
-
-            ! comment
-
-            final_val
-end subroutine sub
+     write(*,*) A1 &
+              , A2 &
+              , A3, B1 &
+                  , B2
+     print fmt, X1 &
+              , X2
+end subroutine io_item_lists
 =-=-=
 
 
@@ -492,4 +807,244 @@ subroutine select_case()
           print *, 'const_expr'
      end select select_variant
 end subroutine select_case
+=-=-=
+
+Name: do concurrent 1
+=-=
+subroutine sub()
+! break at the comma: second control aligned with the first one
+do concurrent (i = 1:n, &
+j = 1:m)
+c(i, j) = a(i) * b(j)
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! break at the comma: second control aligned with the first one
+     do concurrent (i = 1:n, &
+                    j = 1:m)
+          c(i, j) = a(i) * b(j)
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 2
+=-=
+subroutine sub()
+! type specification: controls and mask are aligned with the first control,
+! not with the type; comments between continued lines
+do concurrent (integer :: i = 1:n, & ! comment
+! comment
+j = 1:m, &
+i /= j)
+c(i, j) = c(i, j) + 1.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! type specification: controls and mask are aligned with the first control,
+     ! not with the type; comments between continued lines
+     do concurrent (integer :: i = 1:n, & ! comment
+                                          ! comment
+                               j = 1:m, &
+                               i /= j)
+          c(i, j) = c(i, j) + 1.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 3
+=-=
+subroutine sub()
+! break after "=": initial value hangs relative to the line of the loop
+! variable, final value is aligned with the initial value
+do concurrent (i = &
+1: &
+n, &
+j = 1:m)
+c(i, j) = 0.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! break after "=": initial value hangs relative to the line of the loop
+     ! variable, final value is aligned with the initial value
+     do concurrent (i = &
+            1: &
+            n, &
+                    j = 1:m)
+          c(i, j) = 0.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 4
+=-=
+subroutine sub()
+! colon at the start of the line: aligned with the initial value
+do concurrent (i = 1 &
+: n, &
+j = 1:m)
+c(i, j) = 1.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! colon at the start of the line: aligned with the initial value
+     do concurrent (i = 1 &
+                        : n, &
+                    j = 1:m)
+          c(i, j) = 1.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 5
+=-=
+subroutine sub()
+! step, unary minus: aligned with the initial value, a leading "-1" is placed
+! one column to the left
+do concurrent (i = n: &
+1: &
+-1, &
+j = 1:m)
+c(i, j) = 2.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! step, unary minus: aligned with the initial value, a leading "-1" is placed
+     ! one column to the left
+     do concurrent (i = n: &
+                        1: &
+                       -1, &
+                    j = 1:m)
+          c(i, j) = 2.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 6
+=-=
+subroutine sub()
+! "=" on a continued line: standard continued line position
+do concurrent (i &
+= 1:n, &
+j = 1:m)
+c(i, j) = 3.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! "=" on a continued line: standard continued line position
+     do concurrent (i &
+            = 1:n, &
+                    j = 1:m)
+          c(i, j) = 3.0
+     end do
+end subroutine sub
+=-=-=
+
+Name: do concurrent 7
+=-=
+subroutine sub()
+! closing parenthesis on its own line: aligned with the opening one
+do concurrent (i = 1:n, &
+j = 1:m &
+)
+c(i, j) = 4.0
+end do
+end subroutine sub
+=-=
+subroutine sub()
+     ! closing parenthesis on its own line: aligned with the opening one
+     do concurrent (i = 1:n, &
+                    j = 1:m &
+                      )
+          c(i, j) = 4.0
+     end do
+end subroutine sub
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: do concurrent 8
+=-=
+program int23
+integrate: do, concurrent (i = 1:n) default(none) &
+                                    shared (x, y, z, scale) &
+local (tmp) &
+local_init (test) &
+reduce     (+: int2, &
+int3)
+tmp  = (real(i)-0.5) * scale
+x(i) = tmp
+y(i) = tmp**2
+z(i) = tmp**3
+int2 = int2 + y(i)
+int3 = int3 + z(i)
+end do integrate
+end program int23
+=-=
+program int23
+ integrate: do, concurrent (i = 1:n) default(none) &
+                shared (x, y, z, scale) &
+                local (tmp) &
+                local_init (test) &
+                reduce     (+: int2, &
+                               int3)
+      tmp  = (real(i)-0.5) * scale
+      x(i) = tmp
+      y(i) = tmp**2
+      z(i) = tmp**3
+      int2 = int2 + y(i)
+      int3 = int3 + z(i)
+ end do integrate
+end program int23
+=-=-=
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
+Name: do concurrent 9
+=-=
+program int23
+integrate: do, concurrent (i = 1:n) default(none) &
+                                    shared (x, y, z, scale) &
+local (tmp) local_init (test) &
+            reduce (+: int2, &
+                    int3)
+tmp  = (real(i)-0.5) * scale
+x(i) = tmp
+y(i) = tmp**2
+z(i) = tmp**3
+int2 = int2 + y(i)
+int3 = int3 + z(i)
+end
+end
+=-=
+program int23
+ integrate: do, concurrent (i = 1:n) default(none) &
+                                     shared (x, y, z, scale) &
+                local (tmp) local_init (test) &
+                            reduce (+: int2, &
+                                    int3)
+      tmp  = (real(i)-0.5) * scale
+      x(i) = tmp
+      y(i) = tmp**2
+      z(i) = tmp**3
+      int2 = int2 + y(i)
+      int3 = int3 + z(i)
+ end do integrate
+end program int23
 =-=-=

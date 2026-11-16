@@ -16,7 +16,7 @@ module collatz_mod
 
  ! Public interfaces
  public :: collatz_processor, &
-        collatz_processor_t
+           collatz_processor_t
 
  ! Type for storing results for a single number
  type :: collatz_seq_t
@@ -41,7 +41,7 @@ module collatz_mod
       procedure :: compute => compute_all_sequences
       procedure :: print_summary
       procedure :: find_longest_sequence, &
-             find_most_visited
+                   find_most_visited
  end type collatz_processor_t
 
 contains

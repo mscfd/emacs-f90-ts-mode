@@ -57,8 +57,8 @@ module fill_var_decl
                                x8 = 8, &
                                x9 = 9
  public :: alpha1, alpha2, alpha3, &
-        alpha4, alpha5, alpha6, &
-        alpha7, alpha8, alpha9|
+           alpha4, alpha5, alpha6, &
+           alpha7, alpha8, alpha9|
 
  ! comment1 comment2 comment3 comment4 comment5 comment6 comment7 comment8 comment9 commentA commentB commentC
  type :: test
@@ -126,7 +126,7 @@ module fill_var_decl
                                x8 = 8, &
                                x9 = 9
  public :: alpha1, alpha2, alpha3, &
-        alpha4, alpha5,| &
+           alpha4, alpha5,| &
         alpha6, &
         alpha7, &
         alpha8, &

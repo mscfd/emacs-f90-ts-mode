@@ -89,7 +89,7 @@ Name: align array literal 6
 subroutine arr5()
      character(len=5), dimension(1:3) :: & ! comment
           ! comment
-                                  rgb = &
+                                  rgb_colours = &
               [ &
               'red  ', &
               'green', &
@@ -100,7 +100,7 @@ end
 subroutine arr5()
      character(len=5), dimension(1:3) :: & ! comment
                                            ! comment
-            rgb = &
+            rgb_colours = &
                    [ &
                     'red  ', &
                     'green', &

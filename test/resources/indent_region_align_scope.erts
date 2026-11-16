@@ -1,0 +1,296 @@
+Point-Char: |
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'primary))
+      (indent-region (point-min) (point-max))))
+
+Name: use statement primary 1
+=-=
+module foo
+ use mod0
+ use mod1, only: sub1, &
+                 sub2
+end module foo
+=-=-=
+
+Name: use statement primary 2
+=-=
+module foo
+ use mod2, only: fun1 => mod2_fun1, &
+                 ! comment aligned as well
+                 fun2 => mod2_fun2, &
+                 fun3_as_is
+end module foo
+=-=-=
+
+Name: use statement primary 3
+=-=
+module foo
+ use mod3, fun1 => mod3_fun1, &
+           fun2 => mod3_fun2, &
+           ! one more
+           fun3 => mod3_fun3
+end module foo
+=-=-=
+
+Name: use statement primary 4
+=-=
+module foo
+ use mod3, only: bar111111111111 &
+                        => mod2_fun1, &
+                 ! comment aligned as well
+                 bar222222222222 &
+                        => mod2_fun2
+end module foo
+=-=-=
+
+Name: use statement primary 5
+=-=
+module foo
+ use mod3, bar111111111111 &
+                  => mod2_fun1, &
+           ! comment aligned as well
+           bar222222222222 &
+                  => mod2_fun2
+end module foo
+=-=-=
+
+Name: use statement primary 6
+=-=
+! break before and after "=>": continued offset relative to the lhs
+subroutine sub_use()
+use mod6, only: fun1 => &
+mod6_fun1, &
+fun2 &
+=> mod6_fun2, &
+        fun3 => mod6_fun3
+end subroutine sub_use
+=-=
+! break before and after "=>": continued offset relative to the lhs
+subroutine sub_use()
+     use mod6, only: fun1 => &
+            mod6_fun1, &
+                     fun2 &
+            => mod6_fun2, &
+                     fun3 => mod6_fun3
+end subroutine sub_use
+=-=-=
+
+Name: use statement primary 7
+=-=
+module foo
+ use mod3, &
+        only: bar111111111111 => &
+                     mod2_fun1, &
+              ! comment aligned as well
+              bar222222222222 => &
+                     mod2_fun2
+end module foo
+=-=-=
+
+Name: use statement primary 8
+=-=
+module foo
+contains
+ subroutine bar()
+      use mod3, only: fun1 => mod3_fun1, &
+                      fun2 => mod3_fun2, &
+                      ! one more
+                      fun3 => mod3_fun3
+ end subroutine bar
+end module foo
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (indent-region (point-min) (point-max))))
+
+Name: use statement keep 1
+=-=
+module foo
+ use mod0
+ use mod1, only: sub1, &
+        sub2
+end module foo
+=-=-=
+
+Name: use statement keep 2
+=-=
+module foo
+ use mod2, only: fun1 => mod2_fun1, &
+        ! comment aligned as well
+        fun2 => mod2_fun2
+end module foo
+=-=-=
+
+Name: use statement keep 3
+=-=
+module foo
+ use mod3, only: bar111111111111 &
+                 => mod2_fun1, &
+                 ! comment aligned as well
+                 bar222222222222 &
+        => mod2_fun2
+end module foo
+=-=-=
+
+Name: use statement keep 4
+=-=
+module foo
+ use mod3, &
+        only: bar111111111111 => &
+              mod2_fun1, &
+              ! comment aligned as well
+              bar222222222222 => &
+        mod2_fun2 ! anchored at "use" + continued offset
+end module foo
+=-=-=
+
+Name: use statement keep 5
+=-=
+module foo
+contains
+ subroutine bar()
+      use mod3, only: fun1 => mod3_fun1, &
+             fun2 => mod3_fun2, &
+             ! one more
+                      fun3 => mod3_fun3
+ end subroutine bar
+end module foo
+=-=-=
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (indent-region (point-min) (point-max))))
+
+Name: use statement keep or primary 1
+=-=
+! alignment of use statement with renaming, including comments
+subroutine sub_use()
+use mod3, only: fun1 => mod3_fun1, &
+fun2 => mod3_fun2, &
+! one more
+fun3 => mod3_fun3
+use mod4, a => b, &
+         c => d
+end subroutine sub_use
+=-=
+! alignment of use statement with renaming, including comments
+subroutine sub_use()
+     use mod3, only: fun1 => mod3_fun1, &
+                     fun2 => mod3_fun2, &
+                     ! one more
+                     fun3 => mod3_fun3
+     use mod4, a => b, &
+               c => d
+end subroutine sub_use
+=-=-=
+
+Name: use statement keep or primary 2
+=-=
+! first item on continued line: use standard continued line indentation
+subroutine sub_use()
+use mod5, only: &
+a, &
+          b, &
+   ! comment
+          c
+end subroutine sub_use
+=-=
+! first item on continued line: use standard continued line indentation
+subroutine sub_use()
+     use mod5, only: &
+            a, &
+            b, &
+            ! comment
+            c
+end subroutine sub_use
+=-=-=
+
+
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'keep-or-primary))
+      (indent-region (point-min) (point-max))))
+
+Name: public statement 1
+=-=
+module foo
+public sub1, sub2
+public :: sub3, &
+sub4, &
+   ! comment
+          ! comment
+ sub5
+public    fun1, &
+        fun2, &
+! comment
+        ! comment
+fun3
+public :: &
+sub6, &
+         sub7
+end module foo
+=-=
+module foo
+ public sub1, sub2
+ public :: sub3, &
+           sub4, &
+           ! comment
+           ! comment
+           sub5
+ public    fun1, &
+           fun2, &
+           ! comment
+           ! comment
+           fun3
+ public :: &
+        sub6, &
+        sub7
+end module foo
+=-=-=
+
+Name: private statement 1
+=-=
+module foo
+private sub1, sub2
+private :: sub3, &
+sub4, &
+   ! comment
+          ! comment
+ sub5
+private    fun1, &
+        fun2, &
+! comment
+        ! comment
+fun3
+private :: &
+sub6, &
+         sub7
+end module foo
+=-=
+module foo
+ private sub1, sub2
+ private :: sub3, &
+            sub4, &
+            ! comment
+            ! comment
+            sub5
+ private    fun1, &
+            fun2, &
+            ! comment
+            ! comment
+            fun3
+ private :: &
+        sub6, &
+        sub7
+end module foo
+=-=-=

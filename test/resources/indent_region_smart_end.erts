@@ -94,6 +94,216 @@ subroutine labels()
 end subroutine labels
 =-=-=
 
+Name: labelled do 1
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+do 123, i = 1,234
+do 123, j = 1,345
+end
+end
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+     do 123, i = 1,234
+          do 123, j = 1,345
+123  end do
+end subroutine sub
+=-=-=
+
+Name: labelled do 2
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+do 123, i = 1,234
+do 123, j = 1,345
+continue
+end
+=-=
+! note that this code is invalid, as the end is not seen as an end statement
+! for the two labelled do's
+subroutine sub()
+     do 123, i = 1,234
+          do 123, j = 1,345
+123  continue
+end subroutine sub
+=-=-=
+
+Name: labelled do 3
+=-=
+! first continue is used to close the labelled do
+subroutine sub()
+do 123, i = 1,234
+continue
+continue
+end
+=-=
+! first continue is used to close the labelled do
+subroutine sub()
+     do 123, i = 1,234
+123  continue
+     continue
+end subroutine sub
+=-=-=
+
+Name: labelled do 4
+=-=
+! first continue is not used as it is within if block
+subroutine sub()
+do 123, i = 1,234
+if (cond) then
+continue
+end
+end
+end
+=-=
+! first continue is not used as it is within if block
+subroutine sub()
+     do 123, i = 1,234
+          if (cond) then
+               continue
+          end if
+123  end do
+end subroutine sub
+=-=-=
+
+Name: labelled do 5
+=-=
+! first continue is not used as it is within if block
+subroutine sub()
+do 123, i = 1,234
+if (cond) then
+continue
+end
+continue
+end
+=-=
+! first continue is not used as it is within if block
+subroutine sub()
+     do 123, i = 1,234
+          if (cond) then
+               continue
+          end if
+123  continue
+end subroutine sub
+=-=-=
+
+Name: labelled do 6
+=-=
+subroutine sub()
+do 20, i = 1,n
+do 20, j = 1,n
+do 10, k = 1,m
+do 10, l = 1,m
+continue
+continue
+end
+=-=
+subroutine sub()
+     do 20, i = 1,n
+          do 20, j = 1,n
+               do 10, k = 1,m
+                    do 10, l = 1,m
+10             continue
+20   continue
+end subroutine sub
+=-=-=
+
+Name: labelled do 7
+=-=
+SUBROUTINE sub()
+DO 10, j = 1,m
+DO i = 1,n
+END   ! UPPERCASE
+CONTINUE   ! UPPERCASE
+END
+=-=
+SUBROUTINE sub()
+     DO 10, j = 1,m
+          DO i = 1,n
+          END DO   ! UPPERCASE
+10   CONTINUE   ! UPPERCASE
+END SUBROUTINE sub
+=-=-=
+
+Name: labelled do 8
+=-=
+Subroutine sub()
+labelled: Do 10, j = 1,m
+normal: Do i = 1,n
+End   ! Title
+Continue   ! Title
+End
+=-=
+Subroutine sub()
+     labelled: Do 10, j = 1,m
+          normal: Do i = 1,n
+          End Do normal   ! Title
+10   Continue   ! Title
+End Subroutine sub
+=-=-=
+
+Name: labelled do 9
+=-=
+Subroutine sub()
+labelled: Do 10, j = 1,m
+normal: Do i = 1,n
+End
+End   ! continue without and end do with block label
+End
+=-=
+Subroutine sub()
+     labelled: Do 10, j = 1,m
+          normal: Do i = 1,n
+          End Do normal
+10   End Do labelled   ! continue without and end do with block label
+End Subroutine sub
+=-=-=
+
+
+
+
+Name: normal do with continue 1
+=-=
+! continue must not be matched to normal do loop
+subroutine sum_p(arr, n)
+integer, intent(in) :: n
+real, intent(in) :: arr(n)
+integer :: i, s
+s = 0
+do i = 1, n
+if (arr(i) < 0.0) then
+continue
+else
+s = s + arr(i)
+goto 10
+end
+10 continue
+end
+end
+=-=
+! continue must not be matched to normal do loop
+subroutine sum_p(arr, n)
+     integer, intent(in) :: n
+     real, intent(in) :: arr(n)
+     integer :: i, s
+     s = 0
+     do i = 1, n
+          if (arr(i) < 0.0) then
+               continue
+          else
+               s = s + arr(i)
+               goto 10
+          end if
+10        continue
+     end do
+end subroutine sum_p
+=-=-=
+
+
 Name: smart end with lower-upper-title-camel-case 1
 =-=
 subroutine lower_case()

@@ -109,6 +109,15 @@ contains
 end submodule do_sub
 =-=-=
 
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'continued-line)
+          (f90-ts-indent-list-line 'continued-line))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
 Name: use statement 1
 =-=
 module foo

@@ -205,26 +205,35 @@ function outer(a, b, n) result(T)
      real                :: T(n, n)
      integer             :: i, j
 
-     prod: do concurrent (i = 1:n,&
-            j = 1:n)
+     prod: do concurrent (i = 1:n, j = 1:n)
           T(i, j) = a(i) * b(j)
      end do prod
 end function outer
 =-=-=
 
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (let ((f90-ts-indent-list-region 'continued-line)
+          (f90-ts-indent-list-line 'continued-line))
+      (when f90-ts-mode-test--prepare-fn
+        (funcall f90-ts-mode-test--prepare-fn))
+      (funcall f90-ts-mode-test--action-fn)))
+
 Name: do loop constructs 9
 =-=
+! continued line offset (to allow for add/remove indent prepare functions)
 program int23
  implicit none
  integer, parameter :: n = 8
- real :: x(n), &
-         y(n), &
-         z(n)
- real :: scale, int2, int3
- real :: tmp, test
+ real(dp) :: x(n), &
+        y(n), &
+        z(n)
+ real(dp) :: scale, int2, int3
+ real(dp) :: tmp, test
  integer :: i
 
- scale = 1.0 / real(n)
+ scale = 1.0 / real(n,dp)
  test = -1.0
  int2 = 0.0
  int3 = 0.0
@@ -245,6 +254,56 @@ program int23
 end program int23
 =-=-=
 
+Code:
+  (lambda ()
+    (f90-ts-mode)
+    (when f90-ts-mode-test--prepare-fn
+      (funcall f90-ts-mode-test--prepare-fn))
+    (funcall f90-ts-mode-test--action-fn))
+
+Name: do loop labelled 1
+=-=
+subroutine once_upon_a_time()
+     goto 10
+     if (just_ugly()) then
+          do 100, i = 1,10
+               do 1000, j = 1,10
+                    do 1000, k = 1,10
+                         do 1000, m = 1,10
+                              call neither_good_nor_bad()
+1000           continue  ! comment
+100       continue
+     end if
+10   continue
+end subroutine once_upon_a_time
+=-=-=
+
+Name: do loop labelled 2
+=-=
+subroutine do_a_few_loops_more()
+do 100, i = 1,10
+65 do 100, j = 1,10
+normal: do std = 1,100
+do 1000, k = 1,10
+do 1000, m = 1,10
+76 call take_a_fistful()
+1000 end do
+end do
+100 end do
+end subroutine do_a_few_loops_more
+=-=
+subroutine do_a_few_loops_more()
+     do 100, i = 1,10
+65        do 100, j = 1,10
+               normal: do std = 1,100
+                    do 1000, k = 1,10
+                         do 1000, m = 1,10
+76                            call take_a_fistful()
+1000                end do
+               end do normal
+100  end do
+end subroutine do_a_few_loops_more
+=-=-=
 
 
 Name: constructs with io operations

@@ -14,6 +14,16 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Alignment rules added for:
+  * io item lists,
+  * result keyword for functions,
+  * extent_specifier for array ranges,
+  * do concurrent statement,
+  * use, public and private statements and
+  * procedure and generic binding lists.
+- Indentation for old-style labelled do loops added.
+- Syntax highlighting for keywords goto and continue, and for label
+  references added.
 - Header in TOC buffer added which shows the name of the associated buffer.
 - Abbrev expansion at start of `f90-ts-indent-and-complete-line` added.
   In particular, TAB-based indentation and completion functions also check
@@ -298,11 +308,3 @@ The following list provides features planned for implementation (somewhat ordere
 - Make indentation and alignment aware of fill-column: Do not suggest an indentation if the line exceeds fill-column.
 - Support for (context-aware) `completion-at-point-function` (capf).
 - Electric insert similar to `f90-electric-insert`.
-- Indentation for labeled do loops, like:
-```f90
-  do 123 i = 1,10
-     do 123 j = 1,10
-        print *, i, j
-  123 end do
-```
-  (Remark: the end do statement has one real and one virtual node to match the number of nested loops.)
