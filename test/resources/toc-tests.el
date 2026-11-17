@@ -73,14 +73,6 @@ There is a test which checks that the parser tree and the mock tree are equal.")
   "Number of mock tree builds, to detect needless refreshes.")
 
 
-(defun f90-ts-mode-test--toc-pos (regexp &optional group)
-  "Start of the first match of REGEXP (or of its GROUP) in the current buffer."
-  (save-excursion
-    (goto-char (point-min))
-    (re-search-forward regexp)
-    (match-beginning (or group 0))))
-
-
 (defconst f90-ts-mode-test--toc-text-tree
   '(nil ((("module" "m" 8 28 (1 . 133) nil))
          ((("variable_declaration" "a" 23 nil (12 . 27) nil)
@@ -146,16 +138,17 @@ default display options, and clean up afterwards."
   (declare (indent 1))
   ;; Bind all display options to fixed values, so the tests do not depend
   ;; on the user's customization, then create the source buffers.
-  `(let* ((f90-ts-toc-show-variables      t)
+  `(let* ((f90-ts-toc-show-variables            t)
           (f90-ts-toc-show-interface-procedures t)
-          (f90-ts-toc-include-doc-comments nil)
-          (f90-ts-toc-buffer-side         'left)
-          (f90-ts-toc-name-shortening     'truncate)
-          (f90-ts-toc-short-labels        f90-ts-mode-test--toc-short-labels)
-          (f90-ts-toc-ellipsis            "…")
-          (f90-ts-toc-abbreviate-labels   t)
-          (f90-ts-toc-buffer-auto-sync    t)
-          (f90-ts-mode-test--toc-build-count   0)
+          (f90-ts-toc-include-doc-comments      nil)
+          (f90-ts-toc-filter-dim                nil)
+          (f90-ts-toc-buffer-side               'left)
+          (f90-ts-toc-name-shortening           'truncate)
+          (f90-ts-toc-short-labels              f90-ts-mode-test--toc-short-labels)
+          (f90-ts-toc-ellipsis                  "…")
+          (f90-ts-toc-abbreviate-labels         t)
+          (f90-ts-toc-buffer-auto-sync          t)
+          (f90-ts-mode-test--toc-build-count    0)
           ,@(mapcar (lambda (b) `(,(car b) (f90-ts-mode-test--toc-source ,(cadr b))))
                     bindings))
      ;; replace the tree builder by the function of the current test
@@ -185,6 +178,11 @@ default display options, and clean up afterwards."
                   "\n" t)))
 
 
+(defun f90-ts-mode-test--toc-header-name ()
+  "Return the first header line of the toc buffer, the name of the source."
+  (car (f90-ts-mode-test--toc-header-lines)))
+
+
 (defun f90-ts-mode-test--toc-current-line ()
   "Return the trimmed toc line shown at the point in the toc window."
   (let ((win (get-buffer-window f90-ts--toc-buffer-name 'visible)))
@@ -197,12 +195,29 @@ default display options, and clean up afterwards."
                       (line-beginning-position) (line-end-position)))))))
 
 
-(defun f90-ts-mode-test--toc-sync-at (src pos)
-  "Put point of SRC at POS, run the timer function, return the toc line."
+(defun f90-ts-mode-test--toc-pos (regexp &optional group)
+  "Start of the first match of REGEXP (or of its GROUP) in the current buffer."
+  (save-excursion
+    (goto-char (point-min))
+    (re-search-forward regexp)
+    (match-beginning (or group 0))))
+
+
+(defun f90-ts-mode-test--toc-sync-at-pos (src pos)
+  "Put point of SRC at POS and sync the toc.
+This runs the timer function and returns the toc line."
   (with-current-buffer src (goto-char pos))
   ;; the timer function does the sync, so call it directly
   (f90-ts--toc-tick)
   (f90-ts-mode-test--toc-current-line))
+
+
+(defun f90-ts-mode-test--toc-sync-at-match (src regexp)
+  "Put point of SRC at first MATCH of REGEXP and sync the toc.
+This runs the timer function and returns the toc line."
+  (let ((pos (with-current-buffer src
+               (f90-ts-mode-test--toc-pos regexp))))
+    (f90-ts-mode-test--toc-sync-at-pos src pos)))
 
 
 (defun f90-ts-mode-test--toc-goto-line (n)
@@ -237,17 +252,22 @@ default display options, and clean up afterwards."
   "Kinds without short label use the long label."
   (let ((f90-ts-toc-abbreviate-labels t)
         (f90-ts-toc-short-labels '(("module" . "mod"))))
-    (should (equal (f90-ts--toc-entry-short-label 'module "m") "mod: m"))
+    (should (equal (f90-ts--toc-entry-short-label 'module "m")
+                   "mod: m"))
     (should (equal (f90-ts--toc-entry-short-label 'function "f")
                    (f90-ts--toc-entry-label 'function "f")))
-    (should (equal (f90-ts--toc-entry-short-label 'module "") "mod"))))
+    (should (equal (f90-ts--toc-entry-short-label 'module "")
+                   "mod"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--face-lookup-key-types ()
   "Face lookup works for symbol and string keys."
-  (should (eq (f90-ts--toc-entry-face 'subroutine) 'f90-ts-toc-procedure-face))
-  (should (eq (f90-ts--toc-entry-face "subroutine") 'f90-ts-toc-procedure-face))
-  (should (eq (f90-ts--toc-entry-face 'nonexistent) 'f90-ts-toc-variable-face)))
+  (should (eq (f90-ts--toc-entry-face 'subroutine)
+              'f90-ts-toc-procedure-face))
+  (should (eq (f90-ts--toc-entry-face "subroutine")
+              'f90-ts-toc-procedure-face))
+  (should (eq (f90-ts--toc-entry-face 'nonexistent)
+              'f90-ts-toc-variable-face)))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--text-properties ()
@@ -259,8 +279,10 @@ default display options, and clean up afterwards."
       (forward-line 4)
       (let ((pos (line-beginning-position)))
         (should (markerp (get-text-property pos 'f90-ts-toc-marker)))
-        (should (equal (get-text-property pos 'f90-ts-toc-kind) "subroutine"))
-        (should (eq (get-text-property pos 'mouse-face) 'highlight))
+        (should (equal (get-text-property pos 'f90-ts-toc-kind)
+                       "subroutine"))
+        (should (eq (get-text-property pos 'mouse-face)
+                    'highlight))
         (should (equal (get-text-property pos 'help-echo)
                        (f90-ts--toc-entry-label 'subroutine "s")))))))
 
@@ -269,27 +291,54 @@ default display options, and clean up afterwards."
 ;; header
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-lines ()
-  "The first two lines are the buffer name and a separator of the same width."
+  "The header has the buffer name, the filter line and a separator.
+The filter line and the separator are as wide as the panel."
   (f90-ts-mode-test--toc-with-sources ((src "my_code.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
-    (should (equal (f90-ts-mode-test--toc-header-lines)
-                   '("my_code.f90" "===========")))
+    (let ((header (f90-ts-mode-test--toc-header-lines))
+          (width  (f90-ts-mode-test--toc-panel-width)))
+      (should (= 3 (length header)))
+      (should (equal (nth 0 header)
+                     "my_code.f90"))
+      (should (string-prefix-p "Filter: <none>" (nth 1 header)))
+      (should (string-suffix-p "[ ] rx" (nth 1 header)))
+      (should (= (string-width (nth 1 header))
+                 width))
+      (should (equal (nth 2 header)
+                     (make-string width ?=))))
     ;; the entries follow directly, the header does not change them
-    (should (equal (car (f90-ts-mode-test--toc-lines)) "mod: m"))
+    (should (equal (car (f90-ts-mode-test--toc-lines))
+                   "mod: m"))
     (with-current-buffer f90-ts--toc-buffer-name
       (should (= (f90-ts--toc-buffer-body-start)
-                 (save-excursion (goto-char (point-min))
-                                 (forward-line 2)
-                                 (point)))))))
+                 (save-excursion
+                   (goto-char (point-min))
+                   (forward-line 3)
+                   (point)))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-separator-width ()
-  "The separator is as wide as the name, whatever its length."
+  "The separator is as wide as the wider of the name and the filter line.
+The filter line is as wide as the panel, so only a name which is longer than
+the panel (shown whole with `truncate') makes the separator wider."
   (f90-ts-mode-test--toc-with-sources ((src "a_longer_name.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
     (let ((header (f90-ts-mode-test--toc-header-lines)))
-      (should (equal (car header) "a_longer_name.f90"))
-      (should (equal (cadr header) (make-string (length "a_longer_name.f90") ?=))))))
+      (should (equal (car header)
+                     "a_longer_name.f90"))
+      (should (equal (nth 2 header)
+                     (make-string (f90-ts-mode-test--toc-panel-width) ?=)))))
+  (let ((name "a_rather_long_buffer_name_of_a_source.f90"))
+    (f90-ts-mode-test--toc-with-sources ((src name))
+      (let ((f90-ts-toc-buffer-width 24))
+        (with-current-buffer src (f90-ts-toc-buffer-open)))
+      (let ((header (f90-ts-mode-test--toc-header-lines)))
+        (should (equal (car header)
+                       name))
+        (should (> (length name)
+                   (f90-ts-mode-test--toc-panel-width)))
+        (should (equal (nth 2 header)
+                       (make-string (length name) ?=)))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-properties ()
@@ -297,27 +346,39 @@ default display options, and clean up afterwards."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
     (with-current-buffer f90-ts--toc-buffer-name
-      (cl-loop
-       for pos in (list (point-min)
-                        (save-excursion (goto-char (point-min))
-                                        (forward-line 1)
-                                        (point)))
-       do (progn
-            (should (get-text-property pos 'f90-ts-toc-header))
-            (should-not (get-text-property pos 'f90-ts-toc-marker))
-            (should-not (get-text-property pos 'f90-ts-toc-kind))
-            (should-not (get-text-property pos 'mouse-face))
-            (should (eq (get-text-property pos 'keymap) f90-ts--toc-header-map))))
-
-      (should (eq (get-text-property (point-min) 'face) 'f90-ts-toc-header-face))
-      (should (eq (get-text-property
-                   (save-excursion (goto-char (point-min))
-                                   (forward-line 1)
-                                   (point))
-                   'face)
-                  'f90-ts-toc-separator-face))
+      (let ((line-start (lambda (n)
+                          (save-excursion (goto-char (point-min))
+                                          (forward-line n)
+                                          (point)))))
+        (cl-loop
+         for n from 0 to 2
+         for pos = (funcall line-start n)
+         do (progn
+              (should (get-text-property pos 'f90-ts-toc-header))
+              (should-not (get-text-property pos 'f90-ts-toc-marker))
+              (should-not (get-text-property pos 'f90-ts-toc-kind))
+              (should-not (get-text-property pos 'mouse-face))))
+        ;; clicks: name and separator do nothing, the filter line edits
+        (should (eq (get-text-property (funcall line-start 0) 'keymap)
+                    f90-ts--toc-header-map))
+        (should (eq (get-text-property (funcall line-start 1) 'keymap)
+                    f90-ts--toc-filter-map))
+        (should (eq (get-text-property (funcall line-start 2) 'keymap)
+                    f90-ts--toc-header-map))
+        (should (eq (get-text-property (funcall line-start 0) 'face)
+                    'f90-ts-toc-header-face))
+        (should (eq (get-text-property (funcall line-start 1) 'face)
+                    'f90-ts-toc-separator-face))
+        (should (eq (get-text-property (funcall line-start 2) 'face)
+                    'f90-ts-toc-separator-face))
+        ;; the last character of the filter line belongs to the checkbox
+        (should (eq (get-text-property (- (funcall line-start 2) 2) 'mouse-face)
+                    'highlight))
+        (should (eq (get-text-property (- (funcall line-start 2) 2) 'keymap)
+                    f90-ts--toc-regexp-map)))
       ;; no file: the tooltip is the buffer name
-      (should (equal (get-text-property (point-min) 'help-echo) "a.f90"))
+      (should (equal (get-text-property (point-min) 'help-echo)
+                     "a.f90"))
       ;; the first entry is not part of the header
       (should-not (get-text-property (f90-ts--toc-buffer-body-start)
                                      'f90-ts-toc-header)))))
@@ -341,7 +402,8 @@ default display options, and clean up afterwards."
   "Mouse clicks on the header do nothing."
   (cl-loop
    for key in '([down-mouse-1] [mouse-1] [double-mouse-1] [mouse-2] [mouse-3])
-   do (should (eq (lookup-key f90-ts--toc-header-map key) #'ignore))))
+   do (should (eq (lookup-key f90-ts--toc-header-map key)
+                  #'ignore))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-not-selectable ()
@@ -415,14 +477,18 @@ below the header."
   "The header shows the name of the buffer the panel belongs to."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90") (src2 "bb.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
-    (should (equal (f90-ts-mode-test--toc-header-lines) '("a.f90" "=====")))
+    (should (equal (f90-ts-mode-test--toc-header-name)
+                   "a.f90"))
     (switch-to-buffer src2)
     (f90-ts--toc-tick)
-    (should (equal (f90-ts-mode-test--toc-header-lines) '("bb.f90" "======")))
+    (should (equal (f90-ts-mode-test--toc-header-name)
+                   "bb.f90"))
+    (should (= 3 (length (f90-ts-mode-test--toc-header-lines))))
     ;; and back
     (switch-to-buffer src)
     (f90-ts--toc-tick)
-    (should (equal (f90-ts-mode-test--toc-header-lines) '("a.f90" "=====")))))
+    (should (equal (f90-ts-mode-test--toc-header-name)
+                   "a.f90"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-follows-rename ()
@@ -431,8 +497,8 @@ below the header."
     (with-current-buffer src (f90-ts-toc-buffer-open))
     (with-current-buffer src (rename-buffer "renamed.f90"))
     (f90-ts--toc-tick)
-    (should (equal (f90-ts-mode-test--toc-header-lines)
-                   '("renamed.f90" "===========")))
+    (should (equal (f90-ts-mode-test--toc-header-name)
+                   "renamed.f90"))
     ;; nothing is rebuilt as long as the name stays
     (let ((n f90-ts-mode-test--toc-build-count))
       (f90-ts--toc-tick)
@@ -447,7 +513,9 @@ below the header."
       (f90-ts-toc-buffer-refresh)
       (f90-ts-toc-buffer-toggle-variables)
       (f90-ts-toc-buffer-toggle-variables))
-    (should (equal (f90-ts-mode-test--toc-header-lines) '("a.f90" "=====")))
+    (should (equal (f90-ts-mode-test--toc-header-name)
+                   "a.f90"))
+    (should (= 3 (length (f90-ts-mode-test--toc-header-lines))))
     (should (= 7 (length (f90-ts-mode-test--toc-lines))))))
 
 
@@ -459,9 +527,11 @@ below the header."
     (f90-ts-mode-test--toc-goto-line 5)
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-refresh))
-    (should (equal (f90-ts-mode-test--toc-current-line) "subr: s"))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "subr: s"))
     (with-current-buffer f90-ts--toc-buffer-name
-      (should (>= (point) (f90-ts--toc-buffer-body-start))))))
+      (should (>= (point)
+                  (f90-ts--toc-buffer-body-start))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-shortened ()
@@ -479,14 +549,495 @@ below the header."
       (should (<= (string-width (car header)) width))
       (should (string-prefix-p "…" (car header)))
       (should (string-suffix-p "source.f90" (car header)))
-      (should (= (string-width (cadr header)) (string-width (car header)))))
+      ;; filter line and separator are as wide as the panel
+      (should (= (string-width (nth 1 header)) width))
+      (should (= (string-width (nth 2 header)) width)))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-set-shortening 'right))
     (let ((header (f90-ts-mode-test--toc-header-lines)))
       (should (<= (string-width (car header)) (f90-ts-mode-test--toc-panel-width)))
       (should (string-suffix-p "…" (car header)))
       (should (string-prefix-p "a_rather" (car header)))
-      (should (= (string-width (cadr header)) (string-width (car header)))))))
+      (should (= (string-width (nth 2 header))
+                 (f90-ts-mode-test--toc-panel-width))))))
+
+
+;;;-----------------------------------------------------------------------------
+;; filter
+
+(defmacro f90-ts-mode-test--toc-with-filter-state (&rest body)
+  "Run BODY with the filter variables bound, so that no filter leaks out."
+  (declare (indent 0))
+  `(let ((f90-ts--toc-filter                ""  )
+         (f90-ts--toc-filter-is-regexp      nil )
+         (f90-ts--toc-filter-valid-pattern  nil ))
+     ,@body))
+
+
+(defun f90-ts-mode-test--toc-between-mark-text ()
+  "Return the text of the toc line which has the in between mark, or nil.
+The mark starts at the beginning of the line, so the indentation of the entry
+is part of it.  The normal mark is not there in that case."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (when (f90-ts--toc-buffer-between-mark-p)
+      (should-not f90-ts--toc-buffer-position-overlay)
+      (let ((ov f90-ts--toc-buffer-between-overlay))
+        (should (eq (overlay-get ov 'face)
+                    'f90-ts-toc-position-between-face))
+        (should (= (overlay-start ov)
+                   (save-excursion (goto-char (overlay-start ov))
+                                   (line-beginning-position))))
+        (buffer-substring-no-properties (overlay-start ov)
+                                        (overlay-end ov))))))
+
+
+(defun f90-ts-mode-test--toc-normal-mark-text ()
+  "Return the text of the toc line which has the normal mark, or nil.
+The normal mark is the one of `f90-ts-toc-position-face'.  It covers the line
+including its newline, which is not part of the result.  The in between mark
+is not there in that case."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (let ((ov f90-ts--toc-buffer-position-overlay))
+      (when (and (overlayp ov)
+                 (overlay-buffer ov))
+        (should-not (f90-ts--toc-buffer-between-mark-p))
+        (should (eq (overlay-get ov 'face)
+                    'f90-ts-toc-position-face))
+        (should (= (overlay-start ov)
+                   (save-excursion
+                     (goto-char (overlay-start ov))
+                     (line-beginning-position))))
+        (string-trim-right
+         (buffer-substring-no-properties (overlay-start ov) (overlay-end ov))
+         "\n")))))
+
+
+(defconst f90-ts-mode-test--toc-all-lines
+  '("mod: m" "  var: a" "  var: b" "  ---contains---" "  subr: s" "    var: x"
+    "  fun: f")
+  "TOC lines of `f90-ts-mode-test--toc-text' without filter.")
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-lines ()
+  "A filter keeps matching entries and their parents, and removes the rest."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     f90-ts-mode-test--toc-all-lines))
+      (f90-ts--toc-set-filter "x")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  ---contains---" "  subr: s" "    var: x")))
+      ;; the names are compared ignoring case
+      (f90-ts--toc-set-filter "S")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  ---contains---" "  subr: s")))
+      ;; nothing matches
+      (f90-ts--toc-set-filter "zzz")
+      (should (null (f90-ts-mode-test--toc-lines)))
+      ;; clearing shows everything again
+      (f90-ts-toc-buffer-filter-clear)
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     f90-ts-mode-test--toc-all-lines)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-contains ()
+  "The contains separator is shown if one regular entry of its parent is shown.
+It does not matter if that entry is before or after the separator."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      ;; only entries after the separator
+      (f90-ts--toc-set-filter "f")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  ---contains---" "  fun: f")))
+      ;; only entries before the separator
+      (f90-ts--toc-set-filter "a")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  var: a" "  ---contains---")))
+      ;; entries on both sides
+      (f90-ts--toc-set-filter-is-regexp t)
+      (f90-ts--toc-set-filter "^[af]$")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  var: a" "  ---contains---" "  fun: f")))
+      ;; the parent matches, but no child: the separator alone is dropped
+      (f90-ts--toc-set-filter "^m$")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m"))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-header ()
+  "The filter line shows the filter and the regexp flag, the header stays."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (f90-ts--toc-set-filter "x")
+      (let ((header (f90-ts-mode-test--toc-header-lines))
+            (width  (f90-ts-mode-test--toc-panel-width)))
+        (should (= 3 (length header)))
+        (should (equal (car header)
+                       "a.f90"))
+        (should (string-prefix-p "Filter: x " (nth 1 header)))
+        (should (string-suffix-p "[ ] rx" (nth 1 header)))
+        (should (= (string-width (nth 1 header))
+                   width))
+        (should (equal (nth 2 header)
+                       (make-string width ?=))))
+      (f90-ts--toc-set-filter-is-regexp t)
+      (should (string-suffix-p "[x] rx"
+                               (nth 1 (f90-ts-mode-test--toc-header-lines))))
+      ;; the filter string has its own face
+      (with-current-buffer f90-ts--toc-buffer-name
+        (let ((pos (+ (length "Filter: ")
+                      (save-excursion
+                        (goto-char (point-min))
+                        (forward-line 1)
+                        (point)))))
+          (should (eq (get-text-property pos 'face)
+                      'f90-ts-toc-filter-face))
+          (should (eq (get-text-property pos 'keymap)
+                      f90-ts--toc-filter-map))))
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  ---contains---" "  subr: s" "    var: x"))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-invalid-regexp ()
+  "Check that invalid regexp is coloured and last valid filter is applied."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (f90-ts--toc-set-filter-is-regexp t)
+      (f90-ts--toc-set-filter "x")
+      (let ((lines (f90-ts-mode-test--toc-lines)))
+        (f90-ts--toc-set-filter "x\\(")
+        (should (equal (f90-ts-mode-test--toc-lines)
+                       lines))
+        (with-current-buffer f90-ts--toc-buffer-name
+          (let ((pos (+ (length "Filter: ")
+                        (save-excursion
+                          (goto-char (point-min))
+                          (forward-line 1)
+                          (point)))))
+            (should (eq (get-text-property pos 'face)
+                        'f90-ts-toc-filter-invalid-face))))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-no-position-mark ()
+  "Without filter there is never a position mark."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (cl-loop
+       for regexp in '("integer" "real" "x = 1" "function f")
+       do (progn
+            (f90-ts-mode-test--toc-sync-at-match src regexp)
+            (should-not (f90-ts-mode-test--toc-between-mark-text)))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-position-mark ()
+  "Point on a hidden entry underlines the entry above, without extra line.
+That is also so for hidden variables, as there is no section for them."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (f90-ts--toc-set-filter "s")
+      (let ((lines '("mod: m" "  ---contains---" "  subr: s")))
+        (should (equal (f90-ts-mode-test--toc-lines)
+                       lines))
+        ;; the hidden variables a and b before the separator: the line is
+        ;; between the module and the separator
+        (f90-ts-mode-test--toc-sync-at-match src "integer")
+        (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                       "mod: m"))
+        (f90-ts-mode-test--toc-sync-at-match src "b$")
+        (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                       "mod: m"))
+        ;; the separator and the subroutine are shown
+        (f90-ts-mode-test--toc-sync-at-match src "contains")
+        (should-not (f90-ts-mode-test--toc-between-mark-text))
+        (f90-ts-mode-test--toc-sync-at-match src "subroutine s")
+        (should-not (f90-ts-mode-test--toc-between-mark-text))
+        ;; a line of the shown subroutine without own entry
+        (f90-ts-mode-test--toc-sync-at-match src "x = 1")
+        (should-not (f90-ts-mode-test--toc-between-mark-text))
+        ;; the hidden variable x in the subroutine
+        (f90-ts-mode-test--toc-sync-at-match src "real")
+        (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                       "  subr: s"))
+        ;; the hidden function after the subroutine
+        (f90-ts-mode-test--toc-sync-at-match src "function f")
+        (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                       "  subr: s"))
+        ;; back to a shown entry: the mark is gone
+        (f90-ts-mode-test--toc-sync-at-match src "module m")
+        (should-not (f90-ts-mode-test--toc-between-mark-text))
+        ;; the mark never adds a line or changes the text
+        (should (equal (f90-ts-mode-test--toc-lines)
+                       lines))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-position-mark-gap ()
+  "A position behind a hidden entry is hidden, like the entry itself.
+That is the gap between a hidden entry and the next shown one."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (f90-ts--toc-set-filter "f")
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  ---contains---" "  fun: f")))
+      ;; the end of the hidden subroutine is before the function: between the
+      ;; separator and the function
+      (f90-ts-mode-test--toc-sync-at-match src "end subroutine")
+      (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                     "  ---contains---"))
+      ;; the shown function, and its end
+      (f90-ts-mode-test--toc-sync-at-match src "end function")
+      (should-not (f90-ts-mode-test--toc-between-mark-text)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-position-mark-top ()
+  "With nothing shown, the last header line is underlined."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (f90-ts--toc-set-filter "zzz")
+      (f90-ts-mode-test--toc-sync-at-match src "subroutine s")
+      (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                     (make-string (f90-ts-mode-test--toc-panel-width) ?=)))
+      ;; no filter: no mark
+      (f90-ts-toc-buffer-filter-clear)
+      (should-not (f90-ts-mode-test--toc-between-mark-text)))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-position-mark-update ()
+  "Changing the filter updates the position mark for the unchanged point."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (f90-ts-mode-test--toc-sync-at-match src "function f")
+      (should-not (f90-ts-mode-test--toc-between-mark-text))
+      ;; the function is hidden now
+      (f90-ts--toc-set-filter "s")
+      (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                     "  subr: s"))
+      ;; and shown again
+      (f90-ts--toc-set-filter "f")
+      (should-not (f90-ts-mode-test--toc-between-mark-text)))))
+
+
+(defun f90-ts-mode-test--toc-confine-dimmed-lines ()
+  "Return the trimmed toc lines dimmed due to being outside the confine.
+These are the lines of the entries outside the narrowed source region, see
+`f90-ts-toc-dimmed-face'.  The dimming overlays are looked at directly, because
+other overlays, for example the position mark, hide their face for
+`get-char-property'.  Dimming of filtered entries is not included, see
+`f90-ts-mode-test--toc-filter-dimmed-lines'."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (save-excursion
+      (goto-char (point-min))
+      (cl-loop
+       while (not (eobp))
+       when (cl-some (lambda (ov)
+                       (overlay-get ov 'f90-ts-toc-dim))
+                     (overlays-at (line-beginning-position)))
+       collect (string-trim
+                (buffer-substring-no-properties
+                 (line-beginning-position)
+                 (line-end-position)))
+       do (forward-line 1)))))
+
+
+(defun f90-ts-mode-test--toc-filter-dimmed-lines ()
+  "Return the trimmed toc lines dimmed due to not match the filter regexp.
+This applies if `f90-ts-toc-filter-dim' is non-nil.  The lines are found by the
+text property `f90-ts-toc-nomatch', and each of them must also have
+`f90-ts-toc-filter-dimmed-face'.  Dimming outside the confine is not included,
+see `f90-ts-mode-test--toc-confine-dimmed-lines'."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (save-excursion
+      (goto-char (f90-ts--toc-buffer-body-start))
+      (cl-loop
+       until (eobp)
+       when (get-text-property (point) 'f90-ts-toc-nomatch)
+       collect (progn
+                 (should (memq 'f90-ts-toc-filter-dimmed-face
+                               (ensure-list
+                                (get-text-property (1- (line-end-position))
+                                                   'face))))
+                 (string-trim (buffer-substring-no-properties
+                               (point) (line-end-position))))
+       do (forward-line 1)))))
+
+
+(defun f90-ts-mode-test--toc-move-line (command &optional event)
+  "Run COMMAND in the toc buffer as the command loop does, return the new line.
+The hooks which handle dimmed lines are called before and after COMMAND.
+EVENT is the event which started COMMAND, default is a key press."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (let ((this-command       command)
+          (last-command-event (or event ?n)))
+      (f90-ts--toc-buffer-remember-line)
+      (funcall command)
+      (f90-ts--toc-buffer-skip-dimmed)
+      (string-trim (buffer-substring-no-properties
+                    (line-beginning-position) (line-end-position))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-dim-lines ()
+  "With dimming no entry is removed, the ones not matching are dimmed.
+Dimmed are also the parents of matching entries and the separator."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (let ((f90-ts-toc-filter-dim t))
+        (with-current-buffer src (f90-ts-toc-buffer-open))
+        ;; no filter: nothing is dimmed
+        (should (equal (f90-ts-mode-test--toc-lines)
+                       f90-ts-mode-test--toc-all-lines))
+        (should-not (f90-ts-mode-test--toc-filter-dimmed-lines))
+        (f90-ts--toc-set-filter "x")
+        (should (equal (f90-ts-mode-test--toc-lines)
+                       f90-ts-mode-test--toc-all-lines))
+        (should (equal (f90-ts-mode-test--toc-filter-dimmed-lines)
+                       '("mod: m" "var: a" "var: b" "---contains---"
+                         "subr: s" "fun: f")))
+        ;; nothing matches: everything is dimmed, nothing removed
+        (f90-ts--toc-set-filter "zzz")
+        (should (equal (f90-ts-mode-test--toc-lines)
+                       f90-ts-mode-test--toc-all-lines))
+        (should (= (length (f90-ts-mode-test--toc-filter-dimmed-lines))
+                   (length f90-ts-mode-test--toc-all-lines)))
+        ;; clearing removes the dimming
+        (f90-ts-toc-buffer-filter-clear)
+        (should-not (f90-ts-mode-test--toc-filter-dimmed-lines))
+        ))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-dim-position-mark ()
+  "With dimming no entry is hidden, so there is never an in between mark."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (let ((f90-ts-toc-filter-dim t))
+        (with-current-buffer src (f90-ts-toc-buffer-open))
+        (f90-ts--toc-set-filter "s")
+        ;; function f does not match, but it is shown, so it is marked
+        (f90-ts-mode-test--toc-sync-at-match src "function f")
+        (should-not (f90-ts-mode-test--toc-between-mark-text))
+        (should (equal (f90-ts-mode-test--toc-normal-mark-text)
+                       "  fun: f"))
+        (f90-ts-mode-test--toc-sync-at-match src "integer")
+        (should-not (f90-ts-mode-test--toc-between-mark-text))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-dim-walk ()
+  "Moving point jumps from one matching line to the next one, mouse excepted."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (let ((f90-ts-toc-filter-dim t))
+        (with-current-buffer src (f90-ts-toc-buffer-open))
+        (f90-ts--toc-set-filter-is-regexp t)
+        ;; matches are a, x and f
+        (f90-ts--toc-set-filter "^[afx]$")
+        (with-current-buffer f90-ts--toc-buffer-name
+          (goto-char (f90-ts--toc-buffer-body-start))
+          (forward-line 1))
+        ;; forward over b, the separator and s
+        (should (equal (f90-ts-mode-test--toc-move-line #'next-line)
+                       "var: x"))
+        (should (equal (f90-ts-mode-test--toc-move-line #'next-line)
+                       "fun: f"))
+        ;; backward
+        (should (equal (f90-ts-mode-test--toc-move-line #'previous-line)
+                       "var: x"))
+        (should (equal (f90-ts-mode-test--toc-move-line #'previous-line)
+                       "var: a"))
+        ;; no matching line before a: point stays on a
+        (should (equal (f90-ts-mode-test--toc-move-line #'previous-line)
+                       "var: a"))
+        ;; the mouse works on dimmed lines
+        (should (equal (f90-ts-mode-test--toc-move-line #'next-line
+                                                        (list 'mouse-1))
+                       "var: b"))
+        ;; so do commands which do not move point
+        (let ((this-command #'ignore))
+          (with-current-buffer f90-ts--toc-buffer-name
+            (f90-ts--toc-buffer-remember-line)
+            (f90-ts--toc-buffer-skip-dimmed)
+            (should (equal (string-trim
+                            (buffer-substring-no-properties
+                             (line-beginning-position) (line-end-position)))
+                           "var: b"))))
+        ;; without dimming every line can be visited
+        (setq f90-ts-toc-filter-dim nil)
+        (f90-ts--toc-buffer-refilter)
+        (with-current-buffer f90-ts--toc-buffer-name
+          (goto-char (f90-ts--toc-buffer-body-start)))
+        (should (equal (f90-ts-mode-test--toc-move-line #'next-line)
+                       "var: a"))
+        (should (equal (f90-ts-mode-test--toc-move-line #'next-line)
+                       "---contains---"))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--normal-position-mark ()
+  "Check that the entry got the correct (shown versus hidden) mark.
+The two marks are never there at the same time.  Without filter, there is only
+the normal mark."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      ;; no filter: normal mark on the associated entry
+      (f90-ts-mode-test--toc-sync-at-match src "subroutine s")
+      (should (equal (f90-ts-mode-test--toc-normal-mark-text)
+                     "  subr: s"))
+      (should-not (f90-ts-mode-test--toc-between-mark-text))
+      (f90-ts-mode-test--toc-sync-at-match src "module m")
+      (should (equal (f90-ts-mode-test--toc-normal-mark-text)
+                     "mod: m"))
+      ;; filter shows the entry: still the normal mark
+      (f90-ts--toc-set-filter "s")
+      (f90-ts-mode-test--toc-sync-at-match src "subroutine s")
+      (should (equal (f90-ts-mode-test--toc-normal-mark-text)
+                     "  subr: s"))
+      (should-not (f90-ts-mode-test--toc-between-mark-text))
+      ;; filter hides it: in between mark instead of the normal one
+      (f90-ts-mode-test--toc-sync-at-match src "function f")
+      (should-not (f90-ts-mode-test--toc-normal-mark-text))
+      (should (equal (f90-ts-mode-test--toc-between-mark-text)
+                     "  subr: s"))
+      ;; no filter again
+      (f90-ts-toc-buffer-filter-clear)
+      (should (equal (f90-ts-mode-test--toc-normal-mark-text)
+                     "  fun: f"))
+      (should-not (f90-ts-mode-test--toc-between-mark-text)))))
+
+
+(defun f90-ts-mode-test--toc-has-match-face-p ()
+  "Return non-nil if some text in the toc buffer has `f90-ts-toc-match-face'."
+  (with-current-buffer f90-ts--toc-buffer-name
+    (cl-loop
+     for pos from (point-min) below (point-max)
+     thereis (memq 'f90-ts-toc-match-face
+                   (ensure-list (get-text-property pos 'face))))))
+
+
+(f90-ts-mode-test-defsub f90-ts-mode-test--toc--filter-match-highlight ()
+  "Matches of the filter are highlighted while typing, and not after it."
+  (f90-ts-mode-test--toc-with-filter-state
+    (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
+      (with-current-buffer src (f90-ts-toc-buffer-open))
+      (should-not (f90-ts-mode-test--toc-has-match-face-p))
+      ;; typing: the filter is applied live
+      (let ((f90-ts--toc-filter-typing t))
+        (f90-ts--toc-set-filter "s")
+        (should (f90-ts-mode-test--toc-has-match-face-p)))
+      ;; done: same filter, but rendered again without highlight
+      (f90-ts--toc-set-filter "s" t)
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     '("mod: m" "  ---contains---" "  subr: s")))
+      (should-not (f90-ts-mode-test--toc-has-match-face-p))
+      ;; changes outside of the minibuffer do not highlight either
+      (f90-ts--toc-set-filter-is-regexp t)
+      (f90-ts--toc-set-filter "^s")
+      (should-not (f90-ts-mode-test--toc-has-match-face-p)))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -498,30 +1049,23 @@ Covers names, declarations, the separator, body lines and a position
 inside a keyword."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "module m")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "module m")
                    "mod: m"))
     ;; first variable on the line also captures point before it
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "integer")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "integer")
                    "var: a"))
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "b$")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "b$")
                    "var: b"))
     ;; lines without own entry map to the closest preceding non-variable entry
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "contains")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "contains")
                    "---contains---"))
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "subroutine s")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "subroutine s")
                    "subr: s"))
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "real")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "real")
                    "var: x"))
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "x = 1")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "x = 1")
                    "subr: s"))
-    (should (equal (f90-ts-mode-test--toc-sync-at
+    (should (equal (f90-ts-mode-test--toc-sync-at-pos
                     src (with-current-buffer src
                           (+ 3 (f90-ts-mode-test--toc-pos "function f"))))
                    "fun: f"))))
@@ -542,7 +1086,7 @@ inside a keyword."
         (goto-char (point-min))
         (insert header)
         (f90-ts-toc-buffer-open))
-      (should (equal (f90-ts-mode-test--toc-sync-at src (point-min))
+      (should (equal (f90-ts-mode-test--toc-sync-at-pos src (point-min))
                      "mod: m")))))
 
 
@@ -551,9 +1095,9 @@ inside a keyword."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
     (let ((f90-ts-toc-buffer-auto-sync nil))
-      (f90-ts-mode-test--toc-sync-at
-       src (with-current-buffer src (f90-ts-mode-test--toc-pos "function f")))
-      (should-not (equal (f90-ts-mode-test--toc-current-line) "fun: f")))))
+      (f90-ts-mode-test--toc-sync-at-match src "function f")
+      (should-not (equal (f90-ts-mode-test--toc-current-line)
+                         "fun: f")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--tick-idempotent ()
@@ -597,12 +1141,14 @@ inside a keyword."
   "The separator sits between the entries before and after `contains'."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
-    (should (equal (nth 3 (f90-ts-mode-test--toc-lines)) "  ---contains---"))
+    (should (equal (nth 3 (f90-ts-mode-test--toc-lines))
+                   "  ---contains---"))
     (with-current-buffer f90-ts--toc-buffer-name
       (goto-char (f90-ts--toc-buffer-body-start))
       (forward-line 3)
       (let ((pos (line-beginning-position)))
-        (should (equal (get-text-property pos 'f90-ts-toc-kind) "contains"))
+        (should (equal (get-text-property pos 'f90-ts-toc-kind)
+                       "contains"))
         (should (eq (get-text-property (+ pos 3) 'face)
                     'f90-ts-toc-separator-face))))))
 
@@ -614,8 +1160,10 @@ inside a keyword."
     (select-window (get-buffer-window f90-ts--toc-buffer-name))
     (f90-ts-mode-test--toc-goto-line 4)
     (f90-ts-toc-buffer-jump)
-    (should (eq (window-buffer (selected-window)) src))
-    (should (= (point) (f90-ts-mode-test--toc-pos "contains")))))
+    (should (eq (window-buffer (selected-window))
+                src))
+    (should (= (point)
+               (f90-ts-mode-test--toc-pos "contains")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--contains-label-nil ()
@@ -633,7 +1181,8 @@ inside a keyword."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (let ((f90-ts-toc-contains-label "-- contains --"))
       (with-current-buffer src (f90-ts-toc-buffer-open))
-      (should (equal (nth 3 (f90-ts-mode-test--toc-lines)) "  -- contains --")))))
+      (should (equal (nth 3 (f90-ts-mode-test--toc-lines))
+                     "  -- contains --")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--contains-needs-child-after ()
@@ -645,17 +1194,21 @@ inside a keyword."
              (nodes (list a))
              (after-all (point-max)))
         ;; contains behind every child
-        (should (eq nodes (f90-ts--toc-buffer-add-contains
-                           (list 'module "m" 1 after-all) nodes)))
+        (should (eq nodes
+                    (f90-ts--toc-buffer-add-contains
+                     (list 'module "m" 1 after-all) nodes)))
         ;; no contains at all
-        (should (eq nodes (f90-ts--toc-buffer-add-contains
-                           (list 'module "m" 1) nodes)))
+        (should (eq nodes
+                    (f90-ts--toc-buffer-add-contains
+                     (list 'module "m" 1) nodes)))
         ;; contains before the child: separator in front of it
         (let ((result (f90-ts--toc-buffer-add-contains
                        (list 'module "m" 1 2) nodes)))
           (should (= (length result) 2))
-          (should (equal (f90-ts-toc-buffer-node-kind (car result)) "contains"))
-          (should (eq (cadr result) a)))))))
+          (should (equal (f90-ts-toc-buffer-node-kind (car result))
+                         "contains"))
+          (should (eq (cadr result)
+                      a)))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--contains-in-middle ()
@@ -754,7 +1307,8 @@ This is a copy of `f90-ts-mode-test--toc-iface-text-tree'.  Count the build in
       (f90-ts-toc-buffer-toggle-interface-procedures))
     (should-not f90-ts-toc-show-interface-procedures)
     ;; no interface line at all and none of the contents
-    (should (equal (f90-ts-mode-test--toc-lines) '("mod: m")))
+    (should (equal (f90-ts-mode-test--toc-lines)
+                   '("mod: m")))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-toggle-interface-procedures))
     (should (= (length (f90-ts-mode-test--toc-lines)) 7))))
@@ -777,21 +1331,25 @@ This is a copy of `f90-ts-mode-test--toc-iface-text-tree'.  Count the build in
 Covers named and unnamed interfaces, procedure statements and the
 subroutine declared inside an interface."
   (f90-ts-mode-test--toc-with-iface src
-    (cl-flet ((sync-at (regexp)
-                (f90-ts-mode-test--toc-sync-at
-                 src (with-current-buffer src
-                       (f90-ts-mode-test--toc-pos regexp)))))
-      (should (equal (sync-at "interface gen") "ifc: gen"))
-      (should (equal (sync-at "module procedure sub1") "proc: sub1"))
-      (should (equal (sync-at "sub3") "proc: sub3"))
-      ;; the first procedure on the line captures point before it
-      (should (equal (sync-at "module procedure sub2") "proc: sub2"))
-      ;; the line after the procedures belongs to the interface again
-      (should (equal (sync-at "end interface gen") "ifc: gen"))
-      (should (equal (sync-at "interface$") "ifc"))
-      ;; the name of the subroutine is on that line
-      (should (equal (sync-at "module subroutine") "subr: fs"))
-      (should (equal (sync-at "fs()") "subr: fs")))))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "interface gen")
+                   "ifc: gen"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "module procedure sub1")
+                   "proc: sub1"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "sub3")
+                   "proc: sub3"))
+    ;; the first procedure on the line captures point before it
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "module procedure sub2")
+                   "proc: sub2"))
+    ;; the line after the procedures belongs to the interface again
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "end interface gen")
+                   "ifc: gen"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "interface$")
+                   "ifc"))
+    ;; the name of the subroutine is on that line
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "module subroutine")
+                   "subr: fs"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "fs()")
+                   "subr: fs"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--iface-sync-hidden ()
@@ -799,12 +1357,10 @@ subroutine declared inside an interface."
   (f90-ts-mode-test--toc-with-iface src
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-toggle-interface-procedures))
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "sub3")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "sub3")
                    "mod: m"))
     ;; also the subroutine declared in the (hidden) interface block
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "fs()")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "fs()")
                    "mod: m"))))
 
 
@@ -814,8 +1370,10 @@ subroutine declared inside an interface."
     (select-window (get-buffer-window f90-ts--toc-buffer-name))
     (f90-ts-mode-test--toc-goto-line 6)
     (f90-ts-toc-buffer-jump)
-    (should (eq (window-buffer (selected-window)) src))
-    (should (= (point) (f90-ts-mode-test--toc-pos "interface$")))))
+    (should (eq (window-buffer (selected-window))
+                src))
+    (should (= (point)
+               (f90-ts-mode-test--toc-pos "interface$")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--iface-key-binding ()
@@ -862,7 +1420,8 @@ subroutine declared inside an interface."
   "The panel opens on the left by default."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
-    (should (eq (f90-ts-mode-test--toc-panel-side) 'left))))
+    (should (eq (f90-ts-mode-test--toc-panel-side)
+                'left))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--side-right-option ()
@@ -870,7 +1429,8 @@ subroutine declared inside an interface."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (let ((f90-ts-toc-buffer-side 'right))
       (with-current-buffer src (f90-ts-toc-buffer-open))
-      (should (eq (f90-ts-mode-test--toc-panel-side) 'right))
+      (should (eq (f90-ts-mode-test--toc-panel-side)
+                  'right))
       ;; the panel is right of the source window
       (should (> (window-left-column (get-buffer-window f90-ts--toc-buffer-name))
                  (window-left-column (get-buffer-window src)))))))
@@ -881,21 +1441,26 @@ subroutine declared inside an interface."
 Only one panel window may exist after the move."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-open))
-    (f90-ts-mode-test--toc-sync-at
-     src (with-current-buffer src (f90-ts-mode-test--toc-pos "function f")))
+    (f90-ts-mode-test--toc-sync-at-match src "function f")
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-toggle-side))
-    (should (eq f90-ts-toc-buffer-side 'right))
-    (should (eq (f90-ts-mode-test--toc-panel-side) 'right))
-    (should (equal (f90-ts-mode-test--toc-current-line) "fun: f"))
-    (should (= 1 (cl-count-if (lambda (w)
-                                (eq (window-buffer w)
-                                    (get-buffer f90-ts--toc-buffer-name)))
-                              (window-list))))
+    (should (eq f90-ts-toc-buffer-side
+                'right))
+    (should (eq (f90-ts-mode-test--toc-panel-side)
+                'right))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "fun: f"))
+    (should (= 1 (cl-count-if
+                  (lambda (w)
+                    (eq (window-buffer w)
+                        (get-buffer f90-ts--toc-buffer-name)))
+                  (window-list))))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-toggle-side))
-    (should (eq f90-ts-toc-buffer-side 'left))
-    (should (eq (f90-ts-mode-test--toc-panel-side) 'left))))
+    (should (eq f90-ts-toc-buffer-side
+                'left))
+    (should (eq (f90-ts-mode-test--toc-panel-side)
+                'left))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--side-toggle-keeps-focus ()
@@ -904,7 +1469,8 @@ Only one panel window may exist after the move."
     (with-current-buffer src (f90-ts-toc-buffer-open))
     ;; toggle from the source buffer: focus stays there
     (f90-ts-toc-buffer-toggle-side)
-    (should (eq (window-buffer (selected-window)) src))
+    (should (eq (window-buffer (selected-window))
+                src))
     ;; toggle from the panel: focus stays in the panel
     (select-window (get-buffer-window f90-ts--toc-buffer-name))
     (f90-ts-toc-buffer-toggle-side)
@@ -916,7 +1482,8 @@ Only one panel window may exist after the move."
   "Without a panel only the option changes, no window is created."
   (f90-ts-mode-test--toc-with-sources ((src "a.f90"))
     (with-current-buffer src (f90-ts-toc-buffer-toggle-side))
-    (should (eq f90-ts-toc-buffer-side 'right))
+    (should (eq f90-ts-toc-buffer-side
+                'right))
     (should-not (get-buffer-window f90-ts--toc-buffer-name 'visible))))
 
 
@@ -929,18 +1496,27 @@ Names are kept if they fit, if the width is too small for the marker,
 or if shortening is `truncate'."
   (let ((f90-ts-toc-ellipsis "…"))
     (let ((f90-ts-toc-name-shortening 'left))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 8) "…ng_name"))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 14) "very_long_name"))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 99) "very_long_name"))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 8)
+                     "…ng_name"))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 14)
+                     "very_long_name"))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 99)
+                     "very_long_name"))
       ;; too narrow for anything besides the marker
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 1) "very_long_name"))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 2) "…e")))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 1)
+                     "very_long_name"))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 2)
+                     "…e")))
     (let ((f90-ts-toc-name-shortening 'right))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 8) "very_lo…"))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 14) "very_long_name"))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 1) "very_long_name")))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 8)
+                     "very_lo…"))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 14)
+                     "very_long_name"))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 1)
+                     "very_long_name")))
     (let ((f90-ts-toc-name-shortening 'truncate))
-      (should (equal (f90-ts--toc-shorten-name "very_long_name" 8) "very_long_name")))))
+      (should (equal (f90-ts--toc-shorten-name "very_long_name" 8)
+                     "very_long_name")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--shorten-name-ellipsis-choices ()
@@ -977,11 +1553,14 @@ stay unchanged."
                              (f90-ts--toc-fit-label "subr: very_long_name"
                                                     "very_long_name" 10)))
     ;; unchanged: fits, no width, no name, label does not end with name
-    (should (equal (f90-ts--toc-fit-label "subr: x" "x" 12) "subr: x"))
+    (should (equal (f90-ts--toc-fit-label "subr: x" "x" 12)
+                   "subr: x"))
     (should (equal (f90-ts--toc-fit-label "subr: very_long_name" "very_long_name" nil)
                    "subr: very_long_name"))
-    (should (equal (f90-ts--toc-fit-label "---contains---" nil 5) "---contains---"))
-    (should (equal (f90-ts--toc-fit-label "subr" "very_long_name" 3) "subr"))))
+    (should (equal (f90-ts--toc-fit-label "---contains---" nil 5)
+                   "---contains---"))
+    (should (equal (f90-ts--toc-fit-label "subr" "very_long_name" 3)
+                   "subr"))))
 
 
 (defconst f90-ts-mode-test--toc-long-text
@@ -1036,7 +1615,8 @@ The panel is opened with a width of 24 columns."
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--shortening-truncate-keeps-names ()
   "With `truncate' names stay whole, so long lines may exceed the panel."
   (f90-ts-mode-test--toc-with-long src
-    (should (equal (car (f90-ts-mode-test--toc-lines)) "mod: a_rather_long_module_name"))
+    (should (equal (car (f90-ts-mode-test--toc-lines))
+                   "mod: a_rather_long_module_name"))
     (should-not (f90-ts-mode-test--toc-all-lines-fit-p))))
 
 
@@ -1081,19 +1661,24 @@ The panel is opened with a width of 24 columns."
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--shortening-cycle ()
   "Cycling the shortening mode goes truncate, left, right, truncate."
   (f90-ts-mode-test--toc-with-long src
-    (should (eq f90-ts-toc-name-shortening 'truncate))
+    (should (eq f90-ts-toc-name-shortening
+                'truncate))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-cycle-shortening))
-    (should (eq f90-ts-toc-name-shortening 'left))
+    (should (eq f90-ts-toc-name-shortening
+                'left))
     (should (string-prefix-p "mod: …" (car (f90-ts-mode-test--toc-lines))))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-cycle-shortening))
-    (should (eq f90-ts-toc-name-shortening 'right))
+    (should (eq f90-ts-toc-name-shortening
+                'right))
     (should (string-suffix-p "…" (car (f90-ts-mode-test--toc-lines))))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-cycle-shortening))
-    (should (eq f90-ts-toc-name-shortening 'truncate))
-    (should (equal (car (f90-ts-mode-test--toc-lines)) "mod: a_rather_long_module_name"))))
+    (should (eq f90-ts-toc-name-shortening
+                'truncate))
+    (should (equal (car (f90-ts-mode-test--toc-lines))
+                   "mod: a_rather_long_module_name"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--shortening-tooltip-and-jump ()
@@ -1107,7 +1692,8 @@ The panel is opened with a width of 24 columns."
              "very_long_subroutine_name_which_does_not_fit"
              (get-text-property (line-beginning-position) 'help-echo)))
     (f90-ts-toc-buffer-jump)
-    (should (eq (window-buffer (selected-window)) src))
+    (should (eq (window-buffer (selected-window))
+                src))
     (should (looking-at "very_long_subroutine_name_which_does_not_fit"))))
 
 
@@ -1118,9 +1704,7 @@ The panel is opened with a width of 24 columns."
       (f90-ts-toc-buffer-set-shortening 'left))
     (should (string-prefix-p
              "subr: "
-             (f90-ts-mode-test--toc-sync-at
-              src (with-current-buffer src
-                    (f90-ts-mode-test--toc-pos "very_long_subroutine")))))))
+             (f90-ts-mode-test--toc-sync-at-match src "very_long_subroutine")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--shortening-follows-resize ()
@@ -1218,7 +1802,8 @@ Variables have a span, but narrowing uses the structure they belong to, see
                     ("w" . f90-ts-toc-buffer-narrow-node)
                     ("d" . f90-ts-toc-buffer-toggle-doc-comments)
                     ("i" . f90-ts-toc-buffer-toggle-interface-procedures))
-   do (should (eq (lookup-key f90-ts-toc-mode-map (car binding)) (cdr binding))))
+   do (should (eq (lookup-key f90-ts-toc-mode-map (car binding))
+                  (cdr binding))))
   (cl-loop
    for command in '(f90-ts-toc-buffer-mark-node
                     f90-ts-toc-buffer-mark-node-with-doc
@@ -1423,26 +2008,32 @@ end module
     (let ((pos (with-current-buffer src
                  (f90-ts-mode-test--toc-pos "doc line 2 of gen"))))
       ;; without doc comments the previous entry is selected
-      (should (equal (f90-ts-mode-test--toc-sync-at src pos) "type: t"))
+      (should (equal (f90-ts-mode-test--toc-sync-at-pos src pos)
+                     "type: t"))
       (let ((f90-ts-toc-include-doc-comments t))
         (with-current-buffer f90-ts--toc-buffer-name
           (setq f90-ts--toc-buffer-last-sync-pos nil))
-        (should (equal (f90-ts-mode-test--toc-sync-at src pos) "ifc: gen"))
+        (should (equal (f90-ts-mode-test--toc-sync-at-pos src pos)
+                       "ifc: gen"))
         ;; first and second doc line of s: only the adjacent block counts
-        (cl-flet ((sync-at (regexp)
-                    (f90-ts-mode-test--toc-sync-at
-                     src (with-current-buffer src (f90-ts-mode-test--toc-pos regexp)))))
-          (should (equal (sync-at "second doc of s") "subr: s"))
-          ;; separated from the doc block of s by an empty line, so it is no
-          ;; doc comment of s
-          (should (equal (sync-at "first doc of s") "---contains---"))
-          ;; comment which is not adjacent to the doc block of f
-          (should (equal (sync-at "not adjacent") "subr: s"))
-          (should (equal (sync-at "adjacent a") "fun: f"))
-          (should (equal (sync-at "adjacent b") "fun: f"))
-          (should (equal (sync-at "doc of module m") "mod: m"))
-          ;; the file header is not a doc comment
-          (should (equal (sync-at "file header") "mod: m")))))))
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "second doc of s")
+                       "subr: s"))
+        ;; separated from the doc block of s by an empty line, so it is no
+        ;; doc comment of s
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "first doc of s")
+                       "---contains---"))
+        ;; comment which is not adjacent to the doc block of f
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "not adjacent")
+                       "subr: s"))
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "adjacent a")
+                       "fun: f"))
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "adjacent b")
+                       "fun: f"))
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "doc of module m")
+                       "mod: m"))
+        ;; the file header is not a doc comment
+        (should (equal (f90-ts-mode-test--toc-sync-at-match src "file header")
+                       "mod: m"))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--mark-node ()
@@ -1452,8 +2043,10 @@ end module
       (f90-ts-mode-test--toc-select-entry "subr: s")
       (f90-ts-toc-buffer-mark-node)
       ;; the region is only visible in the source window
-      (should (eq (window-buffer (selected-window)) src))
-      (should (equal (f90-ts-mode-test--toc-region-of src) span))
+      (should (eq (window-buffer (selected-window))
+                  src))
+      (should (equal (f90-ts-mode-test--toc-region-of src)
+                     span))
       ;; second time: deactivate
       (f90-ts-mode-test--toc-select-entry "subr: s")
       (f90-ts-toc-buffer-mark-node)
@@ -1573,10 +2166,12 @@ The panel keeps listing the whole buffer."
         (insert " ! edit"))
       (f90-ts--toc-tick)
       (should (timerp f90-ts--toc-timer))
-      (should (equal (f90-ts-mode-test--toc-lines) all-lines))
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     all-lines))
       ;; also the manual refresh and the menu tree
       (with-current-buffer f90-ts--toc-buffer-name (f90-ts-toc-buffer-refresh))
-      (should (equal (f90-ts-mode-test--toc-lines) all-lines))
+      (should (equal (f90-ts-mode-test--toc-lines)
+                     all-lines))
       (with-current-buffer src
         (should (buffer-narrowed-p))))))
 
@@ -1622,7 +2217,8 @@ The panel keeps listing the whole buffer."
     (let ((text (with-current-buffer src (buffer-string))))
       (f90-ts-mode-test--toc-select-entry "fun: f")
       (should-error (f90-ts-toc-buffer-comment-node) :type 'buffer-read-only)
-      (should (equal text (with-current-buffer src (buffer-string)))))))
+      (should (equal text
+                     (with-current-buffer src (buffer-string)))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--node-ops-outside-restriction ()
@@ -1723,12 +2319,14 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-narrow-node ()
   "Narrowed to a node, all lines stay, and point is on one of its lines."
   (f90-ts-mode-test--toc-with-real src f90-ts-mode-test--toc-nested-text
-    (should (equal (f90-ts-mode-test--toc-lines) f90-ts-mode-test--toc-nested-lines))
+    (should (equal (f90-ts-mode-test--toc-lines)
+                   f90-ts-mode-test--toc-nested-lines))
     (should-not (f90-ts-mode-test--toc-confined-lines))
     (f90-ts-mode-test--toc-select-entry "subr: s")
     (f90-ts-toc-buffer-narrow-node)
     ;; nothing is hidden, the toc buffer is not narrowed
-    (should (equal (f90-ts-mode-test--toc-lines) f90-ts-mode-test--toc-nested-lines))
+    (should (equal (f90-ts-mode-test--toc-lines)
+                   f90-ts-mode-test--toc-nested-lines))
     (with-current-buffer f90-ts--toc-buffer-name
       (should-not (buffer-narrowed-p)))
     ;; the subroutine, its variables, its contains and the inner procedure
@@ -1741,42 +2339,24 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
                       "subr: inner")))))
 
 
-(defun f90-ts-mode-test--toc-dimmed-lines ()
-  "Return the trimmed toc lines which are displayed with the dimmed face."
-  (with-current-buffer f90-ts--toc-buffer-name
-    (save-excursion
-      (goto-char (point-min))
-      (cl-loop
-       for face = (get-char-property (line-beginning-position) 'face)
-       while (not (eobp))
-       when (or (eq face 'f90-ts-toc-dimmed-face)
-                (and (listp face)
-                     (memq 'f90-ts-toc-dimmed-face face)))
-       collect (string-trim
-                (buffer-substring-no-properties
-                 (line-beginning-position)
-                 (line-end-position)))
-       do (forward-line 1)))))
-
-
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--dim-outside-narrowing ()
   "Lines outside the narrowed region are dimmed, widening removes the dimming."
   (f90-ts-mode-test--toc-with-real src f90-ts-mode-test--toc-nested-text
-    (should-not (f90-ts-mode-test--toc-dimmed-lines))
+    (should-not (f90-ts-mode-test--toc-filter-dimmed-lines))
     (f90-ts-mode-test--toc-select-entry "subr: s")
     (f90-ts-toc-buffer-narrow-node)
-    (should (equal (f90-ts-mode-test--toc-dimmed-lines)
+    (should (equal (f90-ts-mode-test--toc-confine-dimmed-lines)
                    '("mod: m" "var: mv" "---contains---" "subr: t")))
     ;; narrowing to another node moves the dimming
     (f90-ts-mode-test--toc-select-entry "subr: t")
     (f90-ts-toc-buffer-narrow-node)
-    (should (equal (f90-ts-mode-test--toc-dimmed-lines)
+    (should (equal (f90-ts-mode-test--toc-confine-dimmed-lines)
                    '("mod: m" "var: mv" "---contains---" "subr: s" "var: a"
                      "var: b" "---contains---" "subr: inner")))
     ;; same node again: widen
     (f90-ts-mode-test--toc-select-entry "subr: t")
     (f90-ts-toc-buffer-narrow-node)
-    (should-not (f90-ts-mode-test--toc-dimmed-lines))))
+    (should-not (f90-ts-mode-test--toc-confine-dimmed-lines))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--header-not-dimmed ()
@@ -1784,10 +2364,12 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
   (f90-ts-mode-test--toc-with-real src f90-ts-mode-test--toc-nested-text
     (f90-ts-mode-test--toc-select-entry "subr: s")
     (f90-ts-toc-buffer-narrow-node)
-    (should (f90-ts-mode-test--toc-dimmed-lines))
-    ;; the header is "real.f90" and its separator
-    (should-not (member "real.f90" (f90-ts-mode-test--toc-dimmed-lines)))
-    (should-not (member "========" (f90-ts-mode-test--toc-dimmed-lines)))
+    (should (f90-ts-mode-test--toc-confine-dimmed-lines))
+    ;; none of the three header lines is dimmed
+    (should-not (cl-intersection
+                 (f90-ts-mode-test--toc-header-lines)
+                 (f90-ts-mode-test--toc-confine-dimmed-lines)
+                 :test #'equal))
     ;; point stays on a confined line, not in the header
     (with-current-buffer f90-ts--toc-buffer-name
       (should (>= (point) (car f90-ts--toc-buffer-confine))))))
@@ -1799,7 +2381,7 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (f90-ts-mode-test--toc-select-entry "var: a")
     (f90-ts-toc-buffer-narrow-node)
     (should (string-prefix-p "subroutine s" (f90-ts-mode-test--toc-narrowed-text src)))
-    (should (equal (f90-ts-mode-test--toc-dimmed-lines)
+    (should (equal (f90-ts-mode-test--toc-confine-dimmed-lines)
                    '("mod: m" "var: mv" "---contains---" "subr: t")))
     ;; again on a variable of the same structure: widen
     (f90-ts-mode-test--toc-select-entry "var: b")
@@ -1842,8 +2424,9 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (f90-ts-mode-test--toc-walk)
     (should (string-prefix-p "subroutine t" (f90-ts-mode-test--toc-narrowed-text src)))
     ;; point stays on its line, the dimming follows
-    (should (equal (f90-ts-mode-test--toc-current-line) "subr: t"))
-    (should (equal (f90-ts-mode-test--toc-dimmed-lines)
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "subr: t"))
+    (should (equal (f90-ts-mode-test--toc-confine-dimmed-lines)
                    '("mod: m" "var: mv" "---contains---" "subr: s" "var: a"
                      "var: b" "---contains---" "subr: inner")))))
 
@@ -1856,15 +2439,17 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (f90-ts-mode-test--toc-select-entry "var: a")
     (f90-ts-mode-test--toc-walk)
     (should (string-prefix-p "subroutine s" (f90-ts-mode-test--toc-narrowed-text src)))
-    (should (equal (f90-ts-mode-test--toc-current-line) "var: a"))
-    (should (equal (f90-ts-mode-test--toc-dimmed-lines)
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "var: a"))
+    (should (equal (f90-ts-mode-test--toc-confine-dimmed-lines)
                    '("mod: m" "var: mv" "---contains---" "subr: t")))
     ;; a variable of the module
     (f90-ts-mode-test--toc-select-entry "var: mv")
     (f90-ts-mode-test--toc-walk)
     (should (string-prefix-p "module m" (f90-ts-mode-test--toc-narrowed-text src)))
-    (should (equal (f90-ts-mode-test--toc-current-line) "var: mv"))
-    (should-not (f90-ts-mode-test--toc-dimmed-lines))))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "var: mv"))
+    (should-not (f90-ts-mode-test--toc-confine-dimmed-lines))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--narrow-further ()
@@ -1873,7 +2458,7 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (f90-ts-mode-test--toc-select-entry "mod: m")
     (f90-ts-toc-buffer-narrow-node)
     (should (string-prefix-p "module m" (f90-ts-mode-test--toc-narrowed-text src)))
-    (should-not (f90-ts-mode-test--toc-dimmed-lines))
+    (should-not (f90-ts-mode-test--toc-confine-dimmed-lines))
     ;; walking to a substructure does not change the narrowing
     (f90-ts-mode-test--toc-select-entry "subr: s")
     (f90-ts-mode-test--toc-walk)
@@ -1881,7 +2466,7 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     ;; but narrowing does
     (f90-ts-toc-buffer-narrow-node)
     (should (string-prefix-p "subroutine s" (f90-ts-mode-test--toc-narrowed-text src)))
-    (should (equal (f90-ts-mode-test--toc-dimmed-lines)
+    (should (equal (f90-ts-mode-test--toc-confine-dimmed-lines)
                    '("mod: m" "var: mv" "---contains---" "subr: t")))))
 
 
@@ -1899,21 +2484,26 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
       ;; down to the last line of the subroutine
       (dotimes (_ 4)
         (move #'next-line))
-      (should (equal (f90-ts-mode-test--toc-current-line) "subr: inner"))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "subr: inner"))
       (should (narrowed-to "subroutine s"))
       ;; one more leaves it
       (move #'next-line)
-      (should (equal (f90-ts-mode-test--toc-current-line) "subr: t"))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "subr: t"))
       (should (narrowed-to "subroutine t"))
       ;; and back
       (move #'previous-line)
-      (should (equal (f90-ts-mode-test--toc-current-line) "subr: inner"))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "subr: inner"))
       (should (narrowed-to "subroutine inner"))
       (move #'previous-line)
-      (should (equal (f90-ts-mode-test--toc-current-line) "---contains---"))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "---contains---"))
       (should (narrowed-to "subroutine s"))
       (move #'previous-line)
-      (should (equal (f90-ts-mode-test--toc-current-line) "var: b"))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "var: b"))
       (should (narrowed-to "subroutine s")))))
 
 
@@ -1931,12 +2521,14 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
       ;; previewed the name of the subroutine, the panel keeps the focus
       (should (= (with-current-buffer src (point))
                  (+ 11 (with-current-buffer src (point-min)))))
-      (should (eq (window-buffer (selected-window)) toc))
+      (should (eq (window-buffer (selected-window))
+                  toc))
       ;; a variable of the module narrows to the module
       (f90-ts-toc-buffer-mouse-jump
        (f90-ts-mode-test--toc-click-event (f90-ts-mode-test--toc-line-number "var: mv")))
       (should (string-prefix-p "module m" (f90-ts-mode-test--toc-narrowed-text src)))
-      (should (eq (window-buffer (selected-window)) src)))))
+      (should (eq (window-buffer (selected-window))
+                  src)))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-widen ()
@@ -1951,7 +2543,7 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (should-not (f90-ts-mode-test--toc-confined-lines))
     (with-current-buffer f90-ts--toc-buffer-name
       (should-not f90-ts--toc-buffer-restriction))
-    (should-not (f90-ts-mode-test--toc-dimmed-lines))))
+    (should-not (f90-ts-mode-test--toc-confine-dimmed-lines))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-external-narrowing ()
@@ -1963,8 +2555,10 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
         (narrow-to-region (car span) (cdr span))
         (goto-char (car span)))
       (f90-ts--toc-tick)
-      (should (equal (f90-ts-mode-test--toc-confined-lines) '("  subr: t")))
-      (should (equal (f90-ts-mode-test--toc-current-line) "subr: t"))
+      (should (equal (f90-ts-mode-test--toc-confined-lines)
+                     '("  subr: t")))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "subr: t"))
       (with-current-buffer src (widen))
       (f90-ts--toc-tick)
       (should-not (f90-ts-mode-test--toc-confined-lines)))))
@@ -1976,13 +2570,15 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (f90-ts-mode-test--toc-select-entry "subr: s")
     (f90-ts-toc-buffer-narrow-node)
     (select-window (get-buffer-window src))
-    (cl-flet ((sync-at (regexp)
-                (f90-ts-mode-test--toc-sync-at
-                 src (with-current-buffer src (f90-ts-mode-test--toc-pos regexp)))))
-      (should (equal (sync-at "subroutine inner") "subr: inner"))
-      (should (equal (sync-at "integer :: a") "var: a"))
-      (should (equal (sync-at "  contains") "---contains---"))
-      (should (equal (sync-at "subroutine s") "subr: s")))))
+
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "subroutine inner")
+                   "subr: inner"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "integer :: a")
+                   "var: a"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "  contains")
+                   "---contains---"))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "subroutine s")
+                   "subr: s"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-sync-clamped ()
@@ -1996,8 +2592,10 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
         (narrow-to-region (car span) (cdr span))
         (goto-char (car span)))
       (f90-ts--toc-tick)
-      (should (equal (f90-ts-mode-test--toc-confined-lines) '("  fun: f")))
-      (should (equal (f90-ts-mode-test--toc-current-line) "fun: f")))))
+      (should (equal (f90-ts-mode-test--toc-confined-lines)
+                     '("  fun: f")))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "fun: f")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-region-without-entries ()
@@ -2011,7 +2609,8 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
       (f90-ts--toc-tick)
       (should-not (f90-ts-mode-test--toc-confined-lines))
       (with-current-buffer f90-ts--toc-buffer-name
-        (should (equal f90-ts--toc-buffer-restriction span))))))
+        (should (equal f90-ts--toc-buffer-restriction
+                       span))))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--confine-follows-display-options ()
@@ -2072,7 +2671,8 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (f90-ts-mode-test--toc-select-entry "subr: inner")
     (f90-ts-toc-buffer-mark-node)
     (should (equal (f90-ts-mode-test--toc-region-of src)
-                   (f90-ts-mode-test--toc-span-of src "subroutine inner"
+                   (f90-ts-mode-test--toc-span-of src
+                                                  "subroutine inner"
                                                   "end subroutine")))))
 
 
@@ -2103,7 +2703,8 @@ Lines are counted below the header, as for `f90-ts-mode-test--toc-goto-line'."
     (should (eq (buffer-local-value 'f90-ts--toc-buffer-source
                                     (get-buffer f90-ts--toc-buffer-name))
                 src2))
-    (should (equal (f90-ts-mode-test--toc-current-line) "subr: s"))))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "subr: s"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--quick-switch-to-panel ()
@@ -2120,8 +2721,10 @@ The timer only runs when Emacs is idle, so it may first see the panel selected."
     (should (eq (buffer-local-value 'f90-ts--toc-buffer-source
                                     (get-buffer f90-ts--toc-buffer-name))
                 src2))
-    (should (equal (f90-ts-mode-test--toc-header-lines) '("b.f90" "=====")))
-    (should (equal (f90-ts-mode-test--toc-current-line) "subr: s"))
+    (should (equal (f90-ts-mode-test--toc-header-name)
+                   "b.f90"))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "subr: s"))
     ;; the panel keeps the focus
     (should (eq (window-buffer (selected-window))
                 (get-buffer f90-ts--toc-buffer-name)))))
@@ -2167,7 +2770,8 @@ The timer only runs when Emacs is idle, so it may first see the panel selected."
       (select-window mid)
       (select-window panel)
       (f90-ts--toc-tick)
-      (should (equal (f90-ts-mode-test--toc-current-line) "fun: f")))))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "fun: f")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--panel-selected-no-needless-work ()
@@ -2182,7 +2786,8 @@ Point in the panel is not moved either, it belongs to the user then."
       (f90-ts--toc-tick)
       (f90-ts--toc-tick)
       (should (= n f90-ts-mode-test--toc-build-count))
-      (should (equal (f90-ts-mode-test--toc-current-line) "var: x")))))
+      (should (equal (f90-ts-mode-test--toc-current-line)
+                     "var: x")))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--panel-selected-without-source-window ()
@@ -2279,8 +2884,7 @@ While hidden, a position on a variable maps to the enclosing entry."
     (should (equal (f90-ts-mode-test--toc-lines)
                    '("mod: m" "  ---contains---" "  subr: s" "  fun: f")))
     ;; a position on a hidden variable maps to the enclosing entry
-    (should (equal (f90-ts-mode-test--toc-sync-at
-                    src (with-current-buffer src (f90-ts-mode-test--toc-pos "real")))
+    (should (equal (f90-ts-mode-test--toc-sync-at-match src "real")
                    "subr: s"))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-toggle-variables))
@@ -2294,7 +2898,8 @@ While hidden, a position on a variable maps to the enclosing entry."
     (select-window (get-buffer-window f90-ts--toc-buffer-name))
     (f90-ts-mode-test--toc-goto-line 7)
     (f90-ts-toc-buffer-toggle-variables)
-    (should (equal (f90-ts-mode-test--toc-current-line) "fun: f"))))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "fun: f"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--toggle-abbreviations ()
@@ -2307,7 +2912,8 @@ While hidden, a position on a variable maps to the enclosing entry."
                    (f90-ts--toc-entry-label 'module "m")))
     (with-current-buffer f90-ts--toc-buffer-name
       (f90-ts-toc-buffer-toggle-abbreviations))
-    (should (equal (car (f90-ts-mode-test--toc-lines)) "mod: m"))))
+    (should (equal (car (f90-ts-mode-test--toc-lines))
+                   "mod: m"))))
 
 
 ;;;-----------------------------------------------------------------------------
@@ -2340,7 +2946,8 @@ The timer must not move point in the selected panel."
                (with-current-buffer src (f90-ts-mode-test--toc-pos "f()"))))
     ;; the timer must not yank point in the panel while it is selected
     (f90-ts--toc-tick)
-    (should (equal (f90-ts-mode-test--toc-current-line) "fun: f"))))
+    (should (equal (f90-ts-mode-test--toc-current-line)
+                   "fun: f"))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--jump ()
@@ -2350,8 +2957,10 @@ The timer must not move point in the selected panel."
     (select-window (get-buffer-window f90-ts--toc-buffer-name))
     (f90-ts-mode-test--toc-goto-line 5)
     (f90-ts-toc-buffer-jump)
-    (should (eq (window-buffer (selected-window)) src))
-    (should (= (point) (f90-ts-mode-test--toc-pos "subroutine \\(s\\)" 1)))))
+    (should (eq (window-buffer (selected-window))
+                src))
+    (should (= (point)
+               (f90-ts-mode-test--toc-pos "subroutine \\(s\\)" 1)))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--jump-displays-hidden-source ()
@@ -2400,7 +3009,8 @@ Uses a fake click event on the toc window."
       (should (= (with-current-buffer src (point))
                  (with-current-buffer src (f90-ts-mode-test--toc-pos "a, b"))))
       (f90-ts-toc-buffer-mouse-jump event)
-      (should (eq (window-buffer (selected-window)) src)))))
+      (should (eq (window-buffer (selected-window))
+                  src)))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--click-on-empty-area ()
@@ -2424,7 +3034,8 @@ Uses a fake click event on the toc window."
     (should (get-buffer-window f90-ts--toc-buffer-name 'visible))
     (should (timerp f90-ts--toc-timer))
     ;; focus stays in the source buffer
-    (should (eq (window-buffer (selected-window)) src))))
+    (should (eq (window-buffer (selected-window))
+                src))))
 
 
 (f90-ts-mode-test-defsub f90-ts-mode-test--toc--no-popup-after-window-closed ()
@@ -2517,12 +3128,14 @@ Uses a fake click event on the toc window."
       (select-window left)
       (select-window mid)
       (select-window panel)
-      (should (eq (f90-ts--toc-buffer-source-window src) mid))
+      (should (eq (f90-ts--toc-buffer-source-window src)
+                  mid))
       ;; the other way round
       (select-window mid)
       (select-window left)
       (select-window panel)
-      (should (eq (f90-ts--toc-buffer-source-window src) left)))))
+      (should (eq (f90-ts--toc-buffer-source-window src)
+                  left)))))
 
 
 ;;;-----------------------------------------------------------------------------

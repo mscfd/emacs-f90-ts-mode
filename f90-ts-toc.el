@@ -33,12 +33,27 @@
 ;; panel itself is selected, it follows the f90-ts window selected last, so
 ;; that a quick switch from one source buffer to another and then to the panel
 ;; does not leave the panel behind.
-;; The first two lines of the panel are a header: the name of the source buffer
-;; the panel belongs to, underlined by a line of "=".  Point never rests there.
-;; Several keys in the panel are bound.  To find and discover them, ? can
-;; be pressed to open a transient menu, where all key and there operations
-;; are listed.  Each key works without pressing ? first
-;; (see `f90-ts-toc-transient').
+;; The first three lines of the panel are a header: the name of the source buffer
+;; the panel belongs to, the filter line, and a separator line.
+;; The filter line restricts the entries shown to those whose name match the
+;; filter string (plain or regexp).  The parents of such entries are kept, so
+;; that the tree stays readable.  `/' edits the filter, `r' toggles regexp,
+;; `x' clears the filter, and clicks on the filter line do the same.
+;; `f' toggles the dimming of filtered entries, see `f90-ts-toc-filter-dim':
+;; the entries which do not
+;; match are then not removed but shown dimmed, so the panel looks as without
+;; filter.  Moving point with the keyboard jumps from one matching line to the
+;; next one, see `f90-ts--toc-buffer-skip-dimmed'.  Mouse actions work on every
+;; line.
+;; The entry which belongs to point in the source buffer is marked in the panel
+;; with the face `f90-ts-toc-position-face'.  If that entry is not shown due to
+;; the filtering, the position is between two entries of the panel: the line
+;; above it is marked with `f90-ts-toc-position-between-face'.  Default is a
+;; double red underline, which is drawn like being in between.  The `contains'
+;; separator is shown if at least one entry of its parent is.
+;; Several keys in the panel are bound.  To find and discover them, ? can be
+;; pressed to open a transient menu, where all keys and there operations are
+;; listed.  Each key works without pressing ? first (see `f90-ts-toc-transient').
 ;; Mouse: click previews, double-click or middle-click jumps, right-click opens
 ;; a menu.
 ;;
@@ -132,6 +147,52 @@ The line below it uses `f90-ts-toc-separator-face'."
   '((t :inherit shadow))
   "Face for entries outside the narrowed region of the source buffer.
 It is applied on top of the faces of the entries by overlays."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-filter-dimmed-face
+  '((t :inherit f90-ts-toc-dimmed-face))
+  "Face for entries not matching the filter if they are shown dimmed.
+See `f90-ts-toc-filter-dim'.  It is applied on top of the faces of the entries."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-filter-face
+  '((t :inherit warning))
+  "Face for the filter string in the filter line of the toc buffer.
+It is only used if there is a filter, so that an active filter is easy to see."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-filter-invalid-face
+  '((t :inherit error :underline (:style wave)))
+  "Face for a filter string which is not a valid regexp."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-match-face
+  '((t :inherit match))
+  "Face for the part of an entry name matching the filter in the toc buffer."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-position-face
+  '((t :inherit font-lock-warning-face))
+  "Face for the entry of the position of the source buffer in the toc buffer.
+It is applied by an overlay to the line of the entry which belongs to point in
+the source buffer, if the filter shows that entry.  Otherwise the position is
+marked by `f90-ts-toc-position-between-face'."
+  :group 'f90-ts-toc)
+
+
+(defface f90-ts-toc-position-between-face
+  '((t :underline (:color "red" :style double-line :position 0)))
+  "Face for the position of the source buffer between two entries.
+It is only used if the filter hides the entry of point in the source buffer,
+and replaces `f90-ts-toc-position-face' in that case.  It is applied by an
+overlay to the whole line of the entry above the position, so the underline
+shows that point is between that line and the next one.  If there is no entry
+above, the last line of the header is marked."
   :group 'f90-ts-toc)
 
 
@@ -243,6 +304,19 @@ between them.  Point in such a comment line is then synced to the entry of the
 structure, and narrowing the source buffer to the entry also includes the doc
 comments.  Marking with and without doc comments is always available.
 Toggle interactively with `f90-ts-toc-buffer-toggle-doc-comments'."
+  :type 'boolean
+  :safe #'booleanp
+  :group 'f90-ts-toc)
+
+
+(defcustom f90-ts-toc-filter-dim nil
+  "If non-nil, entries not matching the filter are dimmed instead of removed.
+The panel then shows all entries as without filter, and the ones whose name does
+not match the filter are shown with `f90-ts-toc-filter-dimmed-face'.  That
+includes the parents of matching entries.  Moving point with the keyboard skips
+the dimmed lines, so that it jumps from one matching entry to the next one.
+Mouse actions work on every line.
+Toggle interactively with `f90-ts-toc-buffer-toggle-filter-dim'."
   :type 'boolean
   :safe #'booleanp
   :group 'f90-ts-toc)
@@ -532,8 +606,9 @@ FIRST is the earlier node.  There must be no empty line in between."
     (skip-chars-backward " \t\n")
     (forward-line 1)
     (= (point)
-       (progn (goto-char (treesit-node-start second))
-              (line-beginning-position)))))
+       (progn
+         (goto-char (treesit-node-start second))
+         (line-beginning-position)))))
 
 
 (defun f90-ts--toc-doc-start (node)
@@ -703,6 +778,37 @@ See `f90-ts--toc-buffer-apply-confine' and `f90-ts--toc-buffer-walk'.")
 This is used to avoid excessive syncing.")
 
 
+(defvar-local f90-ts--toc-buffer-hl-hidden-line nil
+  "Start of the line of the toc buffer which is not highlighted, or nil.
+That is the line to which point was moved when the in between mark was drawn,
+see `f90-ts--toc-buffer-hl-range'.")
+
+
+(defvar-local f90-ts--toc-buffer-pre-command nil
+  "Command and line of point of the toc buffer at the start of the command.
+This is the cons (COMMAND . LINE-START), set before every command run in the
+toc buffer.  It tells `f90-ts--toc-buffer-skip-dimmed' whether and in which
+direction the command has moved point.")
+
+
+(defvar-local f90-ts--toc-buffer-position-overlay nil
+  "The overlay which marks the entry of the position, or nil.
+It is only there if the filter shows that entry, otherwise there is
+`f90-ts--toc-buffer-between-overlay'.
+See `f90-ts--toc-buffer-update-position-mark'.")
+
+
+(defvar-local f90-ts--toc-buffer-between-overlay nil
+  "The overlay which marks the entry above the position, or nil.
+It is only there if the filter hides the entry of the position.
+See `f90-ts--toc-buffer-update-position-mark'.")
+
+
+(defvar-local f90-ts--toc-buffer-nodes nil
+  "The toc buffer nodes of the last render, before filtering.
+This is used to find out whether the filter hides the section of a position.")
+
+
 (defvar f90-ts--toc-timer nil
   "The idle timer driving switch, refresh and sync of the toc buffer.
 It only exists while the toc buffer is live, see `f90-ts--toc-start'
@@ -710,6 +816,46 @@ and `f90-ts--toc-stop'.")
 
 
 (defvar f90-ts-toc-mode-menu)
+
+
+(defvar f90-ts--toc-filter ""
+  "The filter string of the toc buffer.
+Only entries whose name contains it (or matches it, see
+`f90-ts--toc-filter-is-regexp') are shown, besides their parents.  The
+empty string shows all entries.  This is the filter for the current source
+buffer of the toc buffer.  Each source buffer has its own filter state, see
+`f90-ts--toc-source-filter'.")
+
+
+(defvar f90-ts--toc-filter-is-regexp nil
+  "If non-nil, `f90-ts--toc-filter' is an Emacs regexp, otherwise a substring.")
+
+
+(defvar-local f90-ts--toc-source-filter nil
+  "The filter of the toc buffer for this source buffer, or nil if there is none.
+It is the cons (STRING . IS-REGEXP) of `f90-ts--toc-filter' and
+`f90-ts--toc-filter-is-regexp'.  It is stored here whenever the filter changes,
+see `f90-ts--toc-store-filter', and loaded if the toc buffer switches to this
+source buffer, see `f90-ts--toc-load-filter'.  So the filter of a buffer is
+kept while another buffer is shown in the toc buffer.")
+
+
+(defvar f90-ts--toc-filter-valid-pattern nil
+  "The regexp of the last valid filter, see `f90-ts--toc-filter-pattern'.")
+
+
+(defvar f90-ts--toc-filter-history nil
+  "Minibuffer history of the filter strings of the toc buffer.")
+
+
+(defvar f90-ts--toc-filter-toc-buffer nil
+  "The toc buffer while its filter is read in the minibuffer.")
+
+
+(defvar f90-ts--toc-filter-typing nil
+  "Non-nil while the filter is typed in the minibuffer.
+Only then the matches of the filter in the names are highlighted in the toc
+buffer, see `f90-ts-toc-match-face'.  It is bound by `f90-ts-toc-buffer-filter'.")
 
 
 (defvar-keymap f90-ts--toc-header-map
@@ -722,6 +868,28 @@ Clicks there do nothing, so point stays where it is."
   "<drag-mouse-1>"   #'ignore
   "<mouse-2>"        #'ignore
   "<mouse-3>"        #'ignore)
+
+
+(defvar-keymap f90-ts--toc-filter-map
+  :doc "Keymap of the filter string in the header of the toc buffer.
+Clicking it edits the filter, other clicks do nothing."
+  :parent f90-ts--toc-header-map
+  "<mouse-1>"        #'f90-ts-toc-buffer-mouse-filter)
+
+
+(defvar-keymap f90-ts--toc-regexp-map
+  :doc "Keymap of the regexp checkbox in the header of the toc buffer.
+Clicking it toggles regexp matching, other clicks do nothing."
+  :parent f90-ts--toc-header-map
+  "<mouse-1>"        #'f90-ts-toc-buffer-mouse-toggle-regexp)
+
+
+(defvar-keymap f90-ts--toc-filter-minibuffer-map
+  :doc "Keymap for reading the filter of the toc buffer in the minibuffer."
+  :parent minibuffer-local-map
+  "M-r"              #'f90-ts--toc-filter-minibuffer-toggle-regexp
+  "RET"              #'f90-ts--toc-filter-minibuffer-exit
+  "C-j"              #'f90-ts--toc-filter-minibuffer-exit)
 
 
 (defvar-keymap f90-ts-toc-mode-map
@@ -742,6 +910,10 @@ Clicks there do nothing, so point stays where it is."
   "a"                #'f90-ts-toc-buffer-toggle-abbreviations
   "s"                #'f90-ts-toc-buffer-toggle-side
   "t"                #'f90-ts-toc-buffer-cycle-shortening
+  "/"                #'f90-ts-toc-buffer-filter
+  "r"                #'f90-ts-toc-buffer-toggle-regexp
+  "x"                #'f90-ts-toc-buffer-filter-clear
+  "f"                #'f90-ts-toc-buffer-toggle-filter-dim
   "q"                #'f90-ts-toc-buffer-quit
   "?"                #'f90-ts-toc-transient
   "C-g"              #'f90-ts-toc-buffer-quit
@@ -865,10 +1037,169 @@ Return a flat list of `f90-ts-toc-buffer-node' structs."
 
 
 ;;;-----------------------------------------------------------------------------
+;;; toc buffer: filter
+
+;; The filter restricts the nodes before they are rendered.  An entry is shown
+;; if its name matches the filter, or if one of its descendants is shown, so
+;; that the parents of a match give the context.  Entries hidden by the display
+;; options (variables, interfaces) stay hidden.  The `contains' separator is
+;; shown if at least one other entry of its parent is shown, before or after it.
+
+
+(defun f90-ts--toc-regexp-error (text)
+  "Return the error message if TEXT is an invalid regexp, otherwise nil.
+This is only a question if the filter is a regexp, see
+`f90-ts--toc-filter-is-regexp', a substring is always valid."
+  (when (and f90-ts--toc-filter-is-regexp
+             (not (string-empty-p text)))
+    (condition-case err
+        (progn (string-match-p text "") nil)
+      (invalid-regexp (format "%s" (cadr err))))))
+
+
+(defun f90-ts--toc-filter-error ()
+  "Return the error message if the filter is an invalid regexp, otherwise nil."
+  (f90-ts--toc-regexp-error f90-ts--toc-filter))
+
+
+(defun f90-ts--toc-filter-pattern ()
+  "Return the regexp which the entries must match, or nil if there is no filter.
+A substring is quoted.  While the filter is not a valid regexp, which is normal
+while it is being typed, the last valid one stays in effect, so that the panel
+does not jump between filtered and unfiltered.  The invalid filter is signalled
+in the filter line and in the minibuffer, see `f90-ts--toc-filter-error'."
+  (cond ((string-empty-p f90-ts--toc-filter)
+         (setq f90-ts--toc-filter-valid-pattern nil))
+        ((f90-ts--toc-filter-error)
+         f90-ts--toc-filter-valid-pattern)
+        (t
+         (setq f90-ts--toc-filter-valid-pattern
+               (if f90-ts--toc-filter-is-regexp
+                   f90-ts--toc-filter
+                 (regexp-quote f90-ts--toc-filter))))))
+
+
+(defun f90-ts--toc-filter-match-p (node regexp)
+  "Return non-nil if the name of toc buffer NODE matches REGEXP.
+Case is ignored, like in Fortran.  A node without name does not match."
+  (let ((name (f90-ts-toc-buffer-node-name node))
+        (case-fold-search t))
+    (and name
+         (condition-case nil
+             (string-match-p regexp name)
+           (error nil))        ; e.g. regexp stack overflow
+         t)))
+
+
+(defun f90-ts--toc-filter-keeps-p (node regexp)
+  "Return non-nil if NODE is shown with the filter REGEXP.
+That is the case if NODE is not hidden by the display options and if it or
+one of its descendants matches.  See `f90-ts--toc-filter-nodes'."
+  (and (not (f90-ts--toc-kind-hidden-p (f90-ts-toc-buffer-node-kind node)))
+       (or (f90-ts--toc-filter-match-p node regexp)
+           (cl-some (lambda (child)
+                      (f90-ts--toc-filter-keeps-p child regexp))
+                    (f90-ts-toc-buffer-node-children node)))))
+
+
+(defun f90-ts--toc-filter-nodes (nodes regexp)
+  "Return the list NODES of toc buffer nodes restricted to matches of REGEXP.
+A node is kept if its name matches or if it has a kept child.  Kept nodes are
+copies, with their children restricted in the same way, and the nodes of NODES
+are not changed.  The `contains' separator is kept if there is at least one
+other kept node in NODES, before or after it, and dropped otherwise.  The
+copies share the markers of the original nodes."
+  (let ((kept
+         (cl-loop
+          for node in nodes
+          for kind = (f90-ts-toc-buffer-node-kind node)
+          for hidden = (f90-ts--toc-kind-hidden-p kind)
+          for children = (and (not hidden)
+                              (f90-ts--toc-filter-nodes
+                               (f90-ts-toc-buffer-node-children node) regexp))
+          when (and (not hidden)
+                    (or children
+                        (equal kind "contains")
+                        (f90-ts--toc-filter-match-p node regexp)))
+          collect (let ((copy (copy-f90-ts-toc-buffer-node node)))
+                    (setf (f90-ts-toc-buffer-node-children copy) children)
+                    copy))))
+    ;; a separator on its own tells nothing
+    (if (cl-every (lambda (node)
+                    (equal (f90-ts-toc-buffer-node-kind node) "contains"))
+                  kept)
+        nil
+      kept)))
+
+
+(defun f90-ts--toc-flatten-nodes (nodes)
+  "Return the list of the nodes in NODES and their descendants in source order.
+Nodes hidden by the display options are left out together with their children,
+as they are not rendered, see `f90-ts--toc-buffer-render-nodes'."
+  (seq-mapcat
+   (lambda (node)
+     (unless (f90-ts--toc-kind-hidden-p
+              (f90-ts-toc-buffer-node-kind node))
+       ;; if visible, return a list containing the node followed by its
+       ;; flattened children
+       (cons node
+             (f90-ts--toc-flatten-nodes
+              (f90-ts-toc-buffer-node-children node)))))
+   nodes))
+
+
+(defun f90-ts--toc-buffer-hidden-position-p (pos)
+  "Return non-nil if the filter hides the entry of source position POS.
+The entry of POS is the one which is associated with POS without filter, see
+`f90-ts--toc-associated-entry'.  It may be a structure, a variable or a
+`contains' separator, and it is hidden if the filter does not show it, whether
+its parent is shown or not.  So the position of a hidden variable or of the gap
+behind a hidden procedure is hidden, too.  Without filter, nothing is hidden by
+it.  Nothing is hidden if filtered entries are dimmed, see
+`f90-ts-toc-filter-dim'.  Must be called with the toc buffer as current
+buffer."
+  (when-let* (((not f90-ts-toc-filter-dim))
+              (regexp (f90-ts--toc-filter-pattern))
+              (nodes  (f90-ts--toc-flatten-nodes f90-ts--toc-buffer-nodes))
+              (owner  (f90-ts--toc-associated-entry
+                       (mapcar (lambda (node)
+                                 (list node
+                                       (marker-position
+                                        (f90-ts-toc-buffer-node-marker node))
+                                       (f90-ts-toc-buffer-node-doc-beg node)
+                                       (f90-ts-toc-buffer-node-kind node)))
+                               nodes)
+                       pos)))
+    ;; the copies of the filter share the markers of the original nodes
+    (cl-loop
+     with shown = (make-hash-table :test #'eq)
+     for node in (f90-ts--toc-flatten-nodes
+                  (f90-ts--toc-filter-nodes f90-ts--toc-buffer-nodes regexp))
+     do (puthash (f90-ts-toc-buffer-node-marker node) t shown)
+     finally return (not (gethash (f90-ts-toc-buffer-node-marker owner)
+                                  shown)))))
+
+
+;;;-----------------------------------------------------------------------------
 ;;; toc buffer: rendering
 
 (defvar f90-ts--toc-render-width nil
   "Width available for lines while rendering the toc buffer, or nil.")
+
+
+(defvar f90-ts--toc-render-regexp nil
+  "Regexp of the filter while rendering the toc buffer, or nil.")
+
+
+(defvar f90-ts--toc-render-dim nil
+  "Non-nil while rendering the toc buffer with dimmed filtered entries.
+Then all entries are rendered, and the ones not matching
+`f90-ts--toc-render-regexp' are dimmed, see `f90-ts-toc-filter-dim'.")
+
+
+(defvar f90-ts--toc-render-highlight nil
+  "Regexp whose matches are highlighted, or nil.
+It is the same as the filter, but only while the filter is typed.")
 
 
 (defvar-local f90-ts--toc-buffer-rendered-width nil
@@ -924,12 +1255,11 @@ If WIN is nil use `f90-ts-toc-buffer-width'."
 
 (defun f90-ts--toc-width-stale-p (toc-buf win)
   "Return non-nil if TOC-BUF must be rendered again to fit window WIN.
-That is the case if names are shortened and the window width has changed
-since the last render."
-  (and (not (eq f90-ts-toc-name-shortening 'truncate))
-       (not (eql (window-body-width win)
-                 (buffer-local-value 'f90-ts--toc-buffer-rendered-width
-                                     toc-buf)))))
+That is the case if the window width has changed since the last render,
+because the filter line is as wide as the window and, if names are shortened,
+the names depend on it."
+  (not (eql (window-body-width win)
+            (buffer-local-value 'f90-ts--toc-buffer-rendered-width toc-buf))))
 
 
 (defun f90-ts--toc-buffer-body-start ()
@@ -941,29 +1271,95 @@ property `f90-ts-toc-header'."
       (point-max)))
 
 
+(defun f90-ts--toc-header-string (string keymap &rest props)
+  "Return STRING as part of the header of the toc buffer.
+KEYMAP is the keymap for clicks on it.  The other text properties are PROPS."
+  (apply #'propertize string
+         'f90-ts-toc-header t
+         'keymap            keymap
+         props))
+
+
+(defun f90-ts--toc-fit-filter-text (text width)
+  "Return TEXT shortened to WIDTH columns for the filter line.
+This is `f90-ts--toc-shorten-name', but also for `truncate', where it is
+shortened from the right: the checkbox behind the text must stay visible."
+  (let ((f90-ts-toc-name-shortening
+         (if (eq f90-ts-toc-name-shortening 'truncate)
+             'right
+           f90-ts-toc-name-shortening)))
+    (f90-ts--toc-shorten-name text width)))
+
+
+(defun f90-ts--toc-buffer-filter-line (width)
+  "Return the filter line of the header of the toc buffer, without newline.
+It shows the filter string or <none> if there is none, and the checkbox for
+regexp matching (rx) at the right end.  If WIDTH is non-nil, the string is
+shortened and padded so that the line is WIDTH columns wide.  An invalid
+regexp is shown with `f90-ts-toc-filter-invalid-face'.  Clicks on the string
+edit the filter, clicks on the checkbox toggle regexp matching."
+  (let* ((prompt "Filter: ")
+         (rx-box (if f90-ts--toc-filter-is-regexp "[x] rx" "[ ] rx"))
+         (empty  (string-empty-p f90-ts--toc-filter))
+         (text   (if empty "<none>" f90-ts--toc-filter))
+         (avail  (and width
+                      (- width (string-width prompt)
+                         1 (string-width rx-box))))
+         (shown  (if avail
+                     (f90-ts--toc-fit-filter-text text avail)
+                   text))
+         (pad    (make-string (if avail
+                                  (max 0 (- avail (string-width shown)))
+                                1)
+                              ?\s))
+         (face   (cond (empty 'f90-ts-toc-separator-face)
+                       ((f90-ts--toc-filter-error)
+                        'f90-ts-toc-filter-invalid-face)
+                       (t 'f90-ts-toc-filter-face))))
+    (concat
+     (f90-ts--toc-header-string prompt f90-ts--toc-filter-map
+                                'face      'f90-ts-toc-separator-face
+                                'help-echo "mouse-1: edit the filter")
+     (f90-ts--toc-header-string (concat shown pad) f90-ts--toc-filter-map
+                                'face      face
+                                'help-echo "mouse-1: edit the filter")
+     (f90-ts--toc-header-string " " f90-ts--toc-header-map)
+     (f90-ts--toc-header-string rx-box f90-ts--toc-regexp-map
+                                'face       (if f90-ts--toc-filter-is-regexp
+                                                'f90-ts-toc-header-face
+                                              'f90-ts-toc-separator-face)
+                                'mouse-face 'highlight
+                                'help-echo  "mouse-1: toggle regexp matching"))))
+
+
 (defun f90-ts--toc-buffer-render-header ()
   "Insert the header for `f90-ts--toc-buffer-source' into the toc buffer.
-The header has two lines: the name of the source buffer, shortened as the
-names of the entries, see `f90-ts-toc-name-shortening', and a line of \"=\" of
-the same width.  The tooltip is the file name of the source buffer, if it
+The header has three lines: the name of the source buffer, shortened as the
+names of the entries, see `f90-ts-toc-name-shortening', the filter line, see
+`f90-ts--toc-buffer-filter-line', and a line of \"=\" as wide as the wider of
+the two.  The tooltip of the name is the file name of the source buffer, if it
 visits a file.  The lines are not entries, so they have no marker.  Do nothing
 if there is no live source buffer.  See `f90-ts--toc-buffer-body-start'
 and `f90-ts--toc-buffer-keep-off-header'."
   (when (buffer-live-p f90-ts--toc-buffer-source)
-    (let* ((src   f90-ts--toc-buffer-source)
-           (name  (buffer-name src))
-           (shown (if f90-ts--toc-render-width
-                      (f90-ts--toc-shorten-name name f90-ts--toc-render-width)
-                    name))
-           (props (list 'f90-ts-toc-header t
-                        'keymap           f90-ts--toc-header-map
-                        'help-echo        (or (buffer-file-name src) name))))
+    (let* ((src    f90-ts--toc-buffer-source)
+           (name   (buffer-name src))
+           (shown  (if f90-ts--toc-render-width
+                       (f90-ts--toc-shorten-name name f90-ts--toc-render-width)
+                     name))
+           (line   (f90-ts--toc-buffer-filter-line f90-ts--toc-render-width))
+           (rule   (max (string-width shown) (string-width line))))
       (setq f90-ts--toc-buffer-rendered-name name)
       (insert
-       (apply #'propertize (concat shown "\n")
-              'face 'f90-ts-toc-header-face props)
-       (apply #'propertize (concat (make-string (string-width shown) ?=) "\n")
-              'face 'f90-ts-toc-separator-face props)))))
+       (f90-ts--toc-header-string (concat shown "\n") f90-ts--toc-header-map
+                                  'face      'f90-ts-toc-header-face
+                                  'help-echo (or (buffer-file-name src) name))
+       line
+       (f90-ts--toc-header-string "\n" f90-ts--toc-header-map)
+       (f90-ts--toc-header-string (concat (make-string rule ?=) "\n")
+                                  f90-ts--toc-header-map
+                                  'face      'f90-ts-toc-separator-face
+                                  'help-echo (or (buffer-file-name src) name))))))
 
 
 (defun f90-ts--toc-buffer-keep-off-header ()
@@ -977,40 +1373,136 @@ buffer, it runs before `f90-ts--toc-buffer-walk'."
       (goto-char start))))
 
 
+(defun f90-ts--toc-buffer-remember-line ()
+  "Remember the command and the line of point before a command in the toc buffer.
+This is a `pre-command-hook' function of the toc buffer, see
+`f90-ts--toc-buffer-pre-command'."
+  (setq f90-ts--toc-buffer-pre-command
+        (cons this-command (line-beginning-position))))
+
+
+(defun f90-ts--toc-buffer-nearest-match (dir)
+  "Return the start of the nearest toc buffer line with a matching entry, or nil.
+Search from the line of point, which is included, forward if DIR is positive and
+backward otherwise.  Only lines with an entry count, and if filtered entries are
+dimmed, see `f90-ts-toc-filter-dim', not the dimmed ones."
+  (save-excursion
+    (beginning-of-line)
+    (cl-loop
+     for line = (point)
+     when (and (get-text-property line 'f90-ts-toc-marker)
+               (not (get-text-property line 'f90-ts-toc-nomatch)))
+     return line
+     while (zerop (forward-line (if (> dir 0) 1 -1))))))
+
+
+(defun f90-ts--toc-buffer-skip-dimmed ()
+  "Move point off a dimmed line, to the nearest matching line in its direction.
+This makes point jump from one matching line to the next one if filtered entries
+are dimmed, see `f90-ts-toc-filter-dim'.  It applies if a command has moved
+point onto a dimmed line, see `f90-ts--toc-buffer-pre-command'.  Point goes in
+the direction of the motion, or in the other direction if there is no matching
+line that way, and stays if there is no matching line at all.  Mouse commands
+are left alone, so any line can be clicked.  Nothing happens if the command did
+not change the line of point, so a command on a clicked dimmed line works there.
+This is a `post-command-hook' function of the toc buffer, it runs before
+`f90-ts--toc-buffer-walk' so that walking sees the final line."
+  (let ((pre f90-ts--toc-buffer-pre-command)
+        (bol (line-beginning-position)))
+    (when (and pre
+               (eq (car pre) this-command)
+               (/= (cdr pre) bol)
+               (get-text-property bol 'f90-ts-toc-nomatch)
+               (not (mouse-event-p last-command-event)))
+      (let ((dir (if (> bol (cdr pre)) 1 -1)))
+        (when-let* ((line (or (f90-ts--toc-buffer-nearest-match dir)
+                              (f90-ts--toc-buffer-nearest-match (- dir)))))
+          (goto-char line))))))
+
+
+(defun f90-ts--toc-highlight-matches (text start regexp)
+  "Highlight the matches of REGEXP in TEXT from index START on, and return TEXT.
+The face is `f90-ts-toc-match-face', case is ignored.  Anchors in REGEXP refer
+to START.  TEXT is changed."
+  (let ((case-fold-search t)
+        (part (substring text start)))
+    (ignore-errors
+      (cl-loop
+       for beg = (string-match regexp part 0)
+       then (string-match regexp part (max (match-end 0) (1+ beg)))
+       while beg
+       for end = (match-end 0)
+       when (< beg end)
+       do (add-face-text-property (+ start beg)
+                                  (+ start end)
+                                  'f90-ts-toc-match-face nil text)))
+    text))
+
+
+(defun f90-ts--toc-buffer-node-text (node depth)
+  "Return the label of toc buffer NODE at DEPTH as shown in the toc buffer.
+The name is shortened to fit, see `f90-ts--toc-fit-label'.  The face is the one
+of NODE, and the matches of `f90-ts--toc-render-highlight' in the name are
+highlighted."
+  (let* ((name  (f90-ts-toc-buffer-node-name node))
+         (label (f90-ts-toc-buffer-node-label node))
+         (text  (copy-sequence
+                 (f90-ts--toc-fit-label
+                  label name
+                  (and f90-ts--toc-render-width
+                       (- f90-ts--toc-render-width (* depth 2)))))))
+    (add-face-text-property 0 (length text)
+                            (f90-ts-toc-buffer-node-face node) nil text)
+    (when (and f90-ts--toc-render-highlight
+               name
+               (not (string-empty-p name))
+               (string-suffix-p name label))
+      ;; the prefix in front of the name is not shortened
+      (f90-ts--toc-highlight-matches text
+                                     (- (length label) (length name))
+                                     f90-ts--toc-render-highlight))
+    text))
+
+
 (defun f90-ts--toc-buffer-render-nodes (nodes depth)
   "Insert NODES at DEPTH into the toc buffer and recurse into children.
 Variable entries are skipped unless `f90-ts-toc-show-variables' is non-nil,
 and interface blocks (generic, general, abstract) including their children
-unless `f90-ts-toc-show-interface-procedures' is non-nil."
+unless `f90-ts-toc-show-interface-procedures' is non-nil.
+If `f90-ts--toc-render-dim' is non-nil, the lines of the entries not matching
+`f90-ts--toc-render-regexp' get the text property `f90-ts-toc-nomatch' and the
+face `f90-ts-toc-filter-dimmed-face'."
   (cl-loop
    for node in nodes
    for kind = (f90-ts-toc-buffer-node-kind node)
    unless (f90-ts--toc-kind-hidden-p kind)
-   do (progn
-        (insert
-         (propertize
-          (concat (make-string (* depth 2) ?\s)
-                  (propertize
-                   (f90-ts--toc-fit-label
-                    (f90-ts-toc-buffer-node-label node)
-                    (f90-ts-toc-buffer-node-name node)
-                    (and f90-ts--toc-render-width
-                         (- f90-ts--toc-render-width (* depth 2))))
-                   'face (f90-ts-toc-buffer-node-face node)))
-          'f90-ts-toc-marker (f90-ts-toc-buffer-node-marker node)
-          'f90-ts-toc-kind   kind
-          'f90-ts-toc-depth  depth
-          'f90-ts-toc-span   (f90-ts-toc-buffer-node-span node)
-          'f90-ts-toc-doc    (f90-ts-toc-buffer-node-doc-beg node)
-          'mouse-face        'highlight
-          'help-echo         (f90-ts-toc-buffer-node-help node))
-         "\n")
+   do (let* ((dimmed (and f90-ts--toc-render-dim
+                          (not (f90-ts--toc-filter-match-p
+                                node f90-ts--toc-render-regexp))))
+             (line   (propertize
+                      (concat (make-string (* depth 2) ?\s)
+                              (f90-ts--toc-buffer-node-text node depth))
+                      'f90-ts-toc-marker  (f90-ts-toc-buffer-node-marker node)
+                      'f90-ts-toc-kind    kind
+                      'f90-ts-toc-depth   depth
+                      'f90-ts-toc-span    (f90-ts-toc-buffer-node-span node)
+                      'f90-ts-toc-doc     (f90-ts-toc-buffer-node-doc-beg node)
+                      'f90-ts-toc-nomatch dimmed
+                      'mouse-face         'highlight
+                      'help-echo          (f90-ts-toc-buffer-node-help node))))
+        (when dimmed
+          (add-face-text-property 0 (length line)
+                                  'f90-ts-toc-filter-dimmed-face nil line))
+        (insert line "\n")
         (f90-ts--toc-buffer-render-nodes
          (f90-ts-toc-buffer-node-children node) (1+ depth)))))
 
 
 (defun f90-ts--toc-buffer-render (tree-nodes &optional keep-view)
   "Render TREE-NODES into the current toc buffer.
+The entries are restricted by the filter, see `f90-ts--toc-filter-nodes', or,
+if `f90-ts-toc-filter-dim' is non-nil, all are shown and the ones not matching
+the filter are dimmed.
 If KEEP-VIEW is non-nil, restore the line of point and the first visible line
 afterwards, so that re-rendering the same source does not scroll the panel."
   (let* ((inhibit-read-only t)
@@ -1019,11 +1511,23 @@ afterwards, so that re-rendering the same source does not scroll the panel."
                           (line-number-at-pos (if win (window-point win) (point)))))
          (start-line (and keep-view win
                           (line-number-at-pos (window-start win))))
-         (f90-ts--toc-render-width (f90-ts--toc-buffer-text-width win)))
+         (f90-ts--toc-render-width  (f90-ts--toc-buffer-text-width win))
+         (f90-ts--toc-render-regexp (f90-ts--toc-filter-pattern))
+         (f90-ts--toc-render-dim    (and f90-ts-toc-filter-dim
+                                         f90-ts--toc-render-regexp))
+         (f90-ts--toc-render-highlight (and f90-ts--toc-filter-typing
+                                            f90-ts--toc-render-regexp))
+         (nodes (if (and f90-ts--toc-render-regexp
+                         (not f90-ts--toc-render-dim))
+                    (f90-ts--toc-filter-nodes tree-nodes
+                                              f90-ts--toc-render-regexp)
+                  tree-nodes)))
     (setq f90-ts--toc-buffer-rendered-width f90-ts--toc-render-width)
+    (remove-overlays (point-min) (point-max) 'f90-ts-toc-position t)
+    (setq f90-ts--toc-buffer-hl-hidden-line nil)
     (erase-buffer)
     (f90-ts--toc-buffer-render-header)
-    (f90-ts--toc-buffer-render-nodes tree-nodes 0)
+    (f90-ts--toc-buffer-render-nodes nodes 0)
     (goto-char (point-min))
     (when point-line
       (forward-line (1- point-line)))
@@ -1031,7 +1535,9 @@ afterwards, so that re-rendering the same source does not scroll the panel."
     (goto-char (max (point) (f90-ts--toc-buffer-body-start)))
     (when win
       (set-window-point win (point))
-      (when start-line
+      ;; the filter may have made the buffer shorter than the old view
+      (when (and start-line
+                 (<= start-line (count-lines (point-min) (point-max))))
         (save-excursion
           (goto-char (point-min))
           (forward-line (1- start-line))
@@ -1123,9 +1629,12 @@ narrowed, or if the narrowed region contains no entry."
                  (get-buffer f90-ts--toc-buffer-name))
              t "current buffer must be the f90-ts toc buffer")
   (let ((inhibit-read-only t))
+    (remove-overlays (point-min) (point-max) 'f90-ts-toc-position t)
     (erase-buffer))
+  (setq f90-ts--toc-buffer-hl-hidden-line nil)
   (setq f90-ts--toc-buffer-source         nil
         f90-ts--toc-buffer-source-tick    nil
+        f90-ts--toc-buffer-nodes          nil
         f90-ts--toc-buffer-rendered-name  nil
         f90-ts--toc-buffer-restriction    nil
         f90-ts--toc-buffer-confine        nil
@@ -1148,8 +1657,12 @@ This only fills the buffer.  It neither displays it nor moves point."
       (unless (derived-mode-p 'f90-ts-toc-mode)
         (f90-ts-toc-mode))
       (let ((same-source (eq src f90-ts--toc-buffer-source)))
+        ;; every source buffer has its own filter
+        (unless same-source
+          (f90-ts--toc-load-filter src))
         (setq f90-ts--toc-buffer-source      src
-              f90-ts--toc-buffer-source-tick tick)
+              f90-ts--toc-buffer-source-tick tick
+              f90-ts--toc-buffer-nodes       tree-nodes)
         (f90-ts--toc-buffer-render tree-nodes same-source)
         (f90-ts--toc-buffer-apply-confine)))
     toc-buf))
@@ -1301,16 +1814,14 @@ a variable is declared in."
     (beginning-of-line)
     (if (f90-ts--toc-buffer-structure-line-p)
         (point)
-      (let ((depth (get-text-property (point) 'f90-ts-toc-depth))
-            (found nil))
-        (while (and depth
-                    (not found)
-                    (zerop (forward-line -1)))
-          (let ((above (get-text-property (point) 'f90-ts-toc-depth)))
-            (when (and above (< above depth)
-                       (f90-ts--toc-buffer-structure-line-p))
-              (setq found (point)))))
-        found))))
+      (when-let* ((depth (get-text-property (point) 'f90-ts-toc-depth)))
+        (cl-loop
+         while (zerop (forward-line -1))
+         for above = (get-text-property (point) 'f90-ts-toc-depth)
+         when (and above
+                   (< above depth)
+                   (f90-ts--toc-buffer-structure-line-p))
+         return (point))))))
 
 
 (defun f90-ts--toc-buffer-narrow-source (beg end)
@@ -1471,6 +1982,46 @@ The panel keeps the focus, and point in the source buffer does not move."
 ;;;-----------------------------------------------------------------------------
 ;;; toc buffer: sync of point
 
+(defun f90-ts--toc-source-line-bounds (pos)
+  "Return (BOL . EOL) of the line of POS in the source buffer of the toc buffer.
+Must be called with the toc buffer as current buffer."
+  (with-current-buffer f90-ts--toc-buffer-source
+    (save-excursion
+      (goto-char pos)
+      (cons (line-beginning-position) (line-end-position)))))
+
+
+(defun f90-ts--toc-associated-entry (entries pos)
+  "Find the entry in ENTRIES which is associated with source position POS.
+ENTRIES is a list in the order of the source of elements (ID MPOS DOC KIND),
+where MPOS is the marker position of the entry, DOC the start of its doc
+comments or nil, and KIND its kind.  Return the ID of the associated entry, or
+nil if ENTRIES is empty.  The rules are described in
+`f90-ts--toc-buffer-associated-line'.
+Must be called with the toc buffer as current buffer."
+  (let* ((bounds (f90-ts--toc-source-line-bounds pos))
+         (bol    (car bounds))
+         (eol    (cdr bounds)))
+    (or (cl-loop
+         with found = nil
+         with var-seen = nil
+         for (id mpos doc kind) in entries
+         ;; doc comments are part of the entry, so it starts before its name
+         for epos = (and mpos (or (and f90-ts-toc-include-doc-comments doc)
+                                  mpos))
+         until (and epos (> epos eol))
+         do (when mpos
+              (if (not (f90-ts--toc-line-kind-p kind))
+                  (setq found id)
+                (when (and (>= mpos bol)
+                           (or (not var-seen) (<= mpos pos)))
+                  (setq found    id
+                        var-seen t))))
+         finally return found)
+        ;; point is before the first entry: use the first entry
+        (car (car entries)))))
+
+
 (defun f90-ts--toc-buffer-associated-line (pos)
   "Return the start of the toc buffer line associated with source position POS.
 Must be called with the toc buffer as current buffer.  Return nil if the toc
@@ -1484,45 +2035,117 @@ is >= the marker position, except for the first one on the line which also
 captures positions before it on that line.
 If `f90-ts-toc-include-doc-comments' is non-nil, the doc comments
 before a structure belong to its entry, so a position there is associated with
-this entry."
-  (let* ((bounds (with-current-buffer f90-ts--toc-buffer-source
-                   (save-excursion
-                     (goto-char pos)
-                     (cons (line-beginning-position) (line-end-position)))))
-         (bol (car bounds))
-         (eol (cdr bounds)))
-    (save-excursion
-      (goto-char (f90-ts--toc-buffer-body-start))
-      (or (cl-loop
-           with found = nil
-           with var-seen = nil
-           for line-pos = (line-beginning-position)
-           for marker = (get-text-property line-pos 'f90-ts-toc-marker)
-           for mpos = (and marker (marker-position marker))
-           for doc = (and f90-ts-toc-include-doc-comments
-                          (get-text-property line-pos 'f90-ts-toc-doc))
-           ;; doc comments are part of the entry, so it starts before its name
-           for epos = (and mpos (or doc mpos))
-           until (or (eobp) (and epos (> epos eol)))
-           do (when mpos
-                (if (not (f90-ts--toc-line-kind-p
-                          (get-text-property line-pos 'f90-ts-toc-kind)))
-                    (setq found line-pos)
-                  (when (and (>= mpos bol)
-                             (or (not var-seen) (<= mpos pos)))
-                    (setq found    line-pos
-                          var-seen t))))
-           do (forward-line 1)
-           finally return found)
-          ;; point is before the first entry: use the first entry
-          (let ((start (f90-ts--toc-buffer-body-start)))
-            (and (get-text-property start 'f90-ts-toc-marker)
-                 start))))))
+this entry.  See `f90-ts--toc-associated-entry'."
+  (save-excursion
+    (goto-char (f90-ts--toc-buffer-body-start))
+    (f90-ts--toc-associated-entry
+     (cl-loop
+      until (eobp)
+      for line-pos = (line-beginning-position)
+      for marker = (get-text-property line-pos 'f90-ts-toc-marker)
+      when marker
+      collect (list line-pos
+                    (marker-position marker)
+                    (get-text-property line-pos 'f90-ts-toc-doc)
+                    (get-text-property line-pos 'f90-ts-toc-kind))
+      do (forward-line 1))
+     pos)))
 
 
-(defun f90-ts--toc-buffer-sync-now (&optional pos)
+(defun f90-ts--toc-buffer-source-point ()
+  "Return point in the source buffer of the toc buffer.
+If the source buffer is shown in a window, this is the point of that window."
+  (let ((win (get-buffer-window f90-ts--toc-buffer-source 'visible)))
+    (if win
+        (window-point win)
+      (with-current-buffer f90-ts--toc-buffer-source
+        (point)))))
+
+
+(defun f90-ts--toc-buffer-position-line (pos)
+  "Return the start of the first toc buffer line with an entry after POS.
+POS is a position in the source buffer.  If there is no such line, return the
+end of the buffer.  Must be called with the toc buffer as current buffer."
+  (save-excursion
+    (goto-char (f90-ts--toc-buffer-body-start))
+    (or (cl-loop
+         until (eobp)
+         for marker = (get-text-property (point) 'f90-ts-toc-marker)
+         when (and marker (> (marker-position marker) pos))
+         return (point)
+         do (forward-line 1))
+        (point-max))))
+
+
+(defun f90-ts--toc-buffer-between-mark-p ()
+  "Return non-nil if the in between position mark is shown in the toc buffer.
+That is the mark of `f90-ts-toc-position-between-face', which is used if the
+filter hides the entry of the position."
+  (and (overlayp f90-ts--toc-buffer-between-overlay)
+       (overlay-buffer f90-ts--toc-buffer-between-overlay)
+       t))
+
+
+(defun f90-ts--toc-buffer-hl-range ()
+  "Return the range for `hl-line-range-function' in the toc buffer.
+That is the line at point, except for the line at which point was left by the
+last sync if the in between mark is shown: that entry is not the location in
+the source buffer, the underline below the marked line is."
+  (unless (eql f90-ts--toc-buffer-hl-hidden-line (line-beginning-position))
+    (cons (line-beginning-position) (line-beginning-position 2))))
+
+
+(defun f90-ts--toc-buffer-make-position-overlay (beg end face)
+  "Return a new position overlay from BEG to END in the toc buffer.
+The overlay has the face FACE.  It is removed with the other position
+overlays, see `f90-ts--toc-buffer-update-position-mark'."
+  (let ((ov (make-overlay beg (max beg end))))
+    (overlay-put ov 'f90-ts-toc-position t)
+    (overlay-put ov 'face face)
+    ov))
+
+
+(defun f90-ts--toc-buffer-update-position-mark (pos)
+  "Mark the entry of source position POS in the toc buffer.
+The marker is set by using overlays.
+If the filter shows the entry of POS, its line is marked with the face
+`f90-ts-toc-position-face'.  The range is the one of the highlight of the line
+at point, see `f90-ts--toc-buffer-hl-range'.
+If the filter hides the entry, see `f90-ts--toc-buffer-hidden-position-p', the
+line above where POS would be is marked with the face
+`f90-ts-toc-position-between-face' instead, from the first position of the
+line (the indentation is included) to its end.  It is the line before the first
+line with an entry after POS, see `f90-ts--toc-buffer-position-line'.
+Must be called with the toc buffer as current buffer."
+  (remove-overlays (point-min) (point-max) 'f90-ts-toc-position t)
+  (setq f90-ts--toc-buffer-position-overlay nil
+        f90-ts--toc-buffer-between-overlay  nil)
+  (if (f90-ts--toc-buffer-hidden-position-p pos)
+      (let ((bol (f90-ts--toc-buffer-position-line pos)))
+        (when (> bol (point-min))
+          (save-excursion
+            (goto-char bol)
+            (forward-line -1)
+            (setq f90-ts--toc-buffer-between-overlay
+                  (f90-ts--toc-buffer-make-position-overlay
+                   (point) (line-end-position)
+                   'f90-ts-toc-position-between-face)))))
+    (when-let* ((bol (f90-ts--toc-buffer-associated-line pos)))
+      (save-excursion
+        (goto-char bol)
+        (setq f90-ts--toc-buffer-position-overlay
+              (f90-ts--toc-buffer-make-position-overlay
+               (point) (line-beginning-position 2)
+               'f90-ts-toc-position-face))))))
+
+
+(defun f90-ts--toc-buffer-sync-now (&optional pos mark-pos)
   "Move point in the toc buffer to the entry associated with POS.
 POS is a position in the source buffer, default is point there.
+The entry of MARK-POS (default POS) is marked, see
+`f90-ts--toc-buffer-update-position-mark'.  If the filter hides it, the line
+above where it would be is marked by the in between face, and the entry at
+point is not highlighted, see `f90-ts--toc-buffer-hl-range'.
 Do nothing if the toc buffer is not visible."
   (when-let* ((toc-buf (get-buffer f90-ts--toc-buffer-name))
               (toc-win (get-buffer-window toc-buf 'visible))
@@ -1530,6 +2153,7 @@ Do nothing if the toc buffer is not visible."
               ((buffer-live-p src)))
     (let ((pos (or pos (with-current-buffer src (point)))))
       (with-current-buffer toc-buf
+        (f90-ts--toc-buffer-update-position-mark (or mark-pos pos))
         (when-let* ((line-pos (f90-ts--toc-buffer-associated-line pos)))
           (setq line-pos (f90-ts--toc-buffer-clamp line-pos))
           (goto-char line-pos)
@@ -1537,20 +2161,42 @@ Do nothing if the toc buffer is not visible."
           ;; only scroll if necessary, do not recenter on every sync
           (unless (pos-visible-in-window-p line-pos toc-win)
             (with-selected-window toc-win
-              (recenter)))
-          (hl-line-highlight))))))
+              (recenter))))
+        (setq f90-ts--toc-buffer-hl-hidden-line
+              (and (f90-ts--toc-buffer-between-mark-p)
+                   (line-beginning-position)))
+        (hl-line-highlight)))))
 
 
-(defun f90-ts--toc-buffer-rerender ()
+(defun f90-ts--toc-buffer-nodes-current-p ()
+  "Return non-nil if `f90-ts--toc-buffer-nodes' are up to date.
+That is the case if the source buffer has not been changed since they were
+built."
+  (and f90-ts--toc-buffer-nodes
+       (buffer-live-p f90-ts--toc-buffer-source)
+       (eql (buffer-chars-modified-tick f90-ts--toc-buffer-source)
+            f90-ts--toc-buffer-source-tick)))
+
+
+(defun f90-ts--toc-buffer-rerender (&optional cached)
   "Render the toc buffer again.
 For example, this is invoked after a display option has changed.
 Must be called with the toc buffer as current buffer.  Keep the entry
-at point if it still exists."
+at point if it still exists.
+If CACHED is non-nil and the source buffer is unchanged, the nodes of the last
+render are used instead of building them again, see
+`f90-ts--toc-buffer-nodes-current-p'.  That is fast enough to be done for every
+key typed into the filter."
   (when (buffer-live-p f90-ts--toc-buffer-source)
     (let* ((marker (f90-ts--toc-buffer-marker-at-point))
            (pos    (and marker (marker-position marker))))
-      (f90-ts--toc-buffer-update f90-ts--toc-buffer-source)
-      (f90-ts--toc-buffer-sync-now pos))))
+      (if (and cached
+               (f90-ts--toc-buffer-nodes-current-p))
+          (progn
+            (f90-ts--toc-buffer-render f90-ts--toc-buffer-nodes t)
+            (f90-ts--toc-buffer-apply-confine))
+        (f90-ts--toc-buffer-update f90-ts--toc-buffer-source))
+      (f90-ts--toc-buffer-sync-now pos (f90-ts--toc-buffer-source-point)))))
 
 
 (defun f90-ts-toc-buffer-refresh ()
@@ -1659,6 +2305,173 @@ MODE is one of `truncate', `left' and `right', see
 
 
 ;;;-----------------------------------------------------------------------------
+;;; toc buffer: filter commands
+
+(defun f90-ts--toc-store-filter ()
+  "Store the current filter in the source buffer of the toc buffer.
+Must be called with the toc buffer as current buffer."
+  (when (buffer-live-p f90-ts--toc-buffer-source)
+    (let ((state (cons f90-ts--toc-filter f90-ts--toc-filter-is-regexp)))
+      (with-current-buffer f90-ts--toc-buffer-source
+        (setq f90-ts--toc-source-filter state)))))
+
+
+(defun f90-ts--toc-load-filter (src)
+  "Make the filter stored in the source buffer SRC the current filter.
+A buffer without stored filter has the empty one."
+  (let ((state (buffer-local-value 'f90-ts--toc-source-filter src)))
+    (setq f90-ts--toc-filter               (or (car state) "")
+          f90-ts--toc-filter-is-regexp     (cdr state)
+          f90-ts--toc-filter-valid-pattern nil)))
+
+
+(defun f90-ts--toc-buffer-refilter ()
+  "Render the toc buffer again after the filter changed.
+The filter is stored in the source buffer.  The panel is shown from the top, so
+that the filter line stays visible."
+  (when-let* ((toc-buf (get-buffer f90-ts--toc-buffer-name)))
+    (with-current-buffer toc-buf
+      (f90-ts--toc-store-filter)
+      (f90-ts--toc-buffer-rerender t)
+      (when-let* ((win (get-buffer-window toc-buf 'visible)))
+        (set-window-start win (point-min))
+        (unless (pos-visible-in-window-p (window-point win) win)
+          (with-selected-window win
+            (recenter)))))))
+
+
+(defun f90-ts--toc-set-filter (text &optional force)
+  "Set the filter string to TEXT and render the toc buffer again.
+Render also if TEXT is the filter string already and FORCE is non-nil."
+  (when (or force
+            (not (equal text f90-ts--toc-filter)))
+    (setq f90-ts--toc-filter text)
+    (f90-ts--toc-buffer-refilter)))
+
+
+(defun f90-ts--toc-set-filter-is-regexp (flag)
+  "Set whether the filter string is a regexp to FLAG and render again."
+  (unless (eq flag f90-ts--toc-filter-is-regexp)
+    (setq f90-ts--toc-filter-is-regexp flag)
+    (f90-ts--toc-buffer-refilter)))
+
+
+(defun f90-ts--toc-filter-mark-input ()
+  "Colour the input in the minibuffer if the filter is an invalid regexp.
+Do nothing else, there is no error message while typing."
+  (remove-overlays (minibuffer-prompt-end) (point-max)
+                   'f90-ts-toc-filter-input t)
+  (when (f90-ts--toc-filter-error)
+    (let ((ov (make-overlay (minibuffer-prompt-end) (point-max) nil nil t)))
+      (overlay-put ov 'f90-ts-toc-filter-input t)
+      (overlay-put ov 'face 'f90-ts-toc-filter-invalid-face))))
+
+
+(defun f90-ts--toc-filter-live (&rest _)
+  "Apply the filter string typed so far in the minibuffer.
+This is an `after-change-functions' function of the minibuffer which reads the
+filter, see `f90-ts-toc-buffer-filter', so it is called with the arguments of
+such functions, which it ignores.  An invalid regexp is only coloured."
+  (when (buffer-live-p f90-ts--toc-filter-toc-buffer)
+    (f90-ts--toc-set-filter (minibuffer-contents-no-properties))
+    (f90-ts--toc-filter-mark-input)))
+
+
+(defun f90-ts--toc-filter-minibuffer-toggle-regexp ()
+  "Toggle regexp matching while the filter is read in the minibuffer."
+  (interactive)
+  (f90-ts--toc-set-filter-is-regexp (not f90-ts--toc-filter-is-regexp))
+  (f90-ts--toc-filter-mark-input))
+
+
+(defun f90-ts--toc-filter-minibuffer-exit ()
+  "Accept the filter in the minibuffer, unless it is an invalid regexp.
+In that case stay in the minibuffer and show the error."
+  (interactive)
+  (when-let* ((msg (f90-ts--toc-regexp-error
+                    (minibuffer-contents-no-properties))))
+    (user-error "Invalid regexp: %s" msg))
+  (exit-minibuffer))
+
+
+(defun f90-ts-toc-buffer-filter ()
+  "Restrict the entries of the toc buffer to the ones matching a filter string.
+Read the filter in the minibuffer, starting with the current one.  The panel is
+updated while typing, \\<f90-ts--toc-filter-minibuffer-map>\\[f90-ts--toc-filter-minibuffer-toggle-regexp] toggles regexp matching, `C-g' restores
+the old filter, and an empty string shows all entries again.
+The parts of the names matching the filter are highlighted while typing, and
+no more after RET.
+While the regexp is invalid, the text is coloured and the panel keeps the last
+valid filter; \\[f90-ts--toc-filter-minibuffer-exit] on an invalid regexp is refused with an error message.
+The names of the entries are compared ignoring case.  The parents of matching
+entries are shown as well.  If `f90-ts-toc-filter-dim' is non-nil, the other
+entries are dimmed instead of removed.  The filter string is a regexp if the
+checkbox in the filter line is set, see `f90-ts-toc-buffer-toggle-regexp'.
+Every source buffer has its own filter, which is saved while the toc buffer
+shows another buffer."
+  (interactive)
+  (let ((toc-buf (current-buffer))
+        (old     f90-ts--toc-filter)
+        (new     nil))
+    (unwind-protect
+        (let ((f90-ts--toc-filter-toc-buffer toc-buf)
+              (f90-ts--toc-filter-typing     t))
+          (setq new (minibuffer-with-setup-hook
+                        (lambda ()
+                          (add-hook 'after-change-functions
+                                    #'f90-ts--toc-filter-live nil t))
+                      (read-from-minibuffer
+                       "Filter (M-r: toggle regexp): " old
+                       f90-ts--toc-filter-minibuffer-map
+                       nil 'f90-ts--toc-filter-history))))
+      ;; after C-g there is no new string, so this restores the old one; the
+      ;; filter is done, so render again, now without highlighted matches
+      (f90-ts--toc-set-filter (or new old) t))))
+
+
+(defun f90-ts-toc-buffer-toggle-regexp ()
+  "Toggle whether the filter string of the toc buffer is a regexp.
+Otherwise the entries have to contain it as substring."
+  (interactive)
+  (f90-ts--toc-set-filter-is-regexp (not f90-ts--toc-filter-is-regexp))
+  (message "F90-TS-TOC: filter is %s"
+           (if f90-ts--toc-filter-is-regexp "a regexp" "a plain substring")))
+
+
+(defun f90-ts-toc-buffer-toggle-filter-dim ()
+  "Toggle whether entries not matching the filter are dimmed or removed.
+If dimmed, the panel looks as without filter, and moving point with the keyboard
+jumps from one matching line to the next one.  See `f90-ts-toc-filter-dim'."
+  (interactive)
+  (setq f90-ts-toc-filter-dim (not f90-ts-toc-filter-dim))
+  (f90-ts--toc-buffer-refilter)
+  (message "F90-TS-TOC: filtered entries are %s"
+           (if f90-ts-toc-filter-dim "dimmed" "removed")))
+
+
+(defun f90-ts-toc-buffer-filter-clear ()
+  "Remove the filter of the toc buffer, so that all entries are shown."
+  (interactive)
+  (f90-ts--toc-set-filter "")
+  (message "F90-TS-TOC: filter cleared"))
+
+
+(defun f90-ts-toc-buffer-mouse-filter (event)
+  "Edit the filter of the toc buffer, see `f90-ts-toc-buffer-filter'.
+EVENT is the click on the filter line."
+  (interactive "e")
+  (select-window (posn-window (event-start event)))
+  (f90-ts-toc-buffer-filter))
+
+
+(defun f90-ts-toc-buffer-mouse-toggle-regexp (event)
+  "Toggle regexp matching of the filter with a click EVENT on the checkbox."
+  (interactive "e")
+  (select-window (posn-window (event-start event)))
+  (f90-ts-toc-buffer-toggle-regexp))
+
+
+;;;-----------------------------------------------------------------------------
 ;;; toc buffer: transient menu
 
 (defun f90-ts--toc-transient-state (label state)
@@ -1713,6 +2526,21 @@ The keys are the same as in `f90-ts-toc-mode-map'."
             "Shorten long names"
             (format "[%s]" f90-ts-toc-name-shortening)))
      f90-ts-toc-buffer-cycle-shortening :transient t)]
+   ["Filter"
+    ("/" (lambda ()
+           (f90-ts--toc-transient-state
+            "Filter"
+            (if (string-empty-p f90-ts--toc-filter)
+                "[none]"
+              (format "[%s]" f90-ts--toc-filter))))
+     f90-ts-toc-buffer-filter)
+    ("r" (lambda ()
+           (f90-ts--toc-transient-state "Regexp" f90-ts--toc-filter-is-regexp))
+     f90-ts-toc-buffer-toggle-regexp :transient t)
+    ("f" (lambda ()
+           (f90-ts--toc-transient-state "Dim filtered" f90-ts-toc-filter-dim))
+     f90-ts-toc-buffer-toggle-filter-dim :transient t)
+    ("x"   "Clear filter"     f90-ts-toc-buffer-filter-clear :transient t)]
    ["Panel"
     ;; moving the panel deletes and recreates its window: close the menu
     ("s" (lambda ()
@@ -1841,13 +2669,19 @@ up on its own.  The timer cancels itself once the toc buffer is gone."
   (setq truncate-lines t)
   ;; keep the highlight in the panel while it is not the selected window
   (setq-local hl-line-sticky-flag t)
+  ;; no highlight of an entry while the in between mark stands for point
+  (setq-local hl-line-range-function #'f90-ts--toc-buffer-hl-range)
   (hl-line-mode 1)
   ;; no background activity without a toc buffer
   (add-hook 'kill-buffer-hook #'f90-ts--toc-stop nil t)
   ;; walking: moving point to a dimmed line narrows to its structure
   (add-hook 'post-command-hook #'f90-ts--toc-buffer-walk nil t)
   ;; the header is not selectable; this must run before walking
-  (add-hook 'post-command-hook #'f90-ts--toc-buffer-keep-off-header -50 t))
+  (add-hook 'post-command-hook #'f90-ts--toc-buffer-keep-off-header -50 t)
+  ;; dimmed filtered entries are skipped by motion; this must run before
+  ;; walking, too
+  (add-hook 'pre-command-hook #'f90-ts--toc-buffer-remember-line nil t)
+  (add-hook 'post-command-hook #'f90-ts--toc-buffer-skip-dimmed -40 t))
 
 
 (defun f90-ts--toc-buffer-show (toc-buf)
@@ -1895,6 +2729,7 @@ The side is given by `f90-ts-toc-buffer-side'.  Return the window."
     (if-let* ((win (get-buffer-window toc-buf 'visible)))
         (quit-window t win)
       (kill-buffer toc-buf)))
+  ;; the filter belongs to the source buffer and stays there
   (f90-ts--toc-stop))
 
 
@@ -1930,6 +2765,14 @@ The side is given by `f90-ts-toc-buffer-side'.  Return the window."
      ["Cycle" f90-ts-toc-buffer-cycle-shortening])
     ["Panel on right side" f90-ts-toc-buffer-toggle-side
      :style toggle :selected (eq f90-ts-toc-buffer-side 'right)]
+    "---"
+    ["Filter entries..." f90-ts-toc-buffer-filter :active t]
+    ["Filter is regexp" f90-ts-toc-buffer-toggle-regexp
+     :style toggle :selected f90-ts--toc-filter-is-regexp]
+    ["Dim filtered entries" f90-ts-toc-buffer-toggle-filter-dim
+     :style toggle :selected f90-ts-toc-filter-dim]
+    ["Clear filter" f90-ts-toc-buffer-filter-clear
+     :active (not (string-empty-p f90-ts--toc-filter))]
     "---"
     ["Refresh"           f90-ts-toc-buffer-refresh :active t]
     "---"
