@@ -14,6 +14,10 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Support for tree-sitter core 0.22.6 (for example used by Debian) added.
+  The bugs within the core library and particularly this version are a
+  nightmare and some workarounds might be pretty slow. See
+  `f90-ts--indent-full-reparse' for more details. Please report any problems!
 - Alignment rules added for:
   * io item lists,
   * result keyword for functions,
@@ -159,7 +163,8 @@ branch and the compatibility tag of the grammar fork (see below):
 | Emacs | tree-sitter library | grammar ABI |
 |-------|---------------------|-------------|
 | 29.1  | 0.20.8              | 14          |
-| 29.3  | 0.20.8 (apt)        | 14          |
+| 29.3  | 0.20.8              | 14          |
+| 30.1  | 0.22.6              | 14          |
 | 30.1  | 0.24.7              | 14          |
 | 30.1  | 0.25.10             | 15          |
 | 30.2  | 0.24.7              | 14          |
@@ -167,7 +172,7 @@ branch and the compatibility tag of the grammar fork (see below):
 | 31.1  | 0.26.11             | 15          |
 
 The grammar ABI must lie within the range supported by the tree-sitter library linked into Emacs.
-But expect possible minor glitches with non-tested versions (like in between tree-sitter libraries).
+But expect possible glitches with non-tested versions (like in between tree-sitter libraries).
 
 Detailed technical requirements and troubleshooting can be found
 in [MANUAL.md](MANUAL.md#installation).

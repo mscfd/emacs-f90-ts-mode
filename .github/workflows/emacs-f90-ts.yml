@@ -1,7 +1,15 @@
 name: emacs f90-mode
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # manual run from Actions menu
+  pull_request:
+    branches:
+      - main
+      - release
+  push:
+    branches:
+      - main
+      - release
 
 jobs:
   check:
@@ -29,6 +37,13 @@ jobs:
           - emacs-version: "29.3"
             emacs-install: apt
             tree-sitter-version: "0.24.7"
+            tree-sitter-abi: "14"
+
+          # Emacs 30.1 built against Tree-sitter 0.22.6 (for example debian):
+          # exercises the ABI-14 environment shipped by Emacs 30.
+          - emacs-version: "30.1"
+            emacs-install: source
+            tree-sitter-version: "0.22.6"
             tree-sitter-abi: "14"
 
           # Emacs 30.1 built against Tree-sitter 0.24:

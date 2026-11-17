@@ -31,7 +31,9 @@
 (require 'cl-lib)
 (require 'ert)
 (require 'ert-x)
-(unless (>= emacs-major-version 30)
+;; The `ert-font-lock' library is built into Emacs 30+ (autoloaded there);
+;; the vendored copy in test/ is used where it is not available.
+(unless (fboundp 'ert-font-lock-test-file)
   (require 'ert-font-lock))
 
 (require 'treesit)
@@ -191,7 +193,8 @@ Relevant variables are listed as keys in `f90-ts-mode-test-custom-settings'."
 
 
 (defun f90-ts-mode-test--font-lock-recompute-features ()
-  "Wrapper to invoke the treesit function depending on Emacs version."
+  "Wrapper to invoke `treesit-font-lock-recompute-features'.
+Emacs 30 added the optional LANGUAGE argument to that function."
   (apply #'treesit-font-lock-recompute-features
          (if (>= emacs-major-version 30)
              '(nil nil fortran)

@@ -136,6 +136,7 @@ must therefore lie within the range supported by your Emacs. Otherwise regenerat
 | Library | ABI range | Typical setup                            |
 |---------|-----------|------------------------------------------|
 | 0.20.x  | 13-14     | Emacs 29.x                               |
+| 0.22.x  | 13-14     | Emacs 30.x                               |
 | 0.24.x  | 13-14     | Emacs 30.x                               |
 | 0.25.x  | 13-15     | Emacs 30.x                               |
 | 0.26.x  | 13-15     | Emacs 31.x                               |
@@ -145,7 +146,8 @@ Combinations tested in CI (see `.github/workflows`):
 | Emacs | tree-sitter library | grammar ABI |
 |-------|---------------------|-------------|
 | 29.1  | 0.20.8              | 14          |
-| 29.3  | 0.20.8 (apt)        | 14          |
+| 29.3  | 0.20.8              | 14          |
+| 30.1  | 0.22.6              | 14          |
 | 30.1  | 0.24.7              | 14          |
 | 30.1  | 0.25.10             | 15          |
 | 30.2  | 0.24.7              | 14          |
@@ -166,7 +168,8 @@ The following can be used to check the versions of a running Emacs (`M-:` = `eva
 
 **NOTE** (Emacs 29.x): there are a number of workarounds for bugs in the tree-sitter core library 0.20.x.
 These might reduce performance in some cases. Please open an issue if anything fails or performance is bad.
-
+There is an even worse bug in 0.22.x, where a mangled tree is created by internal incremental update and a
+parser restart is required.
 
 ### Tree-sitter based mode
 

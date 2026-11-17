@@ -473,9 +473,7 @@ Emacs versions. Hence `f90-ts--outline-predicate' is provided."
   (setq-local outline-level #'f90-ts--outline-level)
   (setq-local outline-search-function #'f90-ts--outline-search)
   (when (boundp 'treesit-outline-predicate)
-    (setq-local treesit-outline-predicate f90-ts--outline-predicate))
-  (when (< emacs-major-version 30)
-    (setq-local outline-search-function #'f90-ts--outline-search)))
+    (setq-local treesit-outline-predicate f90-ts--outline-predicate)))
 
 
 ;;;-----------------------------------------------------------------------------
