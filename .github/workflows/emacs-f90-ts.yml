@@ -13,6 +13,13 @@ on:
 
 jobs:
   check:
+    # display the runtime tree-sitter core in the job name: it is the
+    # linked library in conjunction with emacs core whose behaviour the
+    # matrix actually checks; the tree-sitter-version value only selects
+    # the CLI that generates the grammar; for source installs it is the
+    # linked core, otherwise core-version below names the linked core
+    # explicitly
+    name: check (${{ matrix.emacs-version }}, ${{ matrix.emacs-install }}, tree-sitter ${{ matrix.core-version || matrix.tree-sitter-version }}, abi ${{ matrix.tree-sitter-abi }})
     runs-on: ubuntu-24.04
 
     env:
@@ -20,6 +27,11 @@ jobs:
 
     strategy:
       matrix:
+        # core-version (optional): the runtime tree-sitter library linked
+        # into Emacs, shown in the job display.  It defaults to
+        # tree-sitter-version, which for 'source' installs is exactly the
+        # linked library; set it only where the runtime core differs from
+        # the CLI used to generate the grammar (apt, purcell).
         include:
           # Emacs 29.1 built against Tree-sitter 0.20.8:
           # exercises the baseline ABI 13-14 environment.
@@ -33,11 +45,14 @@ jobs:
           # ABI 13-14) - that is fixed by Ubuntu, not by this matrix.
           # tree-sitter-version below selects only the tree-sitter-cli
           # release used to generate the grammar: 0.24.7 emits ABI 14,
-          # which matches the linked 0.20.8 library.
+          # which matches the linked 0.20.8 library.  core-version names
+          # the linked runtime library in the job display, because that
+          # is the environment actually under test.
           - emacs-version: "29.3"
             emacs-install: apt
             tree-sitter-version: "0.24.7"
             tree-sitter-abi: "14"
+            core-version: "0.20.8"
 
           # Emacs 30.1 built against Tree-sitter 0.22.6 (for example debian):
           # exercises the ABI-14 environment shipped by Emacs 30.
@@ -77,11 +92,14 @@ jobs:
 
           # Emacs 31: use Purcell's precompiled Emacs.
           # Current Purcell build uses Tree-sitter 0.26.x,
-          # which supports ABI 15.
+          # which supports ABI 15.  core-version names the linked
+          # runtime library in the job display; the exact 0.26.x patch
+          # level is whatever Purcell currently ships
           - emacs-version: "31.1"
             emacs-install: purcell
             tree-sitter-version: "0.26.11"
             tree-sitter-abi: "15"
+            core-version: "0.26.x"
 
     steps:
       # -------------------------
