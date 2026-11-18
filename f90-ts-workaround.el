@@ -332,19 +332,36 @@ as possible."
                    (min (point-max) (1+ end))))
 
 
+(defun f90-ts--first-child-ending-at-or-after (node pos)
+  "Return the index of the first child of NODE whose end is at or after POS.
+Return the child count if there is none.  Children are ordered by
+position, so the search is a binary search, and it relies on indices only,
+not on (treesitter) cursors or siblings.  Note that indexed child access is
+cheap."
+  (cl-loop
+   for (lo . hi) = (cons 0 (treesit-node-child-count node))
+   then (let ((mid (/ (+ lo hi) 2)))
+          (if (< (treesit-node-end (treesit-node-child node mid)) pos)
+              (cons (1+ mid) hi)
+            (cons lo mid)))
+   while (< lo hi)
+   finally return lo))
+
+
 (defun f90-ts--virtual-node-at-pos (node pos)
   "Return the first zero-width node starting and ending at POS below NODE.
 Search by child indices only, which works on all tree-sitter versions,
-unlike cursor based walks in the vicinity of virtual nodes."
+unlike cursor based walks in the vicinity of virtual nodes.  Only
+children covering POS are visited, found by binary search."
   (if (and (= (treesit-node-start node) pos)
            (= (treesit-node-end node) pos))
       node
     (cl-loop
-     for i below (treesit-node-child-count node)
+     for i from (f90-ts--first-child-ending-at-or-after node pos)
+           below (treesit-node-child-count node)
      for child = (treesit-node-child node i)
-     thereis (and (>= pos (treesit-node-start child))
-                  (<= pos (treesit-node-end child))
-                  (f90-ts--virtual-node-at-pos child pos)))))
+     while (<= (treesit-node-start child) pos)
+     thereis (f90-ts--virtual-node-at-pos child pos))))
 
 
 (defun f90-ts--node-virtual-at (pos)
@@ -421,27 +438,33 @@ fail in the vicinity of virtual nodes."
     (f90-ts--sibling-in-parent node parent direction named)))
 
 
+(defun f90-ts--parent-by-descent (from node beg end)
+  "Return the parent of NODE (spanning BEG..END) by descending from FROM.
+Only children covering BEG..END are visited, found by binary search,
+so the cost is about tree depth times the logarithm of the width."
+  (cl-loop
+   for i from (f90-ts--first-child-ending-at-or-after from end)
+         below (treesit-node-child-count from)
+   for child = (treesit-node-child from i)
+   while (<= (treesit-node-start child) beg)
+   thereis (if (treesit-node-eq child node)
+               from
+             (f90-ts--parent-by-descent child node beg end))))
+
+
 (defun f90-ts--node-parent-by-search (node)
-  "Find the parent of NODE by top-down searching the Fortran syntax tree.
+  "Find the parent of NODE by searching the Fortran syntax tree top-down.
 
 This might look like a bad idea, but the core parent function of
-tree-sitter 0.20.x fails to determine the parent in if NODE is in the
-vicinity of a virtual node."
-  ;; TODO: use a direct search, but avoid any sibling operations
+tree-sitter 0.20.x fails to determine the parent if NODE is in the
+vicinity of a virtual node.  The search uses child indices only and
+prunes by position, so it is cheap and independent of the buggy
+parent and sibling operations."
   (when node
-    (let ((root (or (f90-ts--proper-cover-of-region (treesit-node-start node)
-                                                    (treesit-node-end node))
-                    (treesit-buffer-root-node 'fortran))))
-      (caadr
-       (treesit-induce-sparse-tree
-        root
-        (lambda (n)
-          (cl-loop
-           for i below (treesit-node-child-count n)
-           thereis
-           (treesit-node-eq
-            (treesit-node-child n i)
-            node))))))))
+    (when-let* ((root (treesit-buffer-root-node 'fortran)))
+      (f90-ts--parent-by-descent root node
+                                 (treesit-node-start node)
+                                 (treesit-node-end node)))))
 
 
 (defun f90-ts--field-name-p-native (node field-name)
@@ -675,6 +698,12 @@ and 30+) onto the new parser."
         new))))
 
 
+(defvar-local f90-ts--reparse-tick nil
+  "Value of `buffer-chars-modified-tick' at the last forced full reparse.
+While the buffer text is unchanged, the parse tree is the one of a full
+parse already, so another forced reparse is useless.")
+
+
 (defun f90-ts--indent-reparse-workaround-22 (&rest _args)
   "Force a full reparse before indenting a line (advice :before).
 Tree-sitter core 0.22.x diverges on incremental reparses after the
@@ -686,8 +715,10 @@ on a wrong tree.  `treesit--indent-1' is the common per-line entry of
 after being called, so a full reparse here is always effective.
 Only acts in `f90-ts-mode' buffers."
   (when (and (derived-mode-p 'f90-ts-mode)
+             (not (eql f90-ts--reparse-tick (buffer-chars-modified-tick)))
              (f90-ts--fortran-lang-p nil))
-    (f90-ts--indent-full-reparse)))
+    (f90-ts--indent-full-reparse)
+    (setq f90-ts--reparse-tick (buffer-chars-modified-tick))))
 
 
 (defvar f90-ts--indent-reparse-workaround-installed nil
@@ -818,6 +849,31 @@ available at load time (`unavailable' probe results are not cached)."
 ;;;-----------------------------------------------------------------------------
 ;;; Defun and thing: Emacs 29 fallbacks
 
+(defun f90-ts--navigate-thing-window (pattern pos forward beg end)
+  "Return the nearest node matching PATTERN from POS within BEG..END.
+FORWARD selects the first node (in tree order) starting after POS,
+otherwise the last node starting before POS.  Only nodes intersecting
+BEG..END are queried.  In the backward case, return nil if the best node
+starts before BEG, because a nearer one might have been missed outside
+the window (unless BEG is the start of the buffer)."
+  (let ((matches
+         (cl-loop
+          for cap in (treesit-query-capture
+                      (treesit-buffer-root-node) '((_) @thing) beg end)
+          for node = (cdr cap)
+          when (and (f90-ts--node-type-match-p node pattern)
+                    (if forward
+                        (> (treesit-node-start node) pos)
+                      (< (treesit-node-start node) pos)))
+          collect node)))
+    (if forward
+        (car matches)
+      (when-let* ((node (car (last matches))))
+        (and (or (<= beg (point-min))
+                 (>= (treesit-node-start node) beg))
+             node)))))
+
+
 (defun f90-ts--navigate-thing-29 (pos direction thing)
   "Navigate to next or previous THING from POS depending on DIRECTION.
 
@@ -826,30 +882,29 @@ available.  This function does not implemented the default tactic `nested'
 from Emacs 30+, so it does not behave like that.  The tactic can be described
 as `flat' (forget the tree hierarchy).  The `nested' tactic could probably
 be implemented using `treesit-induce-sparse-tree' to navigate to siblings
-and parents."
-  (let* ((pattern
-          (pcase thing
-            ('defun     (car f90-ts--thing-defun-regexp-pred))
-            ('procedure (car f90-ts--thing-procedure-regexp-pred))
-            ('interface (car f90-ts--thing-interface-regexp-pred))
-            ('type      (car f90-ts--thing-type-regexp-pred))))
-         (captures
-          (treesit-query-capture (treesit-buffer-root-node) '((_) @thing)))
-         (matches
-          (seq-filter
-           (lambda (cap)
-             (let ((node (cdr cap)))
-               (and (f90-ts--node-type-match-p node pattern)
-                    (if (> direction 0)
-                        (> (treesit-node-start node) pos)
-                      (< (treesit-node-start node) pos)))))
-           captures))
-         (node-thing
-          (if (> direction 0)
-              (cdar matches)
-            (cdar (last matches)))))
-    (when node-thing
-      (treesit-node-start node-thing))))
+and parents.
+
+The query is restricted to a window around POS, which is doubled until a
+match is found or the window covers the buffer, so the cost depends on
+the distance to the result and not on the buffer size."
+  (let ((pattern
+         (pcase thing
+           ('defun     (car f90-ts--thing-defun-regexp-pred))
+           ('procedure (car f90-ts--thing-procedure-regexp-pred))
+           ('interface (car f90-ts--thing-interface-regexp-pred))
+           ('type      (car f90-ts--thing-type-regexp-pred))))
+        (forward (> direction 0)))
+    (cl-loop
+     for width = 4096 then (* 2 width)
+     for beg = (if forward
+                   (min (1+ pos) (point-max))
+                 (max (point-min) (- pos width)))
+     for end = (if forward
+                   (min (point-max) (+ pos width))
+                 (min pos (point-max)))
+     for node = (f90-ts--navigate-thing-window pattern pos forward beg end)
+     when node return (treesit-node-start node)
+     until (if forward (>= end (point-max)) (<= beg (point-min))))))
 
 
 (defun f90-ts--beginning-of-thing-29 (thing &optional arg _tactic)
