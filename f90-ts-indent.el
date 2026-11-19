@@ -1771,6 +1771,173 @@ the align-list-other family."
        node-sym aux-context start-aux offset-aux indent-at-aux items-plist))))
 
 
+(defun f90-ts--align-op-expr-operand-anoffs-rhs (loc items-plist min-col)
+  "Return anchor-offset pairs aligning the right operand with earlier operands.
+This is the binary operator analog of the unary minus handling in
+`f90-ts--align-nsym-offset'.  It applies if the node at LOC is a binary
+operator starting the line and its right operand follows on the same line:
+
+  x = dot_product(a,   (v(:,1)  .cross.  v(:,2)) &
+                     + (v(:,2)  .cross.  v(:,3)))
+
+There is one pair for each operand (`named' item of ITEMS-PLIST, `:prev') on a
+previous line, so that for a + b + c on the head line, the right operand d
+of a following \"+ d\" can be aligned with a, b or c.  The shape of the binary
+tree does not matter, as the chain is flattened by
+`f90-ts--align-expand-op-expr'.
+
+The offset is minus the distance between the operator and its right operand as
+found on the current line, so the result does not depend on the width of the
+operator, nor on the blanks after it.  If an operand is a unary minus or plus,
+its argument is used, for the left operands as well as for the right operand,
+so that the arguments are aligned, as in a + -b followed by + -c with c
+aligned with b.
+Candidates whose final columns are smaller than MIN-COL are dropped.
+
+Return nil if the current node is not a binary operator, if the right operand
+is not on the same line, or if there is no operand on previous lines."
+  (let ((node (alist-get 'node loc))
+        (nsym (alist-get 'nsym loc)))
+    (when (and node
+               (memq nsym '(operator-math operator-logical
+                            operator-relation operator)))
+      (let ((rhs (treesit-node-next-sibling node)))
+        (when (and rhs
+                   (not (f90-ts--node-type-p rhs '("&" "comment")))
+                   (f90-ts--same-line-p (treesit-node-start node)
+                                        (treesit-node-start rhs)))
+          (let ((delta-op (+ (- (treesit-node-start rhs)
+                                (treesit-node-start node))
+                             (if (eq (f90-ts--align-node-symbol rhs)
+                                     'operator-unary-minusplus)
+                                 (or (f90-ts--align-unary-arg-delta rhs) 0)
+                               0))))
+            (cl-loop
+             for (n . sym) in (plist-get items-plist :prev)
+             for anoff = (when (memq sym '(named operator-unary-minusplus
+                                                 operator-unary-other))
+                           (cons n
+                                 (- (if (eq sym 'operator-unary-minusplus)
+                                        (or (f90-ts--align-unary-arg-delta n) 0)
+                                      0)
+                                    delta-op)))
+             when (and anoff
+                       (>= (f90-ts--continued-line-cache-get-col anoff) min-col))
+             collect anoff)))))))
+
+
+(defun f90-ts--align-op-expr-min-col (aux)
+  "Return the smallest column an operator starting a line may have.
+AUX is the auxiliary context of the operator expression or nil.
+For \"=\" this is the column of the assignment, for \"(\" and \",\" it is the
+column right of the enclosing opening parenthesis (the comma is not the left
+limit, as it may sit far right of the parenthesis).  Without an auxiliary
+context it is the start of the statement."
+  (f90-ts--continued-line-cache-get-col
+   (cond
+    ((null aux)
+     (cons (treesit-node-start (f90-ts--indent-prev-stmt-first)) 0))
+
+    ((f90-ts--node-type-p aux "=")
+     (cons (treesit-node-start aux) 0))
+
+    (t
+     (let ((paren (if (eq (f90-ts--align-node-symbol aux) 'parenthesis)
+                      aux
+                    (when-let* ((parent (treesit-node-parent aux)))
+                      (seq-find (lambda (n)
+                                  (eq (f90-ts--align-node-symbol n)
+                                      'parenthesis))
+                                (treesit-node-children parent))))))
+       (if paren
+           (cons (treesit-node-start paren) 1)
+         (cons (treesit-node-start aux) 0)))))))
+
+
+(defun f90-ts--align-op-expr-operand-anoffs-op (loc items-plist)
+  "Return (OPERAND . 0) for each operand on previous lines of LOC.
+These align an operator starting the line with the start of an operand.
+They are secondary candidates (keep and rotate), see
+`f90-ts--align-other-op-expr-operand'.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
+the align-list-other family."
+  (when (and (alist-get 'node loc)
+             (memq (alist-get 'nsym loc)
+                   '(operator-math
+                     operator-logical
+                     operator-relation
+                     operator)))
+    (cl-loop
+     for (n . sym) in (plist-get items-plist :prev)
+     when (memq sym '(named operator-unary-minusplus
+                            operator-unary-other))
+     collect (cons n 0))))
+
+
+(defun f90-ts--align-op-expr-operand-first (loc items-plist)
+  "Return (OPERAND . 0) for the leftmost operand on previous lines of LOC.
+Applies to an operator starting the line if the operator expression itself
+starts on a continued line (no items on the head line), so that the operator
+is aligned with the start of the first operand:
+
+  x = dot_product(a, &
+                  (v1  .cross.  v2) &
+                  + (v2  .cross.  v3))
+
+The right-operand candidates of `f90-ts--align-op-expr-operand-anoffs-rhs' are
+preferred, if there are any suitable present.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
+the align-list-other family."
+  (when (and (alist-get 'node loc)
+             (memq (alist-get 'nsym loc)
+                   '(operator-math operator-logical
+                     operator-relation operator))
+             (null (plist-get items-plist :head)))
+    (when-let* ((operands
+                 (cl-loop for (n . sym) in (plist-get items-plist :prev)
+                          when (memq sym '(named operator-unary-minusplus
+                                           operator-unary-other))
+                          collect (cons n 0))))
+      (f90-ts--align-smallest-anoff operands))))
+
+
+(defun f90-ts--align-other-op-expr-operand (context loc items-plist)
+  "Return the alignment choice for operator-expression contexts.
+Extend the choice of `f90-ts--align-other-op-expr' by the candidates
+`f90-ts--align-op-expr-operand-anoffs-rhs', which align the right operand
+of a binary operator starting the line with the operands on earlier lines.
+
+The candidate with the smallest column (the one aligning with the leftmost
+operand) becomes the default (primary position), unless an earlier
+compatible operator exists, see `f90-ts--align-anchor-offset'.  The former
+default of the context and the other operand candidates are kept as further
+candidates.
+
+CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
+the align-list-other family."
+  (let* ((choice     (or (f90-ts--align-other-op-expr context loc items-plist)
+                         (f90-ts--align-choice-create)))
+         (aux        (cdr context))
+         (min-col    (f90-ts--align-op-expr-min-col aux))
+         (anoffs-rhs (f90-ts--align-op-expr-operand-anoffs-rhs loc items-plist min-col))
+         (anoffs-op  (f90-ts--align-op-expr-operand-anoffs-op loc items-plist))
+         (primary    (or (and anoffs-rhs
+                              (f90-ts--align-smallest-anoff anoffs-rhs))
+                         (and (null (plist-get items-plist :head))
+                              anoffs-op
+                              (f90-ts--align-smallest-anoff anoffs-op))))
+         (default    (f90-ts--align-choice-default choice)))
+    (f90-ts--align-choice-create
+     :default   (or primary default)
+     :sym-items (f90-ts--align-choice-sym-items choice)
+     :others    (append (and default (list default))
+                        (f90-ts--align-choice-others choice)
+                        anoffs-rhs
+                        anoffs-op))))
+
+
 (defun f90-ts--align-other-case-head-comment (open-paren)
   "Return the last comment on the line of OPEN-PAREN of a case statement.
 Only nodes following OPEN-PAREN are considered.  The comment is either a
@@ -2985,7 +3152,7 @@ Finally use VARIANT to select one pair to align with."
 ;; position are used
 (defconst f90-ts--align-list-context-properties
   (let ((expr-prop        '(:get-isyms-fn f90-ts--align-isyms-op-expr
-                            :get-other-fn f90-ts--align-other-op-expr))
+                            :get-other-fn f90-ts--align-other-op-expr-operand))
         (paren-prop       '(:get-isyms-fn f90-ts--align-isyms-children-no-paren
                             :get-other-fn f90-ts--align-other-paren))
         (bind-prop        '(:get-isyms-fn f90-ts--align-isyms-children2))

@@ -14,10 +14,11 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 ### Changelog (recent)
 
 **11-2026**
+- Alignment of rhs-operands in operator expressions added.
 - Support for tree-sitter core 0.22.6 (for example used by Debian) added.
   The bugs within the core library and particularly this version are a
   nightmare and some workarounds might be pretty slow. See
-  `f90-ts--indent-full-reparse' for more details. Please report any problems!
+  `f90-ts--indent-full-reparse` for more details. Please report any problems!
 - Alignment rules added for:
   * io item lists,
   * result keyword for functions,
@@ -46,8 +47,8 @@ For a comprehensive overview see [MANUAL.md](MANUAL.md).
 **10-2026**
 - Extend/reduce variants for mark region operations based on siblings
   (first, last, previous, next) added.
-- Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel with a
-  table of content of a f90 buffer, see `MANUAL.md` for details.  This
+- Package f90-ts-nav replaced by improved f90-ts-toc providing a side panel
+  with a table of content of a f90 buffer, see `MANUAL.md` for details.  This
   optional package requires its own use-package statement.
 - Alignment rules for improved indentation of variable declarations with
   initialisation added.
@@ -304,9 +305,9 @@ When reporting a bug, please include a small code snippet, showing the issue or 
 There are a number of features still missing or incomplete.
 The following list provides features planned for implementation (somewhat ordered by priority):
 
-- More list contexts for alignment in continued lines.
-  There are a number of list like contexts, which are not yet supported, but for which proper
-  alignment would be nice.
+- Avoid line number computation in indentation engine if possible (performance).
+- Add rules for some remaining list contexts for alignment in continued lines.
+- Add new features to TOC side panel buffer.
 - Fill operations with lower column width (before joining).
 - Fill operation similar to `f90-fill-paragraph`. In conjunction with mark operations: determine interesting
   nodes within tree as region (like: statements, structure block, subroutine/function level).
