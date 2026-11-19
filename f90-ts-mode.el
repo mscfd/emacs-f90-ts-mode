@@ -33,6 +33,11 @@
 ;;
 ;; Changelog (recent):
 ;; [11-2026]
+;;   - Support for tree-sitter core 0.22.6 (for example used by Debian) added.
+;;     The bugs within the core library and particularly this version are a
+;;     nightmare and some workarounds might be pretty slow.  See
+;;     `f90-ts--indent-full-reparse' for more details.
+;;     Please report any problems!
 ;;   - Alignment rules added for:
 ;;     * io item lists,
 ;;     * result keyword for functions,
@@ -207,6 +212,10 @@ source files, based on Emacs's built-in tree-sitter support
 Changelog (recent):
 
 [11-2026]
+- Support for tree-sitter core 0.22.6 (for example used by Debian) added.
+  The bugs within the core library and particularly this version are a
+  nightmare and some workarounds might be pretty slow. See
+  `f90-ts--indent-full-reparse' for more details. Please report any problems!
 - Alignment rules added for:
   * io item lists,
   * result keyword for functions,
@@ -748,7 +757,7 @@ restart Emacs after installing."
 ;;;-----------------------------------------------------------------------------
 
 ;;;###autoload
-(define-derived-mode f90-ts-mode prog-mode "F90[TS]"
+(define-derived-mode f90-ts-mode prog-mode "F90-TS"
   "Major mode for editing Fortran 90+ files, using tree-sitter library."
   :group 'f90-ts
   :syntax-table f90-ts-mode-syntax-table
@@ -765,6 +774,12 @@ restart Emacs after installing."
      (concat "Tree-sitter parser for 'fortran not ready. "
              "Run `M-x treesit-install-language-grammar RET fortran RET' "
              "or ensure treesit-language-source-alist points to a built grammar.")))
+
+  ;; dispatch the region reparse workaround on probed core library
+  ;; behavior (lazy, because the probe below activates `f90-ts-mode'
+  ;; in temporary buffers, which is only possible once the mode
+  ;; function is defined)
+  (f90-ts--install-indent-reparse-workaround)
 
   ;; set font-lock feature list
   (setq-local treesit-font-lock-feature-list
@@ -804,9 +819,7 @@ restart Emacs after installing."
 
   ;;(setq-local treesit--font-lock-verbose t)
   ;;(setq-local treesit--indent-verbose t)
-
-  ;; provide mode name
-  (setq-local mode-name "F90-TS"))
+  )
 
 
 ;;;-----------------------------------------------------------------------------

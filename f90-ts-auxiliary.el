@@ -826,9 +826,10 @@ Querying with [POS-1,POS) gives the expected answer."
                   (lambda (n) (and (treesit-node-check n 'named)
                                    (f90-ts--node-span-p n beg end))))))
     ;; get the first leaf, descend the first child until a leaf is reached
-    (cl-loop for current = sparse then (car (cdr current))
-             while (cdr current)
-             finally return (car current))))
+    (cl-loop
+     for current = sparse then (car (cdr current))
+     while (cdr current)
+     finally return (car current))))
 
 
 (defun f90-ts--largest-node-same-span (node)
