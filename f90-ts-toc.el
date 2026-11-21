@@ -186,7 +186,7 @@ marked by `f90-ts-toc-position-between-face'."
 
 
 (defface f90-ts-toc-position-between-face
-  '((t :underline (:color "red" :style double-line :position 0)))
+  '((t :underline (:color "red" :style wave :position 0)))
   "Face for the position of the source buffer between two entries.
 It is only used if the filter hides the entry of point in the source buffer,
 and replaces `f90-ts-toc-position-face' in that case.  It is applied by an
