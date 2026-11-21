@@ -1485,12 +1485,53 @@ which is represented as a string_content."
 ;;++++++++++++++
 ;; additional anchor for aligned lists:
 
-;; The :get-other-fn functions of a list context are called as
+;; The :get-other-fn functions of a list context (align-other funciton family)
+;; and prefixed with `f90-ts--align-other-*', are called as
 ;;
-;;   (FN CONTEXT LOC ITEMS-PLIST)
+;;   (FN CONTEXT LOC ITEMS)
 ;;
 ;; and return an alignment choice, see `f90-ts--align-choice', or nil, which is
 ;; the same as `(f90-ts--align-choice-create)'.
+;;
+;; The arguments CONTEXT and LOC are documented in the docstring of
+;; `f90-ts--align-anoff-other', which is the only caller.  ITEMS is the struct
+;; `f90-ts--align-items', created by `f90-ts--align-anoff-items'.
+
+(cl-defstruct (f90-ts--align-items
+               (:constructor f90-ts--align-items-create)
+               (:copier nil))
+  "Items of a list context before the current line, and input of :get-other-fn
+functions.  The items are those of the list context found before the line
+at LOC, as selected by the :get-isyms-fn function of the list context, see
+`f90-ts--align-anoff-other'.  Items are never on the current line or later.
+Continuation symbols are dropped.  A list is nil if there are no such items.
+The slots are
+
+`sym'   ANOFFs of the items whose node symbol is compatible with the one at
+        LOC, see `f90-ts--align-nsym-compatible-p'.  These are the compatible
+        items referred to by the slot `sym-items' of the returned choice.
+        They are added to the candidates by the caller of the :get-other-fn
+        function, so they need not be repeated in `others'; the list is nil
+        if LOC has no node.
+`prev'  All items, as list of (NODE . NSYM) with the node symbol NSYM,
+        without offset.
+`head'  The ANOFFs of the items on the head line, without comments and
+        without auxiliary context nodes (\"=\", \"(\", \",\").
+`tail'  The ANOFFs of the items after the head line, without comments, where
+        operator expressions are replaced by their operands.
+
+ANOFFs are conses (NODE . OFFSET), see `f90-ts--align-choice'.  In `sym',
+`head' and `tail' the item nodes are anchors and OFFSET is computed by
+`f90-ts--align-nsym-offset' relative to the node at LOC: it is 0, except for
+unary minus/plus items paired with other items, where it compensates the sign.
+The items in `prev' carry no offset.
+
+The struct is created in `f90-ts--align-anoff-items'.  The slots are meant to
+be read only, :get-other-fn functions must not modify them."
+  (sym nil)
+  (prev nil)
+  (head nil)
+  (tail nil))
 
 (cl-defstruct (f90-ts--align-choice
                (:constructor f90-ts--align-choice-create)
@@ -1568,7 +1609,7 @@ is a node (in general it is a node or a buffer position) and offset is 0."
 
 
 (defun f90-ts--align-other-paren-expr-core
-    (node-sym node-lead start-lead offset-lead indent-at-lead items-plist)
+    (node-sym node-lead start-lead offset-lead indent-at-lead items)
   "Return the alignment choice shared by paren and op-expr contexts.
 The lead node is the token the continuation lines are positioned relative
 to: the opening parenthesis for paren contexts, and the preceding \"=\", \"(\"
@@ -1606,9 +1647,9 @@ parenthesis the hanging position is primary if an item is left of COL-LEAD,
 otherwise the aligned position.
 
 NODE-SYM is the nsym of the current node, NODE-LEAD the lead node (for its
-column), ITEMS-PLIST the items lists from `f90-ts--align-anoff-items'."
-  (let* ((items-head (plist-get items-plist :head))
-         (items-tail (plist-get items-plist :tail))
+column), ITEMS the `f90-ts--align-items' struct of the list context."
+  (let* ((items-head (f90-ts--align-items-head items))
+         (items-tail (f90-ts--align-items-tail items))
          (col-min    (f90-ts--align-smallest-column items-tail))
          (col-lead   (f90-ts--continued-line-cache-get-col (cons node-lead 0)))
          (anoff-lead (cons start-lead offset-lead))
@@ -1680,12 +1721,11 @@ anything else: 0."
     (_ 0)))
 
 
-(defun f90-ts--align-other-paren (context loc items-plist)
+(defun f90-ts--align-other-paren (context loc items)
   "Return the alignment choice for parenthesized list contexts.
 See `f90-ts--align-other-paren-expr-core' for the shared logic.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family.
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'.
 The opening parenthesis is the first parenthesis child of the context."
   (cl-assert (f90-ts--node-type-p (car context)
                                   '("parenthesized_expression"
@@ -1696,7 +1736,7 @@ The opening parenthesis is the first parenthesis child of the context."
                                     "concurrent_header"
                                     "concurrent_locality"))
              nil
-             "align-list-other-paren: wrong context, got '%s'"
+             "wrong context, got '%s'"
              (car context))
   (let* ((list-context    (car context))
          (node-sym        (alist-get 'nsym loc))
@@ -1712,10 +1752,10 @@ The opening parenthesis is the first parenthesis child of the context."
          (offset-paren    (+ (1- (length (treesit-node-text open-paren)))
                              (f90-ts--align-other-paren-offset node-sym))))
     (f90-ts--align-other-paren-expr-core
-     node-sym open-paren start-paren offset-paren indent-at-paren items-plist)))
+     node-sym open-paren start-paren offset-paren indent-at-paren items)))
 
 
-(defun f90-ts--align-other-concurrent-statement (context _loc _items-plist)
+(defun f90-ts--align-other-concurrent-statement (context _loc _items)
   "Return the alignment choice for the list context \"concurrent_statement\".
 The items are the locality specifiers following the header, like
 
@@ -1731,8 +1771,7 @@ a candidate, the earlier specifiers on previous lines are candidates as
 well (`sym-items' is `candidate'), but they are not primary.  This applies to
 comments and continuation symbols on continued lines, too.
 
-CONTEXT is as described in the calling convention of the align-list-other
-family."
+CONTEXT is described in `f90-ts--align-anoff-other'."
   (let* ((list-context (car context))
          (header (seq-find (lambda (n)
                              (f90-ts--node-type-p n "concurrent_header"))
@@ -1745,13 +1784,12 @@ family."
                                    :sym-items 'candidate))))
 
 
-(defun f90-ts--align-other-op-expr (context loc items-plist)
+(defun f90-ts--align-other-op-expr (context loc items)
   "Return the alignment choice for operator-expression contexts.
 There is only something to add if there is an auxiliary context.
 See `f90-ts--align-other-paren-expr-core' for the shared logic.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (cl-assert (f90-ts--node-op-expr-p (car context))
              nil "wrong context, expected some op-expr, got '%s'" (car context))
   (when-let* ((aux-context (cdr context)))
@@ -1768,7 +1806,174 @@ the align-list-other family."
            (offset-aux    (f90-ts--align-other-op-expr-offset-aux psib-type
                                                                   node-sym)))
       (f90-ts--align-other-paren-expr-core
-       node-sym aux-context start-aux offset-aux indent-at-aux items-plist))))
+       node-sym aux-context start-aux offset-aux indent-at-aux items))))
+
+
+(defun f90-ts--align-op-expr-operand-anoffs-rhs (loc items min-col)
+  "Return anchor-offset pairs aligning the right operand with earlier operands.
+This is the binary operator analog of the unary minus handling in
+`f90-ts--align-nsym-offset'.  It applies if the node at LOC is a binary
+operator starting the line and its right operand follows on the same line:
+
+  x = dot_product(a,   (v(:,1)  .cross.  v(:,2)) &
+                     + (v(:,2)  .cross.  v(:,3)))
+
+There is one pair for each operand (`named' item in slot `prev' of ITEMS) on a
+previous line, so that for a + b + c on the head line, the right operand d
+of a following \"+ d\" can be aligned with a, b or c.  The shape of the binary
+tree does not matter, as the chain is flattened by
+`f90-ts--align-expand-op-expr'.
+
+The offset is minus the distance between the operator and its right operand as
+found on the current line, so the result does not depend on the width of the
+operator, nor on the blanks after it.  If an operand is a unary minus or plus,
+its argument is used, for the left operands as well as for the right operand,
+so that the arguments are aligned, as in a + -b followed by + -c with c
+aligned with b.
+Candidates whose final columns are smaller than MIN-COL are dropped.
+
+Return nil if the current node is not a binary operator, if the right operand
+is not on the same line, or if there is no operand on previous lines."
+  (let ((node (alist-get 'node loc))
+        (nsym (alist-get 'nsym loc)))
+    (when (and node
+               (memq nsym '(operator-math operator-logical
+                            operator-relation operator)))
+      (let ((rhs (treesit-node-next-sibling node)))
+        (when (and rhs
+                   (not (f90-ts--node-type-p rhs '("&" "comment")))
+                   (f90-ts--same-line-p (treesit-node-start node)
+                                        (treesit-node-start rhs)))
+          (let ((delta-op (+ (- (treesit-node-start rhs)
+                                (treesit-node-start node))
+                             (if (eq (f90-ts--align-node-symbol rhs)
+                                     'operator-unary-minusplus)
+                                 (or (f90-ts--align-unary-arg-delta rhs) 0)
+                               0))))
+            (cl-loop
+             for (n . sym) in (f90-ts--align-items-prev items)
+             for anoff = (when (memq sym '(named operator-unary-minusplus
+                                                 operator-unary-other))
+                           (cons n
+                                 (- (if (eq sym 'operator-unary-minusplus)
+                                        (or (f90-ts--align-unary-arg-delta n) 0)
+                                      0)
+                                    delta-op)))
+             when (and anoff
+                       (>= (f90-ts--continued-line-cache-get-col anoff) min-col))
+             collect anoff)))))))
+
+
+(defun f90-ts--align-op-expr-min-col (aux)
+  "Return the smallest column an operator starting a line may have.
+AUX is the auxiliary context of the operator expression or nil.
+For \"=\" this is the column of the assignment, for \"(\" and \",\" it is the
+column right of the enclosing opening parenthesis (the comma is not the left
+limit, as it may sit far right of the parenthesis).  Without an auxiliary
+context it is the start of the statement."
+  (f90-ts--continued-line-cache-get-col
+   (cond
+    ((null aux)
+     (cons (treesit-node-start (f90-ts--indent-prev-stmt-first)) 0))
+
+    ((f90-ts--node-type-p aux "=")
+     (cons (treesit-node-start aux) 0))
+
+    (t
+     (let ((paren (if (eq (f90-ts--align-node-symbol aux) 'parenthesis)
+                      aux
+                    (when-let* ((parent (treesit-node-parent aux)))
+                      (seq-find (lambda (n)
+                                  (eq (f90-ts--align-node-symbol n)
+                                      'parenthesis))
+                                (treesit-node-children parent))))))
+       (if paren
+           (cons (treesit-node-start paren) 1)
+         (cons (treesit-node-start aux) 0)))))))
+
+
+(defun f90-ts--align-op-expr-operand-anoffs-op (loc items)
+  "Return (OPERAND . 0) for each operand on previous lines of LOC.
+These align an operator starting the line with the start of an operand.
+They are secondary candidates (keep and rotate), see
+`f90-ts--align-other-op-expr-operand'.
+
+CONTEXT, LOC and ITEMS are as described in the calling convention of
+the align-list-other family."
+  (when (and (alist-get 'node loc)
+             (memq (alist-get 'nsym loc)
+                   '(operator-math
+                     operator-logical
+                     operator-relation
+                     operator)))
+    (cl-loop
+     for (n . sym) in (f90-ts--align-items-prev items)
+     when (memq sym '(named operator-unary-minusplus
+                            operator-unary-other))
+     collect (cons n 0))))
+
+
+(defun f90-ts--align-op-expr-operand-first (loc items)
+  "Return (OPERAND . 0) for the leftmost operand on previous lines of LOC.
+Applies to an operator starting the line if the operator expression itself
+starts on a continued line (no items on the head line), so that the operator
+is aligned with the start of the first operand:
+
+  x = dot_product(a, &
+                  (v1  .cross.  v2) &
+                  + (v2  .cross.  v3))
+
+The right-operand candidates of `f90-ts--align-op-expr-operand-anoffs-rhs' are
+preferred, if there are any suitable present.
+
+CONTEXT, LOC and ITEMS are as described in the calling convention of
+the align-list-other family."
+  (when (and (alist-get 'node loc)
+             (memq (alist-get 'nsym loc)
+                   '(operator-math operator-logical
+                     operator-relation operator))
+             (null (f90-ts--align-items-head items)))
+    (when-let* ((operands
+                 (cl-loop for (n . sym) in (f90-ts--align-items-prev items)
+                          when (memq sym '(named operator-unary-minusplus
+                                           operator-unary-other))
+                          collect (cons n 0))))
+      (f90-ts--align-smallest-anoff operands))))
+
+
+(defun f90-ts--align-other-op-expr-operand (context loc items)
+  "Return the alignment choice for operator-expression contexts.
+Extend the choice of `f90-ts--align-other-op-expr' by the candidates
+`f90-ts--align-op-expr-operand-anoffs-rhs', which align the right operand
+of a binary operator starting the line with the operands on earlier lines.
+
+The candidate with the smallest column (the one aligning with the leftmost
+operand) becomes the default (primary position), unless an earlier
+compatible operator exists, see `f90-ts--align-anchor-offset'.  The former
+default of the context and the other operand candidates are kept as further
+candidates.
+
+CONTEXT, LOC and ITEMS are as described in the calling convention of
+the align-list-other family."
+  (let* ((choice     (or (f90-ts--align-other-op-expr context loc items)
+                         (f90-ts--align-choice-create)))
+         (aux        (cdr context))
+         (min-col    (f90-ts--align-op-expr-min-col aux))
+         (anoffs-rhs (f90-ts--align-op-expr-operand-anoffs-rhs loc items min-col))
+         (anoffs-op  (f90-ts--align-op-expr-operand-anoffs-op loc items))
+         (primary    (or (and anoffs-rhs
+                              (f90-ts--align-smallest-anoff anoffs-rhs))
+                         (and (null (f90-ts--align-items-head items))
+                              anoffs-op
+                              (f90-ts--align-smallest-anoff anoffs-op))))
+         (default    (f90-ts--align-choice-default choice)))
+    (f90-ts--align-choice-create
+     :default   (or primary default)
+     :sym-items (f90-ts--align-choice-sym-items choice)
+     :others    (append (and default (list default))
+                        (f90-ts--align-choice-others choice)
+                        anoffs-rhs
+                        anoffs-op))))
 
 
 (defun f90-ts--align-other-case-head-comment (open-paren)
@@ -1794,7 +1999,7 @@ line.  Return nil if there is no such comment."
        finally return (car (last comments))))))
 
 
-(defun f90-ts--align-other-case (context loc items-plist)
+(defun f90-ts--align-other-case (context loc items)
   "Return the alignment choice for the list context \"case_statement\".
 The list is the one in \"case (a, b, c)\", restricted to the header by
 `f90-ts--align-list-context-other-case-stmt'.  Unlike for argument lists, the
@@ -1806,11 +2011,12 @@ A comment can additionally be aligned with a trailing comment on the line of the
 opening parenthesis, which is relevant if the first item is on a later line.
 See `f90-ts--align-other-paren-expr-core' for the shared logic.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (let ((list-context (car context)))
     (cl-assert (f90-ts--node-type-p list-context "case_statement")
-               nil "align-list-other-case: wrong context, got '%s'" list-context)
+               nil
+               "wrong context, got '%s'"
+               list-context)
     (when-let* ((open-paren (cdr context))
                 ((f90-ts--node-type-p open-paren "(")))
       (let* ((node            (alist-get 'node loc))
@@ -1821,7 +2027,7 @@ the align-list-other family."
                                  (f90-ts--align-other-paren-offset node-sym)))
              (other (f90-ts--align-other-paren-expr-core
                      node-sym open-paren start-paren offset-paren
-                     indent-at-paren items-plist))
+                     indent-at-paren items))
              (head-comment (and (eq node-sym 'comment)
                                 (f90-ts--align-other-case-head-comment open-paren))))
         ;; comment: further candidate is the trailing comment on the head line
@@ -1835,15 +2041,14 @@ the align-list-other family."
           other)))))
 
 
-(defun f90-ts--align-other-association (context loc _items-plist)
+(defun f90-ts--align-other-association (context loc _items)
   "Return the alignment choice for the list context \"association_list\".
 For association lists (associate(x => y, ...)), the primary position is to
 align with the initial opening parenthesis plus some offset.  Line breaks
 within an association, like before or after \"=>\", are handled by the context
 of the association itself, see `f90-ts--align-other-assign-like'.
 
-CONTEXT and LOC are as described in the calling convention of the
-align-list-other family."
+CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
   ;; for association_list, there should always be the opening parenthesis
   (let* ((list-context (car context))
          (nsym (alist-get 'nsym loc))
@@ -1862,7 +2067,7 @@ align-list-other family."
                       )))))
 
 
-(defun f90-ts--align-other-entity-list (context _loc items-plist)
+(defun f90-ts--align-other-entity-list (context _loc items)
   "Return the alignment choice for lists of items aligned with each other.
 This is used for the list contexts \"included_items\", \"use_statement\",
 \"public_statement\", \"private_statement\" and \"procedure_statement\":
@@ -1879,8 +2084,7 @@ comments, use the first item before the current line as primary position.  If
 there is no such item yet, as in \"only: &\" followed by the first item, no
 primary is provided and the standard continued line position is used.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
-align-list-other family."
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (let ((list-context (car context)))
     (cl-assert (f90-ts--node-type-p list-context '("included_items"
                                                    "use_statement"
@@ -1889,7 +2093,7 @@ align-list-other family."
                                                    "procedure_statement"))
                nil "wrong context, got '%s'" list-context)
     (when-let* ((first-item (seq-find (lambda (ni) (eq (cdr ni) 'named))
-                                      (plist-get items-plist :prev))))
+                                      (f90-ts--align-items-prev items))))
       (f90-ts--align-choice-create :default (cons (car first-item) 0)))))
 
 
@@ -2002,7 +2206,7 @@ the default."
 
 ;; binding_list is "lhs => item, item, ..." (generic statement); the items
 ;; drop lhs and "=>", see `f90-ts--align-isyms-children2'.
-(defun f90-ts--align-other-binding-list (context _loc items-plist)
+(defun f90-ts--align-other-binding-list (context _loc items)
   "Return the alignment choice for the list context \"binding_list\".
 A binding list is the \"generic_name => name1, name2\" part of a generic
 statement.  As for init declarators, the symbol \"=>\" and the first rhs item
@@ -2020,17 +2224,16 @@ Later items align with earlier items, see `f90-ts--align-anchor-offset'.  The
 positions derived from the lhs are only used as long as there is no earlier rhs
 item.  Afterwards they are out of context.
 
-CONTEXT and ITEMS-PLIST are as described in the calling convention of the
-align-list-other family."
+CONTEXT and ITEMS are described in `f90-ts--align-anoff-other'."
   (let ((list-context (car context)))
     (cl-assert (f90-ts--node-type-p list-context "binding_list")
                nil "wrong context, got '%s'" list-context)
-    (if (plist-get items-plist :prev)
+    (if (f90-ts--align-items-prev items)
         (f90-ts--align-choice-create)
       (f90-ts--align-choice-lhs-rhs (treesit-node-child list-context 0 nil)))))
 
 
-(defun f90-ts--align-other-assign-like (context loc _items-plist)
+(defun f90-ts--align-other-assign-like (context loc _items)
   "Return the alignment choice for assign-like items.
 An assign-like item is \"lhs = rhs\" or \"lhs => rhs\", spread over several
 lines, see `f90-ts--align-assign-like-types'.  Examples:
@@ -2066,8 +2269,7 @@ For associations the opening parenthesis of the association list plus
 rhs items, as there is only one rhs.  Positions relative to the whole
 declaration or statement, like the one after \"::\", are not appropriate here.
 
-CONTEXT and LOC are as described in the calling convention of the
-align-list-other family."
+CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
   (let* ((item (car context))
          (anoffs-sym (f90-ts--align-assign-like-prev-symbols
                       item
@@ -2082,7 +2284,7 @@ align-list-other family."
      (f90-ts--align-assign-like-parent-anoff item))))
 
 
-(defun f90-ts--align-other-procedure (context loc items-plist)
+(defun f90-ts--align-other-procedure (context loc items)
   "Return the alignment choice for the list context \"procedure_statement\".
 Declarators and comments are aligned as for an entity list, see
 `f90-ts--align-other-entity-list'.  The symbol \"=>\" of a binding is only a
@@ -2090,13 +2292,12 @@ secondary position, like the \"=\" of init declarators in variable declarations:
 for the symbol the primary position is the standard continued line position,
 even if there are earlier symbols compatible with the current one.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of the
-align-list-other family."
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (cl-assert (f90-ts--node-type-p (car context) "procedure_statement")
              nil "wrong context, got '%s'" (car context))
   (if (eq (alist-get 'nsym loc) 'associate)
       (f90-ts--align-choice-create :sym-items 'candidate)
-    (f90-ts--align-other-entity-list context loc items-plist)))
+    (f90-ts--align-other-entity-list context loc items)))
 
 
 (defun f90-ts--align-anoff-node (node loc)
@@ -2112,7 +2313,7 @@ of NODE.  LOC provides the data of the current node."
          (cons node (f90-ts--align-node-symbol node)))))
 
 
-(defun f90-ts--align-other-extent (context loc _items-plist)
+(defun f90-ts--align-other-extent (context loc _items)
   "Return the alignment choice for extent specifier nodes.
 An extent specifier is \"lower:upper\" (optionally with a stride), spread
 over several lines.  Examples:
@@ -2140,8 +2341,7 @@ The default position is forced (`sym-items' is `candidate'), as there is no
 earlier item compatible with the current node, except for the upper bound if
 there is a stride.
 
-CONTEXT and LOC are as described in the calling convention of the
-align-list-other family."
+CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
   (let* ((list-context (car context))
          ;; lower bound, or colon if the lower bound is missing
          (left (treesit-node-child list-context 0 nil))
@@ -2155,7 +2355,7 @@ align-list-other family."
                                  :others    (list anoff-hang))))
 
 
-(defun f90-ts--align-other-control (context loc _items-plist)
+(defun f90-ts--align-other-control (context loc _items)
   "Return the alignment choice for loop control nodes.
 These are \"concurrent_control\" and \"triplet_spec\", like \"i = 1:n:2\", in
 the header of a do concurrent or forall statement.  The pattern is \"left
@@ -2178,8 +2378,7 @@ loop variable are further candidates.
 
 The default position is forced (`sym-items' is `candidate').
 
-CONTEXT and LOC are as described in the calling convention of the
-align-list-other family."
+CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
   (let* ((list-context (car context))
          (pos (alist-get 'pos loc))
          (symbol-p (eq (alist-get 'nsym loc) 'assignment))
@@ -2203,7 +2402,7 @@ align-list-other family."
      :others    (list anoff-hang anoff-left))))
 
 
-(defun f90-ts--align-other-string (context loc items-plist)
+(defun f90-ts--align-other-string (context loc items)
   "Return the alignment choice for string nodes.
 A string_literal consists of opening and closing quoting symbol,
 string_content, ampersand, quote escape character and comments.
@@ -2215,14 +2414,13 @@ If the node is a string_content (symbol `named') the escape nodes are
 candidates, and vice versa.  If there is nothing else, the first of these is
 the primary position.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (cl-assert (f90-ts--grammar-string-literal-decomposed-p)
              nil "wrong grammar, string_literal not decomposed by parser")
   (let* ((list-context (car context))
          (nsym (alist-get 'nsym loc))
          (open-quote (treesit-node-child list-context 0 nil))
-         (items-prev (plist-get items-plist :prev))
+         (items-prev (f90-ts--align-items-prev items))
          (anoff-quote (and (memq nsym '(ampersand comment quote))
                            (cons open-quote 0)))
          (opp-sym (pcase nsym
@@ -2271,7 +2469,7 @@ CUR-LINE, otherwise there is no candidate."
             (- f90-ts-indent-declaration (length "::"))))))
 
 
-(defun f90-ts--align-other-var-decl (context loc items-plist)
+(defun f90-ts--align-other-var-decl (context loc items)
   "Return the alignment choice for variable declarations.
 Car of CONTEXT is a variable_declaration.
 
@@ -2296,9 +2494,8 @@ be used:
 The column of the earlier \"=\" is still a candidate for rotation and
 keep-or-* variants.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
-  (let* ((items-head   (plist-get items-plist :head))
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
+  (let* ((items-head   (f90-ts--align-items-head items))
          (assignment-p (eq (alist-get 'nsym loc) 'assignment))
          (anoff-decl   (f90-ts--align-other-var-decl-anoff (car context)
                                                            (alist-get 'line loc))))
@@ -2317,7 +2514,7 @@ the align-list-other family."
 ;;++++++++++++++
 ;; list context: output_item_list, input_item_list
 
-(defun f90-ts--align-other-item-list (context loc _items-plist)
+(defun f90-ts--align-other-item-list (context loc _items)
   "Return the alignment choice for the item lists of print, write and read.
 These lists have no parentheses, but the statement head provides an anchor for
 a comma starting a continued line.  These are closing parenthesis of the
@@ -2333,8 +2530,7 @@ comma in the list on a previous line, otherwise the usual selection among
 earlier items takes over (the smallest column).  It is a candidate for
 rotation anyway.  There is nothing to add for other node symbols.
 
-CONTEXT and LOC are as described in the calling convention of the
-align-list-other family."
+CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
   (let ((list-context (car context)))
     (cl-assert (f90-ts--node-type-p list-context '("output_item_list"
                                                    "input_item_list"))
@@ -2383,7 +2579,7 @@ positions of the anchors, which must be nodes."
                 (treesit-node-start (car anoff2)))))))
 
 
-(defun f90-ts--align-other-array-commas (context loc items-plist other)
+(defun f90-ts--align-other-array-commas (context loc items other)
   "Return the alignment choice for alignment at commata, or nil if not applicable.
 This is used for array literals, if `f90-ts-indent-array-align' is `right',
 `both-left-primary' or `both-right-primary', the node at LOC is a direct child
@@ -2411,8 +2607,7 @@ For `left' there is nothing to do and nil is returned.
 
 OTHER is the choice returned by `f90-ts--align-other-paren'; its `others' (the
 positions relative to the opening bracket) are always kept as candidates.
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (when (memq f90-ts-indent-array-align '(right
                                           both-left-primary
                                           both-right-primary))
@@ -2428,7 +2623,7 @@ the align-list-other family."
                                      (+ (1- (length (treesit-node-text open)))
                                         f90-ts-indent-paren-default))))
                 (anoffs       (cl-loop
-                               for (n . s) in (plist-get items-plist :prev)
+                               for (n . s) in (f90-ts--align-items-prev items)
                                for anoff = (cons n (- delta))
                                when (and (eq s 'comma)
                                          (>= (f90-ts--continued-line-cache-get-col anoff)
@@ -2457,16 +2652,15 @@ the align-list-other family."
             :others    others)))))))
 
 
-(defun f90-ts--align-other-array (context loc items-plist)
+(defun f90-ts--align-other-array (context loc items)
   "Return the alignment choice for array literals.
 Use alignment at commata, if enabled and applicable, see
 `f90-ts--align-other-array-commas'.  Otherwise this is the same as for other
 parenthesized lists, see `f90-ts--align-other-paren'.
 
-CONTEXT, LOC and ITEMS-PLIST are as described in the calling convention of
-the align-list-other family."
-  (let ((other (f90-ts--align-other-paren context loc items-plist)))
-    (or (f90-ts--align-other-array-commas context loc items-plist other)
+CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
+  (let ((other (f90-ts--align-other-paren context loc items)))
+    (or (f90-ts--align-other-array-commas context loc items other)
         other)))
 
 
@@ -2494,7 +2688,7 @@ there are no parameters."
        (f90-ts--continued-line-cache-get-col (cons name 0)))))
 
 
-(defun f90-ts--align-other-function-result (context _loc _items-plist)
+(defun f90-ts--align-other-function-result (context _loc _items)
   "Return the alignment choice for the \"result\" keyword of a function statement.
 The function statement is provided as CONTEXT.
 The name of the function is the primary position, as in
@@ -2850,8 +3044,9 @@ See `f90-ts--align-expand-op-expr'.  Other items are kept."
 
 (defun f90-ts--align-anoff-items (loc context)
   "Filter relevant alignment anchors from CONTEXT.
-Return all list context items before location specified by LOC, and
-additionally further filtered by node symbol type.
+Return an `f90-ts--align-items' struct with all list context items before
+location specified by LOC, and additionally further filtered by node symbol
+type.
 
 LOC is an alist which provides the node and further location data.
 
@@ -2874,33 +3069,65 @@ the offset is assumed to be 0."
            cur-line)))
     (cl-flet ((select (items pred)
                 (f90-ts--align-nsym-filter-offset items pred loc)))
-      (list :sym  (when node-sym
-                    (select prev-sym
-                            (lambda (nsym)
-                              (f90-ts--align-nsym-compatible-p (cdr nsym)
-                                                               node-sym))))
-            :prev prev-sym
-            :head (select prev-sym
-                          (lambda (nsym)
-                            (f90-ts--align-items-head-p nsym cntxt-line)))
-            :tail (select prev-sym-expanded
-                          (lambda (nsym)
-                            (f90-ts--align-items-tail-p nsym cntxt-line)))))))
+      (f90-ts--align-items-create
+       :sym  (when node-sym
+               (select prev-sym
+                       (lambda (nsym)
+                         (f90-ts--align-nsym-compatible-p (cdr nsym)
+                                                          node-sym))))
+       :prev prev-sym
+       :head (select prev-sym
+                     (lambda (nsym)
+                       (f90-ts--align-items-head-p nsym cntxt-line)))
+       :tail (select prev-sym-expanded
+                     (lambda (nsym)
+                       (f90-ts--align-items-tail-p nsym cntxt-line)))))))
 
 
-(defun f90-ts--align-anoff-other (loc anoff-items-plist context)
+(defun f90-ts--align-anoff-other (loc items context)
   "Return the alignment choice (`f90-ts--align-choice') for CONTEXT.
-ANOFF-ITEMS-PLIST are some items lists of node items already obtained by
-`f90-ts--align-anoff-items'.
-These lists might be necessary to determine which primary and alternative
-alignment positions to select.
-LOC provides node and location data.
-If the list context has no :get-other-fn, or the function returns nil, return a
-choice with all defaults.
-See the calling convention of the align-list-other family."
+Call the :get-other-fn function of the list context, see
+`f90-ts--align-list-context-properties'.  If there is no such function, or if
+it returns nil, return a choice with all defaults.
+
+This docstring defines the calling convention shared by the align-other
+function family (functions prefixed by `f90-ts--align-other-*').  Such a
+function is called as
+
+  (FN CONTEXT LOC ITEMS)
+
+and returns an `f90-ts--align-choice' or nil.  It describes where the line at
+LOC may be aligned, in addition to the standard continued line position.  The
+final selection is done in `f90-ts--align-anchor-offset'.  The arguments are:
+
+CONTEXT is a cons (LIST-CONTEXT . AUX-CONTEXT) as returned by
+`f90-ts--align-list-context'.  The car is the list context node.  Its type is
+the key in `f90-ts--align-list-context-properties', by FN was selected.
+The cdr is an auxiliary node and nil in most cases.  It is the preceding \"=\",
+\"(\" or \",\" of an operator expression, and the opening parenthesis of a
+\"case_statement\".  It is not part of the list context node, but it is the
+lead node the continuation lines are positioned relative to, see
+`f90-ts--align-other-paren-expr-core'.  The head line of the list is the line
+of the auxiliary node if there is one, else of the list context node.
+
+LOC is the alist created by `f90-ts--align-location' for the line to be
+indented, with the keys
+  `node'  First node on the line, or nil for an empty line.
+  `pos'   Its start position (point for an empty line).
+  `col'   Its column before indentation.
+  `line'  Line number.
+  `nsym'  Its node symbol, see `f90-ts--align-node-symbol' (nil without node).
+
+ITEMS is the `f90-ts--align-items' struct with the items of the list context
+found before the line at LOC, see there for the slots.
+
+In general and depending on the context, not all input values are used.
+
+The returned choice may use the nodes in CONTEXT, LOC and ITEMS as
+anchors.  FN must not modify its arguments."
   (or (when-let* ((get-other (f90-ts--get-list-context-prop :get-other-fn
                                                             context)))
-        (funcall get-other context loc anoff-items-plist))
+        (funcall get-other context loc items))
       (f90-ts--align-choice-create)))
 
 
@@ -2915,17 +3142,10 @@ Finally use VARIANT to select one pair to align with."
   (let* ((node (alist-get 'node loc))
          ;; a comment aligned with the trailing comment on the previous line
          (anoff-comment (and node (f90-ts--trailing-comment-primary node)))
-         (anoff-items-plist (f90-ts--align-anoff-items loc
-                                                       context))
-         ;;(_ (progn
-         ;;     (f90-ts-log-msg :anoff "items-sym = %s"  (plist-get anoff-items-plist :sym))
-         ;;     (f90-ts-log-msg :anoff "items-prev = %s" (plist-get anoff-items-plist :prev))
-         ;;     (f90-ts-log-msg :anoff "items-head = %s" (plist-get anoff-items-plist :head))
-         ;;     (f90-ts-log-msg :anoff "items-tail = %s" (plist-get anoff-items-plist :tail))))
-         (anoff-items-sym (plist-get anoff-items-plist :sym))
-         (choice (f90-ts--align-anoff-other loc
-                                            anoff-items-plist
-                                            context))
+         (items (f90-ts--align-anoff-items loc context))
+         ;;(_ (f90-ts-log-msg :anoff "items = %S" items))
+         (anoff-items-sym (f90-ts--align-items-sym items))
+         (choice (f90-ts--align-anoff-other loc items context))
          (sym-items (f90-ts--align-choice-sym-items choice))
          ;; always add default continued offset position as possible anchor
          (anoff-continued (f90-ts--align-pstmt1-anoff))
@@ -2980,12 +3200,14 @@ Finally use VARIANT to select one pair to align with."
 ;; function which returns an alignment choice (`f90-ts--align-choice') with the
 ;; context specific default primary position, the role of compatible items
 ;; (selected by compatible nsym) and further candidate columns for alignment
-;; (see the calling convention above `f90-ts--align-choice');
+;; (see `f90-ts--align-anoff-other' for the calling convention);
 ;; if not provided, only compatible items and the standard continued line
-;; position are used
+;; position are used;
+;; the arguments and the calling convention of get-other functions are described
+;; in `f90-ts--align-anoff-other'
 (defconst f90-ts--align-list-context-properties
   (let ((expr-prop        '(:get-isyms-fn f90-ts--align-isyms-op-expr
-                            :get-other-fn f90-ts--align-other-op-expr))
+                            :get-other-fn f90-ts--align-other-op-expr-operand))
         (paren-prop       '(:get-isyms-fn f90-ts--align-isyms-children-no-paren
                             :get-other-fn f90-ts--align-other-paren))
         (bind-prop        '(:get-isyms-fn f90-ts--align-isyms-children2))
