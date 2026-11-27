@@ -4403,8 +4403,8 @@ If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
                        indent-node
                        (lambda (n) (= start (treesit-node-start n)))))
                 (end (treesit-node-end node)))
-      (when (= (line-number-at-pos)
-               (f90-ts--node-line node))
+      (when (f90-ts--same-line-p (point)
+                                 (treesit-node-start node))
         (when-let* ((node-struct (f90-ts--complete-smart-node node)))
           ;; a label inserted for a labelled do loop sits behind the
           ;; indentation, indent again to move it to the label column
