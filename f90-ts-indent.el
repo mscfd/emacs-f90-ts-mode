@@ -1678,8 +1678,7 @@ column), ITEMS the `f90-ts--align-items' struct of the list context."
         ;; as primary
         (t
          (cl-assert
-          (= (line-number-at-pos start-lead)
-             (line-number-at-pos indent-at-lead))
+          (f90-ts--same-line-p start-lead indent-at-lead)
           nil
           "start-lead and indent-at-lead must be on the same line, got lines %s and %s"
           (line-number-at-pos start-lead)
