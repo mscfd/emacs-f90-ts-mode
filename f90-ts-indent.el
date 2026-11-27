@@ -215,9 +215,16 @@ Use cached value or compute using cached node and parent."
 
 ;;++++++++++++++
 
+;; Marker life time: the only markers created by the continued-line cache are
+;; the BOL keys of its entries, and they are held exclusively by the
+;; buffer-local variable `f90-ts--continued-line-cache'.  That variable is
+;; reused for every continued statement.  Before it is overwritten or
+;; cleared, `f90-ts--continued-line-cache-reset' releases all its markers, so
+;; a marker never leaks.
+
 (defvar-local f90-ts--continued-line-cache nil
   "Cache for continued-line anchor indentation.
-The cache is an alist with entries (LINE . (COL-CACHED DELTA))
+The cache is an alist with entries (BOL . (COL-CACHED DELTA))
 for already indented lines of a continued statement.
 
 For alignment operations, we need node column numbers of nodes on
@@ -235,8 +242,16 @@ necessary to have consistent indentation across all previous lines
 The cache also stores COL-CACHED to detect, whether internal indentation
 buffer of `treesit-indent-region' has already been flushed for a line.
 
-As mentioned above, the cache is an alist (LINE . (COL-CACHED DELTA)),
-mapping buffer LINE numbers to COL-CACHED and DELTA, where:
+As mentioned above, the cache is an alist (BOL . (COL-CACHED DELTA)),
+mapping lines to COL-CACHED and DELTA, where:
+  BOL: marker at the beginning of the line.  Line numbers are not used
+       as keys, as they are expensive to compute.  Plain buffer positions
+       cannot be used either, as they become stale once the indentation
+       buffer of `treesit-indent-region' is flushed.  A marker at the
+       beginning of a line is moved along with such changes, as the
+       indentation is only ever modified behind it (insertion type nil
+       keeps the marker in front of text inserted at the line start).
+       Lines are compared by `f90-ts--continued-line-cache-find'.
   COL-CACHED: indentation column at cache time, used as flush detector:
               if current indentation at line == COL-CACHED, line is not yet
               flushed
@@ -263,14 +278,29 @@ If there is no entry, then return current indentation with DELTA=0.
 This is equivalent to no indentation at this line.  This is necessary for lines,
 which are part of a continued line but not part of the marked region currently
 processed.  For such lines, the returned value makes sense."
-  (if-let* ((line (line-number-at-pos pos))
-            (entry (assq line f90-ts--continued-line-cache)))
+  (if-let* ((entry (f90-ts--continued-line-cache-find pos)))
       (cdr entry)
     (list (f90-ts--indentation-at-pos pos) 0)))
 
 
+(defun f90-ts--continued-line-cache-find (pos)
+  "Return the cache entry for the line at POS, or nil.
+Entries are keyed by markers at the beginning of line, which are compared
+numerically with the beginning of the line at POS.  If there are several
+entries for a line, the most recently pushed one is returned."
+  (assoc (f90-ts--bol-at-pos pos) f90-ts--continued-line-cache #'=))
+
+
 (defun f90-ts--continued-line-cache-reset ()
-  "Reset the continued-line indentation cache."
+  "Reset the continued-line indentation cache.
+Release all markers held by the cache.
+All markers of the cache live in the buffer-local variable
+`f90-ts--continued-line-cache', which is reused.  Releasing them here, before
+the variable is cleared or refilled, ensures that no marker leaks."
+  (cl-loop
+   for entry in f90-ts--continued-line-cache
+   when (markerp (car entry))
+   do (set-marker (car entry) nil))
   (setq f90-ts--continued-line-cache nil))
 
 
@@ -281,12 +311,14 @@ POS is a position within that line.  Always store DELTA=0.
 If later on a flush is detected (actual column at indentation is different
 from COL-CACHED), the DELTA is computed and added to all other cached line.
 This is done in `f90-ts--continued-line-cache-update'."
+  ;; release the markers of the previous statement; the buffer-local cache
+  ;; variable is reused, so these are the only markers alive
   (f90-ts--continued-line-cache-reset)
   (unless f90-ts--align-continued-variant-tab
-    (let* ((col-cached (f90-ts--indentation-at-pos pos))
-           (line (line-number-at-pos pos)))
+    (let ((col-cached (f90-ts--indentation-at-pos pos))
+          (bol (copy-marker (f90-ts--bol-at-pos pos))))
       (setq f90-ts--continued-line-cache
-            (list (cons line (list col-cached 0)))))))
+            (list (cons bol (list col-cached 0)))))))
 
 
 (defun f90-ts--continued-line-cache-put-subsequent (pos anchor offset)
@@ -303,8 +335,8 @@ where delta-at-anchor-line is taken from the cache entry at the anchor line."
            (col-current  (f90-ts--indentation-at-pos pos))
            (col-new (+ anchor-col anchor-delta offset))
            (delta (- col-new col-current))
-           (line (line-number-at-pos pos)))
-      (push (cons line (list col-current delta))
+           (bol (copy-marker (f90-ts--bol-at-pos pos))))
+      (push (cons bol (list col-current delta))
             f90-ts--continued-line-cache))))
 
 
@@ -316,15 +348,15 @@ If not present, a fake entry with current indentation at first line
 and delta=0 is returned.  This happens if the region does not contain
 the first line."
   ;; cache is constructed by push, the last entry is the first line
-  (let ((first-line (line-number-at-pos first-pos))
+  (let ((first-bol (f90-ts--bol-at-pos first-pos))
         (entry (car (last f90-ts--continued-line-cache))))
     (if (and entry
-             (= (car entry) first-line))
+             (= (car entry) first-bol))
         ;; first line has been processed and is in the cache
         entry
       ;; construct a fake entry signalling that first line of continued
       ;; statement keeps it current indentation
-      (cons first-line
+      (cons first-bol
             (list (f90-ts--indentation-at-pos first-pos) 0)))))
 
 
@@ -336,7 +368,7 @@ Argument FIRST-POS is used to jump to this line efficiently (jumping
 to a line by line number is far more expensive)."
   (unless f90-ts--align-continued-variant-tab
     (let* ((first (f90-ts--continued-line-cache-get-first first-pos))
-           (first-line (car first))
+           (first-bol (car first))
            (first-col-cached (cadr first))
            (first-col-current (f90-ts--indentation-at-pos first-pos))
            (first-delta (- first-col-current first-col-cached)))
@@ -345,11 +377,11 @@ to a line by line number is far more expensive)."
       (when (/= first-col-cached first-col-current)
         (setq f90-ts--continued-line-cache
               (seq-map (lambda (entry)
-                         (let ((line (car entry))
+                         (let ((bol (car entry))
                                (col-cached (cadr entry))
                                (delta (caddr entry)))
-                           (cons line
-                                 (if (= line first-line)
+                           (cons bol
+                                 (if (= bol first-bol)
                                      (list first-col-current delta)
                                    (list col-cached (+ delta first-delta))))))
                        f90-ts--continued-line-cache))))))
@@ -385,8 +417,8 @@ and compensate a negative offset."
         ;;(f90-ts-log-msg :cachecol "col: cached, current = %s, %s" col-cached col-current)
         (cl-assert entry
                    nil
-                   "no entry for line in cache, line=%s, cache=%s"
-                   (line-number-at-pos pos) f90-ts--continued-line-cache)
+                   "no entry for line in cache, pos=%s, cache=%s"
+                   pos f90-ts--continued-line-cache)
         (max 0 (if (= col-cached col-current)
                    ;; not yet flushed
                    (+ col delta)
@@ -409,8 +441,8 @@ column to the original indentation."
            (col-current (f90-ts--indentation-at-pos pos)))
         (cl-assert entry
                    nil
-                   "no entry for line in cache, line=%s, cache=%s"
-                   (line-number-at-pos pos) f90-ts--continued-line-cache)
+                   "no entry for line in cache, pos=%s, cache=%s"
+                   pos f90-ts--continued-line-cache)
         (if (= col-cached col-current)
             ;; not yet flushed
             (- col delta)
@@ -4750,6 +4782,9 @@ part of a continued line, can be indented correctly."
               beg-marker end-marker)))
     (f90-ts--continued-line-cache-reset)
     (treesit-indent-region beg-marker end-marker)
+    ;; release the markers of the cache; they are held only by the
+    ;; buffer-local cache variable, so none is forgotten and thus leaking
+    (f90-ts--continued-line-cache-reset)
     ;; restore ampersands or labels: beg-marker still points to the
     ;; first line (insertion-type nil keeps it before any text
     ;; treesit-indent may have inserted at the start).

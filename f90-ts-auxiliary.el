@@ -136,6 +136,13 @@ NODE may be nil, in which case the result is nil."
     (current-indentation)))
 
 
+(defun f90-ts--bol-at-pos (pos)
+  "Return position at the beginning of the line at POS."
+  (save-excursion
+    (goto-char pos)
+    (pos-bol)))
+
+
 (defun f90-ts--line-number-at-node-or-pos (node)
   "Return line number of NODE or point.
 If NODE is non-nil, return line number at which start position is
