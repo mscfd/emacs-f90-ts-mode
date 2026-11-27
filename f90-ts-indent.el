@@ -4671,35 +4671,26 @@ Return a vector (one entry per line) of values as returned by
     (goto-char beg)
     (when (looking-at-p "[ \t]*$")
       (forward-line 1))
-    (let* ((line-beg (line-number-at-pos (point)))
-           (line-end-aux (line-number-at-pos end))
-           ;; if at beginning of line, this line should be excluded,
-           ;; this comes from the loop (while (< (point) end) ... (forward-line 1))
-           ;; used in indentation, but we need number of lines before hand, so we
-           ;; explicitely step back one line
-           (line-end (save-excursion
-                       (goto-char end)
-                       (if (bolp)
-                           (1- line-end-aux)
-                         line-end-aux)))
-           (n-lines  (- line-end line-beg -1))
-           (vec      (make-vector n-lines nil)))
-      ;; after blanking loop, each element of the vector vec will be one of:
+    ;; number of lines visited by a loop walking all lines with forward-line
+    ;; while point has not reached end; note that `count-lines' does not
+    ;; count the trailing empty "line" if END is at the beginning of a line
+    (let ((n-lines (cond ((< (point) end)
+                          (count-lines (point) end))
+                         ((and (= (point) end)
+                               (not (bolp)))
+                          1)
+                         (t
+                          0))))
+      ;; after blanking loop, each element of the returned vector will be one of:
       ;;   nil               – no amp, no label on the line
       ;;   (amp)             – had a leading & on the line
       ;;   (label . "12345") – had a statement label on the line
       ;;   (do-label . "12345") – had the label of a labelled do loop end (not blanked)
-      (cl-loop
-       for ix   from 0
-       for line from line-beg to line-end
-       do (progn
-            (cl-assert (= (line-number-at-pos (point)) line)
-                       nil
-                       "line mismatch at index %d: expected %d, got %d"
-                       ix line (line-number-at-pos (point)))
-            (aset vec ix (f90-ts--indent-blank-leading-amp-or-label-line))
-            (forward-line 1)))
-      vec)))
+      (vconcat
+       (cl-loop
+        repeat n-lines
+        collect (prog1 (f90-ts--indent-blank-leading-amp-or-label-line)
+                  (forward-line 1)))))))
 
 
 (defun f90-ts--indent-restore-leading-amp-or-label-region (beg vec)
@@ -4710,17 +4701,11 @@ VEC is a vector as returned by
     (goto-char beg)
     (when (looking-at-p "[ \t]*$")
       (forward-line 1))
-    (let ((line-beg (line-number-at-pos (point))))
-      (cl-loop
-       for line from line-beg
-       for amp-or-label across vec
-       do (progn
-            (cl-assert (= (line-number-at-pos (point)) line)
-                       nil
-                       "line mismatch at index %d: expected %d, got %d"
-                       (- line line-beg) line (line-number-at-pos (point)))
-            (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label)
-            (forward-line 1))))))
+    (cl-loop
+     for amp-or-label across vec
+     do (progn
+          (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label)
+          (forward-line 1)))))
 
 
 (defun f90-ts--indent-line-aux (&optional variant)
