@@ -111,10 +111,13 @@ But for thing queries, only the named structure node should match."
   (line-number-at-pos (treesit-node-start node)))
 
 
-(defun f90-ts--node-before-line-p (node line)
-  "Return non-nil if NODE is on a line strictly before LINE.
-NODE may be nil, in which case the result is nil."
-  (and node (< (f90-ts--node-line node) line)))
+(defun f90-ts--node-before-bol-p (node bol)
+  "Return non-nil if NODE start before position BOL.
+BOL is the beginning of a line, so NODE is on a line strictly before this
+line.  NODE may be nil, in which case the result is nil.  Positions are only
+comparable as long as the buffer is not modified."
+  (and node
+       (< (treesit-node-start node) bol)))
 
 
 (defun f90-ts--node-column (node)
@@ -141,6 +144,13 @@ NODE may be nil, in which case the result is nil."
   (save-excursion
     (goto-char pos)
     (pos-bol)))
+
+
+(defun f90-ts--eol-at-pos (pos)
+  "Return position of the end of the line at POS."
+  (save-excursion
+    (goto-char pos)
+    (pos-eol)))
 
 
 (defun f90-ts--line-number-at-node-or-pos (node)

@@ -1016,24 +1016,27 @@ offset to align the body and ignore the leading minus."
 
 (defun f90-ts--align-location (node)
   "Determine position related values for node.
-These are position (start of node or point), column at position, line number
-and symbol type at point (for deciding where to align).  If NODE is nil,
-then no relevant node is at point and point position is used instead.
-This is important for handling empty lines.
-The data is returned as an alist with keys `node', `pos', `col', `line'
-and `nsym'."
+These are position (start of node or point), column at position, beginning of
+the line at position and symbol type at point (for deciding where to align).
+If NODE is nil, then no relevant node is at point and point position is used
+instead.  This is important for handling empty lines.
+The data is returned as an alist with keys `node', `pos', `col', `bol'
+and `nsym'.  The value of `bol' is the position of the beginning of the line
+of `pos'.  Comparing it with node positions tells which nodes are on previous
+lines.  This is valid as long as the buffer is not modified, which holds while
+the indentation of a line is determined."
   (if node
       (list (cons 'node node)
             (cons 'pos  (treesit-node-start node))
             (cons 'col  (f90-ts--node-column node))
-            (cons 'line (f90-ts--node-line node))
+            (cons 'bol  (f90-ts--bol-at-pos (treesit-node-start node)))
             ;; decide which kind of (named or anonymous) nodes to filter
             ;; (argument, parentheses, comma, ampersend, etc)
             (cons 'nsym (f90-ts--align-node-symbol node)))
     (list (cons 'node nil)
           (cons 'pos  (point))
           (cons 'col  (f90-ts--column-number-at-pos (point)))
-          (cons 'line (line-number-at-pos))
+          (cons 'bol  (pos-bol))
           (cons 'nsym nil))))
 
 
@@ -2128,11 +2131,12 @@ CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
       (f90-ts--align-choice-create :default (cons (car first-item) 0)))))
 
 
-(defun f90-ts--align-assign-like-prev-symbols (item nsym line)
+(defun f90-ts--align-assign-like-prev-symbols (item nsym bol)
   "Return anoffs of earlier \"=\" or \"=>\" symbols of assign-like items.
 ITEM is an assign-like node.  Collect the assignment symbol of
 NSYM (`assignment': \"=\", `associate': \"=>\") of all assign-like siblings
-of ITEM which precede ITEM, and which are on a line before LINE.  Return a
+of ITEM which precede ITEM, and which are on a line before BOL (the beginning
+of the current line).  Return a
 list of pairs (node . 0), or nil for other values of NSYM."
   (let ((parent (treesit-node-parent item))
         (sym-type (pcase nsym
@@ -2146,7 +2150,7 @@ list of pairs (node . 0), or nil for other values of NSYM."
        append (cl-loop
                for c in (treesit-node-children n)
                when (and (f90-ts--node-type-p c sym-type)
-                         (f90-ts--node-before-line-p c line))
+                         (f90-ts--node-before-bol-p c bol))
                collect (cons c 0))))))
 
 
@@ -2305,7 +2309,7 @@ CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
          (anoffs-sym (f90-ts--align-assign-like-prev-symbols
                       item
                       (alist-get 'nsym loc)
-                      (alist-get 'line loc))))
+                      (alist-get 'bol loc))))
     (cl-assert (f90-ts--node-type-p item f90-ts--align-assign-like-types)
                nil "wrong context, got '%s'" item)
     (f90-ts--align-choice-lhs-rhs
@@ -2468,20 +2472,21 @@ CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
                                  :others  anoffs-opp)))
 
 
-(defun f90-ts--align-other-var-decl-anoff (decl cur-line)
-  "Return the alignment candidate anoff for DECL on line CUR-LINE, or nil.
+(defun f90-ts--align-other-var-decl-anoff (decl bol)
+  "Return the alignment candidate anoff for DECL, or nil.
+BOL is the beginning of the current line.
 DECL is a variable_declaration.  The candidate is the position of \"::\" plus
 `f90-ts-indent-declaration'.  If there is no \"::\", it is the end of the last
 type or attribute node minus the length of \"::\" plus
 `f90-ts-indent-declaration'.  In both cases the node must be on a line before
-CUR-LINE, otherwise there is no candidate."
+BOL, otherwise there is no candidate."
   (if-let* ((node-colons (treesit-search-subtree decl
                                                  "::"
                                                  nil ; search forward
                                                  t   ; include anonymous nodes
                                                  1   ; maximal depth of 1, search only children
                                                  )))
-      (when (< (f90-ts--node-line node-colons) cur-line)
+      (when (< (treesit-node-start node-colons) bol)
         ;; start of "::" plus f90-ts-indent-declaration
         (cons (treesit-node-start node-colons)
               f90-ts-indent-declaration))
@@ -2495,7 +2500,7 @@ CUR-LINE, otherwise there is no candidate."
                             t   ; only named nodes
                             1   ; maximal depth of 1, search only children
                             ))
-                ((< (f90-ts--node-line node-last) cur-line)))
+                ((< (treesit-node-start node-last) bol)))
       (cons (treesit-node-end node-last)
             (- f90-ts-indent-declaration (length "::"))))))
 
@@ -2529,7 +2534,7 @@ CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (let* ((items-head   (f90-ts--align-items-head items))
          (assignment-p (eq (alist-get 'nsym loc) 'assignment))
          (anoff-decl   (f90-ts--align-other-var-decl-anoff (car context)
-                                                           (alist-get 'line loc))))
+                                                           (alist-get 'bol loc))))
     (f90-ts--align-choice-create
      :default   (and items-head
                      (not assignment-p)
@@ -2752,19 +2757,20 @@ instead, and the name is only a secondary candidate:
 ;;++++++++++++++
 ;; list context: items and columns
 
-(defun f90-ts--align-filter-prev (items cur-line)
+(defun f90-ts--align-filter-prev (items bol)
   "Filter ITEMS by line number and remove most ampersands.
 For alignment purposes, only items on previous lines are relevant.
 
-The filter removes any items not before line CUR-LINE.  It also filters out
+The filter removes any items not before BOL, the beginning of the current
+line.  It also filters out
 trailing and virtual ampersand nodes, which are not relevant for alignment.
 Leading ampersands are removed during indentation, except for ampersands
 within strings, which we want to keep."
   (seq-filter
    ;; filter by line number, use only items on some previous line,
    ;; also drop continuation symbols, as these are not relevant for alignment
-   (lambda (n) (and (< (f90-ts--node-line n)
-                       cur-line)
+   (lambda (n) (and (< (treesit-node-start n)
+                       bol)
                     (or (not (f90-ts--node-type-p n "&"))
                         ;; accept a real leading ampersand
                         ;; (which appears within a string_literal)
@@ -3067,10 +3073,11 @@ See `f90-ts--align-expand-op-expr'.  Other items are kept."
               items 'list))
 
 
-(defun f90-ts--align-prev-nsym (items cur-line)
-  "Return ITEMS located before CUR-LINE, each attached to its node symbol."
+(defun f90-ts--align-prev-nsym (items bol)
+  "Return ITEMS located before BOL, each attached to its node symbol.
+BOL is the beginning of the current line."
   (f90-ts--align-attach-nsym
-   (f90-ts--align-filter-prev items cur-line)))
+   (f90-ts--align-filter-prev items bol)))
 
 
 (defun f90-ts--align-anoff-items (loc context)
@@ -3083,13 +3090,13 @@ LOC is an alist which provides the node and further location data.
 
 Note: for anchor-offset pairs extracted from CONTEXT nodes directly,
 the offset is assumed to be 0."
-  (let* ((cur-line (alist-get 'line loc))
+  (let* ((bol (alist-get 'bol loc))
          (cntxt-line (f90-ts--node-line (or (cdr context) (car context))))
          (node-sym (alist-get 'nsym loc))
          (get-items (f90-ts--get-list-context-prop :get-isyms-fn context))
          (items-all (when get-items
                       (funcall get-items context loc)))
-         (prev-sym (f90-ts--align-prev-nsym items-all cur-line))
+         (prev-sym (f90-ts--align-prev-nsym items-all bol))
          ;; the tail uses the operands of operator expressions among the
          ;; items, as a comma is considered just another operator composing
          ;; a tuple; otherwise "(1 + &\n 2 &\n )" has no tail items, as the
@@ -3097,7 +3104,7 @@ the offset is assumed to be 0."
          (prev-sym-expanded
           (f90-ts--align-prev-nsym
            (f90-ts--align-expand-items-op-expr items-all)
-           cur-line)))
+           bol)))
     (cl-flet ((select (items pred)
                 (f90-ts--align-nsym-filter-offset items pred loc)))
       (f90-ts--align-items-create
@@ -3146,7 +3153,7 @@ indented, with the keys
   `node'  First node on the line, or nil for an empty line.
   `pos'   Its start position (point for an empty line).
   `col'   Its column before indentation.
-  `line'  Line number.
+  `bol'   Start position of its line.
   `nsym'  Its node symbol, see `f90-ts--align-node-symbol' (nil without node).
 
 ITEMS is the `f90-ts--align-items' struct with the items of the list context
@@ -3164,8 +3171,8 @@ anchors.  FN must not modify its arguments."
 
 (defun f90-ts--align-anchor-offset (variant loc context)
   "Determine a pair (anchor offset) for alignment of a node in a list context.
-Location data is given as an alist LOC containing node, column, line number and
-node symbol.
+Location data is given as an alist LOC containing node, column, beginning of
+line and node symbol.
 To this end items on continued lines in the provided CONTEXT are
 determined.  Additionally further anchors (like the first node of previous
 statement by pstmt-1) are considered.
@@ -3345,7 +3352,8 @@ Lookup is done in alist `f90-ts--align-list-context-properties'."
 Node location data is given by LOC.
 This is the maximal node for any further subtree searches."
   (let* ((pos (alist-get 'pos loc))
-         (line (alist-get 'line loc))
+         (bol (alist-get 'bol loc))
+         (eol (f90-ts--eol-at-pos bol))
          (ps-key (f90-ts--indent-prev-stmt-keyword))
          (stmt-beg (treesit-node-start ps-key))
          (stmt-root (when (<= stmt-beg pos)
@@ -3354,8 +3362,9 @@ This is the maximal node for any further subtree searches."
       (treesit-search-subtree
        stmt-root
        (lambda (n)
-         (and (<= (f90-ts--node-line n) line)
-              (<= line (line-number-at-pos (treesit-node-end n)))
+         ;; node starts on or before the current line and ends on or after it
+         (and (<= (treesit-node-start n) eol)
+              (<= bol (treesit-node-end n))
               (assoc (treesit-node-type n)
                      f90-ts--align-list-context-properties)))))))
 
@@ -3365,7 +3374,7 @@ This is the maximal node for any further subtree searches."
 For expressions, we need to check node in LOC or PARENT (node might be
 nil).  But we do not need to ascend further."
   (let* ((node (alist-get 'node loc))
-         (line (alist-get 'line loc))
+         (bol (alist-get 'bol loc))
          (stmt-min
           (or (when (f90-ts--node-op-expr-p node)   node)
               (when (f90-ts--node-op-expr-p parent) parent)))
@@ -3378,22 +3387,22 @@ nil).  But we do not need to ascend further."
                          (f90-ts--prev-sibling-proper root-expr))))
     (cond
      ;; note: unlike the second and third clauses below, this one does
-     ;; not require root-expr itself to be before LINE; that is because an
+     ;; not require root-expr itself to be before BOL; that is because an
      ;; assignment or opening parenthesis immediately preceding the expression
      ;; is a valid head even when the expression starts on the current line
      ;; (for example the first continued line after "x = a + &").
-     ((and (f90-ts--node-before-line-p psib-expr line)
+     ((and (f90-ts--node-before-bol-p psib-expr bol)
            (f90-ts--node-type-p psib-expr '("=" "(")))
       (cons root-expr psib-expr))
 
-     ((and (f90-ts--node-before-line-p root-expr line)
-           (f90-ts--node-before-line-p psib-expr line)
+     ((and (f90-ts--node-before-bol-p root-expr bol)
+           (f90-ts--node-before-bol-p psib-expr bol)
            (f90-ts--node-type-p psib-expr ","))
       ;; if root-expr is on the same line, there must be a more appropriate
       ;; list context the commata belongs to, use commata as head
       (cons root-expr psib-expr))
 
-     ((f90-ts--node-before-line-p root-expr line)
+     ((f90-ts--node-before-bol-p root-expr bol)
       (cons root-expr nil)))))
 
 
@@ -3410,7 +3419,7 @@ of the context, which provides the head line of the list."
               (pos   (alist-get 'pos loc))
               ((< (treesit-node-start open) pos))
               ((<= pos (treesit-node-start close)))
-              ((< (f90-ts--node-line open) (alist-get 'line loc))))
+              ((< (treesit-node-start open) (alist-get 'bol loc))))
     (cons case-stmt open)))
 
 
@@ -3432,11 +3441,11 @@ This function returns nil as second auxiliary context node, except for a
 case statement, where it is the opening parenthesis."
   (let* ((node (or (alist-get 'node loc)
                    parent))
-         (line (alist-get 'line loc))
+         (bol (alist-get 'bol loc))
          (list-context (treesit-parent-until
                         node
                         (lambda (n)
-                          (and (< (f90-ts--node-line n) line)
+                          (and (< (treesit-node-start n) bol)
                                (assoc (treesit-node-type n)
                                       f90-ts--align-list-context-properties)))
                         t ; include node in search
@@ -3495,13 +3504,13 @@ be determined or variant prescribes the default continued line indentation."
       ;;(f90-ts-log-msg :anoff "loc = %s" loc)
       ;;(f90-ts-log-msg :anoff "context=%s" context)
       ;;(f90-ts-log-msg :anoff "parent = %s" parent)
-      (cl-assert (< (f90-ts--node-line (or (cdr context)
-                                           (car context)))
-                    (alist-get 'line loc))
+      (cl-assert (< (treesit-node-start (or (cdr context)
+                                            (car context)))
+                    (alist-get 'bol loc))
                  nil
-                 "context not on some previous line: context=%s, loc-line=%s"
+                 "context not on some previous line: context=%s, loc-bol=%s"
                  context
-                 (alist-get 'line loc))
+                 (alist-get 'bol loc))
       (f90-ts--align-anchor-offset variant
                                    loc
                                    context))))
@@ -4783,7 +4792,7 @@ part of a continued line, can be indented correctly."
     (f90-ts--continued-line-cache-reset)
     (treesit-indent-region beg-marker end-marker)
     ;; release the markers of the cache; they are held only by the
-    ;; buffer-local cache variable, so none is forgotten and thus leaking
+    ;; buffer-local cache variable, so none is left behind in the buffer
     (f90-ts--continued-line-cache-reset)
     ;; restore ampersands or labels: beg-marker still points to the
     ;; first line (insertion-type nil keeps it before any text
