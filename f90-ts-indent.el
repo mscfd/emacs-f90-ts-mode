@@ -1715,9 +1715,9 @@ column), ITEMS the `f90-ts--align-items' struct of the list context."
          (cl-assert
           (f90-ts--same-line-p start-lead indent-at-lead)
           nil
-          "start-lead and indent-at-lead must be on the same line, got lines %s and %s"
-          (line-number-at-pos start-lead)
-          (line-number-at-pos indent-at-lead))
+          "start-lead and indent-at-lead must be on the same line, got positions %s and %s"
+          start-lead
+          indent-at-lead)
          (if (< (+ indent-at-lead f90-ts-indent-continued)
                 (+ start-lead offset-lead))
              anoff-hang

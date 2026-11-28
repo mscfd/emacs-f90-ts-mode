@@ -106,11 +106,6 @@ But for thing queries, only the named structure node should match."
   (treesit-node-check node 'named))
 
 
-(defun f90-ts--node-line (node)
-  "Determine line number of start position of NODE."
-  (line-number-at-pos (treesit-node-start node)))
-
-
 (defun f90-ts--node-before-bol-p (node bol)
   "Return non-nil if NODE start before position BOL.
 BOL is the beginning of a line, so NODE is on a line strictly before this
@@ -245,11 +240,12 @@ and ends at the last non-blank character of NODE."
 
 (defun f90-ts--same-line-p (pos1 pos2)
   "Return non-nil if POS1 and POS2 are on the same line.
-The implementation using line numbers, which might be expensive
-to determine."
+The positions are compared with the end of the line of the smaller one,
+no line numbers are determined."
   (save-excursion
     (goto-char (min pos1 pos2))
-    (<= (max pos1 pos2) (pos-eol))))
+    (<= (max pos1 pos2)
+        (pos-eol))))
 
 
 (defun f90-ts--region-trimmed ()
@@ -949,8 +945,7 @@ reached only by walking back via `assumed_size'."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
-    (let* ((line (line-number-at-pos))
-           (on-node (treesit-node-on (point) (point)))
+    (let* ((on-node (treesit-node-on (point) (point)))
            (at-node (treesit-node-at (point))))
       (cond
        ((and on-node
@@ -968,7 +963,8 @@ reached only by walking back via `assumed_size'."
          finally return last))
 
        ((and at-node
-             (= line (f90-ts--node-line at-node)))
+             (f90-ts--same-line-p (point)
+                                  (treesit-node-start at-node)))
         at-node)))))
 
 
@@ -980,8 +976,7 @@ reached only by walking back via `assumed_size'."
     (skip-chars-backward " \t")
     (unless (bolp)
       (when-let* ((node (treesit-node-at (point))))
-        (when (= (line-number-at-pos pos)
-                 (f90-ts--node-line node))
+        (when (f90-ts--same-line-p pos (treesit-node-start node))
           node)))))
 
 
@@ -1123,8 +1118,8 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
                         first))
                (next (treesit-node-next-sibling label)))
           (if (and next
-                   (= (f90-ts--node-line first)
-                      (f90-ts--node-line next)))
+                   (f90-ts--same-line-p (treesit-node-start first)
+                                        (treesit-node-start next)))
               ;; retrieve the leaf node starting at next
               (treesit-node-at (treesit-node-start next))
             first))))))
@@ -1217,8 +1212,7 @@ by `f90-ts--last-node-on-line'"
       (let ((prev (treesit-node-prev-sibling last)))
         (and prev
              (f90-ts--node-ampersand-p prev)
-             (= (line-number-at-pos pos)
-                (f90-ts--node-line prev)))))
+             (f90-ts--same-line-p pos (treesit-node-start prev)))))
 
      (t
       ;; in all other cases, we are not on a continued line
