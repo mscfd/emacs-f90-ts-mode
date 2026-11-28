@@ -215,9 +215,16 @@ Use cached value or compute using cached node and parent."
 
 ;;++++++++++++++
 
+;; Marker life time: the only markers created by the continued-line cache are
+;; the BOL keys of its entries, and they are held exclusively by the
+;; buffer-local variable `f90-ts--continued-line-cache'.  That variable is
+;; reused for every continued statement.  Before it is overwritten or
+;; cleared, `f90-ts--continued-line-cache-reset' releases all its markers, so
+;; a marker never leaks.
+
 (defvar-local f90-ts--continued-line-cache nil
   "Cache for continued-line anchor indentation.
-The cache is an alist with entries (LINE . (COL-CACHED DELTA))
+The cache is an alist with entries (BOL . (COL-CACHED DELTA))
 for already indented lines of a continued statement.
 
 For alignment operations, we need node column numbers of nodes on
@@ -235,8 +242,16 @@ necessary to have consistent indentation across all previous lines
 The cache also stores COL-CACHED to detect, whether internal indentation
 buffer of `treesit-indent-region' has already been flushed for a line.
 
-As mentioned above, the cache is an alist (LINE . (COL-CACHED DELTA)),
-mapping buffer LINE numbers to COL-CACHED and DELTA, where:
+As mentioned above, the cache is an alist (BOL . (COL-CACHED DELTA)),
+mapping lines to COL-CACHED and DELTA, where:
+  BOL: marker at the beginning of the line.  Line numbers are not used
+       as keys, as they are expensive to compute.  Plain buffer positions
+       cannot be used either, as they become stale once the indentation
+       buffer of `treesit-indent-region' is flushed.  A marker at the
+       beginning of a line is moved along with such changes, as the
+       indentation is only ever modified behind it (insertion type nil
+       keeps the marker in front of text inserted at the line start).
+       Lines are compared by `f90-ts--continued-line-cache-find'.
   COL-CACHED: indentation column at cache time, used as flush detector:
               if current indentation at line == COL-CACHED, line is not yet
               flushed
@@ -263,14 +278,29 @@ If there is no entry, then return current indentation with DELTA=0.
 This is equivalent to no indentation at this line.  This is necessary for lines,
 which are part of a continued line but not part of the marked region currently
 processed.  For such lines, the returned value makes sense."
-  (if-let* ((line (line-number-at-pos pos))
-            (entry (assq line f90-ts--continued-line-cache)))
+  (if-let* ((entry (f90-ts--continued-line-cache-find pos)))
       (cdr entry)
     (list (f90-ts--indentation-at-pos pos) 0)))
 
 
+(defun f90-ts--continued-line-cache-find (pos)
+  "Return the cache entry for the line at POS, or nil.
+Entries are keyed by markers at the beginning of line, which are compared
+numerically with the beginning of the line at POS.  If there are several
+entries for a line, the most recently pushed one is returned."
+  (assoc (f90-ts--bol-at-pos pos) f90-ts--continued-line-cache #'=))
+
+
 (defun f90-ts--continued-line-cache-reset ()
-  "Reset the continued-line indentation cache."
+  "Reset the continued-line indentation cache.
+Release all markers held by the cache.
+All markers of the cache live in the buffer-local variable
+`f90-ts--continued-line-cache', which is reused.  Releasing them here, before
+the variable is cleared or refilled, ensures that no marker leaks."
+  (cl-loop
+   for entry in f90-ts--continued-line-cache
+   when (markerp (car entry))
+   do (set-marker (car entry) nil))
   (setq f90-ts--continued-line-cache nil))
 
 
@@ -281,12 +311,14 @@ POS is a position within that line.  Always store DELTA=0.
 If later on a flush is detected (actual column at indentation is different
 from COL-CACHED), the DELTA is computed and added to all other cached line.
 This is done in `f90-ts--continued-line-cache-update'."
+  ;; release the markers of the previous statement; the buffer-local cache
+  ;; variable is reused, so these are the only markers alive
   (f90-ts--continued-line-cache-reset)
   (unless f90-ts--align-continued-variant-tab
-    (let* ((col-cached (f90-ts--indentation-at-pos pos))
-           (line (line-number-at-pos pos)))
+    (let ((col-cached (f90-ts--indentation-at-pos pos))
+          (bol (copy-marker (f90-ts--bol-at-pos pos))))
       (setq f90-ts--continued-line-cache
-            (list (cons line (list col-cached 0)))))))
+            (list (cons bol (list col-cached 0)))))))
 
 
 (defun f90-ts--continued-line-cache-put-subsequent (pos anchor offset)
@@ -303,8 +335,8 @@ where delta-at-anchor-line is taken from the cache entry at the anchor line."
            (col-current  (f90-ts--indentation-at-pos pos))
            (col-new (+ anchor-col anchor-delta offset))
            (delta (- col-new col-current))
-           (line (line-number-at-pos pos)))
-      (push (cons line (list col-current delta))
+           (bol (copy-marker (f90-ts--bol-at-pos pos))))
+      (push (cons bol (list col-current delta))
             f90-ts--continued-line-cache))))
 
 
@@ -316,15 +348,15 @@ If not present, a fake entry with current indentation at first line
 and delta=0 is returned.  This happens if the region does not contain
 the first line."
   ;; cache is constructed by push, the last entry is the first line
-  (let ((first-line (line-number-at-pos first-pos))
+  (let ((first-bol (f90-ts--bol-at-pos first-pos))
         (entry (car (last f90-ts--continued-line-cache))))
     (if (and entry
-             (= (car entry) first-line))
+             (= (car entry) first-bol))
         ;; first line has been processed and is in the cache
         entry
       ;; construct a fake entry signalling that first line of continued
       ;; statement keeps it current indentation
-      (cons first-line
+      (cons first-bol
             (list (f90-ts--indentation-at-pos first-pos) 0)))))
 
 
@@ -336,7 +368,7 @@ Argument FIRST-POS is used to jump to this line efficiently (jumping
 to a line by line number is far more expensive)."
   (unless f90-ts--align-continued-variant-tab
     (let* ((first (f90-ts--continued-line-cache-get-first first-pos))
-           (first-line (car first))
+           (first-bol (car first))
            (first-col-cached (cadr first))
            (first-col-current (f90-ts--indentation-at-pos first-pos))
            (first-delta (- first-col-current first-col-cached)))
@@ -345,11 +377,11 @@ to a line by line number is far more expensive)."
       (when (/= first-col-cached first-col-current)
         (setq f90-ts--continued-line-cache
               (seq-map (lambda (entry)
-                         (let ((line (car entry))
+                         (let ((bol (car entry))
                                (col-cached (cadr entry))
                                (delta (caddr entry)))
-                           (cons line
-                                 (if (= line first-line)
+                           (cons bol
+                                 (if (= bol first-bol)
                                      (list first-col-current delta)
                                    (list col-cached (+ delta first-delta))))))
                        f90-ts--continued-line-cache))))))
@@ -385,8 +417,8 @@ and compensate a negative offset."
         ;;(f90-ts-log-msg :cachecol "col: cached, current = %s, %s" col-cached col-current)
         (cl-assert entry
                    nil
-                   "no entry for line in cache, line=%s, cache=%s"
-                   (line-number-at-pos pos) f90-ts--continued-line-cache)
+                   "no entry for line in cache, pos=%s, cache=%s"
+                   pos f90-ts--continued-line-cache)
         (max 0 (if (= col-cached col-current)
                    ;; not yet flushed
                    (+ col delta)
@@ -409,8 +441,8 @@ column to the original indentation."
            (col-current (f90-ts--indentation-at-pos pos)))
         (cl-assert entry
                    nil
-                   "no entry for line in cache, line=%s, cache=%s"
-                   (line-number-at-pos pos) f90-ts--continued-line-cache)
+                   "no entry for line in cache, pos=%s, cache=%s"
+                   pos f90-ts--continued-line-cache)
         (if (= col-cached col-current)
             ;; not yet flushed
             (- col delta)
@@ -984,24 +1016,27 @@ offset to align the body and ignore the leading minus."
 
 (defun f90-ts--align-location (node)
   "Determine position related values for node.
-These are position (start of node or point), column at position, line number
-and symbol type at point (for deciding where to align).  If NODE is nil,
-then no relevant node is at point and point position is used instead.
-This is important for handling empty lines.
-The data is returned as an alist with keys `node', `pos', `col', `line'
-and `nsym'."
+These are position (start of node or point), column at position, beginning of
+the line at position and symbol type at point (for deciding where to align).
+If NODE is nil, then no relevant node is at point and point position is used
+instead.  This is important for handling empty lines.
+The data is returned as an alist with keys `node', `pos', `col', `bol'
+and `nsym'.  The value of `bol' is the position of the beginning of the line
+of `pos'.  Comparing it with node positions tells which nodes are on previous
+lines.  This is valid as long as the buffer is not modified, which holds while
+the indentation of a line is determined."
   (if node
       (list (cons 'node node)
             (cons 'pos  (treesit-node-start node))
             (cons 'col  (f90-ts--node-column node))
-            (cons 'line (f90-ts--node-line node))
+            (cons 'bol  (f90-ts--bol-at-pos (treesit-node-start node)))
             ;; decide which kind of (named or anonymous) nodes to filter
             ;; (argument, parentheses, comma, ampersend, etc)
             (cons 'nsym (f90-ts--align-node-symbol node)))
     (list (cons 'node nil)
           (cons 'pos  (point))
           (cons 'col  (f90-ts--column-number-at-pos (point)))
-          (cons 'line (line-number-at-pos))
+          (cons 'bol  (pos-bol))
           (cons 'nsym nil))))
 
 
@@ -1678,12 +1713,11 @@ column), ITEMS the `f90-ts--align-items' struct of the list context."
         ;; as primary
         (t
          (cl-assert
-          (= (line-number-at-pos start-lead)
-             (line-number-at-pos indent-at-lead))
+          (f90-ts--same-line-p start-lead indent-at-lead)
           nil
-          "start-lead and indent-at-lead must be on the same line, got lines %s and %s"
-          (line-number-at-pos start-lead)
-          (line-number-at-pos indent-at-lead))
+          "start-lead and indent-at-lead must be on the same line, got positions %s and %s"
+          start-lead
+          indent-at-lead)
          (if (< (+ indent-at-lead f90-ts-indent-continued)
                 (+ start-lead offset-lead))
              anoff-hang
@@ -2097,11 +2131,12 @@ CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
       (f90-ts--align-choice-create :default (cons (car first-item) 0)))))
 
 
-(defun f90-ts--align-assign-like-prev-symbols (item nsym line)
+(defun f90-ts--align-assign-like-prev-symbols (item nsym bol)
   "Return anoffs of earlier \"=\" or \"=>\" symbols of assign-like items.
 ITEM is an assign-like node.  Collect the assignment symbol of
 NSYM (`assignment': \"=\", `associate': \"=>\") of all assign-like siblings
-of ITEM which precede ITEM, and which are on a line before LINE.  Return a
+of ITEM which precede ITEM, and which are on a line before BOL (the beginning
+of the current line).  Return a
 list of pairs (node . 0), or nil for other values of NSYM."
   (let ((parent (treesit-node-parent item))
         (sym-type (pcase nsym
@@ -2115,7 +2150,7 @@ list of pairs (node . 0), or nil for other values of NSYM."
        append (cl-loop
                for c in (treesit-node-children n)
                when (and (f90-ts--node-type-p c sym-type)
-                         (f90-ts--node-before-line-p c line))
+                         (f90-ts--node-before-bol-p c bol))
                collect (cons c 0))))))
 
 
@@ -2274,7 +2309,7 @@ CONTEXT and LOC are described in `f90-ts--align-anoff-other'."
          (anoffs-sym (f90-ts--align-assign-like-prev-symbols
                       item
                       (alist-get 'nsym loc)
-                      (alist-get 'line loc))))
+                      (alist-get 'bol loc))))
     (cl-assert (f90-ts--node-type-p item f90-ts--align-assign-like-types)
                nil "wrong context, got '%s'" item)
     (f90-ts--align-choice-lhs-rhs
@@ -2437,20 +2472,21 @@ CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
                                  :others  anoffs-opp)))
 
 
-(defun f90-ts--align-other-var-decl-anoff (decl cur-line)
-  "Return the alignment candidate anoff for DECL on line CUR-LINE, or nil.
+(defun f90-ts--align-other-var-decl-anoff (decl bol)
+  "Return the alignment candidate anoff for DECL, or nil.
+BOL is the beginning of the current line.
 DECL is a variable_declaration.  The candidate is the position of \"::\" plus
 `f90-ts-indent-declaration'.  If there is no \"::\", it is the end of the last
 type or attribute node minus the length of \"::\" plus
 `f90-ts-indent-declaration'.  In both cases the node must be on a line before
-CUR-LINE, otherwise there is no candidate."
+BOL, otherwise there is no candidate."
   (if-let* ((node-colons (treesit-search-subtree decl
                                                  "::"
                                                  nil ; search forward
                                                  t   ; include anonymous nodes
                                                  1   ; maximal depth of 1, search only children
                                                  )))
-      (when (< (f90-ts--node-line node-colons) cur-line)
+      (when (< (treesit-node-start node-colons) bol)
         ;; start of "::" plus f90-ts-indent-declaration
         (cons (treesit-node-start node-colons)
               f90-ts-indent-declaration))
@@ -2464,7 +2500,7 @@ CUR-LINE, otherwise there is no candidate."
                             t   ; only named nodes
                             1   ; maximal depth of 1, search only children
                             ))
-                ((< (f90-ts--node-line node-last) cur-line)))
+                ((< (treesit-node-start node-last) bol)))
       (cons (treesit-node-end node-last)
             (- f90-ts-indent-declaration (length "::"))))))
 
@@ -2498,7 +2534,7 @@ CONTEXT, LOC and ITEMS are described in `f90-ts--align-anoff-other'."
   (let* ((items-head   (f90-ts--align-items-head items))
          (assignment-p (eq (alist-get 'nsym loc) 'assignment))
          (anoff-decl   (f90-ts--align-other-var-decl-anoff (car context)
-                                                           (alist-get 'line loc))))
+                                                           (alist-get 'bol loc))))
     (f90-ts--align-choice-create
      :default   (and items-head
                      (not assignment-p)
@@ -2721,19 +2757,20 @@ instead, and the name is only a secondary candidate:
 ;;++++++++++++++
 ;; list context: items and columns
 
-(defun f90-ts--align-filter-prev (items cur-line)
+(defun f90-ts--align-filter-prev (items bol)
   "Filter ITEMS by line number and remove most ampersands.
 For alignment purposes, only items on previous lines are relevant.
 
-The filter removes any items not before line CUR-LINE.  It also filters out
+The filter removes any items not before BOL, the beginning of the current
+line.  It also filters out
 trailing and virtual ampersand nodes, which are not relevant for alignment.
 Leading ampersands are removed during indentation, except for ampersands
 within strings, which we want to keep."
   (seq-filter
    ;; filter by line number, use only items on some previous line,
    ;; also drop continuation symbols, as these are not relevant for alignment
-   (lambda (n) (and (< (f90-ts--node-line n)
-                       cur-line)
+   (lambda (n) (and (< (treesit-node-start n)
+                       bol)
                     (or (not (f90-ts--node-type-p n "&"))
                         ;; accept a real leading ampersand
                         ;; (which appears within a string_literal)
@@ -2749,29 +2786,31 @@ Map each NODE in ITEMS, to a cons cell (NODE . NSYM)."
    items))
 
 
-(defun f90-ts--align-items-head-p (node-nsym context-line)
+(defun f90-ts--align-items-head-p (node-nsym context-bol context-eol)
   "Predicate to determine relevant items on first context line (head line).
 NODE-NSYM is a cons (NODE . NSYM) providing NODE and the symbol for NODE.
-The predicate compares line number of NODE with CONTEXT-LINE.
+The predicate checks that the start of NODE is on the head line, that is
+between CONTEXT-BOL and CONTEXT-EOL, the beginning and end of that line.
 It also drops comments and auxiliary context nodes (assignment, parenthesis,
 comma) on the head line, as items on the head line are used to  verify whether
 proper items are present on this line."
   (let ((n (car node-nsym)))
-    (and (= context-line (f90-ts--node-line n))
+    (and (<= context-bol (treesit-node-start n) context-eol)
          (not (f90-ts--node-type-p n "comment"))
          (not (f90-ts--align-aux-context-p n)))))
 
 
-(defun f90-ts--align-items-tail-p (node-nsym context-line)
+(defun f90-ts--align-items-tail-p (node-nsym context-eol)
   "Predicate to determine relevant items in the tail after context line.
 NODE-NSYM is a cons (NODE . NSYM) providing NODE and the symbol for NODE.
-The predicate compares line number of NODE with CONTEXT-LINE.
+The predicate checks that NODE starts on a line after the head line, that is
+after CONTEXT-EOL, the end of the head line.
 It also drops comments, like `f90-ts--align-items-head-p' does for the head
 line.  The column of a comment is a consequence of alignment (with items or
 with a trailing comment of the head line), it does not reflect the style of the
 list items, and must not influence the decision which position is primary."
   (let ((n (car node-nsym)))
-    (and (< context-line (f90-ts--node-line n))
+    (and (< context-eol (treesit-node-start n))
          (not (f90-ts--node-type-p n "comment")))))
 
 
@@ -2780,8 +2819,8 @@ list items, and must not influence the decision which position is primary."
   (let ((arg (treesit-node-child-by-field-name
               (f90-ts--node-leftmost-unary node) "argument")))
     (when (and arg
-               (= (f90-ts--node-line node)
-                  (f90-ts--node-line arg)))
+               (f90-ts--same-line-p (treesit-node-start node)
+                                    (treesit-node-start arg)))
       (- (treesit-node-start arg)
          (treesit-node-start node)))))
 
@@ -3036,10 +3075,11 @@ See `f90-ts--align-expand-op-expr'.  Other items are kept."
               items 'list))
 
 
-(defun f90-ts--align-prev-nsym (items cur-line)
-  "Return ITEMS located before CUR-LINE, each attached to its node symbol."
+(defun f90-ts--align-prev-nsym (items bol)
+  "Return ITEMS located before BOL, each attached to its node symbol.
+BOL is the beginning of the current line."
   (f90-ts--align-attach-nsym
-   (f90-ts--align-filter-prev items cur-line)))
+   (f90-ts--align-filter-prev items bol)))
 
 
 (defun f90-ts--align-anoff-items (loc context)
@@ -3052,13 +3092,17 @@ LOC is an alist which provides the node and further location data.
 
 Note: for anchor-offset pairs extracted from CONTEXT nodes directly,
 the offset is assumed to be 0."
-  (let* ((cur-line (alist-get 'line loc))
-         (cntxt-line (f90-ts--node-line (or (cdr context) (car context))))
+  (let* ((bol (alist-get 'bol loc))
+         ;; head line of the list context, as range of positions
+         (cntxt-bol (f90-ts--bol-at-pos
+                     (treesit-node-start (or (cdr context)
+                                             (car context)))))
+         (cntxt-eol (f90-ts--eol-at-pos cntxt-bol))
          (node-sym (alist-get 'nsym loc))
          (get-items (f90-ts--get-list-context-prop :get-isyms-fn context))
          (items-all (when get-items
                       (funcall get-items context loc)))
-         (prev-sym (f90-ts--align-prev-nsym items-all cur-line))
+         (prev-sym (f90-ts--align-prev-nsym items-all bol))
          ;; the tail uses the operands of operator expressions among the
          ;; items, as a comma is considered just another operator composing
          ;; a tuple; otherwise "(1 + &\n 2 &\n )" has no tail items, as the
@@ -3066,7 +3110,7 @@ the offset is assumed to be 0."
          (prev-sym-expanded
           (f90-ts--align-prev-nsym
            (f90-ts--align-expand-items-op-expr items-all)
-           cur-line)))
+           bol)))
     (cl-flet ((select (items pred)
                 (f90-ts--align-nsym-filter-offset items pred loc)))
       (f90-ts--align-items-create
@@ -3078,10 +3122,10 @@ the offset is assumed to be 0."
        :prev prev-sym
        :head (select prev-sym
                      (lambda (nsym)
-                       (f90-ts--align-items-head-p nsym cntxt-line)))
+                       (f90-ts--align-items-head-p nsym cntxt-bol cntxt-eol)))
        :tail (select prev-sym-expanded
                      (lambda (nsym)
-                       (f90-ts--align-items-tail-p nsym cntxt-line)))))))
+                       (f90-ts--align-items-tail-p nsym cntxt-eol)))))))
 
 
 (defun f90-ts--align-anoff-other (loc items context)
@@ -3115,7 +3159,7 @@ indented, with the keys
   `node'  First node on the line, or nil for an empty line.
   `pos'   Its start position (point for an empty line).
   `col'   Its column before indentation.
-  `line'  Line number.
+  `bol'   Start position of its line.
   `nsym'  Its node symbol, see `f90-ts--align-node-symbol' (nil without node).
 
 ITEMS is the `f90-ts--align-items' struct with the items of the list context
@@ -3133,8 +3177,8 @@ anchors.  FN must not modify its arguments."
 
 (defun f90-ts--align-anchor-offset (variant loc context)
   "Determine a pair (anchor offset) for alignment of a node in a list context.
-Location data is given as an alist LOC containing node, column, line number and
-node symbol.
+Location data is given as an alist LOC containing node, column, beginning of
+line and node symbol.
 To this end items on continued lines in the provided CONTEXT are
 determined.  Additionally further anchors (like the first node of previous
 statement by pstmt-1) are considered.
@@ -3314,7 +3358,8 @@ Lookup is done in alist `f90-ts--align-list-context-properties'."
 Node location data is given by LOC.
 This is the maximal node for any further subtree searches."
   (let* ((pos (alist-get 'pos loc))
-         (line (alist-get 'line loc))
+         (bol (alist-get 'bol loc))
+         (eol (f90-ts--eol-at-pos bol))
          (ps-key (f90-ts--indent-prev-stmt-keyword))
          (stmt-beg (treesit-node-start ps-key))
          (stmt-root (when (<= stmt-beg pos)
@@ -3323,8 +3368,9 @@ This is the maximal node for any further subtree searches."
       (treesit-search-subtree
        stmt-root
        (lambda (n)
-         (and (<= (f90-ts--node-line n) line)
-              (<= line (line-number-at-pos (treesit-node-end n)))
+         ;; node starts on or before the current line and ends on or after it
+         (and (<= (treesit-node-start n) eol)
+              (<= bol (treesit-node-end n))
               (assoc (treesit-node-type n)
                      f90-ts--align-list-context-properties)))))))
 
@@ -3334,7 +3380,7 @@ This is the maximal node for any further subtree searches."
 For expressions, we need to check node in LOC or PARENT (node might be
 nil).  But we do not need to ascend further."
   (let* ((node (alist-get 'node loc))
-         (line (alist-get 'line loc))
+         (bol (alist-get 'bol loc))
          (stmt-min
           (or (when (f90-ts--node-op-expr-p node)   node)
               (when (f90-ts--node-op-expr-p parent) parent)))
@@ -3347,22 +3393,22 @@ nil).  But we do not need to ascend further."
                          (f90-ts--prev-sibling-proper root-expr))))
     (cond
      ;; note: unlike the second and third clauses below, this one does
-     ;; not require root-expr itself to be before LINE; that is because an
+     ;; not require root-expr itself to be before BOL; that is because an
      ;; assignment or opening parenthesis immediately preceding the expression
      ;; is a valid head even when the expression starts on the current line
      ;; (for example the first continued line after "x = a + &").
-     ((and (f90-ts--node-before-line-p psib-expr line)
+     ((and (f90-ts--node-before-bol-p psib-expr bol)
            (f90-ts--node-type-p psib-expr '("=" "(")))
       (cons root-expr psib-expr))
 
-     ((and (f90-ts--node-before-line-p root-expr line)
-           (f90-ts--node-before-line-p psib-expr line)
+     ((and (f90-ts--node-before-bol-p root-expr bol)
+           (f90-ts--node-before-bol-p psib-expr bol)
            (f90-ts--node-type-p psib-expr ","))
       ;; if root-expr is on the same line, there must be a more appropriate
       ;; list context the commata belongs to, use commata as head
       (cons root-expr psib-expr))
 
-     ((f90-ts--node-before-line-p root-expr line)
+     ((f90-ts--node-before-bol-p root-expr bol)
       (cons root-expr nil)))))
 
 
@@ -3379,7 +3425,7 @@ of the context, which provides the head line of the list."
               (pos   (alist-get 'pos loc))
               ((< (treesit-node-start open) pos))
               ((<= pos (treesit-node-start close)))
-              ((< (f90-ts--node-line open) (alist-get 'line loc))))
+              ((< (treesit-node-start open) (alist-get 'bol loc))))
     (cons case-stmt open)))
 
 
@@ -3401,11 +3447,11 @@ This function returns nil as second auxiliary context node, except for a
 case statement, where it is the opening parenthesis."
   (let* ((node (or (alist-get 'node loc)
                    parent))
-         (line (alist-get 'line loc))
+         (bol (alist-get 'bol loc))
          (list-context (treesit-parent-until
                         node
                         (lambda (n)
-                          (and (< (f90-ts--node-line n) line)
+                          (and (< (treesit-node-start n) bol)
                                (assoc (treesit-node-type n)
                                       f90-ts--align-list-context-properties)))
                         t ; include node in search
@@ -3464,13 +3510,13 @@ be determined or variant prescribes the default continued line indentation."
       ;;(f90-ts-log-msg :anoff "loc = %s" loc)
       ;;(f90-ts-log-msg :anoff "context=%s" context)
       ;;(f90-ts-log-msg :anoff "parent = %s" parent)
-      (cl-assert (< (f90-ts--node-line (or (cdr context)
-                                           (car context)))
-                    (alist-get 'line loc))
+      (cl-assert (< (treesit-node-start (or (cdr context)
+                                            (car context)))
+                    (alist-get 'bol loc))
                  nil
-                 "context not on some previous line: context=%s, loc-line=%s"
+                 "context not on some previous line: context=%s, loc-bol=%s"
                  context
-                 (alist-get 'line loc))
+                 (alist-get 'bol loc))
       (f90-ts--align-anchor-offset variant
                                    loc
                                    context))))
@@ -4404,8 +4450,8 @@ If INDENT-STRUCT is true, then indent the whole block with `indent-region'."
                        indent-node
                        (lambda (n) (= start (treesit-node-start n)))))
                 (end (treesit-node-end node)))
-      (when (= (line-number-at-pos)
-               (f90-ts--node-line node))
+      (when (f90-ts--same-line-p (point)
+                                 (treesit-node-start node))
         (when-let* ((node-struct (f90-ts--complete-smart-node node)))
           ;; a label inserted for a labelled do loop sits behind the
           ;; indentation, indent again to move it to the label column
@@ -4672,35 +4718,26 @@ Return a vector (one entry per line) of values as returned by
     (goto-char beg)
     (when (looking-at-p "[ \t]*$")
       (forward-line 1))
-    (let* ((line-beg (line-number-at-pos (point)))
-           (line-end-aux (line-number-at-pos end))
-           ;; if at beginning of line, this line should be excluded,
-           ;; this comes from the loop (while (< (point) end) ... (forward-line 1))
-           ;; used in indentation, but we need number of lines before hand, so we
-           ;; explicitely step back one line
-           (line-end (save-excursion
-                       (goto-char end)
-                       (if (bolp)
-                           (1- line-end-aux)
-                         line-end-aux)))
-           (n-lines  (- line-end line-beg -1))
-           (vec      (make-vector n-lines nil)))
-      ;; after blanking loop, each element of the vector vec will be one of:
+    ;; number of lines visited by a loop walking all lines with forward-line
+    ;; while point has not reached end; note that `count-lines' does not
+    ;; count the trailing empty "line" if END is at the beginning of a line
+    (let ((n-lines (cond ((< (point) end)
+                          (count-lines (point) end))
+                         ((and (= (point) end)
+                               (not (bolp)))
+                          1)
+                         (t
+                          0))))
+      ;; after blanking loop, each element of the returned vector will be one of:
       ;;   nil               – no amp, no label on the line
       ;;   (amp)             – had a leading & on the line
       ;;   (label . "12345") – had a statement label on the line
       ;;   (do-label . "12345") – had the label of a labelled do loop end (not blanked)
-      (cl-loop
-       for ix   from 0
-       for line from line-beg to line-end
-       do (progn
-            (cl-assert (= (line-number-at-pos (point)) line)
-                       nil
-                       "line mismatch at index %d: expected %d, got %d"
-                       ix line (line-number-at-pos (point)))
-            (aset vec ix (f90-ts--indent-blank-leading-amp-or-label-line))
-            (forward-line 1)))
-      vec)))
+      (vconcat
+       (cl-loop
+        repeat n-lines
+        collect (prog1 (f90-ts--indent-blank-leading-amp-or-label-line)
+                  (forward-line 1)))))))
 
 
 (defun f90-ts--indent-restore-leading-amp-or-label-region (beg vec)
@@ -4711,17 +4748,11 @@ VEC is a vector as returned by
     (goto-char beg)
     (when (looking-at-p "[ \t]*$")
       (forward-line 1))
-    (let ((line-beg (line-number-at-pos (point))))
-      (cl-loop
-       for line from line-beg
-       for amp-or-label across vec
-       do (progn
-            (cl-assert (= (line-number-at-pos (point)) line)
-                       nil
-                       "line mismatch at index %d: expected %d, got %d"
-                       (- line line-beg) line (line-number-at-pos (point)))
-            (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label)
-            (forward-line 1))))))
+    (cl-loop
+     for amp-or-label across vec
+     do (progn
+          (f90-ts--indent-restore-leading-amp-or-label-line amp-or-label)
+          (forward-line 1)))))
 
 
 (defun f90-ts--indent-line-aux (&optional variant)
@@ -4766,6 +4797,9 @@ part of a continued line, can be indented correctly."
               beg-marker end-marker)))
     (f90-ts--continued-line-cache-reset)
     (treesit-indent-region beg-marker end-marker)
+    ;; release the markers of the cache; they are held only by the
+    ;; buffer-local cache variable, so none is left behind in the buffer
+    (f90-ts--continued-line-cache-reset)
     ;; restore ampersands or labels: beg-marker still points to the
     ;; first line (insertion-type nil keeps it before any text
     ;; treesit-indent may have inserted at the start).

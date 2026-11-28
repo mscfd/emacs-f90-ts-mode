@@ -106,15 +106,13 @@ But for thing queries, only the named structure node should match."
   (treesit-node-check node 'named))
 
 
-(defun f90-ts--node-line (node)
-  "Determine line number of start position of NODE."
-  (line-number-at-pos (treesit-node-start node)))
-
-
-(defun f90-ts--node-before-line-p (node line)
-  "Return non-nil if NODE is on a line strictly before LINE.
-NODE may be nil, in which case the result is nil."
-  (and node (< (f90-ts--node-line node) line)))
+(defun f90-ts--node-before-bol-p (node bol)
+  "Return non-nil if NODE start before position BOL.
+BOL is the beginning of a line, so NODE is on a line strictly before this
+line.  NODE may be nil, in which case the result is nil.  Positions are only
+comparable as long as the buffer is not modified."
+  (and node
+       (< (treesit-node-start node) bol)))
 
 
 (defun f90-ts--node-column (node)
@@ -136,12 +134,27 @@ NODE may be nil, in which case the result is nil."
     (current-indentation)))
 
 
-(defun f90-ts--line-number-at-node-or-pos (node)
-  "Return line number of NODE or point.
-If NODE is non-nil, return line number at which start position is
-located, otherwise return line number of current point position."
-  (or (and node (f90-ts--node-line node))
-      (line-number-at-pos)))
+(defun f90-ts--bol-at-pos (pos)
+  "Return position at the beginning of the line at POS."
+  (save-excursion
+    (goto-char pos)
+    (pos-bol)))
+
+
+(defun f90-ts--eol-at-pos (pos)
+  "Return position of the end of the line at POS."
+  (save-excursion
+    (goto-char pos)
+    (pos-eol)))
+
+
+(defun f90-ts--bol-at-node-or-pos (node)
+  "Return the beginning of the line of NODE or point.
+If NODE is non-nil, return the beginning of the line of its start position,
+otherwise the beginning of the line of point."
+  (if node
+      (f90-ts--bol-at-pos (treesit-node-start node))
+    (pos-bol)))
 
 
 (defun f90-ts--common-prefix-length (str pos)
@@ -227,11 +240,12 @@ and ends at the last non-blank character of NODE."
 
 (defun f90-ts--same-line-p (pos1 pos2)
   "Return non-nil if POS1 and POS2 are on the same line.
-The implementation using line numbers, which might be expensive
-to determine."
+The positions are compared with the end of the line of the smaller one,
+no line numbers are determined."
   (save-excursion
     (goto-char (min pos1 pos2))
-    (<= (max pos1 pos2) (pos-eol))))
+    (<= (max pos1 pos2)
+        (pos-eol))))
 
 
 (defun f90-ts--region-trimmed ()
@@ -895,17 +909,17 @@ Nodes of type comments and ampersand are not considered \"proper\"."
      (not (f90-ts--node-type-p n '("comment" "&"))))))
 
 
-(defun f90-ts--nodes-on-prev-lines (nodes cur-line &optional predicate)
-  "Filter NODES by PREDICATE and line number.
-Accept only NODES which are on a line prior to CUR-LINE.
+(defun f90-ts--nodes-on-prev-lines (nodes bol &optional predicate)
+  "Filter NODES by PREDICATE and position.
+Accept only NODES which are on a line prior to the line starting at BOL.
 If PREDICATE is provided, additionally filter by predicate.
 For empty NODES, return an empty list."
   (seq-filter
    (lambda (node)
      (and (or (not predicate)
               (funcall predicate node))
-          (< (f90-ts--node-line node)
-             cur-line)))
+          (< (treesit-node-start node)
+             bol)))
    nodes))
 
 
@@ -931,8 +945,7 @@ reached only by walking back via `assumed_size'."
   (save-excursion
     (goto-char pos)
     (back-to-indentation)
-    (let* ((line (line-number-at-pos))
-           (on-node (treesit-node-on (point) (point)))
+    (let* ((on-node (treesit-node-on (point) (point)))
            (at-node (treesit-node-at (point))))
       (cond
        ((and on-node
@@ -950,7 +963,8 @@ reached only by walking back via `assumed_size'."
          finally return last))
 
        ((and at-node
-             (= line (f90-ts--node-line at-node)))
+             (f90-ts--same-line-p (point)
+                                  (treesit-node-start at-node)))
         at-node)))))
 
 
@@ -962,8 +976,7 @@ reached only by walking back via `assumed_size'."
     (skip-chars-backward " \t")
     (unless (bolp)
       (when-let* ((node (treesit-node-at (point))))
-        (when (= (line-number-at-pos pos)
-                 (f90-ts--node-line node))
+        (when (f90-ts--same-line-p pos (treesit-node-start node))
           node)))))
 
 
@@ -1046,10 +1059,10 @@ beginning of statement is found."
    finally return first))
 
 
-(defun f90-ts--previous-stmt-first-line (node line-num)
+(defun f90-ts--previous-stmt-first-line (node bol)
   "Return previous statement determined by NODE.
-First search for any reasonable (leaf) node, which is before line with
-line number LINE-NUM, and then go to start of line.  If on a continued line,
+First search for any reasonable (leaf) node, which is before the line
+starting at position BOL, and then go to start of line.  If on a continued line,
 follow it to the start of the statement.
 If current point is within a continued line, then previous leaf node
 belongs to the continued line as well, and previous-stmt return the
@@ -1075,7 +1088,7 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
           (cl-loop
            for ancestor = node then (treesit-node-parent ancestor)
            while ancestor
-           for relative = (f90-ts--before-child ancestor line-num predicate)
+           for relative = (f90-ts--before-child ancestor bol predicate)
            when relative return relative))
          ;; descend prev-sib-of-anc to find the deepest node still before current line
          (prev-descend
@@ -1083,7 +1096,7 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
                (cl-loop
                 for sib = prev-sib-of-anc then next
                 for next = (and (> (treesit-node-child-count sib) 0)
-                                (f90-ts--before-child sib line-num predicate))
+                                (f90-ts--before-child sib bol predicate))
                 ;; if there is a next, continue and shift next to sib
                 ;; with "for sib=next" in the first cl-loop line
                 while next
@@ -1105,8 +1118,8 @@ exclude comment and preprocessor nodes in `f90-ts--before-child'."
                         first))
                (next (treesit-node-next-sibling label)))
           (if (and next
-                   (= (f90-ts--node-line first)
-                      (f90-ts--node-line next)))
+                   (f90-ts--same-line-p (treesit-node-start first)
+                                        (treesit-node-start next)))
               ;; retrieve the leaf node starting at next
               (treesit-node-at (treesit-node-start next))
             first))))))
@@ -1122,9 +1135,9 @@ the indent engine, which does not have a NODE but always has a PARENT (for
 example on empty lines)."
   (cl-loop
    for ancestor = (or node parent) then pstmt-1
-   for cur-line =    (f90-ts--line-number-at-node-or-pos node)
-   then (f90-ts--node-line pstmt-1)
-   for pstmt-1 = (f90-ts--previous-stmt-first-line ancestor cur-line)
+   for cur-bol = (f90-ts--bol-at-node-or-pos node)
+   then (f90-ts--bol-at-pos (treesit-node-start pstmt-1))
+   for pstmt-1 = (f90-ts--previous-stmt-first-line ancestor cur-bol)
    while pstmt-1
    when (not (f90-ts--node-preproc-p pstmt-1)) return pstmt-1))
 
@@ -1149,11 +1162,11 @@ keyword is relevant."
     first))
 
 
-(defun f90-ts--before-child (node line predicate)
-  "Return child of NODE, which is on a previous LINE and satisfies PREDICATE.
+(defun f90-ts--before-child (node bol predicate)
+  "Return child of NODE, which is on a line before BOL and satisfies PREDICATE.
 Take the last of all children satisfying this condition."
   (when-let* ((children (treesit-node-children node))
-              (children-prev (f90-ts--nodes-on-prev-lines children line predicate)))
+              (children-prev (f90-ts--nodes-on-prev-lines children bol predicate)))
     (car (last children-prev))))
 
 
@@ -1167,8 +1180,8 @@ find a relevant structure type, like subroutine_statement or similar.
 Usually only one step is required to skip the ERROR node.
 
 Comment and preprocessor nodes are ignored as previous siblings."
-  (let* ((cur-line (line-number-at-pos))
-         (psib (f90-ts--before-child parent cur-line
+  (let* ((bol (pos-bol))
+         (psib (f90-ts--before-child parent bol
                                      #'f90-ts--node-not-comment-or-preproc-p)))
     ;; if psib=nil, just return nil
     ;; if psib=ERROR node, descend and try to find some non-error node
@@ -1199,8 +1212,7 @@ by `f90-ts--last-node-on-line'"
       (let ((prev (treesit-node-prev-sibling last)))
         (and prev
              (f90-ts--node-ampersand-p prev)
-             (= (line-number-at-pos pos)
-                (f90-ts--node-line prev)))))
+             (f90-ts--same-line-p pos (treesit-node-start prev)))))
 
      (t
       ;; in all other cases, we are not on a continued line
