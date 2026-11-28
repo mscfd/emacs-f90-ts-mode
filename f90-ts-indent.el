@@ -2819,8 +2819,8 @@ list items, and must not influence the decision which position is primary."
   (let ((arg (treesit-node-child-by-field-name
               (f90-ts--node-leftmost-unary node) "argument")))
     (when (and arg
-               (= (f90-ts--node-line node)
-                  (f90-ts--node-line arg)))
+               (f90-ts--same-line-p (treesit-node-start node)
+                                    (treesit-node-start arg)))
       (- (treesit-node-start arg)
          (treesit-node-start node)))))
 
