@@ -2786,29 +2786,31 @@ Map each NODE in ITEMS, to a cons cell (NODE . NSYM)."
    items))
 
 
-(defun f90-ts--align-items-head-p (node-nsym context-line)
+(defun f90-ts--align-items-head-p (node-nsym context-bol context-eol)
   "Predicate to determine relevant items on first context line (head line).
 NODE-NSYM is a cons (NODE . NSYM) providing NODE and the symbol for NODE.
-The predicate compares line number of NODE with CONTEXT-LINE.
+The predicate checks that the start of NODE is on the head line, that is
+between CONTEXT-BOL and CONTEXT-EOL, the beginning and end of that line.
 It also drops comments and auxiliary context nodes (assignment, parenthesis,
 comma) on the head line, as items on the head line are used to  verify whether
 proper items are present on this line."
   (let ((n (car node-nsym)))
-    (and (= context-line (f90-ts--node-line n))
+    (and (<= context-bol (treesit-node-start n) context-eol)
          (not (f90-ts--node-type-p n "comment"))
          (not (f90-ts--align-aux-context-p n)))))
 
 
-(defun f90-ts--align-items-tail-p (node-nsym context-line)
+(defun f90-ts--align-items-tail-p (node-nsym context-eol)
   "Predicate to determine relevant items in the tail after context line.
 NODE-NSYM is a cons (NODE . NSYM) providing NODE and the symbol for NODE.
-The predicate compares line number of NODE with CONTEXT-LINE.
+The predicate checks that NODE starts on a line after the head line, that is
+after CONTEXT-EOL, the end of the head line.
 It also drops comments, like `f90-ts--align-items-head-p' does for the head
 line.  The column of a comment is a consequence of alignment (with items or
 with a trailing comment of the head line), it does not reflect the style of the
 list items, and must not influence the decision which position is primary."
   (let ((n (car node-nsym)))
-    (and (< context-line (f90-ts--node-line n))
+    (and (< context-eol (treesit-node-start n))
          (not (f90-ts--node-type-p n "comment")))))
 
 
@@ -3091,7 +3093,11 @@ LOC is an alist which provides the node and further location data.
 Note: for anchor-offset pairs extracted from CONTEXT nodes directly,
 the offset is assumed to be 0."
   (let* ((bol (alist-get 'bol loc))
-         (cntxt-line (f90-ts--node-line (or (cdr context) (car context))))
+         ;; head line of the list context, as range of positions
+         (cntxt-bol (f90-ts--bol-at-pos
+                     (treesit-node-start (or (cdr context)
+                                             (car context)))))
+         (cntxt-eol (f90-ts--eol-at-pos cntxt-bol))
          (node-sym (alist-get 'nsym loc))
          (get-items (f90-ts--get-list-context-prop :get-isyms-fn context))
          (items-all (when get-items
@@ -3116,10 +3122,10 @@ the offset is assumed to be 0."
        :prev prev-sym
        :head (select prev-sym
                      (lambda (nsym)
-                       (f90-ts--align-items-head-p nsym cntxt-line)))
+                       (f90-ts--align-items-head-p nsym cntxt-bol cntxt-eol)))
        :tail (select prev-sym-expanded
                      (lambda (nsym)
-                       (f90-ts--align-items-tail-p nsym cntxt-line)))))))
+                       (f90-ts--align-items-tail-p nsym cntxt-eol)))))))
 
 
 (defun f90-ts--align-anoff-other (loc items context)
